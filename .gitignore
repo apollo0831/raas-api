@@ -1,0 +1,8 @@
+﻿.env
+credentials.json
+credentials_웹.json
+token.json
+__pycache__/
+*.pyc
+.DS_Store 
+ 

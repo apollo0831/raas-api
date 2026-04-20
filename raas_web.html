@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAAS — 고릴라 AI 브리핑</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0c10; --bg2:#11141a; --bg3:#181c24; --border:#1e2430;
+    --accent:#e8a838; --accent2:#3b82f6;
+    --text:#e2e8f0; --muted:#6b7280;
+    --powerfm:#3b82f6; --lovefm:#ec4899; --gorilam:#10b981; --pick:#f59e0b;
+    --radius:12px; --mono:'Space Mono',monospace; --sans:'Noto Sans KR',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.7;min-height:100vh;}
+
+  /* 헤더 */
+  header{display:flex;align-items:center;justify-content:space-between;padding:16px 32px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;}
+  .logo-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite;flex-shrink:0;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.3);}}
+  .logo-text{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.1em;margin-left:10px;}
+  .logo-text span{color:var(--accent);}
+  .header-right{display:flex;align-items:center;gap:12px;}
+  .header-date{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .refresh-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:6px;font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .2s;letter-spacing:.05em;}
+  .refresh-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+  main{padding:24px 32px;max-width:1400px;margin:0 auto;}
+
+  /* KPI 그리드 */
+  .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;}
+  @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
+  @media(max-width:700px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+  .kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;position:relative;overflow:hidden;}
+  .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+  .kpi-card.dau::before{background:var(--accent);}
+  .kpi-card.deep::before{background:var(--accent2);}
+  .kpi-card.powerfm::before{background:var(--powerfm);}
+  .kpi-card.lovefm::before{background:var(--lovefm);}
+  .kpi-card.gorilam::before{background:var(--gorilam);}
+  .kpi-label{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;margin-bottom:8px;}
+  .kpi-value{font-size:26px;font-weight:700;font-family:var(--mono);line-height:1;}
+  .kpi-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+  .kpi-wow{display:inline-block;font-size:11px;font-family:var(--mono);padding:2px 6px;border-radius:4px;margin-top:4px;}
+  .kpi-wow.up{background:rgba(16,185,129,.15);color:#10b981;}
+  .kpi-wow.down{background:rgba(239,68,68,.15);color:#ef4444;}
+  .kpi-wow.flat{background:rgba(107,114,128,.15);color:#9ca3af;}
+
+  /* 패널 */
+  .panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;border-bottom:1px solid var(--border);background:var(--bg3);}
+  .panel-title{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;}
+  .panel-badge{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(232,168,56,.1);color:var(--accent);border:1px solid rgba(232,168,56,.2);}
+  .panel-body{padding:20px;}
+
+  /* 브리핑 */
+  .content-grid{display:grid;grid-template-columns:1fr 360px;gap:16px;margin-bottom:16px;}
+  @media(max-width:900px){.content-grid{grid-template-columns:1fr;}}
+  .brief-section{background:var(--bg3);border-radius:8px;padding:15px;margin-bottom:10px;border-left:3px solid var(--border);transition:border-color .2s;}
+  .brief-section:hover{border-color:var(--accent);}
+  .brief-section:last-child{margin-bottom:0;}
+  .brief-section-num{font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:5px;letter-spacing:.1em;}
+  .brief-section-body{font-size:13px;line-height:1.85;color:var(--text);white-space:pre-wrap;}
+  .brief-section-body strong{color:#fff;}
+
+  /* 프로그램 순위 */
+  .rank-list{list-style:none;}
+  .rank-item{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);transition:background .15s;border-radius:4px;}
+  .rank-item:last-child{border-bottom:none;}
+  .rank-item:hover{background:var(--bg3);}
+  .rank-num{font-family:var(--mono);font-size:11px;color:var(--muted);width:18px;text-align:center;flex-shrink:0;}
+  .rank-num.top3{color:var(--accent);font-weight:700;}
+  .rank-info{flex:1;min-width:0;}
+  .rank-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .rank-ch{display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;margin-left:5px;font-family:var(--mono);}
+  .ch-파워FM{background:rgba(59,130,246,.15);color:var(--powerfm);}
+  .ch-러브FM{background:rgba(236,72,153,.15);color:var(--lovefm);}
+  .ch-고릴라M{background:rgba(16,185,129,.15);color:var(--gorilam);}
+  .rank-bar-bg{background:var(--border);border-radius:2px;height:3px;margin-top:4px;}
+  .rank-bar-fill{height:3px;border-radius:2px;background:var(--accent);transition:width .6s ease;}
+  .rank-dau{font-family:var(--mono);font-size:11px;color:var(--muted);width:46px;text-align:right;flex-shrink:0;}
+
+  /* 채널 카드 */
+  .channel-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  @media(max-width:700px){.channel-grid{grid-template-columns:repeat(2,1fr);}}
+  .ch-card{background:var(--bg3);border-radius:8px;padding:14px;text-align:center;border:1px solid var(--border);}
+  .ch-card-label{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px;}
+  .ch-card-val{font-family:var(--mono);font-size:20px;font-weight:700;}
+  .ch-card-pct{font-size:11px;color:var(--muted);margin-top:2px;}
+
+  /* 질의 */
+  .query-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:16px;}
+  .query-label{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px;letter-spacing:.08em;}
+  .query-row{display:flex;gap:10px;}
+  .query-input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .2s;}
+  .query-input:focus{border-color:var(--accent);}
+  .query-input::placeholder{color:var(--muted);}
+  .query-btn{background:var(--accent);color:#0a0c10;border:none;border-radius:8px;padding:10px 20px;font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer;transition:opacity .2s;white-space:nowrap;}
+  .query-btn:hover{opacity:.85;}
+  .query-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .query-result{margin-top:14px;background:var(--bg3);border-radius:8px;padding:14px 16px;font-size:13px;line-height:1.8;color:var(--text);display:none;white-space:pre-wrap;border-left:3px solid var(--accent2);}
+  .query-result.visible{display:block;}
+
+  /* 스켈레톤 */
+  .skeleton{background:linear-gradient(90deg,var(--bg3) 25%,var(--border) 50%,var(--bg3) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px;height:14px;margin-bottom:8px;}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  /* 오류 */
+  .error-msg{color:#ef4444;font-family:var(--mono);font-size:12px;line-height:1.8;padding:16px;background:rgba(239,68,68,.05);border-radius:8px;border:1px solid rgba(239,68,68,.2);}
+  .status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gorilam);margin-right:6px;animation:pulse 2s infinite;}
+  .updated-at{font-family:var(--mono);font-size:10px;color:var(--muted);}
+
+  /* 로딩 */
+  #loading-overlay{position:fixed;inset:0;background:rgba(10,12,16,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:16px;}
+  .loading-bar{width:200px;height:2px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .loading-bar-fill{height:100%;background:var(--accent);border-radius:2px;animation:loading 1.5s ease-in-out infinite;}
+  @keyframes loading{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
+  .loading-text{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.1em;}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div style="font-family:var(--mono);font-size:14px;color:var(--accent);letter-spacing:.2em;font-weight:700">RAAS</div>
+  <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+  <div class="loading-text" id="loading-text">서버 연결 중...</div>
+</div>
+
+<header>
+  <div style="display:flex;align-items:center;">
+    <div class="logo-dot"></div>
+    <div class="logo-text"><span>RAAS</span> · 고릴라 AI 브리핑</div>
+  </div>
+  <div class="header-right">
+    <div class="header-date" id="header-date">--</div>
+    <button class="refresh-btn" onclick="loadData()">↺ 새로고침</button>
+  </div>
+</header>
+
+<main>
+  <div class="kpi-grid">
+    <div class="kpi-card dau">
+      <div class="kpi-label">TOTAL DAU</div>
+      <div class="kpi-value" id="kpi-dau">--</div>
+      <div id="kpi-wow"></div>
+      <div class="kpi-sub">일간 활성사용자</div>
+    </div>
+    <div class="kpi-card deep">
+      <div class="kpi-label">깊은청취율</div>
+      <div class="kpi-value" id="kpi-deep">--</div>
+      <div class="kpi-sub">10분이상 / 1분이상</div>
+    </div>
+    <div class="kpi-card powerfm">
+      <div class="kpi-label">파워FM</div>
+      <div class="kpi-value" id="kpi-powerfm">--</div>
+      <div class="kpi-sub" id="kpi-powerfm-pct">--</div>
+    </div>
+    <div class="kpi-card lovefm">
+      <div class="kpi-label">러브FM</div>
+      <div class="kpi-value" id="kpi-lovefm">--</div>
+      <div class="kpi-sub" id="kpi-lovefm-pct">--</div>
+    </div>
+    <div class="kpi-card gorilam">
+      <div class="kpi-label">고릴라M</div>
+      <div class="kpi-value" id="kpi-gorilam">--</div>
+      <div class="kpi-sub" id="kpi-gorilam-pct">--</div>
+    </div>
+  </div>
+
+  <div class="content-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">AI 브리핑 본문</div>
+        <span class="panel-badge">Claude Sonnet</span>
+      </div>
+      <div class="panel-body" id="briefing-body">
+        <div class="skeleton" style="width:80%"></div>
+        <div class="skeleton" style="width:60%"></div>
+        <div class="skeleton" style="width:90%"></div>
+        <div class="skeleton" style="width:70%"></div>
+        <div class="skeleton" style="width:85%"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">상위 프로그램</div>
+        <div class="updated-at"><span class="status-dot"></span><span id="updated-at">--</span></div>
+      </div>
+      <div class="panel-body">
+        <ul class="rank-list" id="rank-list">
+          <div class="skeleton"></div>
+          <div class="skeleton" style="width:85%"></div>
+          <div class="skeleton" style="width:75%"></div>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-header"><div class="panel-title">채널별 DAU 현황</div></div>
+    <div class="panel-body">
+      <div class="channel-grid" id="channel-grid">
+        <div class="skeleton" style="height:80px;border-radius:8px;"></div>
+        <div class="skeleton" style="height:80px;border-radius:8px;"></div>
+        <div class="skeleton" style="height:80px;border-radius:8px;"></div>
+        <div class="skeleton" style="height:80px;border-radius:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="query-wrap">
+    <div class="query-label">AI 질의 · CLAUDE API</div>
+    <div class="query-row">
+      <input class="query-input" id="query-input" type="text"
+        placeholder="예) 컬투쇼 DAU 알려줘 / 파워FM 어제 성과는? / 깊은청취율이 높은 프로그램은?"
+        onkeydown="if(event.key==='Enter')sendQuery()">
+      <button class="query-btn" id="query-btn" onclick="sendQuery()">질의 →</button>
+    </div>
+    <div class="query-result" id="query-result"></div>
+  </div>
+</main>
+
+<script>
+// ── API 엔드포인트 (로컬 프록시 서버) ───────────────
+const API = 'http://localhost:5000';
+// ────────────────────────────────────────────────────
+
+let _ctx = {}, _topPrograms = [];
+
+function fmt(n) {
+  const v = parseFloat(n) || 0;
+  return v >= 10000 ? (v/1000).toFixed(1)+'k' : Math.round(v).toLocaleString();
+}
+function pct(v, total) {
+  return total > 0 ? ((parseFloat(v)||0)/total*100).toFixed(1)+'%' : '--';
+}
+
+function parseBriefing(text) {
+  if (!text) return '<div class="brief-section"><div class="brief-section-body">데이터 없음</div></div>';
+  const raw = text.replace(/\\n/g, '\n');
+  const sections = [
+    { label:'01 / 핵심지표 요약',   re:/##?\s*1[.\s]*핵심지표[^\n]*\n([\s\S]*?)(?=##?\s*2|$)/ },
+    { label:'02 / 주목할 점',       re:/##?\s*2[.\s]*주목[^\n]*\n([\s\S]*?)(?=##?\s*3|$)/ },
+    { label:'03 / 프로그램 하이라이트', re:/##?\s*3[.\s]*프로그램[^\n]*\n([\s\S]*?)(?=##?\s*4|$)/ },
+    { label:'04 / 한줄 코멘트',     re:/##?\s*4[.\s]*한줄[^\n]*\n([\s\S]*)$/ },
+  ];
+  let html = '', found = false;
+  for (const s of sections) {
+    const m = raw.match(s.re);
+    if (m && m[1].trim()) {
+      found = true;
+      const body = m[1].trim()
+        .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+        .replace(/^\s*-\s/gm,'• ');
+      html += `<div class="brief-section">
+        <div class="brief-section-num">${s.label}</div>
+        <div class="brief-section-body">${body}</div>
+      </div>`;
+    }
+  }
+  if (!found) {
+    const clean = raw.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+    html = `<div class="brief-section"><div class="brief-section-body">${clean}</div></div>`;
+  }
+  return html;
+}
+
+async function loadData() {
+  document.getElementById('loading-overlay').style.display = 'flex';
+  document.getElementById('loading-text').textContent = '브리핑 데이터 조회 중...';
+  try {
+    // 1. 브리핑 + KPI
+    const br = await fetch(`${API}/api/briefing`).then(r => r.json());
+    if (!br.ok) throw new Error(br.error || '브리핑 데이터 없음');
+    const d = br.data;
+    _ctx = d;
+    const total = parseFloat(d.total_dau) || 1;
+
+    document.getElementById('header-date').textContent = d.report_date || '--';
+    document.getElementById('updated-at').textContent = (d.updated_at||'').substring(11,16);
+    document.getElementById('kpi-dau').textContent = fmt(d.total_dau);
+    document.getElementById('kpi-deep').textContent = (parseFloat(d.deep_listen_rate)||0).toFixed(1)+'%';
+    document.getElementById('kpi-powerfm').textContent = fmt(d.powerfm_dau);
+    document.getElementById('kpi-lovefm').textContent  = fmt(d.lovefm_dau);
+    document.getElementById('kpi-gorilam').textContent = fmt(d.gorilam_dau);
+    document.getElementById('kpi-powerfm-pct').textContent = pct(d.powerfm_dau,total)+' 점유';
+    document.getElementById('kpi-lovefm-pct').textContent  = pct(d.lovefm_dau,total)+' 점유';
+    document.getElementById('kpi-gorilam-pct').textContent = pct(d.gorilam_dau,total)+' 점유';
+
+    const wow = parseFloat(d.dau_wow_pct) || 0;
+    const wowCls = wow>0?'up':wow<0?'down':'flat';
+    const wowArrow = wow>0?'▲ +':wow<0?'▼ ':'→ ';
+    document.getElementById('kpi-wow').innerHTML =
+      `<div class="kpi-wow ${wowCls}">${wowArrow}${Math.abs(wow).toFixed(1)}% WoW</div>`;
+
+    document.getElementById('briefing-body').innerHTML = parseBriefing(d.briefing);
+
+    document.getElementById('channel-grid').innerHTML = `
+      <div class="ch-card"><div class="ch-card-label">파워FM</div><div class="ch-card-val" style="color:var(--powerfm)">${fmt(d.powerfm_dau)}</div><div class="ch-card-pct">${pct(d.powerfm_dau,total)}</div></div>
+      <div class="ch-card"><div class="ch-card-label">러브FM</div><div class="ch-card-val" style="color:var(--lovefm)">${fmt(d.lovefm_dau)}</div><div class="ch-card-pct">${pct(d.lovefm_dau,total)}</div></div>
+      <div class="ch-card"><div class="ch-card-label">고릴라M</div><div class="ch-card-val" style="color:var(--gorilam)">${fmt(d.gorilam_dau)}</div><div class="ch-card-pct">${pct(d.gorilam_dau,total)}</div></div>
+      <div class="ch-card"><div class="ch-card-label">픽채널</div><div class="ch-card-val" style="color:var(--pick)">${fmt(d.pick_dau)}</div><div class="ch-card-pct">${pct(d.pick_dau,total)}</div></div>`;
+
+    // 2. 프로그램 순위
+    document.getElementById('loading-text').textContent = '프로그램 순위 조회 중...';
+    const tr = await fetch(`${API}/api/top_programs`).then(r => r.json());
+    if (tr.ok && tr.data.length) {
+      _topPrograms = tr.data;
+      const maxDau = Math.max(...tr.data.map(r => parseFloat(r.dau)||0)) || 1;
+      document.getElementById('rank-list').innerHTML = tr.data.map(r => {
+        const barW = Math.round((parseFloat(r.dau)||0)/maxDau*100);
+        const isTop3 = parseInt(r.rank) <= 3;
+        const chCls = 'ch-'+(r.channel||'');
+        return `<li class="rank-item">
+          <span class="rank-num ${isTop3?'top3':''}">${r.rank}</span>
+          <div class="rank-info">
+            <div class="rank-name">${r.pgm_name}<span class="rank-ch ${chCls}">${r.channel}</span></div>
+            <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${barW}%"></div></div>
+          </div>
+          <div class="rank-dau">${(parseFloat(r.dau)||0).toLocaleString()}</div>
+        </li>`;
+      }).join('');
+    }
+  } catch(e) {
+    console.error(e);
+    document.getElementById('briefing-body').innerHTML =
+      `<div class="error-msg">오류: ${e.message}<br><br>
+      해결 방법:<br>
+      1. raas_server.py 실행 확인 → <code>python raas_server.py</code><br>
+      2. http://localhost:5000 접속 중인지 확인<br>
+      3. raas_server.py의 SPLUNK_PASSWORD 설정 확인</div>`;
+  } finally {
+    document.getElementById('loading-overlay').style.display = 'none';
+  }
+}
+
+async function sendQuery() {
+  const q = document.getElementById('query-input').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('query-btn');
+  const resultEl = document.getElementById('query-result');
+  btn.disabled = true; btn.textContent = '처리 중...';
+  resultEl.className = 'query-result visible';
+  resultEl.textContent = '▌';
+
+  const d = _ctx;
+  const total = parseFloat(d.total_dau) || 1;
+  const pgmList = _topPrograms.map(r =>
+    `  ${r.rank}. ${r.pgm_name}(${r.channel}): ${(parseFloat(r.dau)||0).toLocaleString()}명`).join('\n');
+  const context = `날짜: ${d.report_date}
+전체DAU: ${(parseFloat(d.total_dau)||0).toLocaleString()}명 (전주대비 ${d.dau_wow_pct}%)
+깊은청취율: ${d.deep_listen_rate}%
+파워FM: ${(parseFloat(d.powerfm_dau)||0).toLocaleString()}명 (${pct(d.powerfm_dau,total)})
+러브FM: ${(parseFloat(d.lovefm_dau)||0).toLocaleString()}명 (${pct(d.lovefm_dau,total)})
+고릴라M: ${(parseFloat(d.gorilam_dau)||0).toLocaleString()}명 (${pct(d.gorilam_dau,total)})
+
+상위 프로그램:
+${pgmList}`;
+
+  try {
+    const resp = await fetch(`${API}/api/query`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ question: q, context })
+    });
+    const json = await resp.json();
+    resultEl.textContent = json.ok ? json.answer : ('오류: ' + json.error);
+  } catch(e) {
+    resultEl.textContent = `오류: ${e.message}`;
+  }
+  btn.disabled = false; btn.textContent = '질의 →';
+}
+
+loadData();
+</script>
+</body>
+</html>
