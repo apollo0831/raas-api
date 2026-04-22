@@ -31,6 +31,7 @@ import os
 load_dotenv()
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
+import raas_briefing_engine as BE
 
 # ── 설정 ─────────────────────────────────────────────
 PORT            = 5000
@@ -84,7 +85,7 @@ def call_claude(system: str, user: str) -> str:
         "https://api.anthropic.com/v1/messages", data=payload,
         headers={"Content-Type": "application/json",
                  "anthropic-version": "2023-06-01",
-                 "x-api-key": ANTHROPIC_KEY})
+                 "x-api-key": ANTHROPIC_API_KEY})
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read())["content"][0]["text"]
 
@@ -129,8 +130,34 @@ class RAASHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/api/briefing":
             try:
-                rows = splunk_search("| inputlookup raas_briefing_latest.csv | head 1")
-                self.send_json({"ok": True, "data": rows[0] if rows else {}})
+                # 전체 데이터 수집
+                data = BE.collect_all(splunk_search)
+
+                # Claude 인사이트 생성
+                context = data.get("claude_context", "")
+                s7_alerts = data.get("s7_anomalies", {}).get("alerts", [])
+                alert_text = "\\n".join(a["msg"] for a in s7_alerts)
+
+                claude_prompt = f"""다음은 오늘 SBS 고릴라 라디오 앱의 핵심 지표입니다.
+
+{context}
+
+위 데이터를 바탕으로 아래 4가지를 간결하게 작성하세요 (전체 400자 이내):
+
+01 / 핵심지표 요약 (3줄: DAU·깊은청취율·채널 현황)
+02 / 주목할 점 (2줄: 오늘 특이사항, 전주 대비 변화)
+03 / 프로그램 하이라이트 (2줄: 1위 프로그램과 주목 프로그램)
+04 / 액션 추천 (1줄: 오늘 가장 중요한 조치 1가지)"""
+
+                brief_text = call_claude(
+                    "SBS 고릴라 라디오 앱 데이터 분석 어시스턴트. 한국어로 간결하게. 수치는 천단위 쉼표.",
+                    claude_prompt
+                )
+
+                self.send_json({
+                    "ok":   True,
+                    "data": {**data, "brief": brief_text}
+                })
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
@@ -156,26 +183,31 @@ class RAASHandler(BaseHTTPRequestHandler):
         if self.path == "/api/query":
             try:
                 question    = body.get("question", "")
-                target_date = body.get("date", None)
                 context     = body.get("context", "")
+                target_date = body.get("date", None)
+
                 if not question:
                     self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
                     return
 
                 if QUERY_ENGINE_AVAILABLE:
-                    # 새 질의 엔진 — 의도 분석 + 동적 Splunk 조회
                     answer = QE.query(question, target_date=target_date)
                 else:
-                    # 폴백: 기존 방식 (context 기반)
+                    # 컨텍스트가 없으면 최신 브리핑 데이터 사용
+                    if not context:
+                        try:
+                            bd = BE.collect_all(splunk_search)
+                            context = bd.get("claude_context", "")
+                        except:
+                            pass
+
                     answer = call_claude(
                         "SBS 고릴라 라디오 앱 데이터 분석 어시스턴트. 한국어로 간결하게 답하세요. 수치는 천단위 쉼표.",
-                        f"데이터:\n{context}\n\n질문: {question}")
+                        f"데이터:\\n{context}\\n\\n질문: {question}"
+                    )
                 self.send_json({"ok": True, "answer": answer})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
-        else:
-            self.send_response(404)
-            self.end_headers()
 
 
 if __name__ == "__main__":
