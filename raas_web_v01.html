@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAAS — 고릴라 AI 브리핑 v2</title>
+<style>
+:root {
+  --bg:       #0d1117;
+  --bg2:      #161b22;
+  --bg3:      #21262d;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #7d8590;
+  --accent:   #58a6ff;
+  --green:    #3fb950;
+  --red:      #f85149;
+  --yellow:   #d29922;
+  --purple:   #bc8cff;
+  --orange:   #e3b341;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px; line-height: 1.5;
+}
+
+/* ── 헤더 ── */
+.header {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+  position: sticky; top: 0; z-index: 100;
+}
+.header h1 { font-size: 15px; font-weight: 600; }
+.header .date { color: var(--muted); font-size: 12px; margin-left: auto; }
+.btn-refresh {
+  background: var(--accent); color: #000; border: none; border-radius: 6px;
+  padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.btn-refresh:hover { opacity: 0.85; }
+.btn-refresh:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── 레이아웃 ── */
+.container { max-width: 1400px; margin: 0 auto; padding: 16px 20px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 1100px) { .grid-4 { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 700px)  { .grid-2,.grid-3,.grid-4 { grid-template-columns: 1fr; } }
+
+/* ── 카드 ── */
+.card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px;
+}
+.card-title {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.card-title .icon { font-size: 13px; }
+
+/* ── S1 Executive ── */
+.kpi-mega { font-size: 32px; font-weight: 700; letter-spacing: -1px; }
+.kpi-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.kpi-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+  margin-top: 4px;
+}
+.up   { background: rgba(63,185,80,.15);  color: var(--green);  }
+.down { background: rgba(248,81,73,.15);  color: var(--red);    }
+.flat { background: rgba(125,133,144,.15); color: var(--muted); }
+
+.funnel-row {
+  display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;
+}
+.funnel-item {
+  flex: 1; min-width: 80px; background: var(--bg3); border-radius: 6px;
+  padding: 8px 10px; text-align: center;
+}
+.funnel-item .val { font-size: 18px; font-weight: 700; }
+.funnel-item .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.funnel-item .pct { font-size: 11px; color: var(--accent); }
+
+/* ── S2 Funnel ── */
+.meter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.meter-label { width: 70px; font-size: 11px; color: var(--muted); }
+.meter-bar { flex: 1; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.meter-fill { height: 100%; border-radius: 3px; transition: width .6s ease; }
+.meter-val { width: 50px; text-align: right; font-size: 12px; font-weight: 600; }
+.meter-diff { width: 55px; text-align: right; font-size: 11px; }
+
+/* ── S3 Engagement ── */
+.donut-wrap { display: flex; align-items: center; gap: 16px; }
+.donut-info .big { font-size: 28px; font-weight: 700; }
+.donut-info .sub { font-size: 11px; color: var(--muted); }
+.engage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.engage-item { background: var(--bg3); border-radius: 6px; padding: 8px 10px; }
+.engage-item .val { font-size: 16px; font-weight: 700; }
+.engage-item .lbl { font-size: 10px; color: var(--muted); }
+
+/* ── S4 Growth ── */
+.habit-gauge {
+  text-align: center; padding: 10px 0;
+}
+.habit-num { font-size: 36px; font-weight: 700; color: var(--purple); }
+.habit-label { font-size: 11px; color: var(--muted); }
+.target-line {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--muted); margin-top: 6px; justify-content: center;
+}
+.target-ok  { color: var(--green); }
+.target-bad { color: var(--red); }
+
+/* ── S5 Rankings ── */
+.rank-tabs {
+  display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.rank-tab {
+  padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+}
+.rank-tab.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
+.rank-list { list-style: none; }
+.rank-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.rank-item:last-child { border-bottom: none; }
+.rank-no { width: 20px; font-size: 11px; color: var(--muted); font-weight: 700; }
+.rank-no.gold   { color: #ffd700; }
+.rank-no.silver { color: #c0c0c0; }
+.rank-no.bronze { color: #cd7f32; }
+.rank-name { flex: 1; font-size: 12px; }
+.rank-ch { font-size: 10px; color: var(--muted); margin-left: 4px; }
+.rank-val { font-size: 12px; font-weight: 600; }
+.rank-badge-deep { font-size: 10px; padding: 1px 5px; border-radius: 3px;
+                   background: rgba(188,140,255,.15); color: var(--purple); }
+.risk-item {
+  display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+  background: rgba(248,81,73,.07); border-radius: 6px; margin-bottom: 4px;
+  font-size: 12px;
+}
+.risk-pct { color: var(--red); font-weight: 600; margin-left: auto; }
+
+/* ── S6 Channels ── */
+.ch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ch-card {
+  background: var(--bg3); border-radius: 6px; padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+}
+.ch-card.ch-L { border-left-color: var(--purple); }
+.ch-card.ch-G { border-left-color: var(--green); }
+.ch-card.ch-P { border-left-color: var(--orange); }
+.ch-name { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.ch-dau  { font-size: 20px; font-weight: 700; }
+.ch-meta { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.ch-tag  { font-size: 10px; padding: 1px 5px; border-radius: 3px;
+           background: var(--bg2); color: var(--muted); }
+.ch-tag.good { color: var(--green); }
+.ch-tag.warn { color: var(--yellow); }
+.ch-tag.bad  { color: var(--red); }
+
+/* ── S7 Alerts ── */
+.alert-item {
+  display: flex; align-items: flex-start; gap: 8px; padding: 7px 10px;
+  border-radius: 6px; margin-bottom: 6px; font-size: 12px;
+}
+.alert-red    { background: rgba(248,81,73,.1);  border-left: 3px solid var(--red); }
+.alert-yellow { background: rgba(210,153,34,.1); border-left: 3px solid var(--yellow); }
+.alert-green  { background: rgba(63,185,80,.1);  border-left: 3px solid var(--green); }
+
+/* ── S8 Claude ── */
+.brief-section {
+  margin-bottom: 10px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.brief-section:last-child { border-bottom: none; margin-bottom: 0; }
+.brief-no { color: var(--accent); font-weight: 700; margin-right: 6px; }
+.brief-text { line-height: 1.65; white-space: pre-wrap; font-size: 13px; }
+
+/* ── 질의 ── */
+.query-wrap {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; margin-top: 12px;
+}
+.query-row { display: flex; gap: 8px; }
+.query-input {
+  flex: 1; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 12px; color: var(--text);
+  font-size: 13px; outline: none;
+}
+.query-input:focus { border-color: var(--accent); }
+.btn-ask {
+  background: var(--bg3); color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.btn-ask:hover { background: rgba(88,166,255,.1); }
+.query-answer {
+  margin-top: 10px; padding: 10px 12px; background: var(--bg3);
+  border-radius: 6px; font-size: 13px; line-height: 1.65;
+  white-space: pre-wrap; display: none;
+}
+
+/* ── 로딩 ── */
+.loading {
+  text-align: center; padding: 60px 20px; color: var(--muted);
+}
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .8s linear infinite; margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 섹션 구분선 ── */
+.section-divider {
+  font-size: 10px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1px;
+  padding: 14px 0 6px; display: flex; align-items: center; gap: 8px;
+}
+.section-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span style="font-size:18px">🎙</span>
+  <h1>RAAS — 고릴라 AI 브리핑</h1>
+  <span class="date" id="headerDate">—</span>
+  <button class="btn-refresh" id="btnRefresh" onclick="loadBriefing()">새로고침</button>
+</div>
+
+<div class="container">
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>브리핑 데이터 수집 중…</p>
+    <p style="font-size:11px;margin-top:6px;color:#555">Splunk 8개 룩업 조회 + Claude 분석</p>
+  </div>
+
+  <div id="content" style="display:none">
+
+    <!-- S1: Executive Summary -->
+    <div class="section-divider">📊 S1 · Executive Summary</div>
+    <div class="grid-4" id="s1Cards">
+      <!-- JS로 채움 -->
+    </div>
+
+    <!-- S2 + S3 -->
+    <div class="section-divider">🔄 S2 · Funnel Health &nbsp;|&nbsp; 🎧 S3 · Engagement Quality</div>
+    <div class="grid-2">
+      <div class="card" id="s2Card">
+        <div class="card-title"><span class="icon">🔄</span>사용자 유입·유출 분석</div>
+        <div id="s2Body">—</div>
+      </div>
+      <div class="card" id="s3Card">
+        <div class="card-title"><span class="icon">🎧</span>청취 품질 분석</div>
+        <div id="s3Body">—</div>
+      </div>
+    </div>
+
+    <!-- S4 + S6 -->
+    <div class="section-divider">🌱 S4 · Growth Quality &nbsp;|&nbsp; 📡 S6 · Channel Deep-dive</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><span class="icon">🌱</span>습관형성 & 신규 코호트</div>
+        <div id="s4Body">—</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">📡</span>채널별 심층 분석</div>
+        <div id="s6Body">—</div>
+      </div>
+    </div>
+
+    <!-- S5: Rankings -->
+    <div class="section-divider">🏆 S5 · Program Rankings</div>
+    <div class="card">
+      <div class="card-title"><span class="icon">🏆</span>프로그램 다차원 랭킹</div>
+      <div class="rank-tabs" id="rankTabs">
+        <button class="rank-tab active" onclick="showRank('dau')">DAU TOP10</button>
+        <button class="rank-tab" onclick="showRank('deep')">깊은청취 TOP5</button>
+        <button class="rank-tab" onclick="showRank('new')">신규유입 TOP5</button>
+        <button class="rank-tab" onclick="showRank('react')">복귀유도 TOP5</button>
+        <button class="rank-tab" onclick="showRank('risk')">⚠️ 이탈주의</button>
+      </div>
+      <div id="rankBody">—</div>
+    </div>
+
+    <!-- S7 + S8 -->
+    <div class="section-divider">🚨 S7 · Anomaly Alerts &nbsp;|&nbsp; 🤖 S8 · Claude Insights</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><span class="icon">🚨</span>이상 징후 알림</div>
+        <div id="s7Body">—</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">🤖</span>AI 종합 인사이트</div>
+        <div id="s8Body">—</div>
+      </div>
+    </div>
+
+    <!-- 자연어 질의 -->
+    <div class="query-wrap">
+      <div class="card-title" style="margin-bottom:10px"><span class="icon">💬</span>AI 질의 · CLAUDE API</div>
+      <div class="query-row">
+        <input class="query-input" id="queryInput"
+               placeholder="예: 오늘 파워FM에서 이탈률이 가장 높은 프로그램은?" />
+        <button class="btn-ask" onclick="askQuery()">질의 →</button>
+      </div>
+      <div class="query-answer" id="queryAnswer"></div>
+    </div>
+
+  </div><!-- /content -->
+</div>
+
+<script>
+let _data = null;
+let _rankMode = 'dau';
+
+// ── 숫자 포맷 ──────────────────────────────
+const fmt  = n => n == null ? '—' : Number(n).toLocaleString('ko-KR');
+const fmtK = n => {
+  if (n == null) return '—';
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000)    return (n/1000).toFixed(1) + 'k';
+  return String(n);
+};
+const fmtPct = (n, digits=1) => n == null ? '—' : n.toFixed(digits) + '%';
+const fmtDiff = (n, unit='%', digits=1) => {
+  if (n == null) return '';
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(digits)}${unit}`;
+};
+const badge = (v, unit='%') => {
+  if (v == null) return '';
+  const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+  const icon = v > 0 ? '▲' : v < 0 ? '▼' : '→';
+  return `<span class="kpi-badge ${cls}">${icon} ${fmtDiff(v, unit)}</span>`;
+};
+
+// ── S1: Executive Summary ──────────────────
+function renderS1(s1) {
+  const cards = [
+    {
+      label: 'TOTAL DAU',
+      val:   fmtK(s1.dau),
+      sub:   '일간 활성사용자',
+      badge: badge(s1.dau_wow),
+    },
+    {
+      label: 'WAU 롤링',
+      val:   fmtK(s1.wau),
+      sub:   '7일 롤링 활성',
+      badge: '',
+    },
+    {
+      label: 'MAU 롤링',
+      val:   fmtK(s1.mau),
+      sub:   '30일 롤링 활성',
+      badge: '',
+    },
+    {
+      label: '신규 / 복귀',
+      val:   `${fmtK(s1.new_user)} / ${fmtK(s1.react_user)}`,
+      sub:   `신규 ${fmtPct(s1.new_pct)} | 복귀 ${fmtPct(s1.react_pct)}`,
+      badge: '',
+    },
+  ];
+
+  document.getElementById('s1Cards').innerHTML = cards.map(c => `
+    <div class="card">
+      <div class="card-title">${c.label}</div>
+      <div class="kpi-mega">${c.val}</div>
+      <div class="kpi-label">${c.sub}</div>
+      ${c.badge}
+    </div>`).join('');
+}
+
+// ── S2: Funnel Health ──────────────────────
+function renderS2(s2) {
+  const rows = [
+    { label: '신규',   val: s2.new_user,   pct: s2.new_pct,   diff: s2.new_wow,   unit: '%', color: '#58a6ff' },
+    { label: '유지',   val: s2.mt_user,    pct: s2.mt_pct,    diff: null,          unit: '%', color: '#3fb950' },
+    { label: '복귀',   val: s2.react_user, pct: s2.react_pct, diff: s2.react_wow, unit: '%', color: '#bc8cff' },
+    { label: '이탈율', val: null, pct: s2.churn_rate,  diff: s2.churn_rate_diff, unit: 'pp', color: '#f85149' },
+  ];
+
+  const meterHtml = rows.map(r => {
+    const pct = r.pct || 0;
+    const diffStr = r.diff != null ? `<span class="${r.diff > 0 ? 'up' : 'down'}" style="font-size:11px">${fmtDiff(r.diff, r.unit)}</span>` : '';
+    return `
+    <div class="meter-row">
+      <span class="meter-label">${r.label}</span>
+      <div class="meter-bar">
+        <div class="meter-fill" style="width:${Math.min(pct,100)}%;background:${r.color}"></div>
+      </div>
+      <span class="meter-val">${r.val != null ? fmtK(r.val) : fmtPct(r.pct)}</span>
+      <span class="meter-diff">${diffStr}</span>
+    </div>`;
+  }).join('');
+
+  const retentionHtml = `
+    <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap">
+      <div class="funnel-item">
+        <div class="val">${fmtPct(s2.d1_retention)}</div>
+        <div class="lbl">D1 유지율</div>
+        <div class="pct">${fmtDiff(s2.d1_diff, 'pp')}</div>
+      </div>
+      <div class="funnel-item">
+        <div class="val">${fmtPct(s2.d7_retention)}</div>
+        <div class="lbl">D7 유지율</div>
+        <div class="pct">${fmtDiff(s2.d7_diff, 'pp')}</div>
+      </div>
+      <div class="funnel-item">
+        <div class="val">${fmtPct(s2.react_rate)}</div>
+        <div class="lbl">복귀율</div>
+        <div class="pct">${fmt(s2.dormant_pool)} 풀</div>
+      </div>
+    </div>`;
+
+  document.getElementById('s2Body').innerHTML = meterHtml + retentionHtml;
+}
+
+// ── S3: Engagement Quality ─────────────────
+function renderS3(s3) {
+  const deepDiff = s3.deep_rate_diff;
+  const engDiff  = s3.engage_rate_diff;
+  const ch = s3.channel_deep || {};
+
+  const chHtml = Object.entries(ch).map(([code, d]) =>
+    `<div class="engage-item">
+      <div class="val">${fmtPct(d.rate)}</div>
+      <div class="lbl">${d.name} 깊은청취</div>
+    </div>`
+  ).join('');
+
+  document.getElementById('s3Body').innerHTML = `
+    <div class="donut-wrap">
+      <div class="donut-info">
+        <div class="big" style="color:var(--purple)">${fmtPct(s3.deep_rate)}</div>
+        <div class="sub">깊은청취율 (10분이상/1분이상)</div>
+        <div style="margin-top:4px">${badge(deepDiff, 'pp')}</div>
+      </div>
+      <div style="flex:1">
+        <div class="engage-item" style="margin-bottom:6px">
+          <div class="val" style="color:var(--orange)">${fmtPct(s3.engage_rate)}</div>
+          <div class="lbl">참여율 (공감·공유·검색)</div>
+          <div style="font-size:11px;color:var(--muted)">${fmtDiff(engDiff, 'pp')}</div>
+        </div>
+      </div>
+    </div>
+    <div class="engage-grid" style="margin-top:10px">${chHtml}</div>`;
+}
+
+// ── S4: Growth Quality ─────────────────────
+function renderS4(s4) {
+  const habitOk = (s4.habit_rate || 0) >= 30;
+  const top3 = (s4.top3_habit || []).map(p =>
+    `<div class="meter-row">
+      <span class="meter-label" style="width:100px">${p.name}</span>
+      <div class="meter-bar">
+        <div class="meter-fill" style="width:${Math.min(p.rate||0,100)}%;background:var(--purple)"></div>
+      </div>
+      <span class="meter-val">${fmtPct(p.rate)}</span>
+    </div>`
+  ).join('');
+
+  document.getElementById('s4Body').innerHTML = `
+    <div class="habit-gauge">
+      <div class="habit-num">${fmtPct(s4.habit_rate)}</div>
+      <div class="habit-label">습관형성률 (7일내 3일이상 청취)</div>
+      <div class="target-line">
+        목표 30%
+        <span class="${habitOk ? 'target-ok' : 'target-bad'}">
+          ${habitOk ? '✅ 달성' : '❌ 미달'} ${fmtDiff(s4.habit_diff, 'pp')}
+        </span>
+      </div>
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">신규 D1 ${fmtPct(s4.new_d1)} | D7 ${fmtPct(s4.new_d7)} | 활성비 ${fmtPct(s4.new_quality)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">프로그램별 습관형성률 TOP3</div>
+      ${top3}
+    </div>`;
+}
+
+// ── S5: Rankings ───────────────────────────
+function showRank(mode) {
+  _rankMode = mode;
+  document.querySelectorAll('.rank-tab').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase().includes(
+      mode === 'dau' ? 'dau' : mode === 'deep' ? '깊은' : mode === 'new' ? '신규' : mode === 'react' ? '복귀' : '이탈'
+    ));
+  });
+  if (!_data) return;
+  const s5 = _data.s5_rankings || {};
+  renderRankBody(s5, mode);
+}
+
+function renderRankBody(s5, mode) {
+  let html = '';
+  if (mode === 'dau') {
+    html = `<ul class="rank-list">${(s5.dau_top10 || []).map((p, i) => {
+      const noClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      return `<li class="rank-item">
+        <span class="rank-no ${noClass}">${p.rank || i+1}</span>
+        <span class="rank-name">${p.name}<span class="rank-ch">${p.channel || ''}</span></span>
+        <span class="rank-val">${fmtK(p.dau)}</span>
+      </li>`;
+    }).join('')}</ul>`;
+  } else if (mode === 'deep') {
+    html = `<ul class="rank-list">${(s5.deep_top5 || []).map((p, i) => `
+      <li class="rank-item">
+        <span class="rank-no">${i+1}</span>
+        <span class="rank-name">${p.name}</span>
+        <span class="rank-badge-deep">${fmtPct(p.rate)}</span>
+        <span class="rank-val" style="color:var(--muted);font-size:11px">${fmtK(p.u1min)}명</span>
+      </li>`).join('')}</ul>`;
+  } else if (mode === 'new') {
+    html = `<ul class="rank-list">${(s5.new_top5 || []).map((p, i) => `
+      <li class="rank-item">
+        <span class="rank-no">${i+1}</span>
+        <span class="rank-name">${p.name}</span>
+        <span class="rank-val" style="color:var(--green)">${fmtK(p.count)}</span>
+      </li>`).join('')}</ul>`;
+  } else if (mode === 'react') {
+    html = `<ul class="rank-list">${(s5.react_top5 || []).map((p, i) => `
+      <li class="rank-item">
+        <span class="rank-no">${i+1}</span>
+        <span class="rank-name">${p.name}</span>
+        <span class="rank-val" style="color:var(--purple)">${fmtK(p.count)}</span>
+      </li>`).join('')}</ul>`;
+  } else if (mode === 'risk') {
+    const risks = s5.risk_list || [];
+    html = risks.length === 0
+      ? '<div style="color:var(--green);font-size:12px;padding:8px 0">✅ 3일 연속 하락 프로그램 없음</div>'
+      : risks.map(r => `
+        <div class="risk-item">
+          <span>⚠️ ${r.name}</span>
+          <span style="color:var(--muted);font-size:11px">${fmtK(r.dau_3d_ago)} → ${fmtK(r.dau_today)}</span>
+          <span class="risk-pct">${fmtDiff(r.drop_rate)}</span>
+        </div>`).join('');
+  }
+  document.getElementById('rankBody').innerHTML = html || '<div style="color:var(--muted);padding:8px 0">데이터 없음</div>';
+}
+
+// ── S6: Channels ───────────────────────────
+function renderS6(s6) {
+  const channels = s6.channels || [];
+  const chMap = { F00: '', L00: 'ch-L', G00: 'ch-G', P00: 'ch-P' };
+  const html = `<div class="ch-grid">${channels.map(ch => {
+    const deepCls = (ch.deep_rate || 0) >= 90 ? 'good' : (ch.deep_rate || 0) >= 80 ? '' : 'warn';
+    const churnCls = (ch.churn_rate || 0) >= 30 ? 'bad' : (ch.churn_rate || 0) >= 25 ? 'warn' : 'good';
+    return `<div class="ch-card ${chMap[ch.code] || ''}">
+      <div class="ch-name">${ch.name}</div>
+      <div class="ch-dau">${fmtK(ch.dau)}</div>
+      <div style="font-size:11px;color:var(--muted)">점유율 ${fmtPct(ch.share)}</div>
+      <div class="ch-meta">
+        <span class="ch-tag ${deepCls}">깊은청취 ${fmtPct(ch.deep_rate)}</span>
+        <span class="ch-tag ${churnCls}">이탈 ${fmtPct(ch.churn_rate)}</span>
+        <span class="ch-tag">복귀율 ${fmtPct(ch.react_rate)}</span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+  document.getElementById('s6Body').innerHTML = html;
+}
+
+// ── S7: Alerts ─────────────────────────────
+function renderS7(s7) {
+  const alerts = s7.alerts || [];
+  document.getElementById('s7Body').innerHTML = alerts.map(a =>
+    `<div class="alert-item alert-${a.level}">${a.msg}</div>`
+  ).join('') || '<div style="color:var(--green)">✅ 이상 없음</div>';
+}
+
+// ── S8: Claude Brief ───────────────────────
+function renderS8(brief) {
+  if (!brief) { document.getElementById('s8Body').innerHTML = '<div style="color:var(--muted)">브리핑 로딩 중…</div>'; return; }
+  // 섹션 파싱 (01 / 02 / 03 / 04 패턴)
+  const sections = brief.split(/(?=\d{2}\s*\/)/);
+  const html = sections.map(s => s.trim()).filter(Boolean).map(s =>
+    `<div class="brief-section"><span class="brief-text">${s.replace(/\n/g,'<br>')}</span></div>`
+  ).join('');
+  document.getElementById('s8Body').innerHTML = html || `<div class="brief-text">${brief}</div>`;
+}
+
+// ── 메인 로드 ──────────────────────────────
+async function loadBriefing() {
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true; btn.textContent = '로딩 중…';
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('content').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/briefing');
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+
+    const d = json.data;
+    _data = d;
+
+    document.getElementById('headerDate').textContent =
+      d.s1_executive?.date || d.collected_at || '';
+
+    renderS1(d.s1_executive || {});
+    renderS2(d.s2_funnel    || {});
+    renderS3(d.s3_engagement|| {});
+    renderS4(d.s4_growth    || {});
+    renderRankBody(d.s5_rankings || {}, _rankMode);
+    renderS6(d.s6_channels  || {});
+    renderS7(d.s7_anomalies || {});
+    renderS8(d.brief || '');
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  } catch(e) {
+    document.getElementById('loading').innerHTML =
+      `<div style="color:var(--red)">오류: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = '새로고침';
+  }
+}
+
+// ── 자연어 질의 ────────────────────────────
+async function askQuery() {
+  const q = document.getElementById('queryInput').value.trim();
+  if (!q) return;
+  const ans = document.getElementById('queryAnswer');
+  ans.style.display = 'block';
+  ans.textContent = '분석 중…';
+  try {
+    const ctx = _data?.claude_context || '';
+    const res = await fetch('/api/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ question: q, context: ctx })
+    });
+    const j = await res.json();
+    ans.textContent = j.ok ? j.answer : ('오류: ' + j.error);
+  } catch(e) { ans.textContent = '오류: ' + e.message; }
+}
+
+document.getElementById('queryInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') askQuery();
+});
+
+// 초기 로드
+loadBriefing();
+</script>
+</body>
+</html>

@@ -2,655 +2,1116 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RAAS — 고릴라 AI 브리핑 v2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>RAAS — 고릴라 분석 대시보드</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
 :root {
-  --bg:       #0d1117;
-  --bg2:      #161b22;
-  --bg3:      #21262d;
-  --border:   #30363d;
-  --text:     #e6edf3;
-  --muted:    #7d8590;
-  --accent:   #58a6ff;
-  --green:    #3fb950;
-  --red:      #f85149;
-  --yellow:   #d29922;
-  --purple:   #bc8cff;
-  --orange:   #e3b341;
+  --bg0:    #080c10;
+  --bg1:    #0f1419;
+  --bg2:    #161d26;
+  --bg3:    #1e2833;
+  --bg4:    #263040;
+  --line:   rgba(255,255,255,.07);
+  --line2:  rgba(255,255,255,.12);
+  --text:   #e8edf3;
+  --sub:    #7a8899;
+  --dim:    #4a5566;
+  --accent: #00c8ff;
+  --green:  #00e07a;
+  --red:    #ff4d6a;
+  --yellow: #ffb830;
+  --purple: #a78bfa;
+  --orange: #ff8c42;
+  --mono:   'JetBrains Mono', monospace;
+  --sans:   'Noto Sans KR', sans-serif;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  background: var(--bg); color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 13px; line-height: 1.5;
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg0);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.5;
+  min-height:100vh;
 }
+
+/* ── 스크롤바 ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg1)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
 
 /* ── 헤더 ── */
-.header {
-  background: var(--bg2); border-bottom: 1px solid var(--border);
-  padding: 12px 20px; display: flex; align-items: center; gap: 12px;
-  position: sticky; top: 0; z-index: 100;
+.header{
+  position:sticky;top:0;z-index:200;
+  background:linear-gradient(180deg,var(--bg0) 80%,transparent);
+  padding:12px 16px 8px;
 }
-.header h1 { font-size: 15px; font-weight: 600; }
-.header .date { color: var(--muted); font-size: 12px; margin-left: auto; }
-.btn-refresh {
-  background: var(--accent); color: #000; border: none; border-radius: 6px;
-  padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+.header-top{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:10px;
 }
-.btn-refresh:hover { opacity: 0.85; }
-.btn-refresh:disabled { opacity: 0.4; cursor: not-allowed; }
+.header-logo{
+  font-size:18px;font-weight:900;letter-spacing:-0.5px;
+  background:linear-gradient(135deg,var(--accent),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.header-date{
+  font-family:var(--mono);font-size:11px;color:var(--sub);
+  margin-left:auto;
+}
+.btn-refresh{
+  background:var(--bg3);border:1px solid var(--line2);
+  color:var(--accent);border-radius:8px;
+  padding:6px 12px;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:var(--sans);
+  transition:all .2s;
+}
+.btn-refresh:active{transform:scale(.96)}
+.btn-refresh:disabled{opacity:.4;cursor:not-allowed}
 
-/* ── 레이아웃 ── */
-.container { max-width: 1400px; margin: 0 auto; padding: 16px 20px; }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-@media (max-width: 1100px) { .grid-4 { grid-template-columns: repeat(2,1fr); } }
-@media (max-width: 700px)  { .grid-2,.grid-3,.grid-4 { grid-template-columns: 1fr; } }
+/* ── 기간 탭 ── */
+.period-tabs{
+  display:flex;gap:4px;
+  background:var(--bg2);
+  border-radius:10px;padding:3px;
+}
+.period-tab{
+  flex:1;text-align:center;
+  padding:6px 0;font-size:13px;font-weight:600;
+  border-radius:8px;cursor:pointer;
+  color:var(--sub);border:none;background:transparent;
+  font-family:var(--sans);transition:all .2s;
+}
+.period-tab.active{
+  background:var(--bg4);color:var(--text);
+  box-shadow:0 2px 8px rgba(0,0,0,.4);
+}
 
-/* ── 카드 ── */
-.card {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 14px 16px;
+/* ── 컨테이너 ── */
+.container{padding:0 16px 80px}
+.section{margin-bottom:24px}
+.section-title{
+  font-size:11px;font-weight:700;
+  color:var(--sub);text-transform:uppercase;
+  letter-spacing:1.2px;
+  margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
 }
-.card-title {
-  font-size: 11px; font-weight: 600; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
-  display: flex; align-items: center; gap: 6px;
+.section-title::after{
+  content:'';flex:1;height:1px;
+  background:var(--line);
 }
-.card-title .icon { font-size: 13px; }
 
-/* ── S1 Executive ── */
-.kpi-mega { font-size: 32px; font-weight: 700; letter-spacing: -1px; }
-.kpi-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.kpi-badge {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
-  margin-top: 4px;
+/* ── 헬스 스코어 ── */
+.health-bar{
+  background:var(--bg2);border-radius:12px;
+  padding:14px 16px;
+  border:1px solid var(--line);
 }
-.up   { background: rgba(63,185,80,.15);  color: var(--green);  }
-.down { background: rgba(248,81,73,.15);  color: var(--red);    }
-.flat { background: rgba(125,133,144,.15); color: var(--muted); }
+.health-top{
+  display:flex;justify-content:space-between;
+  align-items:center;margin-bottom:10px;
+}
+.health-score-num{
+  font-family:var(--mono);font-size:32px;font-weight:600;
+}
+.health-label{font-size:11px;color:var(--sub)}
+.health-track{
+  height:6px;background:var(--bg4);border-radius:3px;
+  overflow:hidden;margin-bottom:10px;
+}
+.health-fill{
+  height:100%;border-radius:3px;
+  transition:width .8s cubic-bezier(.4,0,.2,1);
+  background:linear-gradient(90deg,var(--red),var(--yellow),var(--green));
+  background-size:200% 100%;
+}
+.health-dots{
+  display:flex;gap:6px;flex-wrap:wrap;
+}
+.hdot{
+  font-size:10px;padding:2px 7px;border-radius:4px;
+  font-family:var(--mono);
+}
+.hdot.g{background:rgba(0,224,122,.1);color:var(--green)}
+.hdot.y{background:rgba(255,184,48,.1);color:var(--yellow)}
+.hdot.r{background:rgba(255,77,106,.1);color:var(--red)}
 
-.funnel-row {
-  display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;
+/* ── KPI 카드 그리드 ── */
+.kpi-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
 }
-.funnel-item {
-  flex: 1; min-width: 80px; background: var(--bg3); border-radius: 6px;
-  padding: 8px 10px; text-align: center;
+.kpi-card{
+  background:var(--bg2);border-radius:12px;
+  padding:12px 14px;border:1px solid var(--line);
+  position:relative;overflow:hidden;
 }
-.funnel-item .val { font-size: 18px; font-weight: 700; }
-.funnel-item .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
-.funnel-item .pct { font-size: 11px; color: var(--accent); }
+.kpi-card::before{
+  content:'';position:absolute;
+  top:0;left:0;right:0;height:2px;
+}
+.kpi-card.c-blue::before{background:var(--accent)}
+.kpi-card.c-green::before{background:var(--green)}
+.kpi-card.c-purple::before{background:var(--purple)}
+.kpi-card.c-orange::before{background:var(--orange)}
+.kpi-label{font-size:10px;color:var(--sub);font-weight:500;margin-bottom:4px}
+.kpi-val{
+  font-family:var(--mono);font-size:22px;font-weight:600;
+  line-height:1.1;margin-bottom:4px;
+}
+.kpi-sub{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+}
+.kpi-wow{
+  font-size:11px;font-weight:600;
+  font-family:var(--mono);
+  padding:1px 5px;border-radius:4px;
+}
+.kpi-wow.up{background:rgba(0,224,122,.12);color:var(--green)}
+.kpi-wow.dn{background:rgba(255,77,106,.12);color:var(--red)}
+.kpi-wow.fl{background:rgba(122,136,153,.12);color:var(--sub)}
+.kpi-extra{font-size:10px;color:var(--dim)}
 
-/* ── S2 Funnel ── */
-.meter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.meter-label { width: 70px; font-size: 11px; color: var(--muted); }
-.meter-bar { flex: 1; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
-.meter-fill { height: 100%; border-radius: 3px; transition: width .6s ease; }
-.meter-val { width: 50px; text-align: right; font-size: 12px; font-weight: 600; }
-.meter-diff { width: 55px; text-align: right; font-size: 11px; }
+/* ── 멀티 기간 행 ── */
+.period-row{
+  display:flex;gap:4px;margin-top:6px;
+}
+.period-pill{
+  flex:1;text-align:center;
+  background:var(--bg3);border-radius:6px;
+  padding:4px 2px;
+}
+.pp-label{font-size:9px;color:var(--dim);display:block}
+.pp-val{font-family:var(--mono);font-size:12px;font-weight:600}
+.pp-diff{font-size:9px;color:var(--sub);font-family:var(--mono)}
+.pp-diff.up{color:var(--green)}
+.pp-diff.dn{color:var(--red)}
 
-/* ── S3 Engagement ── */
-.donut-wrap { display: flex; align-items: center; gap: 16px; }
-.donut-info .big { font-size: 28px; font-weight: 700; }
-.donut-info .sub { font-size: 11px; color: var(--muted); }
-.engage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-.engage-item { background: var(--bg3); border-radius: 6px; padding: 8px 10px; }
-.engage-item .val { font-size: 16px; font-weight: 700; }
-.engage-item .lbl { font-size: 10px; color: var(--muted); }
+/* ── 퍼널 플로우 ── */
+.funnel-wrap{
+  background:var(--bg2);border-radius:12px;
+  padding:14px;border:1px solid var(--line);
+}
+.funnel-flow{
+  display:flex;align-items:stretch;gap:0;
+  margin-bottom:12px;overflow-x:auto;
+  scrollbar-width:none;
+}
+.funnel-flow::-webkit-scrollbar{display:none}
+.funnel-item{
+  flex:1;min-width:70px;
+  background:var(--bg3);
+  padding:10px 8px;
+  text-align:center;
+  position:relative;
+}
+.funnel-item:first-child{border-radius:8px 0 0 8px}
+.funnel-item:last-child{border-radius:0 8px 8px 0}
+.funnel-item+.funnel-item::before{
+  content:'';
+  position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:0;height:0;
+  border-top:8px solid transparent;
+  border-bottom:8px solid transparent;
+  border-left:8px solid var(--bg2);
+  z-index:1;
+}
+.fi-name{font-size:9px;color:var(--sub);margin-bottom:3px}
+.fi-val{font-family:var(--mono);font-size:14px;font-weight:600}
+.fi-pct{font-size:9px;color:var(--accent)}
+.fi-diff{font-size:9px;margin-top:2px}
 
-/* ── S4 Growth ── */
-.habit-gauge {
-  text-align: center; padding: 10px 0;
+.funnel-meta{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
 }
-.habit-num { font-size: 36px; font-weight: 700; color: var(--purple); }
-.habit-label { font-size: 11px; color: var(--muted); }
-.target-line {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--muted); margin-top: 6px; justify-content: center;
+.fm-item{
+  background:var(--bg3);border-radius:8px;
+  padding:8px 10px;
 }
-.target-ok  { color: var(--green); }
-.target-bad { color: var(--red); }
+.fm-label{font-size:10px;color:var(--sub);margin-bottom:2px}
+.fm-val{font-family:var(--mono);font-size:14px;font-weight:600}
+.fm-diff{font-size:10px;font-family:var(--mono)}
+.fm-diff.up{color:var(--green)}
+.fm-diff.dn{color:var(--red)}
+.fm-diff.bad{color:var(--red)}  /* 이탈은 올라가면 나쁨 */
 
-/* ── S5 Rankings ── */
-.rank-tabs {
-  display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap;
+/* ── 코호트 유지율 ── */
+.cohort-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
 }
-.rank-tab {
-  padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
-  border: 1px solid var(--border); background: transparent; color: var(--muted);
+.cohort-card{
+  background:var(--bg2);border-radius:12px;
+  padding:12px 14px;border:1px solid var(--line);
 }
-.rank-tab.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+.cc-header{
+  display:flex;justify-content:space-between;
+  align-items:flex-start;margin-bottom:8px;
+}
+.cc-type{
+  font-size:11px;font-weight:700;color:var(--sub);
+  text-transform:uppercase;letter-spacing:.5px;
+}
+.cc-val{
+  font-family:var(--mono);font-size:24px;font-weight:600;
+}
+.cc-diff{font-size:11px;font-family:var(--mono)}
+.cc-diff.up{color:var(--green)}
+.cc-diff.dn{color:var(--red)}
+.cc-bar{
+  height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;
+}
+.cc-fill{height:100%;border-radius:2px;transition:width .6s ease}
 
-.rank-list { list-style: none; }
-.rank-item {
-  display: flex; align-items: center; gap: 8px; padding: 5px 0;
-  border-bottom: 1px solid var(--border);
+/* ── 품질 지표 ── */
+.quality-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
 }
-.rank-item:last-child { border-bottom: none; }
-.rank-no { width: 20px; font-size: 11px; color: var(--muted); font-weight: 700; }
-.rank-no.gold   { color: #ffd700; }
-.rank-no.silver { color: #c0c0c0; }
-.rank-no.bronze { color: #cd7f32; }
-.rank-name { flex: 1; font-size: 12px; }
-.rank-ch { font-size: 10px; color: var(--muted); margin-left: 4px; }
-.rank-val { font-size: 12px; font-weight: 600; }
-.rank-badge-deep { font-size: 10px; padding: 1px 5px; border-radius: 3px;
-                   background: rgba(188,140,255,.15); color: var(--purple); }
-.risk-item {
-  display: flex; align-items: center; gap: 6px; padding: 5px 8px;
-  background: rgba(248,81,73,.07); border-radius: 6px; margin-bottom: 4px;
-  font-size: 12px;
+.quality-card{
+  background:var(--bg2);border-radius:12px;
+  padding:12px 14px;border:1px solid var(--line);
 }
-.risk-pct { color: var(--red); font-weight: 600; margin-left: auto; }
+.qc-label{font-size:10px;color:var(--sub);margin-bottom:4px}
+.qc-big{font-family:var(--mono);font-size:26px;font-weight:600}
+.qc-unit{font-size:12px;color:var(--sub)}
+.qc-diff{font-size:11px;font-family:var(--mono);margin-top:2px}
+.qc-diff.up{color:var(--green)}
+.qc-diff.dn{color:var(--red)}
+.qc-multi{margin-top:8px;display:flex;gap:4px}
+.qcm{flex:1;text-align:center;background:var(--bg3);border-radius:6px;padding:4px}
+.qcm-l{font-size:9px;color:var(--dim);display:block}
+.qcm-v{font-family:var(--mono);font-size:11px;font-weight:600}
 
-/* ── S6 Channels ── */
-.ch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.ch-card {
-  background: var(--bg3); border-radius: 6px; padding: 10px 12px;
-  border-left: 3px solid var(--accent);
+/* ── 채널 카드 ── */
+.channel-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
 }
-.ch-card.ch-L { border-left-color: var(--purple); }
-.ch-card.ch-G { border-left-color: var(--green); }
-.ch-card.ch-P { border-left-color: var(--orange); }
-.ch-name { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
-.ch-dau  { font-size: 20px; font-weight: 700; }
-.ch-meta { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
-.ch-tag  { font-size: 10px; padding: 1px 5px; border-radius: 3px;
-           background: var(--bg2); color: var(--muted); }
-.ch-tag.good { color: var(--green); }
-.ch-tag.warn { color: var(--yellow); }
-.ch-tag.bad  { color: var(--red); }
+.channel-card{
+  background:var(--bg2);border-radius:12px;
+  padding:12px 14px;border:1px solid var(--line);
+  border-left:3px solid var(--accent);
+}
+.channel-card.lv{border-left-color:var(--purple)}
+.channel-card.gm{border-left-color:var(--green)}
+.channel-card.pk{border-left-color:var(--orange)}
+.ch-name{font-size:11px;font-weight:700;color:var(--sub);margin-bottom:4px}
+.ch-dau{font-family:var(--mono);font-size:20px;font-weight:600}
+.ch-share{font-size:10px;color:var(--dim)}
+.ch-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.ch-tag{
+  font-size:9px;padding:2px 5px;border-radius:4px;
+  font-family:var(--mono);
+}
+.ch-tag.deep{background:rgba(167,139,250,.1);color:var(--purple)}
+.ch-tag.churn{background:rgba(255,77,106,.1);color:var(--red)}
+.ch-tag.react{background:rgba(0,200,255,.1);color:var(--accent)}
+.ch-tag.good-churn{background:rgba(0,224,122,.1);color:var(--green)}
 
-/* ── S7 Alerts ── */
-.alert-item {
-  display: flex; align-items: flex-start; gap: 8px; padding: 7px 10px;
-  border-radius: 6px; margin-bottom: 6px; font-size: 12px;
+/* ── 습관형성 / 복귀율 ── */
+.growth-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  margin-bottom:8px;
 }
-.alert-red    { background: rgba(248,81,73,.1);  border-left: 3px solid var(--red); }
-.alert-yellow { background: rgba(210,153,34,.1); border-left: 3px solid var(--yellow); }
-.alert-green  { background: rgba(63,185,80,.1);  border-left: 3px solid var(--green); }
+.growth-card{
+  background:var(--bg2);border-radius:12px;
+  padding:12px 14px;border:1px solid var(--line);
+}
+.gc-label{font-size:10px;color:var(--sub);margin-bottom:6px}
+.gc-gauge{
+  position:relative;
+  height:6px;background:var(--bg4);border-radius:3px;
+  overflow:visible;margin-bottom:6px;
+}
+.gc-fill{height:100%;border-radius:3px;transition:width .8s ease}
+.gc-target{
+  position:absolute;top:-3px;
+  width:2px;height:12px;background:var(--yellow);border-radius:1px;
+}
+.gc-big{font-family:var(--mono);font-size:24px;font-weight:600}
+.gc-status{font-size:10px;margin-top:2px}
+.gc-status.ok{color:var(--green)}
+.gc-status.warn{color:var(--yellow)}
+.gc-status.bad{color:var(--red)}
 
-/* ── S8 Claude ── */
-.brief-section {
-  margin-bottom: 10px; padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+.habit-top3{margin-top:8px}
+.habit-row{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:6px;
 }
-.brief-section:last-child { border-bottom: none; margin-bottom: 0; }
-.brief-no { color: var(--accent); font-weight: 700; margin-right: 6px; }
-.brief-text { line-height: 1.65; white-space: pre-wrap; font-size: 13px; }
+.hr-rank{
+  font-family:var(--mono);font-size:10px;
+  color:var(--dim);width:14px;
+}
+.hr-name{flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hr-bar{flex:2;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.hr-fill{height:100%;border-radius:2px;background:var(--purple)}
+.hr-val{font-family:var(--mono);font-size:10px;color:var(--purple);width:30px;text-align:right}
+
+/* ── 알림 ── */
+.alerts-list{display:flex;flex-direction:column;gap:6px}
+.alert-item{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:10px 12px;border-radius:10px;
+  font-size:12px;line-height:1.5;
+}
+.alert-item.red{background:rgba(255,77,106,.08);border-left:3px solid var(--red)}
+.alert-item.yellow{background:rgba(255,184,48,.08);border-left:3px solid var(--yellow)}
+.alert-item.green{background:rgba(0,224,122,.08);border-left:3px solid var(--green)}
+
+/* ── 프로그램 테이블 ── */
+.pgm-tabs{
+  display:flex;gap:4px;margin-bottom:10px;
+  overflow-x:auto;scrollbar-width:none;padding-bottom:2px;
+}
+.pgm-tabs::-webkit-scrollbar{display:none}
+.pgm-tab{
+  flex-shrink:0;padding:4px 10px;border-radius:6px;
+  font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid var(--line2);background:transparent;
+  color:var(--sub);font-family:var(--sans);
+  transition:all .2s;
+}
+.pgm-tab.active{
+  background:var(--bg4);color:var(--text);
+  border-color:var(--bg4);
+}
+.pgm-list{display:flex;flex-direction:column;gap:4px}
+.pgm-row{
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg2);border-radius:8px;
+  padding:9px 12px;border:1px solid var(--line);
+}
+.pr-rank{
+  font-family:var(--mono);font-size:11px;
+  color:var(--dim);width:18px;flex-shrink:0;
+}
+.pr-rank.g1{color:#ffd700}
+.pr-rank.g2{color:#c0c0c0}
+.pr-rank.g3{color:#cd7f32}
+.pr-info{flex:1;min-width:0}
+.pr-name{
+  font-size:12px;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pr-channel{font-size:10px;color:var(--dim)}
+.pr-meta{font-size:9px;color:var(--sub);margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pr-val{
+  font-family:var(--mono);font-size:13px;font-weight:600;
+  flex-shrink:0;text-align:right;
+}
+.pr-badge{
+  font-size:9px;padding:2px 5px;border-radius:4px;
+  flex-shrink:0;font-family:var(--mono);
+}
+.pr-badge.deep{background:rgba(167,139,250,.12);color:var(--purple)}
+.pr-badge.warn{background:rgba(255,77,106,.12);color:var(--red)}
+
+/* ── Claude 브리핑 ── */
+.brief-card{
+  background:var(--bg2);border-radius:12px;
+  padding:14px 16px;border:1px solid var(--line);
+}
+.brief-section{
+  margin-bottom:10px;padding-bottom:10px;
+  border-bottom:1px solid var(--line);
+}
+.brief-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.brief-no{color:var(--accent);font-weight:700;font-family:var(--mono)}
+.brief-text{font-size:13px;line-height:1.7;white-space:pre-wrap}
 
 /* ── 질의 ── */
-.query-wrap {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 14px 16px; margin-top: 12px;
+.query-box{
+  background:var(--bg2);border-radius:12px;
+  padding:14px;border:1px solid var(--line);
 }
-.query-row { display: flex; gap: 8px; }
-.query-input {
-  flex: 1; background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 6px; padding: 7px 12px; color: var(--text);
-  font-size: 13px; outline: none;
+.query-row{display:flex;gap:8px}
+.query-input{
+  flex:1;background:var(--bg3);
+  border:1px solid var(--line2);border-radius:8px;
+  padding:8px 12px;color:var(--text);
+  font-size:13px;font-family:var(--sans);outline:none;
 }
-.query-input:focus { border-color: var(--accent); }
-.btn-ask {
-  background: var(--bg3); color: var(--accent); border: 1px solid var(--accent);
-  border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600;
-  cursor: pointer; white-space: nowrap;
+.query-input:focus{border-color:var(--accent)}
+.btn-ask{
+  background:var(--accent);color:var(--bg0);
+  border:none;border-radius:8px;
+  padding:8px 14px;font-size:12px;font-weight:700;
+  cursor:pointer;font-family:var(--sans);
+  white-space:nowrap;transition:opacity .2s;
 }
-.btn-ask:hover { background: rgba(88,166,255,.1); }
-.query-answer {
-  margin-top: 10px; padding: 10px 12px; background: var(--bg3);
-  border-radius: 6px; font-size: 13px; line-height: 1.65;
-  white-space: pre-wrap; display: none;
+.btn-ask:active{opacity:.8}
+.query-answer{
+  margin-top:10px;padding:10px 12px;
+  background:var(--bg3);border-radius:8px;
+  font-size:13px;line-height:1.7;
+  white-space:pre-wrap;display:none;
+  color:var(--text);
 }
 
 /* ── 로딩 ── */
-.loading {
-  text-align: center; padding: 60px 20px; color: var(--muted);
+.loading{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  min-height:60vh;gap:16px;
 }
-.spinner {
-  width: 32px; height: 32px; border: 3px solid var(--border);
-  border-top-color: var(--accent); border-radius: 50%;
-  animation: spin .8s linear infinite; margin: 0 auto 12px;
+.spinner{
+  width:36px;height:36px;
+  border:3px solid var(--bg3);
+  border-top-color:var(--accent);
+  border-radius:50%;
+  animation:spin .8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{color:var(--sub);font-size:13px}
 
-/* ── 섹션 구분선 ── */
-.section-divider {
-  font-size: 10px; font-weight: 700; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 1px;
-  padding: 14px 0 6px; display: flex; align-items: center; gap: 8px;
+/* ── 이상징후 없음 ── */
+.no-alert{
+  text-align:center;padding:16px;
+  color:var(--green);font-size:13px;
 }
-.section-divider::after {
-  content: ''; flex: 1; height: 1px; background: var(--border);
+
+/* ── 반응형 ── */
+@media(min-width:600px){
+  .container{max-width:800px;margin:0 auto;padding:0 24px 80px}
+  .kpi-grid{grid-template-columns:repeat(4,1fr)}
+  .cohort-grid{grid-template-columns:repeat(4,1fr)}
+  .quality-grid{grid-template-columns:repeat(4,1fr)}
+  .channel-grid{grid-template-columns:repeat(4,1fr)}
+  .growth-grid{grid-template-columns:1fr 1fr}
+  .funnel-meta{grid-template-columns:repeat(4,1fr)}
 }
+@media(min-width:900px){
+  .container{max-width:1200px}
+  .header{padding:14px 24px 10px}
+  .header-logo{font-size:20px}
+}
+
+/* ── 애니메이션 ── */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.section{animation:fadeUp .4s ease both}
+.section:nth-child(1){animation-delay:.05s}
+.section:nth-child(2){animation-delay:.1s}
+.section:nth-child(3){animation-delay:.15s}
+.section:nth-child(4){animation-delay:.2s}
+.section:nth-child(5){animation-delay:.25s}
+.section:nth-child(6){animation-delay:.3s}
+.section:nth-child(7){animation-delay:.35s}
+.section:nth-child(8){animation-delay:.4s}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <span style="font-size:18px">🎙</span>
-  <h1>RAAS — 고릴라 AI 브리핑</h1>
-  <span class="date" id="headerDate">—</span>
-  <button class="btn-refresh" id="btnRefresh" onclick="loadBriefing()">새로고침</button>
+  <div class="header-top">
+    <span class="header-logo">🎙 RAAS</span>
+    <span class="header-date" id="headerDate">—</span>
+    <button class="btn-refresh" id="btnRefresh" onclick="loadAll()">↻</button>
+  </div>
+  <div class="period-tabs">
+    <button class="period-tab active" onclick="setPeriod('day')" id="tab-day">일간</button>
+    <button class="period-tab"        onclick="setPeriod('week')" id="tab-week">주간</button>
+    <button class="period-tab"        onclick="setPeriod('mon')" id="tab-mon">월간</button>
+  </div>
 </div>
 
 <div class="container">
+
   <div id="loading" class="loading">
     <div class="spinner"></div>
-    <p>브리핑 데이터 수집 중…</p>
-    <p style="font-size:11px;margin-top:6px;color:#555">Splunk 8개 룩업 조회 + Claude 분석</p>
+    <p>데이터 로딩 중…</p>
   </div>
 
   <div id="content" style="display:none">
 
-    <!-- S1: Executive Summary -->
-    <div class="section-divider">📊 S1 · Executive Summary</div>
-    <div class="grid-4" id="s1Cards">
-      <!-- JS로 채움 -->
-    </div>
-
-    <!-- S2 + S3 -->
-    <div class="section-divider">🔄 S2 · Funnel Health &nbsp;|&nbsp; 🎧 S3 · Engagement Quality</div>
-    <div class="grid-2">
-      <div class="card" id="s2Card">
-        <div class="card-title"><span class="icon">🔄</span>사용자 유입·유출 분석</div>
-        <div id="s2Body">—</div>
-      </div>
-      <div class="card" id="s3Card">
-        <div class="card-title"><span class="icon">🎧</span>청취 품질 분석</div>
-        <div id="s3Body">—</div>
-      </div>
-    </div>
-
-    <!-- S4 + S6 -->
-    <div class="section-divider">🌱 S4 · Growth Quality &nbsp;|&nbsp; 📡 S6 · Channel Deep-dive</div>
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-title"><span class="icon">🌱</span>습관형성 & 신규 코호트</div>
-        <div id="s4Body">—</div>
-      </div>
-      <div class="card">
-        <div class="card-title"><span class="icon">📡</span>채널별 심층 분석</div>
-        <div id="s6Body">—</div>
+    <!-- ZONE 1: 헬스 스코어 -->
+    <div class="section">
+      <div class="section-title">앱 건강도</div>
+      <div class="health-bar">
+        <div class="health-top">
+          <div>
+            <div class="health-score-num" id="healthNum" style="color:var(--green)">—</div>
+            <div class="health-label">Health Score / 100</div>
+          </div>
+          <div id="healthStatus" style="font-size:20px">—</div>
+        </div>
+        <div class="health-track">
+          <div class="health-fill" id="healthFill" style="width:0%;background-position:0% 50%"></div>
+        </div>
+        <div class="health-dots" id="healthDots"></div>
       </div>
     </div>
 
-    <!-- S5: Rankings -->
-    <div class="section-divider">🏆 S5 · Program Rankings</div>
-    <div class="card">
-      <div class="card-title"><span class="icon">🏆</span>프로그램 다차원 랭킹</div>
-      <div class="rank-tabs" id="rankTabs">
-        <button class="rank-tab active" onclick="showRank('dau')">DAU TOP10</button>
-        <button class="rank-tab" onclick="showRank('deep')">깊은청취 TOP5</button>
-        <button class="rank-tab" onclick="showRank('new')">신규유입 TOP5</button>
-        <button class="rank-tab" onclick="showRank('react')">복귀유도 TOP5</button>
-        <button class="rank-tab" onclick="showRank('risk')">⚠️ 이탈주의</button>
-      </div>
-      <div id="rankBody">—</div>
+    <!-- ZONE 2: KPI 카드 -->
+    <div class="section">
+      <div class="section-title" id="kpiTitle">핵심 지표</div>
+      <div class="kpi-grid" id="kpiGrid"></div>
     </div>
 
-    <!-- S7 + S8 -->
-    <div class="section-divider">🚨 S7 · Anomaly Alerts &nbsp;|&nbsp; 🤖 S8 · Claude Insights</div>
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-title"><span class="icon">🚨</span>이상 징후 알림</div>
-        <div id="s7Body">—</div>
-      </div>
-      <div class="card">
-        <div class="card-title"><span class="icon">🤖</span>AI 종합 인사이트</div>
-        <div id="s8Body">—</div>
+    <!-- ZONE 3: 사용자 흐름 (Funnel) -->
+    <div class="section">
+      <div class="section-title">사용자 흐름</div>
+      <div class="funnel-wrap">
+        <div class="funnel-flow" id="funnelFlow"></div>
+        <div class="funnel-meta" id="funnelMeta"></div>
       </div>
     </div>
 
-    <!-- 자연어 질의 -->
-    <div class="query-wrap">
-      <div class="card-title" style="margin-bottom:10px"><span class="icon">💬</span>AI 질의 · CLAUDE API</div>
-      <div class="query-row">
-        <input class="query-input" id="queryInput"
-               placeholder="예: 오늘 파워FM에서 이탈률이 가장 높은 프로그램은?" />
-        <button class="btn-ask" onclick="askQuery()">질의 →</button>
+    <!-- ZONE 4: 유지율 코호트 -->
+    <div class="section">
+      <div class="section-title">유지율 코호트</div>
+      <div class="cohort-grid" id="cohortGrid"></div>
+    </div>
+
+    <!-- ZONE 5: 청취 품질 -->
+    <div class="section">
+      <div class="section-title">청취 품질</div>
+      <div class="quality-grid" id="qualityGrid"></div>
+    </div>
+
+    <!-- ZONE 6: 채널 현황 -->
+    <div class="section">
+      <div class="section-title">채널 현황</div>
+      <div class="channel-grid" id="channelGrid"></div>
+    </div>
+
+    <!-- ZONE 7: 성장 품질 -->
+    <div class="section">
+      <div class="section-title">성장 품질</div>
+      <div class="growth-grid" id="growthGrid"></div>
+    </div>
+
+    <!-- ZONE 8: 이상징후 -->
+    <div class="section">
+      <div class="section-title">이상징후</div>
+      <div class="alerts-list" id="alertsList"></div>
+    </div>
+
+    <!-- ZONE 9: 프로그램 랭킹 -->
+    <div class="section">
+      <div class="section-title">프로그램 랭킹</div>
+      <div class="pgm-tabs" id="pgmTabs">
+        <button class="pgm-tab active" onclick="showPgmTab('dau')">DAU TOP10</button>
+        <button class="pgm-tab" onclick="showPgmTab('deep')">깊은청취</button>
+        <button class="pgm-tab" onclick="showPgmTab('new')">신규유입</button>
+        <button class="pgm-tab" onclick="showPgmTab('react')">복귀유도</button>
+        <button class="pgm-tab" onclick="showPgmTab('risk')">⚠ 이탈주의</button>
       </div>
-      <div class="query-answer" id="queryAnswer"></div>
+      <div class="pgm-list" id="pgmList"></div>
+    </div>
+
+    <!-- ZONE 10: AI 브리핑 -->
+    <div class="section">
+      <div class="section-title">AI 브리핑</div>
+      <div class="brief-card" id="briefCard">
+        <div style="color:var(--sub);font-size:13px">브리핑 생성 중…</div>
+      </div>
+    </div>
+
+    <!-- ZONE 11: 자연어 질의 -->
+    <div class="section">
+      <div class="section-title">AI 질의</div>
+      <div class="query-box">
+        <div class="query-row">
+          <input class="query-input" id="queryInput"
+            placeholder="예: 오늘 이탈율이 높은 채널은?" />
+          <button class="btn-ask" onclick="askQuery()">전송</button>
+        </div>
+        <div class="query-answer" id="queryAnswer"></div>
+      </div>
     </div>
 
   </div><!-- /content -->
-</div>
+</div><!-- /container -->
 
 <script>
-let _data = null;
-let _rankMode = 'dau';
-
-// ── 숫자 포맷 ──────────────────────────────
-const fmt  = n => n == null ? '—' : Number(n).toLocaleString('ko-KR');
+// ── 상수 & 전역 ─────────────────────────────────────────
+const fmt  = n => n==null ? '—' : Number(n).toLocaleString('ko-KR');
 const fmtK = n => {
-  if (n == null) return '—';
-  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
-  if (n >= 1000)    return (n/1000).toFixed(1) + 'k';
+  if(n==null) return '—';
+  if(n>=1000000) return (n/1000000).toFixed(1)+'M';
+  if(n>=1000)    return (n/1000).toFixed(1)+'k';
   return String(n);
 };
-const fmtPct = (n, digits=1) => n == null ? '—' : n.toFixed(digits) + '%';
-const fmtDiff = (n, unit='%', digits=1) => {
-  if (n == null) return '';
-  const sign = n > 0 ? '+' : '';
-  return `${sign}${n.toFixed(digits)}${unit}`;
+const fmtP = (n,d=1) => n==null ? '—' : n.toFixed(d)+'%';
+const fmtD = (n,u='%',d=1) => {
+  if(n==null) return '';
+  return (n>0?'+':'')+n.toFixed(d)+u;
 };
-const badge = (v, unit='%') => {
-  if (v == null) return '';
-  const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
-  const icon = v > 0 ? '▲' : v < 0 ? '▼' : '→';
-  return `<span class="kpi-badge ${cls}">${icon} ${fmtDiff(v, unit)}</span>`;
+const wowClass = v => v==null?'fl':v>0?'up':'dn';
+const diffClass= (v,inv=false) => {
+  if(v==null) return '';
+  if(inv) return v>0?'bad':'up'; // 이탈율: 오르면 나쁨
+  return v>0?'up':'dn';
 };
 
-// ── S1: Executive Summary ──────────────────
-function renderS1(s1) {
-  const cards = [
-    {
-      label: 'TOTAL DAU',
-      val:   fmtK(s1.dau),
-      sub:   '일간 활성사용자',
-      badge: badge(s1.dau_wow),
-    },
-    {
-      label: 'WAU 롤링',
-      val:   fmtK(s1.wau),
-      sub:   '7일 롤링 활성',
-      badge: '',
-    },
-    {
-      label: 'MAU 롤링',
-      val:   fmtK(s1.mau),
-      sub:   '30일 롤링 활성',
-      badge: '',
-    },
-    {
-      label: '신규 / 복귀',
-      val:   `${fmtK(s1.new_user)} / ${fmtK(s1.react_user)}`,
-      sub:   `신규 ${fmtPct(s1.new_pct)} | 복귀 ${fmtPct(s1.react_pct)}`,
-      badge: '',
-    },
-  ];
+let _data = null;
+let _period = 'day';
+let _pgmTab = 'dau';
 
-  document.getElementById('s1Cards').innerHTML = cards.map(c => `
-    <div class="card">
-      <div class="card-title">${c.label}</div>
-      <div class="kpi-mega">${c.val}</div>
-      <div class="kpi-label">${c.sub}</div>
-      ${c.badge}
-    </div>`).join('');
-}
-
-// ── S2: Funnel Health ──────────────────────
-function renderS2(s2) {
-  const rows = [
-    { label: '신규',   val: s2.new_user,   pct: s2.new_pct,   diff: s2.new_wow,   unit: '%', color: '#58a6ff' },
-    { label: '유지',   val: s2.mt_user,    pct: s2.mt_pct,    diff: null,          unit: '%', color: '#3fb950' },
-    { label: '복귀',   val: s2.react_user, pct: s2.react_pct, diff: s2.react_wow, unit: '%', color: '#bc8cff' },
-    { label: '이탈율', val: null, pct: s2.churn_rate,  diff: s2.churn_rate_diff, unit: 'pp', color: '#f85149' },
-  ];
-
-  const meterHtml = rows.map(r => {
-    const pct = r.pct || 0;
-    const diffStr = r.diff != null ? `<span class="${r.diff > 0 ? 'up' : 'down'}" style="font-size:11px">${fmtDiff(r.diff, r.unit)}</span>` : '';
-    return `
-    <div class="meter-row">
-      <span class="meter-label">${r.label}</span>
-      <div class="meter-bar">
-        <div class="meter-fill" style="width:${Math.min(pct,100)}%;background:${r.color}"></div>
-      </div>
-      <span class="meter-val">${r.val != null ? fmtK(r.val) : fmtPct(r.pct)}</span>
-      <span class="meter-diff">${diffStr}</span>
-    </div>`;
-  }).join('');
-
-  const retentionHtml = `
-    <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap">
-      <div class="funnel-item">
-        <div class="val">${fmtPct(s2.d1_retention)}</div>
-        <div class="lbl">D1 유지율</div>
-        <div class="pct">${fmtDiff(s2.d1_diff, 'pp')}</div>
-      </div>
-      <div class="funnel-item">
-        <div class="val">${fmtPct(s2.d7_retention)}</div>
-        <div class="lbl">D7 유지율</div>
-        <div class="pct">${fmtDiff(s2.d7_diff, 'pp')}</div>
-      </div>
-      <div class="funnel-item">
-        <div class="val">${fmtPct(s2.react_rate)}</div>
-        <div class="lbl">복귀율</div>
-        <div class="pct">${fmt(s2.dormant_pool)} 풀</div>
-      </div>
-    </div>`;
-
-  document.getElementById('s2Body').innerHTML = meterHtml + retentionHtml;
-}
-
-// ── S3: Engagement Quality ─────────────────
-function renderS3(s3) {
-  const deepDiff = s3.deep_rate_diff;
-  const engDiff  = s3.engage_rate_diff;
-  const ch = s3.channel_deep || {};
-
-  const chHtml = Object.entries(ch).map(([code, d]) =>
-    `<div class="engage-item">
-      <div class="val">${fmtPct(d.rate)}</div>
-      <div class="lbl">${d.name} 깊은청취</div>
-    </div>`
-  ).join('');
-
-  document.getElementById('s3Body').innerHTML = `
-    <div class="donut-wrap">
-      <div class="donut-info">
-        <div class="big" style="color:var(--purple)">${fmtPct(s3.deep_rate)}</div>
-        <div class="sub">깊은청취율 (10분이상/1분이상)</div>
-        <div style="margin-top:4px">${badge(deepDiff, 'pp')}</div>
-      </div>
-      <div style="flex:1">
-        <div class="engage-item" style="margin-bottom:6px">
-          <div class="val" style="color:var(--orange)">${fmtPct(s3.engage_rate)}</div>
-          <div class="lbl">참여율 (공감·공유·검색)</div>
-          <div style="font-size:11px;color:var(--muted)">${fmtDiff(engDiff, 'pp')}</div>
-        </div>
-      </div>
-    </div>
-    <div class="engage-grid" style="margin-top:10px">${chHtml}</div>`;
-}
-
-// ── S4: Growth Quality ─────────────────────
-function renderS4(s4) {
-  const habitOk = (s4.habit_rate || 0) >= 30;
-  const top3 = (s4.top3_habit || []).map(p =>
-    `<div class="meter-row">
-      <span class="meter-label" style="width:100px">${p.name}</span>
-      <div class="meter-bar">
-        <div class="meter-fill" style="width:${Math.min(p.rate||0,100)}%;background:var(--purple)"></div>
-      </div>
-      <span class="meter-val">${fmtPct(p.rate)}</span>
-    </div>`
-  ).join('');
-
-  document.getElementById('s4Body').innerHTML = `
-    <div class="habit-gauge">
-      <div class="habit-num">${fmtPct(s4.habit_rate)}</div>
-      <div class="habit-label">습관형성률 (7일내 3일이상 청취)</div>
-      <div class="target-line">
-        목표 30%
-        <span class="${habitOk ? 'target-ok' : 'target-bad'}">
-          ${habitOk ? '✅ 달성' : '❌ 미달'} ${fmtDiff(s4.habit_diff, 'pp')}
-        </span>
-      </div>
-    </div>
-    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">신규 D1 ${fmtPct(s4.new_d1)} | D7 ${fmtPct(s4.new_d7)} | 활성비 ${fmtPct(s4.new_quality)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">프로그램별 습관형성률 TOP3</div>
-      ${top3}
-    </div>`;
-}
-
-// ── S5: Rankings ───────────────────────────
-function showRank(mode) {
-  _rankMode = mode;
-  document.querySelectorAll('.rank-tab').forEach(b => {
-    b.classList.toggle('active', b.textContent.toLowerCase().includes(
-      mode === 'dau' ? 'dau' : mode === 'deep' ? '깊은' : mode === 'new' ? '신규' : mode === 'react' ? '복귀' : '이탈'
-    ));
+// ── 기간 선택 ────────────────────────────────────────────
+function setPeriod(p){
+  _period = p;
+  ['day','week','mon'].forEach(t=>{
+    document.getElementById('tab-'+t).classList.toggle('active',t===p);
   });
-  if (!_data) return;
-  const s5 = _data.s5_rankings || {};
-  renderRankBody(s5, mode);
+  if(_data) renderAll(_data);
 }
 
-function renderRankBody(s5, mode) {
-  let html = '';
-  if (mode === 'dau') {
-    html = `<ul class="rank-list">${(s5.dau_top10 || []).map((p, i) => {
-      const noClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-      return `<li class="rank-item">
-        <span class="rank-no ${noClass}">${p.rank || i+1}</span>
-        <span class="rank-name">${p.name}<span class="rank-ch">${p.channel || ''}</span></span>
-        <span class="rank-val">${fmtK(p.dau)}</span>
-      </li>`;
-    }).join('')}</ul>`;
-  } else if (mode === 'deep') {
-    html = `<ul class="rank-list">${(s5.deep_top5 || []).map((p, i) => `
-      <li class="rank-item">
-        <span class="rank-no">${i+1}</span>
-        <span class="rank-name">${p.name}</span>
-        <span class="rank-badge-deep">${fmtPct(p.rate)}</span>
-        <span class="rank-val" style="color:var(--muted);font-size:11px">${fmtK(p.u1min)}명</span>
-      </li>`).join('')}</ul>`;
-  } else if (mode === 'new') {
-    html = `<ul class="rank-list">${(s5.new_top5 || []).map((p, i) => `
-      <li class="rank-item">
-        <span class="rank-no">${i+1}</span>
-        <span class="rank-name">${p.name}</span>
-        <span class="rank-val" style="color:var(--green)">${fmtK(p.count)}</span>
-      </li>`).join('')}</ul>`;
-  } else if (mode === 'react') {
-    html = `<ul class="rank-list">${(s5.react_top5 || []).map((p, i) => `
-      <li class="rank-item">
-        <span class="rank-no">${i+1}</span>
-        <span class="rank-name">${p.name}</span>
-        <span class="rank-val" style="color:var(--purple)">${fmtK(p.count)}</span>
-      </li>`).join('')}</ul>`;
-  } else if (mode === 'risk') {
-    const risks = s5.risk_list || [];
-    html = risks.length === 0
-      ? '<div style="color:var(--green);font-size:12px;padding:8px 0">✅ 3일 연속 하락 프로그램 없음</div>'
-      : risks.map(r => `
-        <div class="risk-item">
-          <span>⚠️ ${r.name}</span>
-          <span style="color:var(--muted);font-size:11px">${fmtK(r.dau_3d_ago)} → ${fmtK(r.dau_today)}</span>
-          <span class="risk-pct">${fmtDiff(r.drop_rate)}</span>
-        </div>`).join('');
-  }
-  document.getElementById('rankBody').innerHTML = html || '<div style="color:var(--muted);padding:8px 0">데이터 없음</div>';
-}
-
-// ── S6: Channels ───────────────────────────
-function renderS6(s6) {
-  const channels = s6.channels || [];
-  const chMap = { F00: '', L00: 'ch-L', G00: 'ch-G', P00: 'ch-P' };
-  const html = `<div class="ch-grid">${channels.map(ch => {
-    const deepCls = (ch.deep_rate || 0) >= 90 ? 'good' : (ch.deep_rate || 0) >= 80 ? '' : 'warn';
-    const churnCls = (ch.churn_rate || 0) >= 30 ? 'bad' : (ch.churn_rate || 0) >= 25 ? 'warn' : 'good';
-    return `<div class="ch-card ${chMap[ch.code] || ''}">
-      <div class="ch-name">${ch.name}</div>
-      <div class="ch-dau">${fmtK(ch.dau)}</div>
-      <div style="font-size:11px;color:var(--muted)">점유율 ${fmtPct(ch.share)}</div>
-      <div class="ch-meta">
-        <span class="ch-tag ${deepCls}">깊은청취 ${fmtPct(ch.deep_rate)}</span>
-        <span class="ch-tag ${churnCls}">이탈 ${fmtPct(ch.churn_rate)}</span>
-        <span class="ch-tag">복귀율 ${fmtPct(ch.react_rate)}</span>
-      </div>
-    </div>`;
-  }).join('')}</div>`;
-  document.getElementById('s6Body').innerHTML = html;
-}
-
-// ── S7: Alerts ─────────────────────────────
-function renderS7(s7) {
-  const alerts = s7.alerts || [];
-  document.getElementById('s7Body').innerHTML = alerts.map(a =>
-    `<div class="alert-item alert-${a.level}">${a.msg}</div>`
-  ).join('') || '<div style="color:var(--green)">✅ 이상 없음</div>';
-}
-
-// ── S8: Claude Brief ───────────────────────
-function renderS8(brief) {
-  if (!brief) { document.getElementById('s8Body').innerHTML = '<div style="color:var(--muted)">브리핑 로딩 중…</div>'; return; }
-  // 섹션 파싱 (01 / 02 / 03 / 04 패턴)
-  const sections = brief.split(/(?=\d{2}\s*\/)/);
-  const html = sections.map(s => s.trim()).filter(Boolean).map(s =>
-    `<div class="brief-section"><span class="brief-text">${s.replace(/\n/g,'<br>')}</span></div>`
-  ).join('');
-  document.getElementById('s8Body').innerHTML = html || `<div class="brief-text">${brief}</div>`;
-}
-
-// ── 메인 로드 ──────────────────────────────
-async function loadBriefing() {
+// ── 데이터 로드 ──────────────────────────────────────────
+async function loadAll(){
   const btn = document.getElementById('btnRefresh');
-  btn.disabled = true; btn.textContent = '로딩 중…';
-  document.getElementById('loading').style.display = 'block';
-  document.getElementById('content').style.display = 'none';
-
+  btn.disabled=true;
+  document.getElementById('loading').style.display='flex';
+  document.getElementById('content').style.display='none';
   try {
     const res = await fetch('/api/briefing');
     const json = await res.json();
-    if (!json.ok) throw new Error(json.error);
-
-    const d = json.data;
-    _data = d;
-
-    document.getElementById('headerDate').textContent =
-      d.s1_executive?.date || d.collected_at || '';
-
-    renderS1(d.s1_executive || {});
-    renderS2(d.s2_funnel    || {});
-    renderS3(d.s3_engagement|| {});
-    renderS4(d.s4_growth    || {});
-    renderRankBody(d.s5_rankings || {}, _rankMode);
-    renderS6(d.s6_channels  || {});
-    renderS7(d.s7_anomalies || {});
-    renderS8(d.brief || '');
-
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('content').style.display = 'block';
-  } catch(e) {
-    document.getElementById('loading').innerHTML =
+    if(!json.ok) throw new Error(json.error);
+    _data = json.data;
+    renderAll(_data);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('content').style.display='block';
+  } catch(e){
+    document.getElementById('loading').innerHTML=
       `<div style="color:var(--red)">오류: ${e.message}</div>`;
-  } finally {
-    btn.disabled = false; btn.textContent = '새로고침';
-  }
+  } finally { btn.disabled=false; }
 }
 
-// ── 자연어 질의 ────────────────────────────
-async function askQuery() {
+// ── 전체 렌더 ────────────────────────────────────────────
+function renderAll(d){
+  const s1=d.s1_executive||{};
+  const s2=d.s2_funnel||{};
+  const s3=d.s3_engagement||{};
+  const s4=d.s4_growth||{};
+  const s5=d.s5_rankings||{};
+  const s6=d.s6_channels||{};
+  const s7=d.s7_anomalies||{};
+
+  // 기준일
+  document.getElementById('headerDate').textContent =
+    s1.date || d.collected_at?.split(' ')[0] || '';
+
+  renderHealth(s1,s2,s3,s4);
+  renderKPI(s1,s2);
+  renderFunnel(s1,s2);
+  renderCohort(s2);
+  renderQuality(s3);
+  renderChannels(s6);
+  renderGrowth(s4);
+  renderAlerts(s7);
+  renderPgm(s5, _pgmTab);
+  renderBrief(d.brief||'');
+}
+
+// ── ZONE 1: 헬스 스코어 ──────────────────────────────────
+function renderHealth(s1,s2,s3,s4){
+  // 6개 지표 점수화
+  const scores = [];
+  const dots   = [];
+
+  const p = _period;
+
+  // DAU WoW
+  const dauW = p==='day'?s1.dau_wow : p==='week'?s1.dau_week_wow : s1.dau_mon_wow;
+  if(dauW!=null){
+    const sc = dauW>5?20:dauW>0?15:dauW>-5?10:5;
+    scores.push(sc);
+    dots.push({label:'DAU '+fmtD(dauW),cls:dauW>0?'g':dauW>-5?'y':'r'});
+  }
+  // 깊은청취율
+  const dr = p==='day'?s3.deep_rate : p==='week'?s3.deep_rate_week : s3.deep_rate_mon;
+  if(dr!=null){
+    const sc = dr>=90?20:dr>=80?15:dr>=70?10:5;
+    scores.push(sc); dots.push({label:'깊은청취 '+fmtP(dr),cls:dr>=85?'g':dr>=75?'y':'r'});
+  }
+  // 이탈율 (낮을수록 좋음)
+  const cr = p==='day'?s2.churn_rate : p==='week'?s2.churn_week : s2.churn_mon;
+  if(cr!=null){
+    const sc = cr<15?20:cr<25?15:cr<35?10:5;
+    scores.push(sc); dots.push({label:'이탈율 '+fmtP(cr),cls:cr<20?'g':cr<30?'y':'r'});
+  }
+  // D1/W1/M1 유지율
+  const ret = p==='day'?s2.d1_ret : p==='week'?s2.w1_ret : s2.m1_ret;
+  const retL= p==='day'?'D1':'W1 M1'.split(' ')[p==='week'?0:1];
+  if(ret!=null){
+    const sc = ret>=50?20:ret>=35?15:ret>=20?10:5;
+    scores.push(sc); dots.push({label:retL+' '+fmtP(ret),cls:ret>=45?'g':ret>=30?'y':'r'});
+  }
+  // 복귀율
+  const rr = p==='day'?s2.react_rate : p==='week'?s2.react_rate_week : s2.react_rate_mon;
+  if(rr!=null){
+    const sc = rr>=5?10:rr>=3?8:5;
+    scores.push(sc); dots.push({label:'복귀율 '+fmtP(rr),cls:rr>=5?'g':rr>=3?'y':'r'});
+  }
+  // 습관형성률
+  const hr = p==='day'?s4.habit_rate : p==='week'?s4.habit_week : s4.habit_mon;
+  if(hr!=null){
+    const sc = hr>=30?10:hr>=20?8:5;
+    scores.push(sc); dots.push({label:'습관 '+fmtP(hr),cls:hr>=30?'g':hr>=20?'y':'r'});
+  }
+
+  const total = scores.length ? Math.min(100, scores.reduce((a,b)=>a+b,0)) : 0;
+  const color = total>=75?'var(--green)':total>=50?'var(--yellow)':'var(--red)';
+  const emoji = total>=75?'😊':total>=50?'😐':'😟';
+
+  document.getElementById('healthNum').textContent = total;
+  document.getElementById('healthNum').style.color = color;
+  document.getElementById('healthStatus').textContent = emoji;
+  document.getElementById('healthFill').style.width = total+'%';
+  document.getElementById('healthFill').style.backgroundPosition = (100-total)+'% 50%';
+  document.getElementById('healthDots').innerHTML =
+    dots.map(d=>`<span class="hdot ${d.cls}">${d.label}</span>`).join('');
+}
+
+// ── ZONE 2: KPI 카드 ─────────────────────────────────────
+function renderKPI(s1,s2){
+  const p = _period;
+  document.getElementById('kpiTitle').innerHTML =
+    `핵심 지표 <span style="font-size:10px;color:var(--accent);font-weight:400">
+    ${p==='day'?'일간 (전일 기준)':p==='week'?'주간 (직전주 기준)':'월간 (전월 기준)'}</span>`;
+
+  const cards = p==='day' ? [
+    {label:'DAU', val:fmtK(s1.dau), wow:s1.dau_wow, unit:'%', extra:`WAU ${fmtK(s1.wau_today)} / MAU ${fmtK(s1.mau_today)}`, color:'c-blue'},
+    {label:'신규사용자', val:fmtK(s2.new_user), wow:s2.new_wow, unit:'%', extra:`DAU의 ${fmtP(s2.new_pct)}`, color:'c-green'},
+    {label:'복귀사용자', val:fmtK(s2.react_user), wow:s2.react_wow, unit:'%', extra:`DAU의 ${fmtP(s2.react_pct)}`, color:'c-purple'},
+    {label:'이탈율', val:fmtP(s2.churn_rate), wow:s2.churn_diff, unit:'pp', extra:`전주 ${fmtP(s2.churn_rate_pw)}`, color:'c-orange', invWow:true},
+  ] : p==='week' ? [
+    {label:'WAU', val:fmtK(s2.dau_week), wow:s2.dau_week_wow, unit:'%', extra:`전주 ${fmtK(s2.dau_week_pw)}`, color:'c-blue'},
+    {label:'신규 (주간)', val:fmtK(s2.new_week), wow:s2.new_week_wow, unit:'%', extra:`WAU의 ${fmtP(s2.new_week_pct)}`, color:'c-green'},
+    {label:'복귀 (주간)', val:fmtK(s2.react_week), wow:s2.react_week_wow, unit:'%', extra:`WAU의 ${fmtP(s2.react_week_pct)}`, color:'c-purple'},
+    {label:'이탈율 (주간)', val:fmtP(s2.churn_week), wow:s2.churn_week_diff, unit:'pp', extra:`전주 ${fmtP(s2.churn_week_pw)}`, color:'c-orange', invWow:true},
+  ] : [
+    {label:'MAU', val:fmtK(s2.dau_mon), wow:s2.dau_mon_wow, unit:'%', extra:`전월 ${fmtK(s2.dau_mon_pw)}`, color:'c-blue'},
+    {label:'신규 (월간)', val:fmtK(s2.new_mon), wow:s2.new_mon_wow, unit:'%', extra:`MAU의 ${fmtP(s2.new_mon_pct)}`, color:'c-green'},
+    {label:'복귀 (월간)', val:fmtK(s2.react_mon), wow:s2.react_mon_wow, unit:'%', extra:`MAU의 ${fmtP(s2.react_mon_pct)}`, color:'c-purple'},
+    {label:'이탈율 (월간)', val:fmtP(s2.churn_mon), wow:s2.churn_mon_diff, unit:'pp', extra:`전월 ${fmtP(s2.churn_mon_pw)}`, color:'c-orange', invWow:true},
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = cards.map(c=>{
+    const wc = wowClass(c.wow);
+    const wowIcon = wc==='up'?'▲':wc==='dn'?'▼':'→';
+    const wowColor = c.invWow
+      ? (wc==='up'?'dn':wc==='dn'?'up':'fl')
+      : wc;
+    return `<div class="kpi-card ${c.color}">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-val">${c.val}</div>
+      <div class="kpi-sub">
+        ${c.wow!=null?`<span class="kpi-wow ${wowColor}">${wowIcon} ${fmtD(c.wow,c.unit)}</span>`:''}
+        <span class="kpi-extra">${c.extra}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── ZONE 3: 퍼널 흐름 ───────────────────────────────────
+function renderFunnel(s1,s2){
+  const p = _period;
+  const dau   = p==='day'?s1.dau    : p==='week'?s2.dau_week : s2.dau_mon;
+  const newU  = p==='day'?s2.new_user : p==='week'?s2.new_week : s2.new_mon;
+  const retU  = p==='day'?s2.react_user: p==='week'?s2.react_week: s2.react_mon;
+  const newP  = p==='day'?s2.new_pct  : p==='week'?s2.new_week_pct: s2.new_mon_pct;
+  const retP  = p==='day'?s2.react_pct: p==='week'?s2.react_week_pct: s2.react_mon_pct;
+  const maint = dau && newU && retU ? dau-newU-retU : null;
+  const maintP= dau && maint ? (maint/dau*100).toFixed(1) : null;
+
+  const flow = [
+    {name:'전체 활성', val:fmtK(dau),   pct:'100%', color:'var(--accent)'},
+    {name:'신규',      val:fmtK(newU),  pct:fmtP(newP), color:'var(--green)'},
+    {name:'유지',      val:fmtK(maint), pct:maintP?maintP+'%':'—', color:'var(--purple)'},
+    {name:'복귀',      val:fmtK(retU),  pct:fmtP(retP), color:'var(--yellow)'},
+  ];
+  document.getElementById('funnelFlow').innerHTML = flow.map(f=>`
+    <div class="funnel-item">
+      <div class="fi-name">${f.name}</div>
+      <div class="fi-val" style="color:${f.color}">${f.val}</div>
+      <div class="fi-pct" style="color:${f.color}">${f.pct}</div>
+    </div>`).join('');
+
+  // 메타 지표 (이탈율, 복귀율, D1/W1 유지율)
+  const cr   = p==='day'?s2.churn_rate  : p==='week'?s2.churn_week  : s2.churn_mon;
+  const crD  = p==='day'?s2.churn_diff  : p==='week'?s2.churn_week_diff: s2.churn_mon_diff;
+  const rr   = p==='day'?s2.react_rate  : p==='week'?s2.react_rate_week: s2.react_rate_mon;
+  const rrD  = p==='day'?s2.react_rate_diff: p==='week'?s2.react_rate_week_diff: s2.react_rate_mon_diff;
+  const ret  = p==='day'?s2.d1_ret  : p==='week'?s2.w1_ret  : s2.m1_ret;
+  const retD = p==='day'?s2.d1_diff : p==='week'?s2.w1_diff : s2.m1_diff;
+  const retL = p==='day'?'D1유지율':'W1 유지율'.split(' ')[p==='week'?0:1];
+
+  document.getElementById('funnelMeta').innerHTML = `
+    <div class="fm-item">
+      <div class="fm-label">이탈율</div>
+      <div class="fm-val" style="color:var(--red)">${fmtP(cr)}</div>
+      <div class="fm-diff ${crD>0?'bad':'up'}">${fmtD(crD,'pp')}</div>
+    </div>
+    <div class="fm-item">
+      <div class="fm-label">복귀율</div>
+      <div class="fm-val" style="color:var(--accent)">${fmtP(rr)}</div>
+      <div class="fm-diff ${rrD>0?'up':'dn'}">${fmtD(rrD,'pp')}</div>
+    </div>
+    <div class="fm-item">
+      <div class="fm-label">${p==='day'?'D1':'W1'} 유지율</div>
+      <div class="fm-val" style="color:var(--purple)">${fmtP(ret)}</div>
+      <div class="fm-diff ${retD>0?'up':'dn'}">${fmtD(retD,'pp')}</div>
+    </div>
+    <div class="fm-item">
+      <div class="fm-label">${p==='day'?'D7':'M1'} 유지율</div>
+      <div class="fm-val" style="color:var(--purple)">${fmtP(p==='day'?s2.d7_ret:s2.m1_ret)}</div>
+      <div class="fm-diff ${(p==='day'?s2.d7_diff:s2.m1_diff)>0?'up':'dn'}">${fmtD(p==='day'?s2.d7_diff:s2.m1_diff,'pp')}</div>
+    </div>`;
+}
+
+// ── ZONE 4: 유지율 코호트 ────────────────────────────────
+function renderCohort(s2){
+  const items = [
+    {type:'D1', val:s2.d1_ret, pw:s2.d1_ret_pw, diff:s2.d1_diff, color:'var(--accent)'},
+    {type:'D7', val:s2.d7_ret, pw:s2.d7_ret_pw, diff:s2.d7_diff, color:'var(--purple)'},
+    {type:'W1', val:s2.w1_ret, pw:s2.w1_ret_pw, diff:s2.w1_diff, color:'var(--green)'},
+    {type:'M1', val:s2.m1_ret, pw:s2.m1_ret_pw, diff:s2.m1_diff, color:'var(--yellow)'},
+  ];
+  document.getElementById('cohortGrid').innerHTML = items.map(it=>`
+    <div class="cohort-card">
+      <div class="cc-header">
+        <span class="cc-type">${it.type}</span>
+        <span class="cc-diff ${it.diff>0?'up':'dn'}">${fmtD(it.diff,'pp')}</span>
+      </div>
+      <div class="cc-val" style="color:${it.color}">${fmtP(it.val)}</div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:6px">전기간 ${fmtP(it.pw)}</div>
+      <div class="cc-bar">
+        <div class="cc-fill" style="width:${Math.min(it.val||0,100)}%;background:${it.color}"></div>
+      </div>
+    </div>`).join('');
+}
+
+// ── ZONE 5: 청취 품질 ────────────────────────────────────
+function renderQuality(s3){
+  const p = _period;
+  const dr   = p==='day'?s3.deep_rate     : p==='week'?s3.deep_rate_week    : s3.deep_rate_mon;
+  const drD  = p==='day'?s3.deep_rate_diff: p==='week'?s3.deep_rate_week_diff: s3.deep_rate_mon_diff;
+  const er   = p==='day'?s3.engage_rate   : p==='week'?s3.engage_week        : s3.engage_mon;
+  const erD  = p==='day'?s3.engage_diff   : p==='week'?s3.engage_week_diff   : s3.engage_mon_diff;
+
+  const ch = s3.channel_deep || {};
+  const chItems = Object.entries(ch).map(([c,d])=>
+    `<div class="qcm"><span class="qcm-l">${d.name}</span><span class="qcm-v">${fmtP(d.rate)}</span></div>`
+  ).join('');
+
+  document.getElementById('qualityGrid').innerHTML = `
+    <div class="quality-card">
+      <div class="qc-label">깊은청취율 <span style="color:var(--dim);font-size:9px">(10분이상/1분이상)</span></div>
+      <div><span class="qc-big" style="color:var(--purple)">${fmtP(dr)}</span></div>
+      <div class="qc-diff ${drD>0?'up':'dn'}">${fmtD(drD,'pp')} 전기간 대비</div>
+      <div class="qc-multi">${chItems}</div>
+    </div>
+    <div class="quality-card">
+      <div class="qc-label">참여율 <span style="color:var(--dim);font-size:9px">(공감·공유·검색)</span></div>
+      <div><span class="qc-big" style="color:var(--orange)">${fmtP(er)}</span></div>
+      <div class="qc-diff ${erD>0?'up':'dn'}">${fmtD(erD,'pp')} 전기간 대비</div>
+      <div style="font-size:10px;color:var(--dim);margin-top:8px">
+        1분이상 ${fmt(s3.dau_1min)}명 / 10분이상 ${fmt(s3.dau_10min)}명
+      </div>
+    </div>`;
+}
+
+// ── ZONE 6: 채널 현황 ────────────────────────────────────
+function renderChannels(s6){
+  const chs = s6.channels || [];
+  const clsMap = {F00:'',L00:'lv',G00:'gm',P00:'pk'};
+  const p = _period;
+  document.getElementById('channelGrid').innerHTML = chs.map(ch=>{
+    const dr = p==='day'?ch.deep_rate : p==='week'?ch.deep_rate_week : ch.deep_rate_mon;
+    const cr = p==='day'?ch.churn_rate: p==='week'?ch.churn_week     : ch.churn_rate;
+    const rr = p==='day'?ch.react_rate: p==='week'?ch.react_rate_week: ch.react_rate;
+    return `<div class="channel-card ${clsMap[ch.code]||''}">
+      <div class="ch-name">${ch.name}</div>
+      <div class="ch-dau">${fmtK(ch.dau)}</div>
+      <div class="ch-share">점유 ${fmtP(ch.share)}</div>
+      <div class="ch-tags">
+        <span class="ch-tag deep">깊은청취 ${fmtP(dr)}</span>
+        <span class="ch-tag ${(cr||0)<25?'good-churn':'churn'}">이탈 ${fmtP(cr)}</span>
+        <span class="ch-tag react">복귀율 ${fmtP(rr)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── ZONE 7: 성장 품질 ────────────────────────────────────
+function renderGrowth(s4){
+  const p = _period;
+  const hr   = p==='day'?s4.habit_rate  : p==='week'?s4.habit_week  : s4.habit_mon;
+  const hrD  = p==='day'?s4.habit_diff  : p==='week'?s4.habit_week_diff : s4.habit_mon_diff;
+  const rr   = _data?.s2_funnel;
+  const rrV  = p==='day'?(rr?.react_rate): p==='week'?(rr?.react_rate_week):(rr?.react_rate_mon);
+  const rrD  = p==='day'?(rr?.react_rate_diff): p==='week'?(rr?.react_rate_week_diff):(rr?.react_rate_mon_diff);
+  const TARGET_HABIT = 30;
+  const habitOk = hr>=TARGET_HABIT;
+  const targetPos = Math.min(TARGET_HABIT,100);
+
+  const top3 = (s4.top3_habit||[]).map((p,i)=>{
+    const maxRate = s4.top3_habit[0]?.rate||1;
+    return `<div class="habit-row">
+      <span class="hr-rank">${i+1}</span>
+      <span class="hr-name">${p.name}</span>
+      <div class="hr-bar"><div class="hr-fill" style="width:${(p.rate/Math.max(maxRate,1)*100).toFixed(0)}%"></div></div>
+      <span class="hr-val">${fmtP(p.rate)}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('growthGrid').innerHTML = `
+    <div class="growth-card">
+      <div class="gc-label">습관형성률 <span style="color:var(--dim);font-size:9px">(목표 ${TARGET_HABIT}%)</span></div>
+      <div class="gc-gauge">
+        <div class="gc-fill" style="width:${Math.min(hr||0,100)}%;background:${habitOk?'var(--green)':'var(--yellow)'}"></div>
+        <div class="gc-target" style="left:${targetPos}%"></div>
+      </div>
+      <div class="gc-big" style="color:${habitOk?'var(--green)':'var(--yellow)'}">${fmtP(hr)}</div>
+      <div class="gc-status ${habitOk?'ok':'warn'}">${habitOk?'✅ 목표 달성':'⚠ 목표 미달'} ${fmtD(hrD,'pp')}</div>
+      <div class="habit-top3" style="margin-top:10px">
+        <div style="font-size:9px;color:var(--dim);margin-bottom:6px">프로그램 TOP3</div>
+        ${top3}
+      </div>
+    </div>
+    <div class="growth-card">
+      <div class="gc-label">복귀율 <span style="color:var(--dim);font-size:9px">(복귀사용자/휴면풀)</span></div>
+      <div class="gc-gauge">
+        <div class="gc-fill" style="width:${Math.min((rrV||0)*10,100)}%;background:var(--accent)"></div>
+      </div>
+      <div class="gc-big" style="color:var(--accent)">${fmtP(rrV)}</div>
+      <div class="gc-status ${rrD>0?'ok':'warn'}">${fmtD(rrD,'pp')} 전기간 대비</div>
+      <div style="margin-top:14px;font-size:11px;color:var(--sub)">
+        <div style="margin-bottom:4px">일간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate)}</span></div>
+        <div style="margin-bottom:4px">주간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate_week)}</span></div>
+        <div>월간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate_mon)}</span></div>
+      </div>
+    </div>`;
+}
+
+// ── ZONE 8: 이상징후 ─────────────────────────────────────
+function renderAlerts(s7){
+  const alerts = s7.alerts || [];
+  if(!alerts.length){
+    document.getElementById('alertsList').innerHTML =
+      '<div class="no-alert">✅ 전 지표 정상 범위 — 이상 없음</div>';
+    return;
+  }
+  document.getElementById('alertsList').innerHTML = alerts.map(a=>
+    `<div class="alert-item ${a.level}">${a.msg}</div>`
+  ).join('');
+}
+
+// ── ZONE 9: 프로그램 랭킹 ───────────────────────────────
+function showPgmTab(tab){
+  _pgmTab = tab;
+  document.querySelectorAll('.pgm-tab').forEach(b=>{
+    b.classList.toggle('active', b.textContent.includes(
+      tab==='dau'?'DAU':tab==='deep'?'깊은':tab==='new'?'신규':tab==='react'?'복귀':'이탈'
+    ));
+  });
+  if(_data) renderPgm(_data.s5_rankings||{}, tab);
+}
+
+function renderPgm(s5, tab){
+  let rows = [];
+  if(tab==='dau'){
+    rows = (s5.dau_top10||[]).map((p,i)=>`
+      <div class="pgm-row">
+        <span class="pr-rank ${i<3?'g'+(i+1):''}">${p.rank||i+1}</span>
+        <div class="pr-info">
+          <div class="pr-name">${p.name||p.code||'—'}</div>
+          <div class="pr-channel">${p.channel||''}</div>
+        </div>
+        <span class="pr-val">${fmtK(p.dau)}</span>
+      </div>`);
+  } else if(tab==='deep'){
+    rows = (s5.deep_top5||[]).map((p,i)=>`
+      <div class="pgm-row">
+        <span class="pr-rank">${i+1}</span>
+        <div class="pr-info"><div class="pr-name">${p.name}</div></div>
+        <span class="pr-badge deep">${fmtP(p.rate)}</span>
+        <span class="pr-val" style="color:var(--sub);font-size:11px">${fmtK(p.u1min)}명</span>
+      </div>`);
+  } else if(tab==='new'){
+    rows = (s5.new_top5||[]).map((p,i)=>`
+      <div class="pgm-row">
+        <span class="pr-rank">${i+1}</span>
+        <div class="pr-info"><div class="pr-name">${p.name}</div></div>
+        <span class="pr-val" style="color:var(--green)">${fmtK(p.count)}</span>
+      </div>`);
+  } else if(tab==='react'){
+    rows = (s5.react_top5||[]).map((p,i)=>`
+      <div class="pgm-row">
+        <span class="pr-rank">${i+1}</span>
+        <div class="pr-info"><div class="pr-name">${p.name}</div></div>
+        <span class="pr-val" style="color:var(--purple)">${fmtK(p.count)}</span>
+      </div>`);
+  } else if(tab==='risk'){
+    const risks = s5.risk_list||[];
+    rows = risks.length ? risks.map(r=>`
+      <div class="pgm-row">
+        <span class="pr-rank">⚠</span>
+        <div class="pr-info">
+          <div class="pr-name">${r.name}</div>
+          <div class="pr-channel">DAU ${fmtK(r.dau)}</div>
+        </div>
+        <span class="pr-badge warn">${fmtD(r.dau_wow||r.drop_rate)}</span>
+        <span class="pr-val" style="color:var(--red)">${fmtP(r.churn_rate)}</span>
+      </div>`) :
+      [`<div style="padding:16px;text-align:center;color:var(--green);font-size:12px">✅ 이탈 위험 프로그램 없음</div>`];
+  }
+  document.getElementById('pgmList').innerHTML = rows.join('');
+}
+
+// ── ZONE 10: AI 브리핑 ──────────────────────────────────
+function renderBrief(text){
+  if(!text){
+    document.getElementById('briefCard').innerHTML =
+      '<div style="color:var(--sub);font-size:13px">브리핑 없음</div>';
+    return;
+  }
+  const sections = text.split(/(?=\d{2}\s*\/)/);
+  document.getElementById('briefCard').innerHTML = sections
+    .map(s=>s.trim()).filter(Boolean)
+    .map(s=>`<div class="brief-section">
+      <span class="brief-text">${s.replace(/\n/g,'<br>')}</span>
+    </div>`).join('') ||
+    `<div class="brief-text">${text.replace(/\n/g,'<br>')}</div>`;
+}
+
+// ── 자연어 질의 ──────────────────────────────────────────
+async function askQuery(){
   const q = document.getElementById('queryInput').value.trim();
-  if (!q) return;
+  if(!q) return;
   const ans = document.getElementById('queryAnswer');
-  ans.style.display = 'block';
-  ans.textContent = '분석 중…';
+  ans.style.display='block';
+  ans.textContent='분석 중…';
   try {
-    const ctx = _data?.claude_context || '';
-    const res = await fetch('/api/query', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ question: q, context: ctx })
+    const ctx = _data?.claude_context||'';
+    const res = await fetch('/api/query',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question:q,context:ctx})
     });
     const j = await res.json();
-    ans.textContent = j.ok ? j.answer : ('오류: ' + j.error);
-  } catch(e) { ans.textContent = '오류: ' + e.message; }
+    ans.textContent = j.ok ? j.answer : '오류: '+j.error;
+  } catch(e){ ans.textContent='오류: '+e.message; }
 }
 
-document.getElementById('queryInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') askQuery();
+document.getElementById('queryInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter') askQuery();
 });
 
 // 초기 로드
-loadBriefing();
+loadAll();
 </script>
 </body>
 </html>
