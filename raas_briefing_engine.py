@@ -76,6 +76,18 @@ def build_s2(kpi):
         'react_rate_diff': _fn(t.get('react_rate_diff')),
         'd1_ret':          _fn(t.get('d1_ret')),
         'd7_ret':          _fn(t.get('d7_ret')),
+        'new_d1_ret':      _fn(t.get('new_d1_ret')),
+        'new_d1_ret_pw':   _fn(t.get('new_d1_ret_pw')),
+        'new_d1_diff':     _fn(t.get('new_d1_diff')),
+        'new_d7_ret':      _fn(t.get('new_d7_ret')),
+        'new_d7_ret_pw':   _fn(t.get('new_d7_ret_pw')),
+        'new_d7_diff':     _fn(t.get('new_d7_diff')),
+        'new_w1_ret':      _fn(t.get('new_w1_ret')),
+        'new_w1_ret_pw':   _fn(t.get('new_w1_ret_pw')),
+        'new_w1_diff':     _fn(t.get('new_w1_diff')),
+        'new_m1_ret':      _fn(t.get('new_m1_ret')),
+        'new_m1_ret_pw':   _fn(t.get('new_m1_ret_pw')),
+        'new_m1_diff':     _fn(t.get('new_m1_diff')),
         'd1_diff':         _fn(t.get('d1_diff')),
         'd7_diff':         _fn(t.get('d7_diff')),
         'new_pct':         _fn(t.get('new_pct')),
@@ -100,12 +112,25 @@ def build_s2(kpi):
         'react_rate_mon':    _fn(t.get('react_rate_mon')),
         'm1_ret':            _fn(t.get('m1_ret')),
         'm1_diff':           _fn(t.get('m1_diff')),
+        'dau_week_avg':      _fn(t.get('dau_week_avg')),
+        'dau_mon_avg':       _fn(t.get('dau_mon_avg')),
+        'wau_mon_avg':       _fn(t.get('wau_mon_avg')),
     }
 
 def build_s3(kpi):
     t=kpi.get('T00',{})
     if not t: return {}
-    ch_deep={c:{'name':PGM_NAMES.get(c,c),'rate':_fn(kpi.get(c,{}).get('deep_rate'))} for c in CH}
+    ch_deep={}
+    for c in CH:
+        row=kpi.get(c,{})
+        v1w,v10w=_fn(row.get('wau_1min')),_fn(row.get('wau_10min'))
+        v1m,v10m=_fn(row.get('mau_1min')),_fn(row.get('mau_10min'))
+        ch_deep[c]={
+            'name':      PGM_NAMES.get(c,c),
+            'rate':      _fn(row.get('deep_rate')),
+            'rate_week': round(v10w/v1w*100,2) if v1w and v10w and v1w>0 else None,
+            'rate_mon':  round(v10m/v1m*100,2) if v1m and v10m and v1m>0 else None,
+        }
     return {
         'dau':              _i(t.get('dau_today')),
         'dau_1min':         _i(t.get('dau_1min')),
@@ -116,11 +141,15 @@ def build_s3(kpi):
         'engage_diff':      _fn(t.get('engage_diff')),
         'channel_deep':     ch_deep,
         # 주간
+        'wau_1min':             _fn(t.get('wau_1min')),
+        'wau_10min':            _fn(t.get('wau_10min')),
         'deep_rate_week':       _fn(t.get('deep_rate_week')),
         'deep_rate_week_diff':  _fn(t.get('deep_rate_week_diff')),
         'engage_week':          _fn(t.get('engage_week')),
         'engage_week_diff':     _fn(t.get('engage_week_diff')),
         # 월간
+        'mau_1min':             _fn(t.get('mau_1min')),
+        'mau_10min':            _fn(t.get('mau_10min')),
         'deep_rate_mon':        _fn(t.get('deep_rate_mon')),
         'deep_rate_mon_diff':   _fn(t.get('deep_rate_mon_diff')),
         'engage_mon':           _fn(t.get('engage_mon')),

@@ -12,6 +12,7 @@ RAAS Local Proxy Server
 import json
 import sys
 import os
+import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import raas_query_engine as QE
@@ -47,6 +48,23 @@ SSL_CONTEXT = ssl.create_default_context()
 SSL_CONTEXT.check_hostname = False
 SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
+# ── 캐시 (Splunk 동시 검색 529 방지) ─────────────────────
+CACHE_TTL = timedelta(minutes=5)
+_cache: dict = {}
+_cache_lock = threading.Lock()
+
+def cache_get(key):
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry and datetime.now() - entry["ts"] < CACHE_TTL:
+            return entry["data"]
+    return None
+
+def cache_set(key, data):
+    with _cache_lock:
+        _cache[key] = {"data": data, "ts": datetime.now()}
+# ──────────────────────────────────────────────────────────
+
 def splunk_auth():
     return "Basic " + base64.b64encode(
         f"{SPLUNK_USER}:{SPLUNK_PASSWORD}".encode()).decode()
@@ -81,13 +99,25 @@ def call_claude(system: str, user: str) -> str:
         "system": system,
         "messages": [{"role": "user", "content": user}]
     }).encode()
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages", data=payload,
-        headers={"Content-Type": "application/json",
-                 "anthropic-version": "2023-06-01",
-                 "x-api-key": ANTHROPIC_API_KEY})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read())["content"][0]["text"]
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages", data=payload,
+                headers={"Content-Type": "application/json",
+                         "anthropic-version": "2023-06-01",
+                         "x-api-key": ANTHROPIC_API_KEY})
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.loads(resp.read())["content"][0]["text"]
+        except urllib.error.HTTPError as e:
+            if e.code == 529:
+                print(f"  ⚠️ Claude API 529 (과부하) — 3초 후 재시도 ({attempt + 1}/3)")
+                if attempt < 2:
+                    time.sleep(3)
+            else:
+                raise Exception(f"Claude API {e.code}: {e.read().decode()[:200]}")
+        except Exception as e:
+            raise Exception(f"Claude API 오류: {e}")
+    raise Exception("Claude API 일시 과부하. 잠시 후 다시 시도해 주세요.")
 
 # HTML 파일 경로 (서버와 같은 폴더)
 HTML_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.html")
@@ -130,6 +160,11 @@ class RAASHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/api/briefing":
             try:
+                cached = cache_get("briefing")
+                if cached:
+                    self.send_json({"ok": True, "data": cached, "_cached": True})
+                    return
+
                 # 전체 데이터 수집
                 data = BE.collect_all(splunk_search)
 
@@ -154,17 +189,22 @@ class RAASHandler(BaseHTTPRequestHandler):
                     claude_prompt
                 )
 
-                self.send_json({
-                    "ok":   True,
-                    "data": {**data, "brief": brief_text}
-                })
+                result = {**data, "brief": brief_text}
+                cache_set("briefing", result)
+                self.send_json({"ok": True, "data": result})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
         elif self.path == "/api/top_programs":
             try:
+                cached = cache_get("top_programs")
+                if cached:
+                    self.send_json({"ok": True, "data": cached, "_cached": True})
+                    return
+
                 rows = splunk_search(
                     "| inputlookup raas_top_programs_latest.csv | sort rank | head 10")
+                cache_set("top_programs", rows)
                 self.send_json({"ok": True, "data": rows})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
@@ -211,7 +251,7 @@ class RAASHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("localhost", PORT), RAASHandler)
+    server = HTTPServer(("0.0.0.0", PORT), RAASHandler)
     print(f"""
 ╔══════════════════════════════════════╗
 ║   RAAS Local Server 시작             ║

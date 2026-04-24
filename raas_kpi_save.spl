@@ -1,0 +1,1236 @@
+| inputlookup program_user_funnel_day.csv
+`comment("================================================================")`
+`comment("raas_kpi_latest.csv 저장용 쿼리 — 일간 + 주간 + 월간 통합")`
+`comment("스케줄: 매일 07:10 (일배치 완료 후)")`
+`comment("결과: PGM_CODE별 1행에 일간/주간/월간 지표 + 편성정보 포함")`
+`comment("metric_type 명명 규칙: 모두 소문자 + _day / _week / _mon suffix 통일")`
+`comment("DATE     : 소스 룩업의 일간 기준 날짜 (전일)")`
+`comment("DATE_WEEK: 소스 룩업의 주간 기준 날짜 (전주 월요일)")`
+`comment("DATE_MON : 소스 룩업의 월간 기준 날짜 (전월 1일)")`
+`comment("================================================================")`
+
+`comment("================================================================")`
+`comment("=== [1] 일간 지표 블록 ===")`
+`comment("================================================================")`
+| search TYPE=ALL AND PERIOD=1D
+| fields DATE T00 F00 L00 G00 P00 F* L* M*
+| untable DATE PGM_CODE metric_value
+| eval PGM_CODE=upper(PGM_CODE), metric_type="dau_day",
+       metric_value=tonumber(metric_value),
+       _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+
+| append maxout=200000 [
+    | inputlookup program_user_funnel_day.csv
+    | search TYPE=ALL AND PERIOD=7D
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="wau_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_user_funnel_day.csv
+    | search TYPE=ALL AND PERIOD=30D
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="mau_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_newuser_funnel_day.csv
+    | search TYPE=ALL AND PERIOD=1D
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="new_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_reactuser_funnel_day.csv
+    | search TYPE=ALL AND PERIOD="1D"
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="react_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 복귀율 일간: 복귀사용자수 / 당일 휴면풀수 × 100 ---")`
+| append maxout=200000 [
+    | inputlookup program_reactuser_funnel_day.csv
+    | search TYPE=ALL AND PERIOD="1D"
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE react_val
+    | eval react_val=coalesce(tonumber(react_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_dormant_pool_day.csv
+        | search TYPE=ALL AND PERIOD="1D"
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dormant_val
+        | eval dormant_val=coalesce(tonumber(dormant_val), 0)
+    ]
+    | eval metric_value=if(dormant_val>0, round(react_val/dormant_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="react_rate_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 이탈율 일간: 이탈사용자수 / 전일 DAU × 100 ---")`
+| append maxout=200000 [
+    | inputlookup program_churnuser_funnel_day.csv
+    | where TYPE="ALL" AND PERIOD="1D"
+    | eval prev_DATE=strftime(strptime(DATE,"%Y/%m/%d")-86400,"%Y/%m/%d")
+    | join type=left prev_DATE [
+        | inputlookup program_user_funnel_day.csv
+        | where TYPE="ALL" AND PERIOD="1D"
+        | rename DATE AS prev_DATE,
+            T00 AS prev_T00, F00 AS prev_F00, L00 AS prev_L00,
+            G00 AS prev_G00, P00 AS prev_P00,
+            F01 AS prev_F01, F02 AS prev_F02, F03 AS prev_F03, F04 AS prev_F04,
+            F05 AS prev_F05, F06 AS prev_F06, F07 AS prev_F07, F08 AS prev_F08,
+            F09 AS prev_F09, F10 AS prev_F10, F11 AS prev_F11, F12 AS prev_F12, F13 AS prev_F13,
+            L01 AS prev_L01, L02 AS prev_L02, L03 AS prev_L03, L04 AS prev_L04,
+            L05 AS prev_L05, L06 AS prev_L06, L07 AS prev_L07, L08 AS prev_L08,
+            L09 AS prev_L09, L10 AS prev_L10, L11 AS prev_L11, L12 AS prev_L12,
+            L13 AS prev_L13, L14 AS prev_L14, L15 AS prev_L15,
+            M05 AS prev_M05, M07 AS prev_M07, M10 AS prev_M10, M11 AS prev_M11
+    ]
+    | eval
+        T00=if(prev_T00>0,round(T00/prev_T00*100,1),null()),
+        F00=if(prev_F00>0,round(F00/prev_F00*100,1),null()),
+        L00=if(prev_L00>0,round(L00/prev_L00*100,1),null()),
+        G00=if(prev_G00>0,round(G00/prev_G00*100,1),null()),
+        P00=if(prev_P00>0,round(P00/prev_P00*100,1),null()),
+        F01=if(prev_F01>0,round(F01/prev_F01*100,1),null()),
+        F02=if(prev_F02>0,round(F02/prev_F02*100,1),null()),
+        F03=if(prev_F03>0,round(F03/prev_F03*100,1),null()),
+        F04=if(prev_F04>0,round(F04/prev_F04*100,1),null()),
+        F05=if(prev_F05>0,round(F05/prev_F05*100,1),null()),
+        F06=if(prev_F06>0,round(F06/prev_F06*100,1),null()),
+        F07=if(prev_F07>0,round(F07/prev_F07*100,1),null()),
+        F08=if(prev_F08>0,round(F08/prev_F08*100,1),null()),
+        F09=if(prev_F09>0,round(F09/prev_F09*100,1),null()),
+        F10=if(prev_F10>0,round(F10/prev_F10*100,1),null()),
+        F11=if(prev_F11>0,round(F11/prev_F11*100,1),null()),
+        F12=if(prev_F12>0,round(F12/prev_F12*100,1),null()),
+        F13=if(prev_F13>0,round(F13/prev_F13*100,1),null()),
+        L01=if(prev_L01>0,round(L01/prev_L01*100,1),null()),
+        L02=if(prev_L02>0,round(L02/prev_L02*100,1),null()),
+        L03=if(prev_L03>0,round(L03/prev_L03*100,1),null()),
+        L04=if(prev_L04>0,round(L04/prev_L04*100,1),null()),
+        L05=if(prev_L05>0,round(L05/prev_L05*100,1),null()),
+        L06=if(prev_L06>0,round(L06/prev_L06*100,1),null()),
+        L07=if(prev_L07>0,round(L07/prev_L07*100,1),null()),
+        L08=if(prev_L08>0,round(L08/prev_L08*100,1),null()),
+        L09=if(prev_L09>0,round(L09/prev_L09*100,1),null()),
+        L10=if(prev_L10>0,round(L10/prev_L10*100,1),null()),
+        L11=if(prev_L11>0,round(L11/prev_L11*100,1),null()),
+        L12=if(prev_L12>0,round(L12/prev_L12*100,1),null()),
+        L13=if(prev_L13>0,round(L13/prev_L13*100,1),null()),
+        L14=if(prev_L14>0,round(L14/prev_L14*100,1),null()),
+        L15=if(prev_L15>0,round(L15/prev_L15*100,1),null()),
+        M05=if(prev_M05>0,round(M05/prev_M05*100,1),null()),
+        M07=if(prev_M07>0,round(M07/prev_M07*100,1),null()),
+        M10=if(prev_M10>0,round(M10/prev_M10*100,1),null()),
+        M11=if(prev_M11>0,round(M11/prev_M11*100,1),null())
+    | fields - prev_*
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 깊은청취율용 일간 1MIN / 10MIN (PERIOD=1D 조건 필수 — 없으면 30D롤링값이 들어옴) ---")`
+| append maxout=200000 [
+    | inputlookup program_user_funnel_day.csv
+    | search TYPE=1MIN AND PERIOD=1D
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="dau_1min_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_user_funnel_day.csv
+    | search TYPE=10MIN AND PERIOD=1D
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="dau_10min_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- D1/D7 유지율 일간 (전체 코호트 기준) ---")`
+| append maxout=200000 [
+    | inputlookup program_user_retention_day.csv
+    | search TYPE=D1 AND COHORT=all
+    | rename RR_T00 as T00, RR_F00 as F00, RR_L00 as L00, RR_G00 as G00, RR_P00 as P00,
+             RR_F01 as F01, RR_F02 as F02, RR_F03 as F03, RR_F04 as F04, RR_F05 as F05,
+             RR_F06 as F06, RR_F07 as F07, RR_F08 as F08, RR_F09 as F09, RR_F10 as F10,
+             RR_F11 as F11, RR_F12 as F12, RR_F13 as F13,
+             RR_L01 as L01, RR_L02 as L02, RR_L03 as L03, RR_L04 as L04, RR_L05 as L05,
+             RR_L06 as L06, RR_L07 as L07, RR_L08 as L08, RR_L09 as L09, RR_L10 as L10,
+             RR_L11 as L11, RR_L12 as L12, RR_L13 as L13, RR_L14 as L14, RR_L15 as L15,
+             RR_M05 as M05, RR_M07 as M07, RR_M10 as M10, RR_M11 as M11
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="d1_ret_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_user_retention_day.csv
+    | search TYPE=D7 AND COHORT=all
+    | rename RR_T00 as T00, RR_F00 as F00, RR_L00 as L00, RR_G00 as G00, RR_P00 as P00,
+             RR_F01 as F01, RR_F02 as F02, RR_F03 as F03, RR_F04 as F04, RR_F05 as F05,
+             RR_F06 as F06, RR_F07 as F07, RR_F08 as F08, RR_F09 as F09, RR_F10 as F10,
+             RR_F11 as F11, RR_F12 as F12, RR_F13 as F13,
+             RR_L01 as L01, RR_L02 as L02, RR_L03 as L03, RR_L04 as L04, RR_L05 as L05,
+             RR_L06 as L06, RR_L07 as L07, RR_L08 as L08, RR_L09 as L09, RR_L10 as L10,
+             RR_L11 as L11, RR_L12 as L12, RR_L13 as L13, RR_L14 as L14, RR_L15 as L15,
+             RR_M05 as M05, RR_M07 as M07, RR_M10 as M10, RR_M11 as M11
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="d7_ret_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 신규사용자 D1유지율 일간 (신규 코호트 기준) ---")`
+`comment("    전체 코호트 d1_ret_day와 구분: 신규사용자가 다음날도 앱을 사용한 비율")`
+| append maxout=200000 [
+    | inputlookup program_newuser_retention_day.csv
+    | search TYPE=D1 AND COHORT=all
+    | rename RR_T00 as T00, RR_F00 as F00, RR_L00 as L00, RR_G00 as G00, RR_P00 as P00,
+             RR_F01 as F01, RR_F02 as F02, RR_F03 as F03, RR_F04 as F04, RR_F05 as F05,
+             RR_F06 as F06, RR_F07 as F07, RR_F08 as F08, RR_F09 as F09, RR_F10 as F10,
+             RR_F11 as F11, RR_F12 as F12, RR_F13 as F13,
+             RR_L01 as L01, RR_L02 as L02, RR_L03 as L03, RR_L04 as L04, RR_L05 as L05,
+             RR_L06 as L06, RR_L07 as L07, RR_L08 as L08, RR_L09 as L09, RR_L10 as L10,
+             RR_L11 as L11, RR_L12 as L12, RR_L13 as L13, RR_L14 as L14, RR_L15 as L15,
+             RR_M05 as M05, RR_M07 as M07, RR_M10 as M10, RR_M11 as M11
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="new_d1_ret_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 신규사용자 D7유지율 일간 (신규 코호트 기준) ---")`
+`comment("    전체 코호트 d7_ret_day와 구분: 신규사용자가 7일 후에도 앱을 사용한 비율")`
+| append maxout=200000 [
+    | inputlookup program_newuser_retention_day.csv
+    | search TYPE=D7 AND COHORT=all
+    | rename RR_T00 as T00, RR_F00 as F00, RR_L00 as L00, RR_G00 as G00, RR_P00 as P00,
+             RR_F01 as F01, RR_F02 as F02, RR_F03 as F03, RR_F04 as F04, RR_F05 as F05,
+             RR_F06 as F06, RR_F07 as F07, RR_F08 as F08, RR_F09 as F09, RR_F10 as F10,
+             RR_F11 as F11, RR_F12 as F12, RR_F13 as F13,
+             RR_L01 as L01, RR_L02 as L02, RR_L03 as L03, RR_L04 as L04, RR_L05 as L05,
+             RR_L06 as L06, RR_L07 as L07, RR_L08 as L08, RR_L09 as L09, RR_L10 as L10,
+             RR_L11 as L11, RR_L12 as L12, RR_L13 as L13, RR_L14 as L14, RR_L15 as L15,
+             RR_M05 as M05, RR_M07 as M07, RR_M10 as M10, RR_M11 as M11
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="new_d7_ret_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 참여율 일간: 참여사용자수 / DAU × 100 ---")`
+| append maxout=200000 [
+    | inputlookup program_user_engage_day.csv
+    | search TYPE=TOTAL_USER
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE eng_val
+    | eval eng_val=coalesce(tonumber(eng_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_user_funnel_day.csv
+        | search TYPE=ALL
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dau_val
+        | eval dau_val=coalesce(tonumber(dau_val), 0)
+    ]
+    | eval metric_value=if(dau_val>0, round(eng_val/dau_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 습관형성률 일간: 3D7D_1M / ALL × 100, +6일 시프트 ---")`
+| append maxout=200000 [
+    | inputlookup program_newuser_funnel_day.csv
+    | search TYPE=3D7D_1M
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE num_val
+    | eval num_val=coalesce(tonumber(num_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_newuser_funnel_day.csv
+        | search TYPE=ALL
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dau_val
+        | eval dau_val=coalesce(tonumber(dau_val), 0)
+    ]
+    | eval metric_value=if(dau_val>0, round(num_val/dau_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | eval _time=strptime(DATE,"%Y/%m/%d")
+    | eval DATE=strftime(relative_time(_time,"+6d"),"%Y/%m/%d")
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_day",
+           metric_value=tonumber(metric_value),
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("================================================================")`
+`comment("=== [2] 주간 지표 블록 — DATE_WEEK 필드(전주 월요일) 보존 ===")`
+`comment("================================================================")`
+
+| append maxout=200000 [
+    | inputlookup program_user_funnel_week.csv
+    | search TYPE=ALL AND PERIOD=1W
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="dau_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_newuser_funnel_week.csv
+    | search TYPE=ALL
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="new_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_reactuser_funnel_week.csv
+    | search TYPE=ALL
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="react_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 복귀율 주간 ---")`
+| append maxout=200000 [
+    | inputlookup program_reactuser_funnel_week.csv
+    | search TYPE=ALL
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE react_val
+    | eval react_val=coalesce(tonumber(react_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_dormant_pool_week.csv
+        | search TYPE=ALL
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dormant_val
+        | eval dormant_val=coalesce(tonumber(dormant_val), 0)
+    ]
+    | eval metric_value=if(dormant_val>0, round(react_val/dormant_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="react_rate_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 이탈율 주간: 이탈사용자수 / 전주 WAU × 100 ---")`
+| append maxout=200000 [
+    | inputlookup program_churnuser_funnel_week.csv
+    | where TYPE="ALL" AND PERIOD="1W"
+    | eval prev_DATE=strftime(strptime(DATE,"%Y/%m/%d")-7*86400,"%Y/%m/%d")
+    | join type=left prev_DATE [
+        | inputlookup program_user_funnel_week.csv
+        | where TYPE="ALL" AND PERIOD="1W"
+        | rename DATE AS prev_DATE,
+            T00 AS prev_T00, F00 AS prev_F00, L00 AS prev_L00,
+            G00 AS prev_G00, P00 AS prev_P00,
+            F01 AS prev_F01, F02 AS prev_F02, F03 AS prev_F03, F04 AS prev_F04,
+            F05 AS prev_F05, F06 AS prev_F06, F07 AS prev_F07, F08 AS prev_F08,
+            F09 AS prev_F09, F10 AS prev_F10, F11 AS prev_F11, F12 AS prev_F12, F13 AS prev_F13,
+            L01 AS prev_L01, L02 AS prev_L02, L03 AS prev_L03, L04 AS prev_L04,
+            L05 AS prev_L05, L06 AS prev_L06, L07 AS prev_L07, L08 AS prev_L08,
+            L09 AS prev_L09, L10 AS prev_L10, L11 AS prev_L11, L12 AS prev_L12,
+            L13 AS prev_L13, L14 AS prev_L14, L15 AS prev_L15,
+            M05 AS prev_M05, M07 AS prev_M07, M10 AS prev_M10, M11 AS prev_M11
+    ]
+    | eval
+        T00=if(prev_T00>0,round(T00/prev_T00*100,1),null()),
+        F00=if(prev_F00>0,round(F00/prev_F00*100,1),null()),
+        L00=if(prev_L00>0,round(L00/prev_L00*100,1),null()),
+        G00=if(prev_G00>0,round(G00/prev_G00*100,1),null()),
+        P00=if(prev_P00>0,round(P00/prev_P00*100,1),null()),
+        F01=if(prev_F01>0,round(F01/prev_F01*100,1),null()),
+        F02=if(prev_F02>0,round(F02/prev_F02*100,1),null()),
+        F03=if(prev_F03>0,round(F03/prev_F03*100,1),null()),
+        F04=if(prev_F04>0,round(F04/prev_F04*100,1),null()),
+        F05=if(prev_F05>0,round(F05/prev_F05*100,1),null()),
+        F06=if(prev_F06>0,round(F06/prev_F06*100,1),null()),
+        F07=if(prev_F07>0,round(F07/prev_F07*100,1),null()),
+        F08=if(prev_F08>0,round(F08/prev_F08*100,1),null()),
+        F09=if(prev_F09>0,round(F09/prev_F09*100,1),null()),
+        F10=if(prev_F10>0,round(F10/prev_F10*100,1),null()),
+        F11=if(prev_F11>0,round(F11/prev_F11*100,1),null()),
+        F12=if(prev_F12>0,round(F12/prev_F12*100,1),null()),
+        F13=if(prev_F13>0,round(F13/prev_F13*100,1),null()),
+        L01=if(prev_L01>0,round(L01/prev_L01*100,1),null()),
+        L02=if(prev_L02>0,round(L02/prev_L02*100,1),null()),
+        L03=if(prev_L03>0,round(L03/prev_L03*100,1),null()),
+        L04=if(prev_L04>0,round(L04/prev_L04*100,1),null()),
+        L05=if(prev_L05>0,round(L05/prev_L05*100,1),null()),
+        L06=if(prev_L06>0,round(L06/prev_L06*100,1),null()),
+        L07=if(prev_L07>0,round(L07/prev_L07*100,1),null()),
+        L08=if(prev_L08>0,round(L08/prev_L08*100,1),null()),
+        L09=if(prev_L09>0,round(L09/prev_L09*100,1),null()),
+        L10=if(prev_L10>0,round(L10/prev_L10*100,1),null()),
+        L11=if(prev_L11>0,round(L11/prev_L11*100,1),null()),
+        L12=if(prev_L12>0,round(L12/prev_L12*100,1),null()),
+        L13=if(prev_L13>0,round(L13/prev_L13*100,1),null()),
+        L14=if(prev_L14>0,round(L14/prev_L14*100,1),null()),
+        L15=if(prev_L15>0,round(L15/prev_L15*100,1),null()),
+        M05=if(prev_M05>0,round(M05/prev_M05*100,1),null()),
+        M07=if(prev_M07>0,round(M07/prev_M07*100,1),null()),
+        M10=if(prev_M10>0,round(M10/prev_M10*100,1),null()),
+        M11=if(prev_M11>0,round(M11/prev_M11*100,1),null())
+    | fields - prev_*
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 깊은청취율용 주간 1MIN / 10MIN (PERIOD=1W 조건 필수) ---")`
+| append maxout=200000 [
+    | inputlookup program_user_funnel_week.csv
+    | search TYPE=1MIN AND PERIOD=1W
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="wau_1min_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_user_funnel_week.csv
+    | search TYPE=10MIN AND PERIOD=1W
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="wau_10min_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- W1 유지율: 주간 ---")`
+| append maxout=200000 [
+    | inputlookup program_user_retention_week.csv
+    | search TYPE=W1 AND COHORT=all
+    | rename RR_T00 as T00, RR_F00 as F00, RR_L00 as L00, RR_G00 as G00, RR_P00 as P00,
+             RR_F01 as F01, RR_F02 as F02, RR_F03 as F03, RR_F04 as F04, RR_F05 as F05,
+             RR_F06 as F06, RR_F07 as F07, RR_F08 as F08, RR_F09 as F09, RR_F10 as F10,
+             RR_F11 as F11, RR_F12 as F12, RR_F13 as F13,
+             RR_L01 as L01, RR_L02 as L02, RR_L03 as L03, RR_L04 as L04, RR_L05 as L05,
+             RR_L06 as L06, RR_L07 as L07, RR_L08 as L08, RR_L09 as L09, RR_L10 as L10,
+             RR_L11 as L11, RR_L12 as L12, RR_L13 as L13, RR_L14 as L14, RR_L15 as L15,
+             RR_M05 as M05, RR_M07 as M07, RR_M10 as M10, RR_M11 as M11
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="w1_ret_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 신규사용자 W1유지율 주간 (신규 코호트 기준) ---")`
+`comment("    전체 코호트 w1_ret_week와 구분: 신규사용자가 1주 후에도 앱을 사용한 비율")`
+| append maxout=200000 [
+    | inputlookup program_newuser_retention_week.csv
+    | search TYPE=W1 AND COHORT=all
+    | rename RR_T00 as T00, RR_F00 as F00, RR_L00 as L00, RR_G00 as G00, RR_P00 as P00,
+             RR_F01 as F01, RR_F02 as F02, RR_F03 as F03, RR_F04 as F04, RR_F05 as F05,
+             RR_F06 as F06, RR_F07 as F07, RR_F08 as F08, RR_F09 as F09, RR_F10 as F10,
+             RR_F11 as F11, RR_F12 as F12, RR_F13 as F13,
+             RR_L01 as L01, RR_L02 as L02, RR_L03 as L03, RR_L04 as L04, RR_L05 as L05,
+             RR_L06 as L06, RR_L07 as L07, RR_L08 as L08, RR_L09 as L09, RR_L10 as L10,
+             RR_L11 as L11, RR_L12 as L12, RR_L13 as L13, RR_L14 as L14, RR_L15 as L15,
+             RR_M05 as M05, RR_M07 as M07, RR_M10 as M10, RR_M11 as M11
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="new_w1_ret_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 참여율 주간 ---")`
+| append maxout=200000 [
+    | inputlookup program_user_engage_week.csv
+    | search TYPE=TOTAL_USER
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE eng_val
+    | eval eng_val=coalesce(tonumber(eng_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_user_funnel_week.csv
+        | search TYPE=ALL
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dau_val
+        | eval dau_val=coalesce(tonumber(dau_val), 0)
+    ]
+    | eval metric_value=if(dau_val>0, round(eng_val/dau_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 습관형성률 주간 ---")`
+| append maxout=200000 [
+    | inputlookup program_newuser_funnel_week.csv
+    | search TYPE=3D7D_1M
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE num_val
+    | eval num_val=coalesce(tonumber(num_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_newuser_funnel_week.csv
+        | search TYPE=ALL
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dau_val
+        | eval dau_val=coalesce(tonumber(dau_val), 0)
+    ]
+    | eval metric_value=if(dau_val>0, round(num_val/dau_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_week",
+           metric_value=tonumber(metric_value), DATE_WEEK=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("================================================================")`
+`comment("=== [3] 월간 지표 블록 — DATE_MON 필드(전월 1일) 보존 ===")`
+`comment("================================================================")`
+
+| append maxout=200000 [
+    | inputlookup program_user_funnel_mon.csv
+    | search TYPE=ALL AND PERIOD=1M
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="dau_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_newuser_funnel_mon.csv
+    | search TYPE=ALL
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="new_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_reactuser_funnel_mon.csv
+    | search TYPE=ALL
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="react_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 복귀율 월간 ---")`
+| append maxout=200000 [
+    | inputlookup program_reactuser_funnel_mon.csv
+    | search TYPE=ALL
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE react_val
+    | eval react_val=coalesce(tonumber(react_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_dormant_pool_mon.csv
+        | search TYPE=ALL
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dormant_val
+        | eval dormant_val=coalesce(tonumber(dormant_val), 0)
+    ]
+    | eval metric_value=if(dormant_val>0, round(react_val/dormant_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="react_rate_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 이탈율 월간: 이탈사용자수 / 전월 MAU × 100 ---")`
+| append maxout=200000 [
+    | inputlookup program_churnuser_funnel_mon.csv
+    | where TYPE="ALL" AND PERIOD="1M"
+    | eval prev_DATE=strftime(relative_time(strptime(DATE,"%Y/%m/%d"),"-1mon"),"%Y/%m/%d")
+    | join type=left prev_DATE [
+        | inputlookup program_user_funnel_mon.csv
+        | where TYPE="ALL" AND PERIOD="1M"
+        | rename DATE AS prev_DATE,
+            T00 AS prev_T00, F00 AS prev_F00, L00 AS prev_L00,
+            G00 AS prev_G00, P00 AS prev_P00,
+            F01 AS prev_F01, F02 AS prev_F02, F03 AS prev_F03, F04 AS prev_F04,
+            F05 AS prev_F05, F06 AS prev_F06, F07 AS prev_F07, F08 AS prev_F08,
+            F09 AS prev_F09, F10 AS prev_F10, F11 AS prev_F11, F12 AS prev_F12, F13 AS prev_F13,
+            L01 AS prev_L01, L02 AS prev_L02, L03 AS prev_L03, L04 AS prev_L04,
+            L05 AS prev_L05, L06 AS prev_L06, L07 AS prev_L07, L08 AS prev_L08,
+            L09 AS prev_L09, L10 AS prev_L10, L11 AS prev_L11, L12 AS prev_L12,
+            L13 AS prev_L13, L14 AS prev_L14, L15 AS prev_L15,
+            M05 AS prev_M05, M07 AS prev_M07, M10 AS prev_M10, M11 AS prev_M11
+    ]
+    | eval
+        T00=if(prev_T00>0,round(T00/prev_T00*100,1),null()),
+        F00=if(prev_F00>0,round(F00/prev_F00*100,1),null()),
+        L00=if(prev_L00>0,round(L00/prev_L00*100,1),null()),
+        G00=if(prev_G00>0,round(G00/prev_G00*100,1),null()),
+        P00=if(prev_P00>0,round(P00/prev_P00*100,1),null()),
+        F01=if(prev_F01>0,round(F01/prev_F01*100,1),null()),
+        F02=if(prev_F02>0,round(F02/prev_F02*100,1),null()),
+        F03=if(prev_F03>0,round(F03/prev_F03*100,1),null()),
+        F04=if(prev_F04>0,round(F04/prev_F04*100,1),null()),
+        F05=if(prev_F05>0,round(F05/prev_F05*100,1),null()),
+        F06=if(prev_F06>0,round(F06/prev_F06*100,1),null()),
+        F07=if(prev_F07>0,round(F07/prev_F07*100,1),null()),
+        F08=if(prev_F08>0,round(F08/prev_F08*100,1),null()),
+        F09=if(prev_F09>0,round(F09/prev_F09*100,1),null()),
+        F10=if(prev_F10>0,round(F10/prev_F10*100,1),null()),
+        F11=if(prev_F11>0,round(F11/prev_F11*100,1),null()),
+        F12=if(prev_F12>0,round(F12/prev_F12*100,1),null()),
+        F13=if(prev_F13>0,round(F13/prev_F13*100,1),null()),
+        L01=if(prev_L01>0,round(L01/prev_L01*100,1),null()),
+        L02=if(prev_L02>0,round(L02/prev_L02*100,1),null()),
+        L03=if(prev_L03>0,round(L03/prev_L03*100,1),null()),
+        L04=if(prev_L04>0,round(L04/prev_L04*100,1),null()),
+        L05=if(prev_L05>0,round(L05/prev_L05*100,1),null()),
+        L06=if(prev_L06>0,round(L06/prev_L06*100,1),null()),
+        L07=if(prev_L07>0,round(L07/prev_L07*100,1),null()),
+        L08=if(prev_L08>0,round(L08/prev_L08*100,1),null()),
+        L09=if(prev_L09>0,round(L09/prev_L09*100,1),null()),
+        L10=if(prev_L10>0,round(L10/prev_L10*100,1),null()),
+        L11=if(prev_L11>0,round(L11/prev_L11*100,1),null()),
+        L12=if(prev_L12>0,round(L12/prev_L12*100,1),null()),
+        L13=if(prev_L13>0,round(L13/prev_L13*100,1),null()),
+        L14=if(prev_L14>0,round(L14/prev_L14*100,1),null()),
+        L15=if(prev_L15>0,round(L15/prev_L15*100,1),null()),
+        M05=if(prev_M05>0,round(M05/prev_M05*100,1),null()),
+        M07=if(prev_M07>0,round(M07/prev_M07*100,1),null()),
+        M10=if(prev_M10>0,round(M10/prev_M10*100,1),null()),
+        M11=if(prev_M11>0,round(M11/prev_M11*100,1),null())
+    | fields - prev_*
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 깊은청취율용 월간 1MIN / 10MIN (PERIOD=1M 조건 필수) ---")`
+| append maxout=200000 [
+    | inputlookup program_user_funnel_mon.csv
+    | search TYPE=1MIN AND PERIOD=1M
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="mau_1min_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+| append maxout=200000 [
+    | inputlookup program_user_funnel_mon.csv
+    | search TYPE=10MIN AND PERIOD=1M
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="mau_10min_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- M1 유지율: 월간 ---")`
+| append maxout=200000 [
+    | inputlookup program_user_retention_mon.csv
+    | search TYPE=M1 AND COHORT=all
+    | rename RR_T00 as T00, RR_F00 as F00, RR_L00 as L00, RR_G00 as G00, RR_P00 as P00,
+             RR_F01 as F01, RR_F02 as F02, RR_F03 as F03, RR_F04 as F04, RR_F05 as F05,
+             RR_F06 as F06, RR_F07 as F07, RR_F08 as F08, RR_F09 as F09, RR_F10 as F10,
+             RR_F11 as F11, RR_F12 as F12, RR_F13 as F13,
+             RR_L01 as L01, RR_L02 as L02, RR_L03 as L03, RR_L04 as L04, RR_L05 as L05,
+             RR_L06 as L06, RR_L07 as L07, RR_L08 as L08, RR_L09 as L09, RR_L10 as L10,
+             RR_L11 as L11, RR_L12 as L12, RR_L13 as L13, RR_L14 as L14, RR_L15 as L15,
+             RR_M05 as M05, RR_M07 as M07, RR_M10 as M10, RR_M11 as M11
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="m1_ret_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 신규사용자 M1유지율 월간 (신규 코호트 기준) ---")`
+`comment("    전체 코호트 m1_ret_mon와 구분: 신규사용자가 1개월 후에도 앱을 사용한 비율")`
+| append maxout=200000 [
+    | inputlookup program_newuser_retention_mon.csv
+    | search TYPE=M1 AND COHORT=all
+    | rename RR_T00 as T00, RR_F00 as F00, RR_L00 as L00, RR_G00 as G00, RR_P00 as P00,
+             RR_F01 as F01, RR_F02 as F02, RR_F03 as F03, RR_F04 as F04, RR_F05 as F05,
+             RR_F06 as F06, RR_F07 as F07, RR_F08 as F08, RR_F09 as F09, RR_F10 as F10,
+             RR_F11 as F11, RR_F12 as F12, RR_F13 as F13,
+             RR_L01 as L01, RR_L02 as L02, RR_L03 as L03, RR_L04 as L04, RR_L05 as L05,
+             RR_L06 as L06, RR_L07 as L07, RR_L08 as L08, RR_L09 as L09, RR_L10 as L10,
+             RR_L11 as L11, RR_L12 as L12, RR_L13 as L13, RR_L14 as L14, RR_L15 as L15,
+             RR_M05 as M05, RR_M07 as M07, RR_M10 as M10, RR_M11 as M11
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="new_m1_ret_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 참여율 월간 ---")`
+| append maxout=200000 [
+    | inputlookup program_user_engage_mon.csv
+    | search TYPE=TOTAL_USER
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE eng_val
+    | eval eng_val=coalesce(tonumber(eng_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_user_funnel_mon.csv
+        | search TYPE=ALL
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dau_val
+        | eval dau_val=coalesce(tonumber(dau_val), 0)
+    ]
+    | eval metric_value=if(dau_val>0, round(eng_val/dau_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("--- 습관형성률 월간 ---")`
+| append maxout=200000 [
+    | inputlookup program_newuser_funnel_mon.csv
+    | search TYPE=3D7D_1M
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE num_val
+    | eval num_val=coalesce(tonumber(num_val), 0)
+    | join type=left max=1 DATE PGM_CODE [
+        | inputlookup program_newuser_funnel_mon.csv
+        | search TYPE=ALL
+        | fields DATE T00 F00 L00 G00 P00 F* L* M*
+        | untable DATE PGM_CODE dau_val
+        | eval dau_val=coalesce(tonumber(dau_val), 0)
+    ]
+    | eval metric_value=if(dau_val>0, round(num_val/dau_val*100,1), 0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | xyseries DATE PGM_CODE metric_value
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_mon",
+           metric_value=tonumber(metric_value), DATE_MON=DATE,
+           _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
+]
+
+`comment("================================================================")`
+`comment("=== [4] 전주 비교값 생성 (appendpipe) ===")`
+`comment("================================================================")`
+
+| appendpipe [
+    | where isnotnull(metric_value)
+    | eval DATE=strftime(relative_time(_time,"+7d"),"%Y/%m/%d"),
+           prev_week_value=metric_value
+    | fields DATE PGM_CODE metric_type prev_week_value
+]
+
+| stats max(today_value)     as today_value
+        max(prev_week_value) as prev_week_value
+        max(DATE_WEEK)       as DATE_WEEK
+        max(DATE_MON)        as DATE_MON
+  by DATE PGM_CODE metric_type
+| where isnotnull(today_value)
+
+`comment("================================================================")`
+`comment("=== [4-1] 평균 지표 블록 (주간 DAU일평균 / 월간 DAU일평균 / 월간 WAU평균) ===")`
+`comment("================================================================")`
+
+`comment("--- 주간 DAU 일평균: 전주 월~일 7일간 DAU 값의 평균 ---")`
+| append maxout=200000 [
+    | inputlookup program_user_funnel_day.csv
+    | search TYPE=ALL AND PERIOD=1D
+    | eval week_start = strftime(relative_time(now(),"-1w@w1"),         "%Y/%m/%d")
+    | eval week_end   = strftime(relative_time(now(),"-1w@w1+6d@d"),    "%Y/%m/%d")
+    | where DATE>=week_start AND DATE<=week_end
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval metric_value=coalesce(tonumber(metric_value),0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | stats avg(metric_value) as today_value by PGM_CODE
+    | eval metric_type="DAU_WEEK_AVG",
+           DATE=strftime(relative_time(now(),"-1w@w1"),"%Y/%m/%d"),
+           prev_week_value=null()
+]
+
+`comment("--- 월간 DAU 일평균: 전월 1일~말일 각 DAU 값의 평균 ---")`
+| append maxout=200000 [
+    | inputlookup program_user_funnel_day.csv
+    | search TYPE=ALL AND PERIOD=1D
+    | eval mon_start = strftime(relative_time(now(),"-1mon@mon"),    "%Y/%m/%d")
+    | eval mon_end   = strftime(relative_time(now(),"@mon-1d@d"),    "%Y/%m/%d")
+    | where DATE>=mon_start AND DATE<=mon_end
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval metric_value=coalesce(tonumber(metric_value),0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | stats avg(metric_value) as today_value by PGM_CODE
+    | eval metric_type="DAU_MON_AVG",
+           DATE=strftime(relative_time(now(),"-1mon@mon"),"%Y/%m/%d"),
+           prev_week_value=null()
+]
+
+`comment("--- 월간 WAU 평균: 전월 1일~말일 기간의 7D롤링(WAU_day)값 평균 ---")`
+| append maxout=200000 [
+    | inputlookup program_user_funnel_day.csv
+    | search TYPE=ALL AND PERIOD=7D
+    | eval mon_start = strftime(relative_time(now(),"-1mon@mon"),    "%Y/%m/%d")
+    | eval mon_end   = strftime(relative_time(now(),"@mon-1d@d"),    "%Y/%m/%d")
+    | where DATE>=mon_start AND DATE<=mon_end
+    | fields DATE T00 F00 L00 G00 P00 F* L* M*
+    | untable DATE PGM_CODE metric_value
+    | eval metric_value=coalesce(tonumber(metric_value),0)
+    | eval PGM_CODE=upper(PGM_CODE)
+    | stats avg(metric_value) as today_value by PGM_CODE
+    | eval metric_type="WAU_MON_AVG",
+           DATE=strftime(relative_time(now(),"-1mon@mon"),"%Y/%m/%d"),
+           prev_week_value=null()
+]
+
+`comment("================================================================")`
+`comment("=== [5] 날짜 필터 + DATE 분기 보존 ===")`
+`comment("필터 통과 후 metric_type 기준으로 DATE를 분리 보존")`
+`comment("  일간 → DATE_DAY(=DATE) / 주간 → DATE_WEEK / 월간 → DATE_MON")`
+`comment("이후 [7] stats by PGM_CODE 에서 max()로 합쳐져 1행으로 만들어짐")`
+`comment("================================================================")`
+
+| eval date_day  = strftime(relative_time(now(),"-1d@d"),   "%Y/%m/%d")
+| eval date_week = strftime(relative_time(now(),"-1w@w1"),  "%Y/%m/%d")
+| eval date_mon  = strftime(relative_time(now(),"-1mon@mon"),"%Y/%m/%d")
+
+| where (
+    (match(metric_type,"_day")       AND DATE=date_day)  OR
+    (match(metric_type,"_week")      AND DATE=date_week) OR
+    (match(metric_type,"_mon")       AND DATE=date_mon)  OR
+    (match(metric_type,"DAU_WEEK_AVG") AND DATE=date_week) OR
+    (match(metric_type,"DAU_MON_AVG")  AND DATE=date_mon)  OR
+    (match(metric_type,"WAU_MON_AVG")  AND DATE=date_mon)
+)
+
+`comment("--- DATE를 각 기간 컬럼으로 분리 보존 (null이면 stats max()에서 무시됨) ---")`
+| eval DATE_DAY  = if(match(metric_type,"_day"),  DATE, null())
+| eval DATE_WEEK = if(match(metric_type,"_week"), DATE, coalesce(DATE_WEEK, null()))
+| eval DATE_MON  = if(match(metric_type,"_mon"),  DATE, coalesce(DATE_MON,  null()))
+
+| fields - date_day date_week date_mon
+
+`comment("================================================================")`
+`comment("=== [6] metric_type → 컬럼 피벗 ===")`
+`comment("================================================================")`
+
+`comment("--- 일간 ---")`
+| eval dau_today       = if(metric_type="dau_day",         today_value, null())
+| eval dau_pw          = if(metric_type="dau_day",         prev_week_value, null())
+| eval wau_today       = if(metric_type="wau_day",         today_value, null())
+| eval wau_pw          = if(metric_type="wau_day",         prev_week_value, null())
+| eval mau_today       = if(metric_type="mau_day",         today_value, null())
+| eval mau_pw          = if(metric_type="mau_day",         prev_week_value, null())
+| eval new_today       = if(metric_type="new_day",         today_value, null())
+| eval new_pw          = if(metric_type="new_day",         prev_week_value, null())
+| eval react_today     = if(metric_type="react_day",       today_value, null())
+| eval react_pw        = if(metric_type="react_day",       prev_week_value, null())
+| eval react_rate      = if(metric_type="react_rate_day",  today_value, null())
+| eval react_rate_pw   = if(metric_type="react_rate_day",  prev_week_value, null())
+| eval churn_rate      = if(metric_type="churn_day",       today_value, null())
+| eval churn_rate_pw   = if(metric_type="churn_day",       prev_week_value, null())
+| eval dau_1min        = if(metric_type="dau_1min_day",    today_value, null())
+| eval dau_1min_pw     = if(metric_type="dau_1min_day",    prev_week_value, null())
+| eval dau_10min       = if(metric_type="dau_10min_day",   today_value, null())
+| eval dau_10min_pw    = if(metric_type="dau_10min_day",   prev_week_value, null())
+| eval d1_ret          = if(metric_type="d1_ret_day",      today_value, null())
+| eval d1_ret_pw       = if(metric_type="d1_ret_day",      prev_week_value, null())
+| eval d7_ret          = if(metric_type="d7_ret_day",      today_value, null())
+| eval d7_ret_pw       = if(metric_type="d7_ret_day",      prev_week_value, null())
+| eval new_d1_ret      = if(metric_type="new_d1_ret_day",   today_value, null())
+| eval new_d1_ret_pw   = if(metric_type="new_d1_ret_day",   prev_week_value, null())
+| eval new_d7_ret      = if(metric_type="new_d7_ret_day",   today_value, null())
+| eval new_d7_ret_pw   = if(metric_type="new_d7_ret_day",   prev_week_value, null())
+| eval new_w1_ret      = if(metric_type="new_w1_ret_week",  today_value, null())
+| eval new_w1_ret_pw   = if(metric_type="new_w1_ret_week",  prev_week_value, null())
+| eval new_m1_ret      = if(metric_type="new_m1_ret_mon",   today_value, null())
+| eval new_m1_ret_pw   = if(metric_type="new_m1_ret_mon",   prev_week_value, null())
+| eval engage_rate     = if(metric_type="engage_day",      today_value, null())
+| eval engage_rate_pw  = if(metric_type="engage_day",      prev_week_value, null())
+| eval habit_rate      = if(metric_type="habit_day",       today_value, null())
+| eval habit_rate_pw   = if(metric_type="habit_day",       prev_week_value, null())
+
+`comment("--- 주간 ---")`
+| eval dau_week           = if(metric_type="dau_week",          today_value, null())
+| eval dau_week_pw        = if(metric_type="dau_week",          prev_week_value, null())
+| eval new_week           = if(metric_type="new_week",          today_value, null())
+| eval new_week_pw        = if(metric_type="new_week",          prev_week_value, null())
+| eval react_week         = if(metric_type="react_week",        today_value, null())
+| eval react_week_pw      = if(metric_type="react_week",        prev_week_value, null())
+| eval react_rate_week    = if(metric_type="react_rate_week",   today_value, null())
+| eval react_rate_week_pw = if(metric_type="react_rate_week",   prev_week_value, null())
+| eval churn_week         = if(metric_type="churn_week",        today_value, null())
+| eval churn_week_pw      = if(metric_type="churn_week",        prev_week_value, null())
+| eval wau_1min           = if(metric_type="wau_1min_week",     today_value, null())
+| eval wau_1min_pw        = if(metric_type="wau_1min_week",     prev_week_value, null())
+| eval wau_10min          = if(metric_type="wau_10min_week",    today_value, null())
+| eval wau_10min_pw       = if(metric_type="wau_10min_week",    prev_week_value, null())
+| eval w1_ret             = if(metric_type="w1_ret_week",       today_value, null())
+| eval w1_ret_pw          = if(metric_type="w1_ret_week",       prev_week_value, null())
+| eval engage_week        = if(metric_type="engage_week",       today_value, null())
+| eval engage_week_pw     = if(metric_type="engage_week",       prev_week_value, null())
+| eval habit_week         = if(metric_type="habit_week",        today_value, null())
+| eval habit_week_pw      = if(metric_type="habit_week",        prev_week_value, null())
+
+`comment("--- 월간 ---")`
+| eval dau_mon            = if(metric_type="dau_mon",           today_value, null())
+| eval dau_mon_pw         = if(metric_type="dau_mon",           prev_week_value, null())
+| eval new_mon            = if(metric_type="new_mon",           today_value, null())
+| eval new_mon_pw         = if(metric_type="new_mon",           prev_week_value, null())
+| eval react_mon          = if(metric_type="react_mon",         today_value, null())
+| eval react_mon_pw       = if(metric_type="react_mon",         prev_week_value, null())
+| eval react_rate_mon     = if(metric_type="react_rate_mon",    today_value, null())
+| eval react_rate_mon_pw  = if(metric_type="react_rate_mon",    prev_week_value, null())
+| eval churn_mon          = if(metric_type="churn_mon",         today_value, null())
+| eval churn_mon_pw       = if(metric_type="churn_mon",         prev_week_value, null())
+| eval mau_1min           = if(metric_type="mau_1min_mon",      today_value, null())
+| eval mau_1min_pw        = if(metric_type="mau_1min_mon",      prev_week_value, null())
+| eval mau_10min          = if(metric_type="mau_10min_mon",     today_value, null())
+| eval mau_10min_pw       = if(metric_type="mau_10min_mon",     prev_week_value, null())
+| eval m1_ret             = if(metric_type="m1_ret_mon",        today_value, null())
+| eval m1_ret_pw          = if(metric_type="m1_ret_mon",        prev_week_value, null())
+| eval engage_mon         = if(metric_type="engage_mon",        today_value, null())
+| eval engage_mon_pw      = if(metric_type="engage_mon",        prev_week_value, null())
+| eval habit_mon          = if(metric_type="habit_mon",         today_value, null())
+| eval habit_mon_pw       = if(metric_type="habit_mon",         prev_week_value, null())
+
+`comment("--- 평균 지표 ---")`
+| eval dau_week_avg = if(metric_type="DAU_WEEK_AVG", today_value, null())
+| eval dau_mon_avg  = if(metric_type="DAU_MON_AVG",  today_value, null())
+| eval wau_mon_avg  = if(metric_type="WAU_MON_AVG",  today_value, null())
+
+`comment("================================================================")`
+`comment("=== [7] PGM_CODE별 집계 ===")`
+`comment("================================================================")`
+
+| stats
+    `comment("--- 날짜: DATE=일간전일 / DATE_WEEK=전주월요일 / DATE_MON=전월1일 ---")`
+    max(DATE_DAY)  as DATE
+    max(DATE_WEEK) as DATE_WEEK
+    max(DATE_MON)  as DATE_MON
+    `comment("--- 일간 ---")`
+    max(dau_today)       as dau_today       max(dau_pw)            as dau_pw
+    max(wau_today)       as wau_today       max(wau_pw)            as wau_pw
+    max(mau_today)       as mau_today       max(mau_pw)            as mau_pw
+    max(new_today)       as new_today       max(new_pw)            as new_pw
+    max(react_today)     as react_today     max(react_pw)          as react_pw
+    max(react_rate)      as react_rate      max(react_rate_pw)     as react_rate_pw
+    max(churn_rate)      as churn_rate      max(churn_rate_pw)     as churn_rate_pw
+    max(dau_1min)        as dau_1min        max(dau_1min_pw)       as dau_1min_pw
+    max(dau_10min)       as dau_10min       max(dau_10min_pw)      as dau_10min_pw
+    max(d1_ret)          as d1_ret          max(d1_ret_pw)         as d1_ret_pw
+    max(d7_ret)          as d7_ret          max(d7_ret_pw)         as d7_ret_pw
+    max(new_d1_ret)      as new_d1_ret      max(new_d1_ret_pw)     as new_d1_ret_pw
+    max(new_d7_ret)      as new_d7_ret      max(new_d7_ret_pw)     as new_d7_ret_pw
+    max(new_w1_ret)      as new_w1_ret      max(new_w1_ret_pw)     as new_w1_ret_pw
+    max(new_m1_ret)      as new_m1_ret      max(new_m1_ret_pw)     as new_m1_ret_pw
+    max(engage_rate)     as engage_rate     max(engage_rate_pw)    as engage_rate_pw
+    max(habit_rate)      as habit_rate      max(habit_rate_pw)     as habit_rate_pw
+    `comment("--- 주간 ---")`
+    max(dau_week)        as dau_week        max(dau_week_pw)       as dau_week_pw
+    max(new_week)        as new_week        max(new_week_pw)       as new_week_pw
+    max(react_week)      as react_week      max(react_week_pw)     as react_week_pw
+    max(react_rate_week) as react_rate_week max(react_rate_week_pw) as react_rate_week_pw
+    max(churn_week)      as churn_week      max(churn_week_pw)     as churn_week_pw
+    max(wau_1min)        as wau_1min        max(wau_1min_pw)       as wau_1min_pw
+    max(wau_10min)       as wau_10min       max(wau_10min_pw)      as wau_10min_pw
+    max(w1_ret)          as w1_ret          max(w1_ret_pw)         as w1_ret_pw
+    max(engage_week)     as engage_week     max(engage_week_pw)    as engage_week_pw
+    max(habit_week)      as habit_week      max(habit_week_pw)     as habit_week_pw
+    `comment("--- 월간 ---")`
+    max(dau_mon)         as dau_mon         max(dau_mon_pw)        as dau_mon_pw
+    max(new_mon)         as new_mon         max(new_mon_pw)        as new_mon_pw
+    max(react_mon)       as react_mon       max(react_mon_pw)      as react_mon_pw
+    max(react_rate_mon)  as react_rate_mon  max(react_rate_mon_pw) as react_rate_mon_pw
+    max(churn_mon)       as churn_mon       max(churn_mon_pw)      as churn_mon_pw
+    max(mau_1min)        as mau_1min        max(mau_1min_pw)       as mau_1min_pw
+    max(mau_10min)       as mau_10min       max(mau_10min_pw)      as mau_10min_pw
+    max(m1_ret)          as m1_ret          max(m1_ret_pw)         as m1_ret_pw
+    max(engage_mon)      as engage_mon      max(engage_mon_pw)     as engage_mon_pw
+    max(habit_mon)       as habit_mon       max(habit_mon_pw)      as habit_mon_pw
+    `comment("--- 평균 지표 ---")`
+    max(dau_week_avg) as dau_week_avg
+    max(dau_mon_avg)  as dau_mon_avg
+    max(wau_mon_avg)  as wau_mon_avg
+  by PGM_CODE
+
+`comment("================================================================")`
+`comment("=== [8] 파생 지표 계산 ===")`
+`comment("================================================================")`
+
+`comment("--- 일간 파생 ---")`
+| eval deep_rate        = if(dau_1min>0,    round(dau_10min/dau_1min*100,1),       null())
+| eval deep_rate_pw     = if(dau_1min_pw>0, round(dau_10min_pw/dau_1min_pw*100,1), null())
+| eval deep_rate_diff   = if(isnotnull(deep_rate) AND isnotnull(deep_rate_pw), round(deep_rate-deep_rate_pw,1), null())
+| eval dau_wow          = if(dau_pw>0,      round((dau_today-dau_pw)/dau_pw*100,1),       null())
+| eval new_wow          = if(new_pw>0,      round((new_today-new_pw)/new_pw*100,1),        null())
+| eval react_wow        = if(react_pw>0,    round((react_today-react_pw)/react_pw*100,1),  null())
+| eval churn_diff       = if(isnotnull(churn_rate)  AND isnotnull(churn_rate_pw),  round(churn_rate-churn_rate_pw,1),   null())
+| eval react_rate_diff  = if(isnotnull(react_rate)  AND isnotnull(react_rate_pw),  round(react_rate-react_rate_pw,1),   null())
+| eval d1_diff          = if(isnotnull(d1_ret)      AND isnotnull(d1_ret_pw),      round(d1_ret-d1_ret_pw,1),           null())
+| eval d7_diff          = if(isnotnull(d7_ret)      AND isnotnull(d7_ret_pw),      round(d7_ret-d7_ret_pw,1),           null())
+| eval new_d1_diff      = if(isnotnull(new_d1_ret)  AND isnotnull(new_d1_ret_pw),  round(new_d1_ret-new_d1_ret_pw,1),   null())
+| eval new_d7_diff      = if(isnotnull(new_d7_ret)  AND isnotnull(new_d7_ret_pw),  round(new_d7_ret-new_d7_ret_pw,1),   null())
+| eval new_w1_diff      = if(isnotnull(new_w1_ret)  AND isnotnull(new_w1_ret_pw),  round(new_w1_ret-new_w1_ret_pw,1),   null())
+| eval new_m1_diff      = if(isnotnull(new_m1_ret)  AND isnotnull(new_m1_ret_pw),  round(new_m1_ret-new_m1_ret_pw,1),   null())
+| eval engage_diff      = if(isnotnull(engage_rate) AND isnotnull(engage_rate_pw), round(engage_rate-engage_rate_pw,1), null())
+| eval habit_diff       = if(isnotnull(habit_rate)  AND isnotnull(habit_rate_pw),  round(habit_rate-habit_rate_pw,1),   null())
+| eval new_pct          = if(dau_today>0, round(new_today/dau_today*100,1),   null())
+| eval react_pct        = if(dau_today>0, round(react_today/dau_today*100,1), null())
+
+`comment("--- 주간 파생 ---")`
+| eval deep_rate_week      = if(wau_1min>0,    round(wau_10min/wau_1min*100,1),       null())
+| eval deep_rate_week_pw   = if(wau_1min_pw>0, round(wau_10min_pw/wau_1min_pw*100,1), null())
+| eval deep_rate_week_diff = if(isnotnull(deep_rate_week) AND isnotnull(deep_rate_week_pw), round(deep_rate_week-deep_rate_week_pw,1), null())
+| eval dau_week_wow        = if(dau_week_pw>0,   round((dau_week-dau_week_pw)/dau_week_pw*100,1),      null())
+| eval new_week_wow        = if(new_week_pw>0,   round((new_week-new_week_pw)/new_week_pw*100,1),        null())
+| eval react_week_wow      = if(react_week_pw>0, round((react_week-react_week_pw)/react_week_pw*100,1),  null())
+| eval churn_week_diff      = if(isnotnull(churn_week)      AND isnotnull(churn_week_pw),      round(churn_week-churn_week_pw,1),           null())
+| eval react_rate_week_diff = if(isnotnull(react_rate_week) AND isnotnull(react_rate_week_pw), round(react_rate_week-react_rate_week_pw,1), null())
+| eval w1_diff              = if(isnotnull(w1_ret)          AND isnotnull(w1_ret_pw),          round(w1_ret-w1_ret_pw,1),                   null())
+| eval engage_week_diff     = if(isnotnull(engage_week)     AND isnotnull(engage_week_pw),     round(engage_week-engage_week_pw,1),          null())
+| eval habit_week_diff      = if(isnotnull(habit_week)      AND isnotnull(habit_week_pw),      round(habit_week-habit_week_pw,1),            null())
+| eval new_week_pct         = if(dau_week>0, round(new_week/dau_week*100,1),   null())
+| eval react_week_pct       = if(dau_week>0, round(react_week/dau_week*100,1), null())
+
+`comment("--- 월간 파생 ---")`
+| eval deep_rate_mon      = if(mau_1min>0,    round(mau_10min/mau_1min*100,1),       null())
+| eval deep_rate_mon_pw   = if(mau_1min_pw>0, round(mau_10min_pw/mau_1min_pw*100,1), null())
+| eval deep_rate_mon_diff = if(isnotnull(deep_rate_mon) AND isnotnull(deep_rate_mon_pw), round(deep_rate_mon-deep_rate_mon_pw,1), null())
+| eval dau_mon_wow        = if(dau_mon_pw>0,   round((dau_mon-dau_mon_pw)/dau_mon_pw*100,1),      null())
+| eval new_mon_wow        = if(new_mon_pw>0,   round((new_mon-new_mon_pw)/new_mon_pw*100,1),        null())
+| eval react_mon_wow      = if(react_mon_pw>0, round((react_mon-react_mon_pw)/react_mon_pw*100,1),  null())
+| eval churn_mon_diff      = if(isnotnull(churn_mon)      AND isnotnull(churn_mon_pw),      round(churn_mon-churn_mon_pw,1),           null())
+| eval react_rate_mon_diff = if(isnotnull(react_rate_mon) AND isnotnull(react_rate_mon_pw), round(react_rate_mon-react_rate_mon_pw,1), null())
+| eval m1_diff             = if(isnotnull(m1_ret)         AND isnotnull(m1_ret_pw),         round(m1_ret-m1_ret_pw,1),                 null())
+| eval engage_mon_diff     = if(isnotnull(engage_mon)     AND isnotnull(engage_mon_pw),     round(engage_mon-engage_mon_pw,1),          null())
+| eval habit_mon_diff      = if(isnotnull(habit_mon)      AND isnotnull(habit_mon_pw),      round(habit_mon-habit_mon_pw,1),            null())
+| eval new_mon_pct         = if(dau_mon>0, round(new_mon/dau_mon*100,1),   null())
+| eval react_mon_pct       = if(dau_mon>0, round(react_mon/dau_mon*100,1), null())
+
+| eval dau_week_avg = if(isnotnull(dau_week_avg), round(dau_week_avg,0), null())
+| eval dau_mon_avg  = if(isnotnull(dau_mon_avg),  round(dau_mon_avg,0),  null())
+| eval wau_mon_avg  = if(isnotnull(wau_mon_avg),  round(wau_mon_avg,0),  null())
+
+`comment("================================================================")`
+`comment("=== [9] 편성 정보 JOIN ===")`
+`comment("편성 고정 정보: PGM_NAME, STIME (BROADPLAN.csv)")`
+`comment("당일 편성 정보: schedule_title, guestname, daily_corner, weekly_corner (broadplan index)")`
+`comment("join_key = DATE||PGM_CODE 로 당일 편성과 매칭")`
+`comment("================================================================")`
+
+| eval join_key=DATE."||".PGM_CODE
+
+`comment("--- 프로그램명/방송시작시간: BROADPLAN.csv 고정 정보 ---")`
+| join type=left max=0 PGM_CODE [
+    | inputlookup BROADPLAN.csv
+    | eval CHN=case(CHN="AM","LM", CHN="FM","FM", CHN="GM","GM", true(), CHN)
+    | search IS_END="N" CHN=*
+    | eval SEQ=tostring(SEQ)
+    | eval SEQ=if(len(SEQ)=1, "0".SEQ, SEQ)
+    | eval PGM_CODE=upper(SEQ)
+    | stats values(PGM_NAME) as PGM_NAME values(STIME) as STIME by PGM_CODE
+    | eval PGM_NAME=mvindex(PGM_NAME,0), STIME=mvindex(STIME,0)
+    | fields PGM_CODE PGM_NAME STIME
+]
+
+`comment("--- 당일 방송 편성 상세: 제목/게스트/코너 (broadplan index, 전일 기준) ---")`
+| join type=left max=0 join_key [
+    search index=broadplan
+    [| makeresults
+        | eval PROGRAM_CODE=""
+        | eval earliest="-1d@d"
+        | eval latest="@d"
+        | eval earliest=if(PROGRAM_CODE!="F01", earliest, earliest-3600)
+        | eval latest=if(PROGRAM_CODE!="F01", latest, latest-3600)
+        | return earliest, latest]
+    | eval DATE=strftime(_time, "%Y/%m/%d")
+    | eval date_mday=ltrim(strftime(_time,"%d"),"0"),
+           date_month=lower(strftime(_time,"%B")),
+           date_wday=lower(strftime(_time,"%A")),
+           date_year=strftime(_time,"%Y")
+    | lookup HOLIDAY_0 HOLIDAY_DAY AS date_mday, HOLIDAY_WEEK AS date_wday, HOLIDAY_MONTH AS date_month, HOLIDAY_YEAR AS date_year output HOLIDAY_CHECK
+    | fillnull value="no" HOLIDAY_CHECK
+    | search date_wday="monday" OR date_wday="tuesday" OR date_wday="wednesday" OR date_wday="thursday" OR date_wday="friday" OR date_wday="saturday" OR date_wday="sunday"
+    | rename program.vod_id as vod_id,
+             program.start_time as start_time,
+             program.end_time as end_time,
+             program.gonggam_ch_cd as ch,
+             program.view_radio as view_radio,
+             program.image as image,
+             program.gorealraboard_url as board,
+             program.aodurl as aod,
+             program.musiclist as music,
+             program.title as title,
+             program.guestlist.guest.name as guestname,
+             program.daily_corners as daily_corner,
+             program.weekly_corners as weekly_corner
+    | join type=left max=0 vod_id [
+        | inputlookup BROADPLAN.csv
+        | search IS_END="N"
+        | rename VOD_ID AS vod_id
+        | fields SEQ, vod_id, PD_NAME
+    ]
+    | fillnull value="" view_radio
+    | search SEQ=F* OR SEQ=L* OR SEQ=M*
+    | eval PGM_CODE=upper(SEQ)
+    | eval join_key=DATE."||".PGM_CODE
+    | stats values(title)         as schedule_title
+            values(guestname)     as guestname
+            values(daily_corner)  as daily_corner
+            values(weekly_corner) as weekly_corner
+      by join_key
+    | fields join_key schedule_title guestname daily_corner weekly_corner
+]
+
+| fields - join_key
+
+`comment("================================================================")`
+`comment("=== [10] 최종 저장 필드 ===")`
+`comment("================================================================")`
+
+| table
+    `comment("--- 기준 날짜 ---")`
+    `comment("DATE: 일간 기준(전일) / DATE_WEEK: 전주 월요일 / DATE_MON: 전월 1일")`
+    DATE DATE_WEEK DATE_MON
+
+    `comment("--- 편성 정보 ---")`
+    PGM_CODE PGM_NAME STIME
+
+    `comment("--- 당일 방송 편성 상세 ---")`
+    schedule_title guestname daily_corner weekly_corner
+
+    `comment("--- 일간 ---")`
+    `comment("DAU 일간 현재값 / 전주동일일값 / 전주대비증감률(%)")`
+    dau_today dau_pw dau_wow
+    `comment("WAU롤링(7일) 현재값 / 전주동일일값")`
+    wau_today wau_pw
+    `comment("MAU롤링(30일) 현재값 / 전주동일일값")`
+    mau_today mau_pw
+    `comment("신규사용자 현재값 / 전주값 / 전주대비증감률(%) / DAU대비비율(%)")`
+    new_today new_pw new_wow new_pct
+    `comment("복귀사용자 현재값 / 전주값 / 전주대비증감률(%) / DAU대비비율(%)")`
+    react_today react_pw react_wow react_pct
+    `comment("복귀율(%) 현재값 / 전주값 / 전주대비증감(pp)")`
+    react_rate react_rate_pw react_rate_diff
+    `comment("이탈율(%) 현재값 / 전주값 / 전주대비증감(pp)")`
+    churn_rate churn_rate_pw churn_diff
+    `comment("1분이상청취 사용자수 / 10분이상청취 사용자수")`
+    dau_1min dau_10min
+    `comment("깊은청취율(%) 현재값 / 전주값 / 전주대비증감(pp)")`
+    deep_rate deep_rate_pw deep_rate_diff
+    `comment("D1유지율(%) 전체코호트 현재값 / 전주동일코호트값 / 전주대비증감(pp)")`
+    d1_ret d1_ret_pw d1_diff
+    `comment("D7유지율(%) 전체코호트 현재값 / 전주동일코호트값 / 전주대비증감(pp)")`
+    d7_ret d7_ret_pw d7_diff
+    `comment("신규 D1유지율(%) 신규코호트 현재값 / 전주동일코호트값 / 전주대비증감(pp)")`
+    new_d1_ret new_d1_ret_pw new_d1_diff
+    `comment("신규 D7유지율(%) 신규코호트 현재값 / 전주동일코호트값 / 전주대비증감(pp)")`
+    new_d7_ret new_d7_ret_pw new_d7_diff
+    `comment("참여율(%) 현재값 / 전주값 / 전주대비증감(pp)")`
+    engage_rate engage_rate_pw engage_diff
+    `comment("습관형성률(%) 현재값 / 전주값 / 전주대비증감(pp)")`
+    habit_rate habit_rate_pw habit_diff
+
+    `comment("--- 주간 ---")`
+    `comment("WAU 현재주값 / 전주값 / 전전주대비증감률(%)")`
+    dau_week dau_week_pw dau_week_wow
+    `comment("신규사용자 주간 현재주값 / 전주값 / 전전주대비증감률(%) / WAU대비비율(%)")`
+    new_week new_week_pw new_week_wow new_week_pct
+    `comment("복귀사용자 주간 현재주값 / 전주값 / 전전주대비증감률(%) / WAU대비비율(%)")`
+    react_week react_week_pw react_week_wow react_week_pct
+    `comment("복귀율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
+    react_rate_week react_rate_week_pw react_rate_week_diff
+    `comment("이탈율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
+    churn_week churn_week_pw churn_week_diff
+    `comment("깊은청취율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
+    deep_rate_week deep_rate_week_pw deep_rate_week_diff
+    `comment("W1유지율(%) 현재주값 / 전주동일코호트값 / 전전주대비증감(pp)")`
+    w1_ret w1_ret_pw w1_diff
+    `comment("신규 W1유지율(%) 신규코호트 현재주값 / 전주동일코호트값 / 전전주대비증감(pp)")`
+    new_w1_ret new_w1_ret_pw new_w1_diff
+    `comment("참여율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
+    engage_week engage_week_pw engage_week_diff
+    `comment("습관형성률 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
+    habit_week habit_week_pw habit_week_diff
+
+    `comment("--- 월간 ---")`
+    `comment("MAU 현재월값 / 전월값 / 전전월대비증감률(%)")`
+    dau_mon dau_mon_pw dau_mon_wow
+    `comment("신규사용자 월간 현재월값 / 전월값 / 전전월대비증감률(%) / MAU대비비율(%)")`
+    new_mon new_mon_pw new_mon_wow new_mon_pct
+    `comment("복귀사용자 월간 현재월값 / 전월값 / 전전월대비증감률(%) / MAU대비비율(%)")`
+    react_mon react_mon_pw react_mon_wow react_mon_pct
+    `comment("복귀율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
+    react_rate_mon react_rate_mon_pw react_rate_mon_diff
+    `comment("이탈율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
+    churn_mon churn_mon_pw churn_mon_diff
+    `comment("깊은청취율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
+    deep_rate_mon deep_rate_mon_pw deep_rate_mon_diff
+    `comment("M1유지율(%) 현재월값 / 전월동일코호트값 / 전전월대비증감(pp)")`
+    m1_ret m1_ret_pw m1_diff
+    `comment("신규 M1유지율(%) 신규코호트 현재월값 / 전월동일코호트값 / 전전월대비증감(pp)")`
+    new_m1_ret new_m1_ret_pw new_m1_diff
+    `comment("참여율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
+    engage_mon engage_mon_pw engage_mon_diff
+    `comment("습관형성률 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
+    habit_mon habit_mon_pw habit_mon_diff
+
+    `comment("--- 평균 지표 ---")`
+    `comment("dau_week_avg: 전주 월~일 7일간 DAU 일평균")`
+    `comment("dau_mon_avg:  전월 1일~말일 DAU 일평균")`
+    `comment("wau_mon_avg:  전월 1일~말일 7D롤링 평균")`
+    dau_week_avg dau_mon_avg wau_mon_avg
+    
+| outputlookup raas_kpi_latest.csv append=true

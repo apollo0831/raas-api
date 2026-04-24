@@ -26,6 +26,11 @@
   --orange: #ff8c42;
   --mono:   'JetBrains Mono', monospace;
   --sans:   'Noto Sans KR', sans-serif;
+  --fs-xs:   11px;
+  --fs-sm:   13px;
+  --fs-base: 16px;
+  --fs-lg:   18px;
+  --fs-xl:   20px;
 }
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -34,7 +39,7 @@ body{
   background:var(--bg0);
   color:var(--text);
   font-family:var(--sans);
-  font-size:14px;
+  font-size:21px;
   line-height:1.5;
   min-height:100vh;
 }
@@ -55,18 +60,18 @@ body{
   margin-bottom:10px;
 }
 .header-logo{
-  font-size:18px;font-weight:900;letter-spacing:-0.5px;
+  font-size:27px;font-weight:900;letter-spacing:-0.5px;
   background:linear-gradient(135deg,var(--accent),var(--purple));
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
 }
 .header-date{
-  font-family:var(--mono);font-size:11px;color:var(--sub);
+  font-family:var(--mono);font-size:16px;color:var(--sub);
   margin-left:auto;
 }
 .btn-refresh{
   background:var(--bg3);border:1px solid var(--line2);
   color:var(--accent);border-radius:8px;
-  padding:6px 12px;font-size:12px;font-weight:600;
+  padding:6px 12px;font-size:18px;font-weight:600;
   cursor:pointer;font-family:var(--sans);
   transition:all .2s;
 }
@@ -81,7 +86,7 @@ body{
 }
 .period-tab{
   flex:1;text-align:center;
-  padding:6px 0;font-size:13px;font-weight:600;
+  padding:6px 0;font-size:20px;font-weight:600;
   border-radius:8px;cursor:pointer;
   color:var(--sub);border:none;background:transparent;
   font-family:var(--sans);transition:all .2s;
@@ -95,7 +100,7 @@ body{
 .container{padding:0 16px 80px}
 .section{margin-bottom:24px}
 .section-title{
-  font-size:11px;font-weight:700;
+  font-size:16px;font-weight:700;
   color:var(--sub);text-transform:uppercase;
   letter-spacing:1.2px;
   margin-bottom:10px;
@@ -117,9 +122,9 @@ body{
   align-items:center;margin-bottom:10px;
 }
 .health-score-num{
-  font-family:var(--mono);font-size:32px;font-weight:600;
+  font-family:var(--mono);font-size:48px;font-weight:600;
 }
-.health-label{font-size:11px;color:var(--sub)}
+.health-label{font-size:16px;color:var(--sub)}
 .health-track{
   height:6px;background:var(--bg4);border-radius:3px;
   overflow:hidden;margin-bottom:10px;
@@ -134,7 +139,7 @@ body{
   display:flex;gap:6px;flex-wrap:wrap;
 }
 .hdot{
-  font-size:10px;padding:2px 7px;border-radius:4px;
+  font-size:15px;padding:2px 7px;border-radius:4px;
   font-family:var(--mono);
 }
 .hdot.g{background:rgba(0,224,122,.1);color:var(--green)}
@@ -160,23 +165,23 @@ body{
 .kpi-card.c-green::before{background:var(--green)}
 .kpi-card.c-purple::before{background:var(--purple)}
 .kpi-card.c-orange::before{background:var(--orange)}
-.kpi-label{font-size:10px;color:var(--sub);font-weight:500;margin-bottom:4px}
+.kpi-label{font-size:15px;color:var(--sub);font-weight:500;margin-bottom:4px}
 .kpi-val{
-  font-family:var(--mono);font-size:22px;font-weight:600;
+  font-family:var(--mono);font-size:33px;font-weight:600;
   line-height:1.1;margin-bottom:4px;
 }
 .kpi-sub{
   display:flex;align-items:center;gap:6px;flex-wrap:wrap;
 }
 .kpi-wow{
-  font-size:11px;font-weight:600;
+  font-size:16px;font-weight:600;
   font-family:var(--mono);
   padding:1px 5px;border-radius:4px;
 }
 .kpi-wow.up{background:rgba(0,224,122,.12);color:var(--green)}
 .kpi-wow.dn{background:rgba(255,77,106,.12);color:var(--red)}
 .kpi-wow.fl{background:rgba(122,136,153,.12);color:var(--sub)}
-.kpi-extra{font-size:10px;color:var(--dim)}
+.kpi-extra{font-size:15px;color:var(--dim)}
 
 /* ── 멀티 기간 행 ── */
 .period-row{
@@ -187,9 +192,9 @@ body{
   background:var(--bg3);border-radius:6px;
   padding:4px 2px;
 }
-.pp-label{font-size:9px;color:var(--dim);display:block}
-.pp-val{font-family:var(--mono);font-size:12px;font-weight:600}
-.pp-diff{font-size:9px;color:var(--sub);font-family:var(--mono)}
+.pp-label{font-size:14px;color:var(--dim);display:block}
+.pp-val{font-family:var(--mono);font-size:18px;font-weight:600}
+.pp-diff{font-size:14px;color:var(--sub);font-family:var(--mono)}
 .pp-diff.up{color:var(--green)}
 .pp-diff.dn{color:var(--red)}
 
@@ -222,10 +227,10 @@ body{
   border-left:8px solid var(--bg2);
   z-index:1;
 }
-.fi-name{font-size:9px;color:var(--sub);margin-bottom:3px}
-.fi-val{font-family:var(--mono);font-size:14px;font-weight:600}
-.fi-pct{font-size:9px;color:var(--accent)}
-.fi-diff{font-size:9px;margin-top:2px}
+.fi-name{font-size:14px;color:var(--sub);margin-bottom:3px}
+.fi-val{font-family:var(--mono);font-size:21px;font-weight:600}
+.fi-pct{font-size:14px;color:var(--accent)}
+.fi-diff{font-size:14px;margin-top:2px}
 
 .funnel-meta{
   display:grid;grid-template-columns:1fr 1fr;gap:8px;
@@ -234,9 +239,9 @@ body{
   background:var(--bg3);border-radius:8px;
   padding:8px 10px;
 }
-.fm-label{font-size:10px;color:var(--sub);margin-bottom:2px}
-.fm-val{font-family:var(--mono);font-size:14px;font-weight:600}
-.fm-diff{font-size:10px;font-family:var(--mono)}
+.fm-label{font-size:15px;color:var(--sub);margin-bottom:2px}
+.fm-val{font-family:var(--mono);font-size:21px;font-weight:600}
+.fm-diff{font-size:15px;font-family:var(--mono)}
 .fm-diff.up{color:var(--green)}
 .fm-diff.dn{color:var(--red)}
 .fm-diff.bad{color:var(--red)}  /* 이탈은 올라가면 나쁨 */
@@ -256,13 +261,13 @@ body{
   align-items:flex-start;margin-bottom:8px;
 }
 .cc-type{
-  font-size:11px;font-weight:700;color:var(--sub);
+  font-size:16px;font-weight:700;color:var(--sub);
   text-transform:uppercase;letter-spacing:.5px;
 }
 .cc-val{
-  font-family:var(--mono);font-size:24px;font-weight:600;
+  font-family:var(--mono);font-size:36px;font-weight:600;
 }
-.cc-diff{font-size:11px;font-family:var(--mono)}
+.cc-diff{font-size:16px;font-family:var(--mono)}
 .cc-diff.up{color:var(--green)}
 .cc-diff.dn{color:var(--red)}
 .cc-bar{
@@ -272,22 +277,22 @@ body{
 
 /* ── 품질 지표 ── */
 .quality-grid{
-  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  display:grid;grid-template-columns:1fr;gap:8px;
 }
 .quality-card{
   background:var(--bg2);border-radius:12px;
   padding:12px 14px;border:1px solid var(--line);
 }
-.qc-label{font-size:10px;color:var(--sub);margin-bottom:4px}
-.qc-big{font-family:var(--mono);font-size:26px;font-weight:600}
-.qc-unit{font-size:12px;color:var(--sub)}
-.qc-diff{font-size:11px;font-family:var(--mono);margin-top:2px}
+.qc-label{font-size:15px;color:var(--sub);margin-bottom:4px}
+.qc-big{font-family:var(--mono);font-size:39px;font-weight:600}
+.qc-unit{font-size:18px;color:var(--sub)}
+.qc-diff{font-size:16px;font-family:var(--mono);margin-top:2px}
 .qc-diff.up{color:var(--green)}
 .qc-diff.dn{color:var(--red)}
-.qc-multi{margin-top:8px;display:flex;gap:4px}
-.qcm{flex:1;text-align:center;background:var(--bg3);border-radius:6px;padding:4px}
-.qcm-l{font-size:9px;color:var(--dim);display:block}
-.qcm-v{font-family:var(--mono);font-size:11px;font-weight:600}
+.qc-multi{margin-top:8px;display:flex;gap:4px;flex-wrap:wrap}
+.qcm{flex:1;min-width:calc(50% - 2px);text-align:center;background:var(--bg3);border-radius:6px;padding:4px}
+.qcm-l{font-size:14px;color:var(--dim);display:block}
+.qcm-v{font-family:var(--mono);font-size:16px;font-weight:600}
 
 /* ── 채널 카드 ── */
 .channel-grid{
@@ -301,12 +306,12 @@ body{
 .channel-card.lv{border-left-color:var(--purple)}
 .channel-card.gm{border-left-color:var(--green)}
 .channel-card.pk{border-left-color:var(--orange)}
-.ch-name{font-size:11px;font-weight:700;color:var(--sub);margin-bottom:4px}
-.ch-dau{font-family:var(--mono);font-size:20px;font-weight:600}
-.ch-share{font-size:10px;color:var(--dim)}
+.ch-name{font-size:16px;font-weight:700;color:var(--sub);margin-bottom:4px}
+.ch-dau{font-family:var(--mono);font-size:30px;font-weight:600}
+.ch-share{font-size:15px;color:var(--dim)}
 .ch-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
 .ch-tag{
-  font-size:9px;padding:2px 5px;border-radius:4px;
+  font-size:14px;padding:2px 5px;border-radius:4px;
   font-family:var(--mono);
 }
 .ch-tag.deep{background:rgba(167,139,250,.1);color:var(--purple)}
@@ -316,14 +321,14 @@ body{
 
 /* ── 습관형성 / 복귀율 ── */
 .growth-grid{
-  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  display:grid;grid-template-columns:1fr;gap:8px;
   margin-bottom:8px;
 }
 .growth-card{
   background:var(--bg2);border-radius:12px;
   padding:12px 14px;border:1px solid var(--line);
 }
-.gc-label{font-size:10px;color:var(--sub);margin-bottom:6px}
+.gc-label{font-size:15px;color:var(--sub);margin-bottom:6px}
 .gc-gauge{
   position:relative;
   height:6px;background:var(--bg4);border-radius:3px;
@@ -334,8 +339,8 @@ body{
   position:absolute;top:-3px;
   width:2px;height:12px;background:var(--yellow);border-radius:1px;
 }
-.gc-big{font-family:var(--mono);font-size:24px;font-weight:600}
-.gc-status{font-size:10px;margin-top:2px}
+.gc-big{font-family:var(--mono);font-size:36px;font-weight:600}
+.gc-status{font-size:15px;margin-top:2px}
 .gc-status.ok{color:var(--green)}
 .gc-status.warn{color:var(--yellow)}
 .gc-status.bad{color:var(--red)}
@@ -346,20 +351,20 @@ body{
   margin-bottom:6px;
 }
 .hr-rank{
-  font-family:var(--mono);font-size:10px;
+  font-family:var(--mono);font-size:15px;
   color:var(--dim);width:14px;
 }
-.hr-name{flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hr-name{flex:1;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hr-bar{flex:2;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden}
 .hr-fill{height:100%;border-radius:2px;background:var(--purple)}
-.hr-val{font-family:var(--mono);font-size:10px;color:var(--purple);width:30px;text-align:right}
+.hr-val{font-family:var(--mono);font-size:15px;color:var(--purple);width:30px;text-align:right}
 
 /* ── 알림 ── */
 .alerts-list{display:flex;flex-direction:column;gap:6px}
 .alert-item{
   display:flex;align-items:flex-start;gap:10px;
   padding:10px 12px;border-radius:10px;
-  font-size:12px;line-height:1.5;
+  font-size:18px;line-height:1.5;
 }
 .alert-item.red{background:rgba(255,77,106,.08);border-left:3px solid var(--red)}
 .alert-item.yellow{background:rgba(255,184,48,.08);border-left:3px solid var(--yellow)}
@@ -373,7 +378,7 @@ body{
 .pgm-tabs::-webkit-scrollbar{display:none}
 .pgm-tab{
   flex-shrink:0;padding:4px 10px;border-radius:6px;
-  font-size:11px;font-weight:600;cursor:pointer;
+  font-size:16px;font-weight:600;cursor:pointer;
   border:1px solid var(--line2);background:transparent;
   color:var(--sub);font-family:var(--sans);
   transition:all .2s;
@@ -389,7 +394,7 @@ body{
   padding:9px 12px;border:1px solid var(--line);
 }
 .pr-rank{
-  font-family:var(--mono);font-size:11px;
+  font-family:var(--mono);font-size:16px;
   color:var(--dim);width:18px;flex-shrink:0;
 }
 .pr-rank.g1{color:#ffd700}
@@ -397,18 +402,18 @@ body{
 .pr-rank.g3{color:#cd7f32}
 .pr-info{flex:1;min-width:0}
 .pr-name{
-  font-size:12px;font-weight:500;
+  font-size:18px;font-weight:500;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.pr-channel{font-size:10px;color:var(--dim)}
-.pr-meta{font-size:9px;color:var(--sub);margin-top:1px;
+.pr-channel{font-size:15px;color:var(--dim)}
+.pr-meta{font-size:14px;color:var(--sub);margin-top:1px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .pr-val{
-  font-family:var(--mono);font-size:13px;font-weight:600;
+  font-family:var(--mono);font-size:20px;font-weight:600;
   flex-shrink:0;text-align:right;
 }
 .pr-badge{
-  font-size:9px;padding:2px 5px;border-radius:4px;
+  font-size:14px;padding:2px 5px;border-radius:4px;
   flex-shrink:0;font-family:var(--mono);
 }
 .pr-badge.deep{background:rgba(167,139,250,.12);color:var(--purple)}
@@ -425,25 +430,26 @@ body{
 }
 .brief-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
 .brief-no{color:var(--accent);font-weight:700;font-family:var(--mono)}
-.brief-text{font-size:13px;line-height:1.7;white-space:pre-wrap}
+.brief-text{font-size:20px;line-height:1.7;white-space:pre-wrap}
 
 /* ── 질의 ── */
 .query-box{
   background:var(--bg2);border-radius:12px;
   padding:14px;border:1px solid var(--line);
 }
-.query-row{display:flex;gap:8px}
+.query-row{display:flex;gap:8px;min-width:0}
 .query-input{
-  flex:1;background:var(--bg3);
+  flex:1;min-width:0;background:var(--bg3);
   border:1px solid var(--line2);border-radius:8px;
   padding:8px 12px;color:var(--text);
-  font-size:13px;font-family:var(--sans);outline:none;
+  font-size:20px;font-family:var(--sans);outline:none;
+  width:0;
 }
 .query-input:focus{border-color:var(--accent)}
 .btn-ask{
   background:var(--accent);color:var(--bg0);
   border:none;border-radius:8px;
-  padding:8px 14px;font-size:12px;font-weight:700;
+  padding:8px 14px;font-size:18px;font-weight:700;
   cursor:pointer;font-family:var(--sans);
   white-space:nowrap;transition:opacity .2s;
 }
@@ -451,7 +457,7 @@ body{
 .query-answer{
   margin-top:10px;padding:10px 12px;
   background:var(--bg3);border-radius:8px;
-  font-size:13px;line-height:1.7;
+  font-size:20px;line-height:1.7;
   white-space:pre-wrap;display:none;
   color:var(--text);
 }
@@ -470,28 +476,29 @@ body{
   animation:spin .8s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
-.loading p{color:var(--sub);font-size:13px}
+.loading p{color:var(--sub);font-size:20px}
 
 /* ── 이상징후 없음 ── */
 .no-alert{
   text-align:center;padding:16px;
-  color:var(--green);font-size:13px;
+  color:var(--green);font-size:20px;
 }
 
 /* ── 반응형 ── */
 @media(min-width:600px){
-  .container{max-width:800px;margin:0 auto;padding:0 24px 80px}
+  .container{max-width:960px;margin:0 auto;padding:0 24px 80px}
+  .quality-grid{grid-template-columns:1fr 1fr}
+  .growth-grid{grid-template-columns:1fr 1fr}
+}
+@media(min-width:900px){
+  .container{max-width:1400px}
   .kpi-grid{grid-template-columns:repeat(4,1fr)}
   .cohort-grid{grid-template-columns:repeat(4,1fr)}
   .quality-grid{grid-template-columns:repeat(4,1fr)}
   .channel-grid{grid-template-columns:repeat(4,1fr)}
-  .growth-grid{grid-template-columns:1fr 1fr}
   .funnel-meta{grid-template-columns:repeat(4,1fr)}
-}
-@media(min-width:900px){
-  .container{max-width:1200px}
   .header{padding:14px 24px 10px}
-  .header-logo{font-size:20px}
+  .header-logo{font-size:30px}
 }
 
 /* ── 애니메이션 ── */
@@ -536,14 +543,14 @@ body{
 
     <!-- ZONE 1: 헬스 스코어 -->
     <div class="section">
-      <div class="section-title">앱 건강도</div>
+      <div class="section-title">앱 건강도 <span id="healthInfoBtn" style="cursor:pointer;font-size:14px;color:var(--accent);margin-left:6px;border:1px solid var(--accent);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;" onclick="document.getElementById('healthModal').style.display='flex'">ⓘ</span></div>
       <div class="health-bar">
         <div class="health-top">
           <div>
             <div class="health-score-num" id="healthNum" style="color:var(--green)">—</div>
             <div class="health-label">Health Score / 100</div>
           </div>
-          <div id="healthStatus" style="font-size:20px">—</div>
+          <div id="healthStatus" style="font-size:30px">—</div>
         </div>
         <div class="health-track">
           <div class="health-fill" id="healthFill" style="width:0%;background-position:0% 50%"></div>
@@ -570,6 +577,10 @@ body{
     <!-- ZONE 4: 유지율 코호트 -->
     <div class="section">
       <div class="section-title">유지율 코호트</div>
+      <div class="pgm-tabs" id="cohortTabs" style="margin-bottom:10px;">
+        <button class="pgm-tab active" data-tab="all" onclick="showCohortTab('all')">전체 코호트</button>
+        <button class="pgm-tab" data-tab="new" onclick="showCohortTab('new')">신규 코호트</button>
+      </div>
       <div class="cohort-grid" id="cohortGrid"></div>
     </div>
 
@@ -614,7 +625,7 @@ body{
     <div class="section">
       <div class="section-title">AI 브리핑</div>
       <div class="brief-card" id="briefCard">
-        <div style="color:var(--sub);font-size:13px">브리핑 생성 중…</div>
+        <div style="color:var(--sub);font-size:20px">브리핑 생성 중…</div>
       </div>
     </div>
 
@@ -658,6 +669,14 @@ const diffClass= (v,inv=false) => {
 let _data = null;
 let _period = 'day';
 let _pgmTab = 'dau';
+let _cohortTab = 'all';
+function showCohortTab(tab){
+  _cohortTab = tab;
+  document.querySelectorAll('#cohortTabs .pgm-tab').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  if(_data) renderCohort(_data.s2_funnel);
+}
 
 // ── 기간 선택 ────────────────────────────────────────────
 function setPeriod(p){
@@ -722,12 +741,13 @@ function renderHealth(s1,s2,s3,s4){
 
   const p = _period;
 
-  // DAU WoW
+  // DAU/WAU/MAU WoW
   const dauW = p==='day'?s1.dau_wow : p==='week'?s1.dau_week_wow : s1.dau_mon_wow;
+  const dauLabel = p==='day'?'DAU' : p==='week'?'WAU' : 'MAU';
   if(dauW!=null){
     const sc = dauW>5?20:dauW>0?15:dauW>-5?10:5;
     scores.push(sc);
-    dots.push({label:'DAU '+fmtD(dauW),cls:dauW>0?'g':dauW>-5?'y':'r'});
+    dots.push({label:dauLabel+' '+fmtD(dauW),cls:dauW>0?'g':dauW>-5?'y':'r'});
   }
   // 깊은청취율
   const dr = p==='day'?s3.deep_rate : p==='week'?s3.deep_rate_week : s3.deep_rate_mon;
@@ -743,7 +763,7 @@ function renderHealth(s1,s2,s3,s4){
   }
   // D1/W1/M1 유지율
   const ret = p==='day'?s2.d1_ret : p==='week'?s2.w1_ret : s2.m1_ret;
-  const retL= p==='day'?'D1':'W1 M1'.split(' ')[p==='week'?0:1];
+  const retL= p==='day'?'D1유지' : p==='week'?'W1유지' : 'M1유지';
   if(ret!=null){
     const sc = ret>=50?20:ret>=35?15:ret>=20?10:5;
     scores.push(sc); dots.push({label:retL+' '+fmtP(ret),cls:ret>=45?'g':ret>=30?'y':'r'});
@@ -758,7 +778,7 @@ function renderHealth(s1,s2,s3,s4){
   const hr = p==='day'?s4.habit_rate : p==='week'?s4.habit_week : s4.habit_mon;
   if(hr!=null){
     const sc = hr>=30?10:hr>=20?8:5;
-    scores.push(sc); dots.push({label:'습관 '+fmtP(hr),cls:hr>=30?'g':hr>=20?'y':'r'});
+    scores.push(sc); dots.push({label:'습관형성 '+fmtP(hr),cls:hr>=30?'g':hr>=20?'y':'r'});
   }
 
   const total = scores.length ? Math.min(100, scores.reduce((a,b)=>a+b,0)) : 0;
@@ -778,21 +798,33 @@ function renderHealth(s1,s2,s3,s4){
 function renderKPI(s1,s2){
   const p = _period;
   document.getElementById('kpiTitle').innerHTML =
-    `핵심 지표 <span style="font-size:10px;color:var(--accent);font-weight:400">
-    ${p==='day'?'일간 (전일 기준)':p==='week'?'주간 (직전주 기준)':'월간 (전월 기준)'}</span>`;
+    `핵심 지표 <span style="font-size:15px;color:var(--accent);font-weight:400">
+    ${p==='day'?'일간 (전주 동일 요일 기준)':p==='week'?'주간 (직전주 기준)':'월간 (전월 기준)'}</span>`;
+
+  const subRow = items => `
+    <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;gap:4px;">
+      ${items.map(s=>`
+        <div style="flex:1;">
+          <span style="font-size:var(--fs-xs);color:var(--sub);display:block;margin-bottom:2px;">${s.label}</span>
+          <span style="font-size:var(--fs-xl);font-weight:600;">${s.val}</span>
+        </div>`).join('')}
+    </div>`;
 
   const cards = p==='day' ? [
-    {label:'DAU', val:fmtK(s1.dau), wow:s1.dau_wow, unit:'%', extra:`WAU ${fmtK(s1.wau_today)} / MAU ${fmtK(s1.mau_today)}`, color:'c-blue'},
+    {label:'DAU', val:fmtK(s1.dau), wow:s1.dau_wow, unit:'%', extra:'전주 동일 요일 대비', color:'c-blue',
+     sub:[{label:'7D 롤링', val:fmtK(s1.wau)},{label:'30D 롤링', val:fmtK(s1.mau)}]},
     {label:'신규사용자', val:fmtK(s2.new_user), wow:s2.new_wow, unit:'%', extra:`DAU의 ${fmtP(s2.new_pct)}`, color:'c-green'},
     {label:'복귀사용자', val:fmtK(s2.react_user), wow:s2.react_wow, unit:'%', extra:`DAU의 ${fmtP(s2.react_pct)}`, color:'c-purple'},
     {label:'이탈율', val:fmtP(s2.churn_rate), wow:s2.churn_diff, unit:'pp', extra:`전주 ${fmtP(s2.churn_rate_pw)}`, color:'c-orange', invWow:true},
   ] : p==='week' ? [
-    {label:'WAU', val:fmtK(s2.dau_week), wow:s2.dau_week_wow, unit:'%', extra:`전주 ${fmtK(s2.dau_week_pw)}`, color:'c-blue'},
+    {label:'WAU (주간)', val:fmtK(s2.dau_week), wow:s2.dau_week_wow, unit:'%', extra:'', color:'c-blue',
+     sub:[{label:'DAU 일평균 (전주 월~일)', val:fmtK(s2.dau_week_avg)},{label:'30D 롤링', val:fmtK(s1.mau)}]},
     {label:'신규 (주간)', val:fmtK(s2.new_week), wow:s2.new_week_wow, unit:'%', extra:`WAU의 ${fmtP(s2.new_week_pct)}`, color:'c-green'},
     {label:'복귀 (주간)', val:fmtK(s2.react_week), wow:s2.react_week_wow, unit:'%', extra:`WAU의 ${fmtP(s2.react_week_pct)}`, color:'c-purple'},
     {label:'이탈율 (주간)', val:fmtP(s2.churn_week), wow:s2.churn_week_diff, unit:'pp', extra:`전주 ${fmtP(s2.churn_week_pw)}`, color:'c-orange', invWow:true},
   ] : [
-    {label:'MAU', val:fmtK(s2.dau_mon), wow:s2.dau_mon_wow, unit:'%', extra:`전월 ${fmtK(s2.dau_mon_pw)}`, color:'c-blue'},
+    {label:'MAU (월간)', val:fmtK(s2.dau_mon), wow:s2.dau_mon_wow, unit:'%', extra:'', color:'c-blue',
+     sub:[{label:'DAU 일평균 (전월)', val:fmtK(s2.dau_mon_avg)},{label:'WAU 평균 (전월)', val:fmtK(s2.wau_mon_avg)}]},
     {label:'신규 (월간)', val:fmtK(s2.new_mon), wow:s2.new_mon_wow, unit:'%', extra:`MAU의 ${fmtP(s2.new_mon_pct)}`, color:'c-green'},
     {label:'복귀 (월간)', val:fmtK(s2.react_mon), wow:s2.react_mon_wow, unit:'%', extra:`MAU의 ${fmtP(s2.react_mon_pct)}`, color:'c-purple'},
     {label:'이탈율 (월간)', val:fmtP(s2.churn_mon), wow:s2.churn_mon_diff, unit:'pp', extra:`전월 ${fmtP(s2.churn_mon_pw)}`, color:'c-orange', invWow:true},
@@ -809,8 +841,9 @@ function renderKPI(s1,s2){
       <div class="kpi-val">${c.val}</div>
       <div class="kpi-sub">
         ${c.wow!=null?`<span class="kpi-wow ${wowColor}">${wowIcon} ${fmtD(c.wow,c.unit)}</span>`:''}
-        <span class="kpi-extra">${c.extra}</span>
+        ${c.extra?`<span class="kpi-extra">${c.extra}</span>`:''}
       </div>
+      ${c.sub?subRow(c.sub):''}
     </div>`;
   }).join('');
 }
@@ -873,24 +906,50 @@ function renderFunnel(s1,s2){
 
 // ── ZONE 4: 유지율 코호트 ────────────────────────────────
 function renderCohort(s2){
-  const items = [
-    {type:'D1', val:s2.d1_ret, pw:s2.d1_ret_pw, diff:s2.d1_diff, color:'var(--accent)'},
-    {type:'D7', val:s2.d7_ret, pw:s2.d7_ret_pw, diff:s2.d7_diff, color:'var(--purple)'},
-    {type:'W1', val:s2.w1_ret, pw:s2.w1_ret_pw, diff:s2.w1_diff, color:'var(--green)'},
-    {type:'M1', val:s2.m1_ret, pw:s2.m1_ret_pw, diff:s2.m1_diff, color:'var(--yellow)'},
-  ];
-  document.getElementById('cohortGrid').innerHTML = items.map(it=>`
+  const cardHtml = it => `
     <div class="cohort-card">
       <div class="cc-header">
         <span class="cc-type">${it.type}</span>
-        <span class="cc-diff ${it.diff>0?'up':'dn'}">${fmtD(it.diff,'pp')}</span>
+        <span class="cc-diff ${(it.diff||0)>0?'up':'dn'}">${fmtD(it.diff,'pp')}</span>
       </div>
       <div class="cc-val" style="color:${it.color}">${fmtP(it.val)}</div>
-      <div style="font-size:10px;color:var(--dim);margin-bottom:6px">전기간 ${fmtP(it.pw)}</div>
+      <div style="font-size:15px;color:var(--dim);margin-bottom:6px">전기간 ${fmtP(it.pw)}</div>
       <div class="cc-bar">
         <div class="cc-fill" style="width:${Math.min(it.val||0,100)}%;background:${it.color}"></div>
       </div>
-    </div>`).join('');
+    </div>`;
+
+  if(_cohortTab === 'all'){
+    const items = [
+      {type:'D1', val:s2.d1_ret, pw:s2.d1_ret_pw, diff:s2.d1_diff, color:'var(--accent)'},
+      {type:'D7', val:s2.d7_ret, pw:s2.d7_ret_pw, diff:s2.d7_diff, color:'var(--purple)'},
+      {type:'W1', val:s2.w1_ret, pw:s2.w1_ret_pw, diff:s2.w1_diff, color:'var(--green)'},
+      {type:'M1', val:s2.m1_ret, pw:s2.m1_ret_pw, diff:s2.m1_diff, color:'var(--yellow)'},
+    ];
+    document.getElementById('cohortGrid').innerHTML = items.map(cardHtml).join('');
+  } else {
+    const items = [
+      {type:'D1 (신규)', val:s2.new_d1_ret, pw:s2.new_d1_ret_pw, diff:s2.new_d1_diff, color:'var(--accent)'},
+      {type:'D7 (신규)', val:s2.new_d7_ret, pw:s2.new_d7_ret_pw, diff:s2.new_d7_diff, color:'var(--purple)'},
+      {type:'W1 (신규)', val:s2.new_w1_ret, pw:s2.new_w1_ret_pw, diff:s2.new_w1_diff, color:'var(--green)'},
+      {type:'M1 (신규)', val:s2.new_m1_ret, pw:s2.new_m1_ret_pw, diff:s2.new_m1_diff, color:'var(--yellow)'},
+    ];
+    const gap = Math.abs((s2.d1_ret||0) - (s2.new_d1_ret||0));
+    const insightOk = gap < 10;
+    document.getElementById('cohortGrid').innerHTML =
+      items.map(cardHtml).join('') +
+      `<div style="grid-column:1/-1;font-size:var(--fs-xs);color:var(--sub);margin-top:8px;">
+        신규사용자가 다음날(D1) / 7일 후(D7) / 1주 후(W1) / 1개월 후(M1)에도 앱을 사용한 비율
+      </div>
+      <div style="grid-column:1/-1;background:var(--bg3);border-radius:8px;padding:10px;margin-top:10px;">
+        <div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:4px;">
+          전체 D1 ${fmtP(s2.d1_ret)} vs 신규 D1 ${fmtP(s2.new_d1_ret)}
+        </div>
+        <div style="font-size:var(--fs-sm);font-weight:600;color:${insightOk?'var(--green)':'var(--yellow)'};">
+          ${insightOk?'✅ 신규 유지율 양호':'⚠ 신규 온보딩 개선 필요'}
+        </div>
+      </div>`;
+  }
 }
 
 // ── ZONE 5: 청취 품질 ────────────────────────────────────
@@ -901,25 +960,36 @@ function renderQuality(s3){
   const er   = p==='day'?s3.engage_rate   : p==='week'?s3.engage_week        : s3.engage_mon;
   const erD  = p==='day'?s3.engage_diff   : p==='week'?s3.engage_week_diff   : s3.engage_mon_diff;
 
+  const u1min  = p==='day'?s3.dau_1min  : p==='week'?s3.wau_1min  : s3.mau_1min;
+  const u10min = p==='day'?s3.dau_10min : p==='week'?s3.wau_10min : s3.mau_10min;
+
   const ch = s3.channel_deep || {};
-  const chItems = Object.entries(ch).map(([c,d])=>
-    `<div class="qcm"><span class="qcm-l">${d.name}</span><span class="qcm-v">${fmtP(d.rate)}</span></div>`
-  ).join('');
+  const chItems = Object.entries(ch).map(([c,d])=>{
+    const rate = p==='day'?d.rate : p==='week'?d.rate_week : d.rate_mon;
+    return `<div class="qcm"><span class="qcm-l">${d.name}</span><span class="qcm-v">${fmtP(rate)}</span></div>`;
+  }).join('');
 
   document.getElementById('qualityGrid').innerHTML = `
     <div class="quality-card">
-      <div class="qc-label">깊은청취율 <span style="color:var(--dim);font-size:9px">(10분이상/1분이상)</span></div>
+      <div class="qc-label">깊은청취율 <span style="color:var(--dim);font-size:14px">(10분이상/1분이상)</span></div>
       <div><span class="qc-big" style="color:var(--purple)">${fmtP(dr)}</span></div>
       <div class="qc-diff ${drD>0?'up':'dn'}">${fmtD(drD,'pp')} 전기간 대비</div>
       <div class="qc-multi">${chItems}</div>
+      <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;gap:4px;">
+        <div style="flex:1;">
+          <span style="font-size:var(--fs-xs);color:var(--sub);display:block;margin-bottom:2px;">1분이상</span>
+          <span style="font-size:var(--fs-lg);font-weight:600;">${fmtK(u1min)}명</span>
+        </div>
+        <div style="flex:1;">
+          <span style="font-size:var(--fs-xs);color:var(--sub);display:block;margin-bottom:2px;">10분이상</span>
+          <span style="font-size:var(--fs-lg);font-weight:600;">${fmtK(u10min)}명</span>
+        </div>
+      </div>
     </div>
     <div class="quality-card">
-      <div class="qc-label">참여율 <span style="color:var(--dim);font-size:9px">(공감·공유·검색)</span></div>
+      <div class="qc-label">참여율 <span style="color:var(--dim);font-size:14px">(공감·공유·검색)</span></div>
       <div><span class="qc-big" style="color:var(--orange)">${fmtP(er)}</span></div>
       <div class="qc-diff ${erD>0?'up':'dn'}">${fmtD(erD,'pp')} 전기간 대비</div>
-      <div style="font-size:10px;color:var(--dim);margin-top:8px">
-        1분이상 ${fmt(s3.dau_1min)}명 / 10분이상 ${fmt(s3.dau_10min)}명
-      </div>
     </div>`;
 }
 
@@ -969,7 +1039,7 @@ function renderGrowth(s4){
 
   document.getElementById('growthGrid').innerHTML = `
     <div class="growth-card">
-      <div class="gc-label">습관형성률 <span style="color:var(--dim);font-size:9px">(목표 ${TARGET_HABIT}%)</span></div>
+      <div class="gc-label">습관형성률 <span style="color:var(--dim);font-size:14px">(목표 ${TARGET_HABIT}%)</span></div>
       <div class="gc-gauge">
         <div class="gc-fill" style="width:${Math.min(hr||0,100)}%;background:${habitOk?'var(--green)':'var(--yellow)'}"></div>
         <div class="gc-target" style="left:${targetPos}%"></div>
@@ -977,18 +1047,18 @@ function renderGrowth(s4){
       <div class="gc-big" style="color:${habitOk?'var(--green)':'var(--yellow)'}">${fmtP(hr)}</div>
       <div class="gc-status ${habitOk?'ok':'warn'}">${habitOk?'✅ 목표 달성':'⚠ 목표 미달'} ${fmtD(hrD,'pp')}</div>
       <div class="habit-top3" style="margin-top:10px">
-        <div style="font-size:9px;color:var(--dim);margin-bottom:6px">프로그램 TOP3</div>
+        <div style="font-size:14px;color:var(--dim);margin-bottom:6px">프로그램 TOP3</div>
         ${top3}
       </div>
     </div>
     <div class="growth-card">
-      <div class="gc-label">복귀율 <span style="color:var(--dim);font-size:9px">(복귀사용자/휴면풀)</span></div>
+      <div class="gc-label">복귀율 <span style="color:var(--dim);font-size:14px">(복귀사용자/휴면풀)</span></div>
       <div class="gc-gauge">
         <div class="gc-fill" style="width:${Math.min((rrV||0)*10,100)}%;background:var(--accent)"></div>
       </div>
       <div class="gc-big" style="color:var(--accent)">${fmtP(rrV)}</div>
       <div class="gc-status ${rrD>0?'ok':'warn'}">${fmtD(rrD,'pp')} 전기간 대비</div>
-      <div style="margin-top:14px;font-size:11px;color:var(--sub)">
+      <div style="margin-top:14px;font-size:16px;color:var(--sub)">
         <div style="margin-bottom:4px">일간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate)}</span></div>
         <div style="margin-bottom:4px">주간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate_week)}</span></div>
         <div>월간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate_mon)}</span></div>
@@ -1038,7 +1108,7 @@ function renderPgm(s5, tab){
         <span class="pr-rank">${i+1}</span>
         <div class="pr-info"><div class="pr-name">${p.name}</div></div>
         <span class="pr-badge deep">${fmtP(p.rate)}</span>
-        <span class="pr-val" style="color:var(--sub);font-size:11px">${fmtK(p.u1min)}명</span>
+        <span class="pr-val" style="color:var(--sub);font-size:16px">${fmtK(p.u1min)}명</span>
       </div>`);
   } else if(tab==='new'){
     rows = (s5.new_top5||[]).map((p,i)=>`
@@ -1066,7 +1136,7 @@ function renderPgm(s5, tab){
         <span class="pr-badge warn">${fmtD(r.dau_wow||r.drop_rate)}</span>
         <span class="pr-val" style="color:var(--red)">${fmtP(r.churn_rate)}</span>
       </div>`) :
-      [`<div style="padding:16px;text-align:center;color:var(--green);font-size:12px">✅ 이탈 위험 프로그램 없음</div>`];
+      [`<div style="padding:16px;text-align:center;color:var(--green);font-size:18px">✅ 이탈 위험 프로그램 없음</div>`];
   }
   document.getElementById('pgmList').innerHTML = rows.join('');
 }
@@ -1075,7 +1145,7 @@ function renderPgm(s5, tab){
 function renderBrief(text){
   if(!text){
     document.getElementById('briefCard').innerHTML =
-      '<div style="color:var(--sub);font-size:13px">브리핑 없음</div>';
+      '<div style="color:var(--sub);font-size:20px">브리핑 없음</div>';
     return;
   }
   const sections = text.split(/(?=\d{2}\s*\/)/);
@@ -1113,5 +1183,66 @@ document.getElementById('queryInput').addEventListener('keydown',e=>{
 // 초기 로드
 loadAll();
 </script>
+
+<!-- ── 건강도 모달 ── -->
+<div id="healthModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--bg2);border-radius:14px;padding:20px;width:calc(100% - 32px);max-width:480px;border:1px solid var(--line2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <span style="font-size:var(--fs-xl);font-weight:700;">건강도 점수 계산 방식</span>
+      <span style="cursor:pointer;font-size:20px;color:var(--sub);line-height:1;" onclick="document.getElementById('healthModal').style.display='none'">✕</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--bg3);">
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:left;font-weight:600;">지표명</th>
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:center;font-weight:600;">🟢 좋음</th>
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:center;font-weight:600;">🟡 보통</th>
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:center;font-weight:600;">🔴 나쁨</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">활성사용자 WoW</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">+5% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">±5% 이내<br><span style="font-size:var(--fs-sm);">13점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">-5% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">깊은청취율</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">90% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">75~90%<br><span style="font-size:var(--fs-sm);">13점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">75% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">이탈율 <span style="color:var(--dim);font-size:var(--fs-sm);">(낮을수록↑)</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">15% 미만<br><span style="font-size:var(--fs-sm);">20점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">15~30%<br><span style="font-size:var(--fs-sm);">13점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">30% 이상<br><span style="font-size:var(--fs-sm);">6점</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">D1/W1/M1 유지율</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">45% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">25~45%<br><span style="font-size:var(--fs-sm);">13점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">25% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">복귀율</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">5% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">3~5%<br><span style="font-size:var(--fs-sm);">13점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">3% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+        </tr>
+        <tr>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">습관형성률</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">30% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">18~30%<br><span style="font-size:var(--fs-sm);">13점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">18% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="font-size:var(--fs-sm);color:var(--sub);text-align:center;margin-top:14px;">
+      6개 지표 합산 &middot; 최대 100점 &middot; 75점↑🟢 &nbsp;50점↑🟡 &nbsp;50점↓🔴
+    </div>
+  </div>
+</div>
 </body>
 </html>
