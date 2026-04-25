@@ -87,3 +87,41 @@ raas_query_engine.py  ← 자연어 질의 엔진 (3단계 파이프라인)
 - **깊은청취율**: 10분 이상 연속 청취 / 1분 이상 연속 청취 비율 (몰입도)
 - **WoW**: 전주 동일 요일 대비 증감률
 - **습관형성률**: 신규 사용자 중 7일 내 재방문 비율
+
+## 최근 주요 변경사항 (2026-04 기준)
+
+### raas_kpi_latest.csv 신규 필드
+- dau_week_avg: 전주 월~일 7일간 DAU 일평균
+- dau_mon_avg:  전월 1일~말일 DAU 일평균
+- wau_mon_avg:  전월 1일~말일 7D롤링 평균
+- new_d1_ret / new_d1_ret_pw / new_d1_diff: 신규코호트 D1유지율
+- new_d7_ret / new_d7_ret_pw / new_d7_diff: 신규코호트 D7유지율
+- new_w1_ret / new_w1_ret_pw / new_w1_diff: 신규코호트 W1유지율
+- new_m1_ret / new_m1_ret_pw / new_m1_diff: 신규코호트 M1유지율
+
+### Briefing Engine 섹션 추가 필드
+s2_funnel 추가:
+- new_d1_ret / new_d7_ret / new_w1_ret / new_m1_ret (신규 코호트 유지율 4종)
+- dau_week_avg / dau_mon_avg / wau_mon_avg (기간별 평균 지표)
+
+s3_engagement 추가:
+- wau_1min / wau_10min (주간 1분이상/10분이상 사용자)
+- mau_1min / mau_10min (월간 1분이상/10분이상 사용자)
+- channel_deep 각 채널에 rate_week / rate_mon 추가
+
+### 유지율 코호트 구분
+- 전체 코호트: d1_ret / d7_ret / w1_ret / m1_ret (program_user_retention_*.csv)
+- 신규 코호트: new_d1_ret / new_d7_ret / new_w1_ret / new_m1_ret (program_newuser_retention_*.csv)
+
+### 1MIN/10MIN PERIOD 조건 (중요)
+- 일간: PERIOD=1D (없으면 30D롤링 값이 들어옴)
+- 주간: PERIOD=1W
+- 월간: PERIOD=1M
+
+## 접속 환경
+- 회사 윈도우PC: localhost:5000 직접 접속, Splunk(10.10.15.31) 접근 가능
+- 맥미니/외부: ngrok URL (https://unifier-verbose-schnapps.ngrok-free.dev)
+- GitHub: https://github.com/apollo0831/raas-api
+
+## ngrok 실행 (윈도우PC)
+ngrok http 5000
