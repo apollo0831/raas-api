@@ -772,8 +772,17 @@
     | fields DATE PGM_CODE metric_type prev_week_value
 ]
 
+`comment("--- 전일값(+1d 시프트): dau_day 전용 — dau_yday 계산용 ---")`
+| appendpipe [
+    | where isnotnull(metric_value) AND metric_type="dau_day"
+    | eval DATE=strftime(relative_time(_time,"+1d"),"%Y/%m/%d"),
+           yday_value=metric_value
+    | fields DATE PGM_CODE metric_type yday_value
+]
+
 | stats max(today_value)     as today_value
         max(prev_week_value) as prev_week_value
+        max(yday_value)      as yday_value
         max(DATE_WEEK)       as DATE_WEEK
         max(DATE_MON)        as DATE_MON
   by DATE PGM_CODE metric_type
@@ -868,6 +877,7 @@
 `comment("--- 일간 ---")`
 | eval dau_today       = if(metric_type="dau_day",         today_value, null())
 | eval dau_pw          = if(metric_type="dau_day",         prev_week_value, null())
+| eval dau_yday        = if(metric_type="dau_day",         yday_value, null())
 | eval wau_today       = if(metric_type="wau_day",         today_value, null())
 | eval wau_pw          = if(metric_type="wau_day",         prev_week_value, null())
 | eval mau_today       = if(metric_type="mau_day",         today_value, null())
@@ -961,6 +971,7 @@
     max(DATE_MON)  as DATE_MON
     `comment("--- 일간 ---")`
     max(dau_today)       as dau_today       max(dau_pw)            as dau_pw
+    max(dau_yday)        as dau_yday
     max(wau_today)       as wau_today       max(wau_pw)            as wau_pw
     max(mau_today)       as mau_today       max(mau_pw)            as mau_pw
     max(new_today)       as new_today       max(new_pw)            as new_pw
@@ -1152,8 +1163,10 @@
     schedule_title guestname daily_corner weekly_corner
 
     `comment("--- 일간 ---")`
-    `comment("DAU 일간 현재값 / 전주동일일값 / 전주대비증감률(%)")`
+    `comment("DAU 일간 현재값 / 전주동일일값 / 전주대비증감률(%)")` 
     dau_today dau_pw dau_wow
+    `comment("DAU 일간 어제값 (직전일 활성사용자 — 사용자 흐름 직전 활성 계산용)")`
+    dau_yday
     `comment("WAU롤링(7일) 현재값 / 전주동일일값")`
     wau_today wau_pw
     `comment("MAU롤링(30일) 현재값 / 전주동일일값")`
@@ -1194,6 +1207,8 @@
     react_rate_week react_rate_week_pw react_rate_week_diff
     `comment("이탈율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
     churn_week churn_week_pw churn_week_diff
+    `comment("주간 1분이상/10분이상 청취 사용자수 (깊은청취율 분모/분자)")`
+    wau_1min wau_10min
     `comment("깊은청취율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
     deep_rate_week deep_rate_week_pw deep_rate_week_diff
     `comment("W1유지율(%) 현재주값 / 전주동일코호트값 / 전전주대비증감(pp)")`
@@ -1216,6 +1231,8 @@
     react_rate_mon react_rate_mon_pw react_rate_mon_diff
     `comment("이탈율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
     churn_mon churn_mon_pw churn_mon_diff
+    `comment("월간 1분이상/10분이상 청취 사용자수 (깊은청취율 분모/분자)")`
+    mau_1min mau_10min
     `comment("깊은청취율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
     deep_rate_mon deep_rate_mon_pw deep_rate_mon_diff
     `comment("M1유지율(%) 현재월값 / 전월동일코호트값 / 전전월대비증감(pp)")`
@@ -1232,5 +1249,5 @@
     `comment("dau_mon_avg:  전월 1일~말일 DAU 일평균")`
     `comment("wau_mon_avg:  전월 1일~말일 7D롤링 평균")`
     dau_week_avg dau_mon_avg wau_mon_avg
-    
+
 | outputlookup raas_kpi_latest.csv append=true

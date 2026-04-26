@@ -2,8 +2,6 @@
 RAAS Briefing Engine v2.2
 raas_kpi_latest.csv 단일 룩업 — 일간 + 주간 + 월간 통합
 """
-import os
-import pandas as pd
 from datetime import datetime
 
 def _f(v,d=0.0):
@@ -36,17 +34,8 @@ CH=['F00','L00','G00','P00']
 ALL=PGM_F+PGM_L
 
 def _load(search):
-    try:
-        rows=search("| inputlookup raas_kpi_latest.csv")
-        return {r['PGM_CODE']:r for r in rows if r.get('PGM_CODE')}
-    except Exception as e:
-        local_path=os.path.join(os.path.dirname(__file__),'raas_kpi_latest.csv')
-        if os.path.exists(local_path):
-            print(f"  📂 Splunk 실패({type(e).__name__}) — 로컬 CSV 폴백: {local_path}")
-            df=pd.read_csv(local_path,dtype=str,keep_default_na=False)
-            rows=df.to_dict(orient='records')
-            return {r['PGM_CODE']:r for r in rows if r.get('PGM_CODE')}
-        raise
+    rows=search("| inputlookup raas_kpi_latest.csv")
+    return {r['PGM_CODE']:r for r in rows if r.get('PGM_CODE')}
 
 def _load_top(search):
     return search("| inputlookup raas_top_programs_latest.csv | sort rank | head 15")
@@ -77,7 +66,6 @@ def build_s2(kpi):
     return {
         # 일간
         'dau':             _i(t.get('dau_today')),
-        'dau_yday':        _i(t.get('dau_yday')),
         'new_user':        _i(t.get('new_today')),
         'new_wow':         _fn(t.get('new_wow')),
         'react_user':      _i(t.get('react_today')),
@@ -223,41 +211,15 @@ def build_s6(kpi):
     chs=[]
     for c in CH:
         row=kpi.get(c,{}); d=_f(row.get('dau_today'),0)
-        # deep_rate 폴백 계산 (1min/10min 직접 비율 우선, 없으면 CSV 값)
-        dau_1min  = _i(row.get('dau_1min'))
-        dau_10min = _i(row.get('dau_10min'))
-        deep_rate = round(dau_10min/dau_1min*100, 1) if dau_1min and dau_1min > 0 else _fn(row.get('deep_rate'))
-        wau_1min  = _i(row.get('wau_1min'))
-        wau_10min = _i(row.get('wau_10min'))
-        deep_rate_week = round(wau_10min/wau_1min*100, 1) if wau_1min and wau_1min > 0 else _fn(row.get('deep_rate_week'))
-        mau_1min  = _i(row.get('mau_1min'))
-        mau_10min = _i(row.get('mau_10min'))
-        deep_rate_mon = round(mau_10min/mau_1min*100, 1) if mau_1min and mau_1min > 0 else _fn(row.get('deep_rate_mon'))
-        chs.append({
-            'code':c,'name':PGM_NAMES[c],
-            'share':round(d/t00*100,1),
-            # 일간
-            'dau':         int(d),
-            'deep_rate':   deep_rate,
-            'churn_rate':  _fn(row.get('churn_rate')),
-            'react_rate':  _fn(row.get('react_rate')),
-            'new_user':    _i(row.get('new_today')),
-            'new_pct':     _fn(row.get('new_pct')),
-            # 주간
-            'dau_week':        _i(row.get('dau_week')),
-            'deep_rate_week':  deep_rate_week,
-            'churn_week':      _fn(row.get('churn_week')),
-            'react_rate_week': _fn(row.get('react_rate_week')),
-            'new_week':        _i(row.get('new_week')),
-            'new_week_pct':    _fn(row.get('new_week_pct')),
-            # 월간
-            'dau_mon':        _i(row.get('dau_mon')),
-            'deep_rate_mon':  deep_rate_mon,
-            'churn_mon':      _fn(row.get('churn_mon')),
-            'react_rate_mon': _fn(row.get('react_rate_mon')),
-            'new_mon':        _i(row.get('new_mon')),
-            'new_mon_pct':    _fn(row.get('new_mon_pct')),
-        })
+        chs.append({'code':c,'name':PGM_NAMES[c],'dau':int(d),
+            'share':round(d/t00*100,1),'deep_rate':_fn(row.get('deep_rate')),
+            'deep_rate_week':_fn(row.get('deep_rate_week')),
+            'deep_rate_mon': _fn(row.get('deep_rate_mon')),
+            'new_user':int(_f(row.get('new_today'))),'new_pct':_fn(row.get('new_pct')),
+            'churn_rate':_fn(row.get('churn_rate')),
+            'churn_week':_fn(row.get('churn_week')),
+            'react_rate':_fn(row.get('react_rate')),
+            'react_rate_week':_fn(row.get('react_rate_week'))})
     return {'channels':chs}
 
 def build_s7(s1,s2,s3,s4,s5):

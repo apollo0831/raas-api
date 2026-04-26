@@ -246,69 +246,6 @@ body{
 .fm-diff.dn{color:var(--red)}
 .fm-diff.bad{color:var(--red)}  /* 이탈은 올라가면 나쁨 */
 
-/* ── 사용자 흐름 v2 (그리드 셀 레이아웃) ── */
-.funnel-row {
-  display: grid;
-  gap: 1px;
-  border-radius: 8px;
-  overflow: hidden;
-}
-.funnel-row.r3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.funnel-row.r2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.funnel-cell {
-  background: var(--bg3);
-  padding: 12px 8px;
-  text-align: center;
-}
-.fc-name {
-  font-size: 15px;        /* 항목명 → kpi-label과 동일 */
-  font-weight: 500;
-  color: var(--sub);
-  margin-bottom: 4px;
-}
-.fc-pct {
-  font-size: 33px;        /* 비율 → kpi-val과 동일 */
-  font-weight: 600;
-  font-family: var(--mono);
-  line-height: 1.1;
-}
-.fc-val {
-  font-size: 16px;        /* 수치 → kpi-wow와 동일 */
-  font-weight: 600;
-  font-family: var(--mono);
-  color: var(--sub);
-  margin-top: 3px;
-}
-.funnel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 8px;
-}
-.funnel-head-label {
-  font-size: 15px;        /* 이번활성/직전활성 라벨 → kpi-label과 동일 */
-  font-weight: 500;
-  color: var(--sub);
-}
-.funnel-head-val {
-  font-size: 15px;        /* 이번활성/직전활성 수치 → kpi-extra와 동일 */
-  font-weight: 600;
-  color: var(--text);
-}
-.funnel-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin-top: 10px;
-  padding: 8px 10px;
-  background: rgba(255,180,0,0.08);
-  border-radius: 8px;
-  border: 0.5px solid rgba(255,180,0,0.3);
-  font-size: 11px;
-  color: var(--yellow);
-  line-height: 1.5;
-}
-
 /* ── 코호트 유지율 ── */
 .cohort-grid{
   display:grid;
@@ -578,82 +515,6 @@ body{
 .section:nth-child(6){animation-delay:.3s}
 .section:nth-child(7){animation-delay:.35s}
 .section:nth-child(8){animation-delay:.4s}
-
-/* ── 하단 네비게이션 + 페이지 ── */
-.bottom-nav {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: 60px;
-  background: #0f1419;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  display: flex;
-  align-items: stretch;
-  z-index: 500;
-}
-.nav-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 6px 2px;
-}
-.nav-item svg {
-  width: 22px; height: 22px;
-  fill: none;
-  stroke: #4a5566;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: stroke 0.15s;
-}
-.nav-item.active svg { stroke: #e8edf3; }
-.nav-item .nav-label {
-  font-size: 10px;
-  color: #4a5566;
-  font-weight: 500;
-  transition: color 0.15s;
-}
-.nav-item.active .nav-label { color: #e8edf3; }
-
-.page { display: none; }
-.page.active { display: block; }
-
-.container { padding-bottom: 72px; }
-
-.period-tabs-wrap { display: none; }
-.period-tabs-wrap.visible { display: flex; }
-
-/* ── 분석 페이지 범위 탭 ── */
-.scope-bar {
-  display: flex;
-  gap: 6px;
-  padding: 10px 0 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.scope-bar::-webkit-scrollbar { display: none; }
-.scope-tab {
-  flex-shrink: 0;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: var(--fs-base);
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--line2);
-  background: transparent;
-  color: var(--sub);
-  transition: all 0.2s;
-}
-.scope-tab.active {
-  background: var(--bg4);
-  color: var(--text);
-  border-color: var(--accent);
-}
 </style>
 </head>
 <body>
@@ -664,18 +525,14 @@ body{
     <span class="header-date" id="headerDate">—</span>
     <button class="btn-refresh" id="btnRefresh" onclick="loadAll()">↻</button>
   </div>
-  <div class="period-tabs-wrap" id="periodTabsWrap">
-    <div class="period-tabs">
-      <button class="period-tab active" onclick="setPeriod('day')" id="tab-day">일간</button>
-      <button class="period-tab"        onclick="setPeriod('week')" id="tab-week">주간</button>
-      <button class="period-tab"        onclick="setPeriod('mon')" id="tab-mon">월간</button>
-    </div>
+  <div class="period-tabs">
+    <button class="period-tab active" onclick="setPeriod('day')" id="tab-day">일간</button>
+    <button class="period-tab"        onclick="setPeriod('week')" id="tab-week">주간</button>
+    <button class="period-tab"        onclick="setPeriod('mon')" id="tab-mon">월간</button>
   </div>
 </div>
 
 <div class="container">
-
-<div class="page active" id="page-home">
 
   <div id="loading" class="loading">
     <div class="spinner"></div>
@@ -711,7 +568,26 @@ body{
     <!-- ZONE 3: 사용자 흐름 (Funnel) -->
     <div class="section">
       <div class="section-title">사용자 흐름</div>
-      <div class="funnel-wrap"></div>
+      <div class="funnel-wrap">
+        <div class="funnel-flow" id="funnelFlow"></div>
+        <div class="funnel-meta" id="funnelMeta"></div>
+      </div>
+    </div>
+
+    <!-- ZONE 4: 유지율 코호트 -->
+    <div class="section">
+      <div class="section-title">유지율 코호트</div>
+      <div class="pgm-tabs" id="cohortTabs" style="margin-bottom:10px;">
+        <button class="pgm-tab active" data-tab="all" onclick="showCohortTab('all')">전체 코호트</button>
+        <button class="pgm-tab" data-tab="new" onclick="showCohortTab('new')">신규 코호트</button>
+      </div>
+      <div class="cohort-grid" id="cohortGrid"></div>
+    </div>
+
+    <!-- ZONE 5: 청취 품질 -->
+    <div class="section">
+      <div class="section-title">청취 품질</div>
+      <div class="quality-grid" id="qualityGrid"></div>
     </div>
 
     <!-- ZONE 6: 채널 현황 -->
@@ -720,10 +596,29 @@ body{
       <div class="channel-grid" id="channelGrid"></div>
     </div>
 
+    <!-- ZONE 7: 성장 품질 -->
+    <div class="section">
+      <div class="section-title">성장 품질</div>
+      <div class="growth-grid" id="growthGrid"></div>
+    </div>
+
     <!-- ZONE 8: 이상징후 -->
     <div class="section">
       <div class="section-title">이상징후</div>
       <div class="alerts-list" id="alertsList"></div>
+    </div>
+
+    <!-- ZONE 9: 프로그램 랭킹 -->
+    <div class="section">
+      <div class="section-title">프로그램 랭킹</div>
+      <div class="pgm-tabs" id="pgmTabs">
+        <button class="pgm-tab active" onclick="showPgmTab('dau')">DAU TOP10</button>
+        <button class="pgm-tab" onclick="showPgmTab('deep')">깊은청취</button>
+        <button class="pgm-tab" onclick="showPgmTab('new')">신규유입</button>
+        <button class="pgm-tab" onclick="showPgmTab('react')">복귀유도</button>
+        <button class="pgm-tab" onclick="showPgmTab('risk')">⚠ 이탈주의</button>
+      </div>
+      <div class="pgm-list" id="pgmList"></div>
     </div>
 
     <!-- ZONE 10: AI 브리핑 -->
@@ -732,100 +627,22 @@ body{
       <div class="brief-card" id="briefCard">
         <div style="color:var(--sub);font-size:20px">브리핑 생성 중…</div>
       </div>
-      <button onclick="goPage('ai')"
-        style="margin-top:10px;width:100%;padding:10px;
-               background:var(--bg3);border:1px solid var(--line2);
-               border-radius:8px;color:var(--accent);font-size:var(--fs-base);
-               cursor:pointer;">
-        AI에게 질문하기 →
-      </button>
+    </div>
+
+    <!-- ZONE 11: 자연어 질의 -->
+    <div class="section">
+      <div class="section-title">AI 질의</div>
+      <div class="query-box">
+        <div class="query-row">
+          <input class="query-input" id="queryInput"
+            placeholder="예: 오늘 이탈율이 높은 채널은?" />
+          <button class="btn-ask" onclick="askQuery()">전송</button>
+        </div>
+        <div class="query-answer" id="queryAnswer"></div>
+      </div>
     </div>
 
   </div><!-- /content -->
-
-</div><!-- /page-home -->
-
-<div class="page" id="page-analytics">
-  <div class="scope-bar" id="scopeBar">
-    <button class="scope-tab active" onclick="setScope('T00')" id="scope-T00">전체</button>
-    <button class="scope-tab" onclick="setScope('F00')" id="scope-F00">파워FM</button>
-    <button class="scope-tab" onclick="setScope('L00')" id="scope-L00">러브FM</button>
-    <button class="scope-tab" onclick="setScope('G00')" id="scope-G00">고릴라M</button>
-    <button class="scope-tab" onclick="setScope('P00')" id="scope-P00">픽채널</button>
-  </div>
-
-  <!-- ZONE 2 (복사): 핵심 지표 -->
-  <div class="section">
-    <div class="section-title" id="a-kpiTitle">핵심 지표</div>
-    <div class="kpi-grid" id="a-kpiGrid"></div>
-  </div>
-
-  <!-- ZONE 4: 유지율 코호트 -->
-  <div class="section">
-    <div class="section-title">유지율 코호트</div>
-    <div class="pgm-tabs" id="cohortTabs" style="margin-bottom:10px;">
-      <button class="pgm-tab active" data-tab="all" onclick="showCohortTab('all')">전체 코호트</button>
-      <button class="pgm-tab" data-tab="new" onclick="showCohortTab('new')">신규 코호트</button>
-    </div>
-    <div class="cohort-grid" id="cohortGrid"></div>
-  </div>
-
-  <!-- ZONE 5: 청취 품질 -->
-  <div class="section">
-    <div class="section-title">청취 품질</div>
-    <div class="quality-grid" id="qualityGrid"></div>
-  </div>
-
-  <!-- ZONE 7: 성장 품질 -->
-  <div class="section">
-    <div class="section-title">성장 품질</div>
-    <div class="growth-grid" id="growthGrid"></div>
-  </div>
-</div>
-
-<div class="page" id="page-programs">
-  <!-- ZONE 9: 프로그램 랭킹 -->
-  <div class="section">
-    <div class="section-title">프로그램 랭킹</div>
-    <div class="pgm-tabs" id="pgmTabs">
-      <button class="pgm-tab active" onclick="showPgmTab('dau')">DAU TOP10</button>
-      <button class="pgm-tab" onclick="showPgmTab('deep')">깊은청취</button>
-      <button class="pgm-tab" onclick="showPgmTab('new')">신규유입</button>
-      <button class="pgm-tab" onclick="showPgmTab('react')">복귀유도</button>
-      <button class="pgm-tab" onclick="showPgmTab('risk')">⚠ 이탈주의</button>
-    </div>
-    <div class="pgm-list" id="pgmList"></div>
-  </div>
-</div>
-
-<div class="page" id="page-ai">
-  <div class="section">
-    <div class="section-title">AI 브리핑 전문</div>
-    <div class="card" id="briefCardFull">
-      <div style="color:var(--sub)">브리핑 로딩 중…</div>
-    </div>
-  </div>
-
-  <!-- ZONE 11: 자연어 질의 -->
-  <div class="section">
-    <div class="section-title">AI 질의</div>
-    <div class="query-box">
-      <div class="query-row">
-        <input class="query-input" id="queryInput"
-          placeholder="예: 오늘 이탈율이 높은 채널은?" />
-        <button class="btn-ask" onclick="askQuery()">전송</button>
-      </div>
-      <div class="query-answer" id="queryAnswer"></div>
-    </div>
-  </div>
-</div>
-
-<div class="page" id="page-settings">
-  <div style="padding:20px;color:#7a8899;text-align:center;margin-top:40px">
-    더보기 페이지 — Phase 4에서 구현
-  </div>
-</div>
-
 </div><!-- /container -->
 
 <script>
@@ -850,7 +667,6 @@ const diffClass= (v,inv=false) => {
 };
 
 let _data = null;
-let _scope = 'T00';
 let _period = 'day';
 let _pgmTab = 'dau';
 let _cohortTab = 'all';
@@ -915,14 +731,6 @@ function renderAll(d){
   renderAlerts(s7);
   renderPgm(s5, _pgmTab);
   renderBrief(d.brief||'');
-
-  // AI 브리핑 전문 동기화
-  const full = document.getElementById('briefCardFull');
-  if (full) full.innerHTML =
-    document.getElementById('briefCard')?.innerHTML || '';
-
-  // 분석 페이지 KPI 복사
-  renderAnalytics(d);
 }
 
 // ── ZONE 1: 헬스 스코어 ──────────────────────────────────
@@ -1041,106 +849,59 @@ function renderKPI(s1,s2){
 }
 
 // ── ZONE 3: 퍼널 흐름 ───────────────────────────────────
-function renderFunnel(s1, s2) {
+function renderFunnel(s1,s2){
   const p = _period;
+  const dau   = p==='day'?s1.dau    : p==='week'?s2.dau_week : s2.dau_mon;
+  const newU  = p==='day'?s2.new_user : p==='week'?s2.new_week : s2.new_mon;
+  const retU  = p==='day'?s2.react_user: p==='week'?s2.react_week: s2.react_mon;
+  const newP  = p==='day'?s2.new_pct  : p==='week'?s2.new_week_pct: s2.new_mon_pct;
+  const retP  = p==='day'?s2.react_pct: p==='week'?s2.react_week_pct: s2.react_mon_pct;
+  const maint = dau && newU && retU ? dau-newU-retU : null;
+  const maintP= dau && maint ? (maint/dau*100).toFixed(1) : null;
 
-  // 기간별 값 분기
-  let dau, new_u, new_p, react, react_p, dau_prev, churn_rate, dau_label, prev_label;
-  if (p === 'week') {
-    dau        = s2.dau_week;
-    new_u      = s2.new_week;      new_p    = s2.new_week_pct;
-    react      = s2.react_week;    react_p  = s2.react_week_pct;
-    dau_prev   = s1.wau;
-    churn_rate = s2.churn_week;
-    dau_label  = '이번 활성 (WAU)';
-    prev_label = '직전 활성 (전주)';
-  } else if (p === 'mon') {
-    dau        = s2.dau_mon;
-    new_u      = s2.new_mon;       new_p    = s2.new_mon_pct;
-    react      = s2.react_mon;     react_p  = s2.react_mon_pct;
-    dau_prev   = s1.mau;
-    churn_rate = s2.churn_mon;
-    dau_label  = '이번 활성 (MAU)';
-    prev_label = '직전 활성 (전월)';
-  } else {
-    dau        = s1.dau;
-    new_u      = s2.new_user;      new_p    = s2.new_pct;
-    react      = s2.react_user;    react_p  = s2.react_pct;
-    dau_prev   = s2.dau_yday;
-    churn_rate = s2.churn_rate;
-    dau_label  = '이번 활성 (DAU)';
-    prev_label = '직전 활성 (전일)';
-  }
+  const flow = [
+    {name:'전체 활성', val:fmtK(dau),   pct:'100%', color:'var(--accent)'},
+    {name:'신규',      val:fmtK(newU),  pct:fmtP(newP), color:'var(--green)'},
+    {name:'유지',      val:fmtK(maint), pct:maintP?maintP+'%':'—', color:'var(--purple)'},
+    {name:'복귀',      val:fmtK(retU),  pct:fmtP(retP), color:'var(--yellow)'},
+  ];
+  document.getElementById('funnelFlow').innerHTML = flow.map(f=>`
+    <div class="funnel-item">
+      <div class="fi-name">${f.name}</div>
+      <div class="fi-val" style="color:${f.color}">${f.val}</div>
+      <div class="fi-pct" style="color:${f.color}">${f.pct}</div>
+    </div>`).join('');
 
-  // 유지사용자 = 전일DAU × D1유지율/100 (일간), 그 외 역산
-  const d1_ret = s2.d1_ret;
-  let maint;
-  if (p === 'day' && dau_prev && d1_ret) {
-    maint = Math.round(dau_prev * d1_ret / 100);
-  } else {
-    maint = (dau||0) - (new_u||0) - (react||0);
-  }
-  const maint_p  = dau > 0 ? (maint/dau*100).toFixed(1) : null;
+  // 메타 지표 (이탈율, 복귀율, D1/W1 유지율)
+  const cr   = p==='day'?s2.churn_rate  : p==='week'?s2.churn_week  : s2.churn_mon;
+  const crD  = p==='day'?s2.churn_diff  : p==='week'?s2.churn_week_diff: s2.churn_mon_diff;
+  const rr   = p==='day'?s2.react_rate  : p==='week'?s2.react_rate_week: s2.react_rate_mon;
+  const rrD  = p==='day'?s2.react_rate_diff: p==='week'?s2.react_rate_week_diff: s2.react_rate_mon_diff;
+  const ret  = p==='day'?s2.d1_ret  : p==='week'?s2.w1_ret  : s2.m1_ret;
+  const retD = p==='day'?s2.d1_diff : p==='week'?s2.w1_diff : s2.m1_diff;
+  const retL = p==='day'?'D1유지율':'W1 유지율'.split(' ')[p==='week'?0:1];
 
-  // 이탈자수 = 직전DAU × 이탈율/100
-  const churn_users = (dau_prev && churn_rate)
-    ? Math.round(dau_prev * churn_rate / 100) : null;
-
-  // 직전 활성 기준 비율
-  const maint_p2 = (dau_prev > 0 && maint)
-    ? (maint/dau_prev*100).toFixed(1) : null;
-  const churn_p2 = churn_rate ? churn_rate.toFixed(1) : null;
-
-  const fmt = v => {
-    if (v == null || isNaN(v)) return '—';
-    if (v >= 1000) return (v/1000).toFixed(1) + 'k';
-    return String(Math.round(v));
-  };
-  const fmtP = v => v != null ? v + '%' : '—';
-
-  document.querySelector('.funnel-wrap').innerHTML = `
-    <div class="funnel-head">
-      <span class="funnel-head-label">${dau_label}</span>
-      <span class="funnel-head-val">${fmt(dau)}</span>
+  document.getElementById('funnelMeta').innerHTML = `
+    <div class="fm-item">
+      <div class="fm-label">이탈율</div>
+      <div class="fm-val" style="color:var(--red)">${fmtP(cr)}</div>
+      <div class="fm-diff ${crD>0?'bad':'up'}">${fmtD(crD,'pp')}</div>
     </div>
-    <div class="funnel-row r3">
-      <div class="funnel-cell">
-        <div class="fc-name">신규</div>
-        <div class="fc-pct" style="color:var(--green)">${fmtP(new_p)}</div>
-        <div class="fc-val">${fmt(new_u)}</div>
-      </div>
-      <div class="funnel-cell">
-        <div class="fc-name">유지</div>
-        <div class="fc-pct" style="color:var(--text)">${fmtP(maint_p)}</div>
-        <div class="fc-val">${fmt(maint)}</div>
-      </div>
-      <div class="funnel-cell">
-        <div class="fc-name">복귀 *</div>
-        <div class="fc-pct" style="color:var(--yellow)">${fmtP(react_p)}</div>
-        <div class="fc-val">${fmt(react)}</div>
-      </div>
+    <div class="fm-item">
+      <div class="fm-label">복귀율</div>
+      <div class="fm-val" style="color:var(--accent)">${fmtP(rr)}</div>
+      <div class="fm-diff ${rrD>0?'up':'dn'}">${fmtD(rrD,'pp')}</div>
     </div>
-    <div style="height:0.5px;background:var(--line);margin:10px 0"></div>
-    <div class="funnel-head">
-      <span class="funnel-head-label">${prev_label}</span>
-      <span class="funnel-head-val">${fmt(dau_prev)}</span>
+    <div class="fm-item">
+      <div class="fm-label">${p==='day'?'D1':'W1'} 유지율</div>
+      <div class="fm-val" style="color:var(--purple)">${fmtP(ret)}</div>
+      <div class="fm-diff ${retD>0?'up':'dn'}">${fmtD(retD,'pp')}</div>
     </div>
-    <div class="funnel-row r2">
-      <div class="funnel-cell">
-        <div class="fc-name">유지</div>
-        <div class="fc-pct" style="color:var(--text)">${fmtP(maint_p2)}</div>
-        <div class="fc-val">${fmt(maint)}</div>
-      </div>
-      <div class="funnel-cell">
-        <div class="fc-name">이탈 *</div>
-        <div class="fc-pct" style="color:var(--red)">${fmtP(churn_p2)}</div>
-        <div class="fc-val">${fmt(churn_users)}</div>
-      </div>
-    </div>
-    <div class="funnel-notice">
-      ⚠ 복귀·이탈 수치는 직전 사용일 추적 데이터 안정화 중으로 실제값과 차이가 있을 수 있습니다.
-    </div>
-  `;
+    <div class="fm-item">
+      <div class="fm-label">${p==='day'?'D7':'M1'} 유지율</div>
+      <div class="fm-val" style="color:var(--purple)">${fmtP(p==='day'?s2.d7_ret:s2.m1_ret)}</div>
+      <div class="fm-diff ${(p==='day'?s2.d7_diff:s2.m1_diff)>0?'up':'dn'}">${fmtD(p==='day'?s2.d7_diff:s2.m1_diff,'pp')}</div>
+    </div>`;
 }
 
 // ── ZONE 4: 유지율 코호트 ────────────────────────────────
@@ -1238,15 +999,12 @@ function renderChannels(s6){
   const clsMap = {F00:'',L00:'lv',G00:'gm',P00:'pk'};
   const p = _period;
   document.getElementById('channelGrid').innerHTML = chs.map(ch=>{
-    const dau   = p==='day' ? ch.dau        : p==='week' ? ch.dau_week        : ch.dau_mon;
-    const dr    = p==='day' ? ch.deep_rate  : p==='week' ? ch.deep_rate_week  : ch.deep_rate_mon;
-    const cr    = p==='day' ? ch.churn_rate : p==='week' ? ch.churn_week      : ch.churn_mon;
-    const rr    = p==='day' ? ch.react_rate : p==='week' ? ch.react_rate_week : ch.react_rate_mon;
-    const newU  = p==='day' ? ch.new_user   : p==='week' ? ch.new_week        : ch.new_mon;
-    const newP  = p==='day' ? ch.new_pct    : p==='week' ? ch.new_week_pct    : ch.new_mon_pct;
+    const dr = p==='day'?ch.deep_rate : p==='week'?ch.deep_rate_week : ch.deep_rate_mon;
+    const cr = p==='day'?ch.churn_rate: p==='week'?ch.churn_week     : ch.churn_rate;
+    const rr = p==='day'?ch.react_rate: p==='week'?ch.react_rate_week: ch.react_rate;
     return `<div class="channel-card ${clsMap[ch.code]||''}">
       <div class="ch-name">${ch.name}</div>
-      <div class="ch-dau">${fmtK(dau)}</div>
+      <div class="ch-dau">${fmtK(ch.dau)}</div>
       <div class="ch-share">점유 ${fmtP(ch.share)}</div>
       <div class="ch-tags">
         <span class="ch-tag deep">깊은청취 ${fmtP(dr)}</span>
@@ -1422,50 +1180,6 @@ document.getElementById('queryInput').addEventListener('keydown',e=>{
   if(e.key==='Enter') askQuery();
 });
 
-// ── 분석 페이지 ──
-function setScope(code) {
-  _scope = code;
-  document.querySelectorAll('.scope-tab').forEach(t =>
-    t.classList.toggle('active', t.id === 'scope-' + code)
-  );
-  if (_data) renderAnalytics(_data);
-}
-
-function renderAnalytics(d) {
-  const s1 = d.s1_executive || {};
-  const s2 = d.s2_funnel || {};
-  // a-kpiTitle, a-kpiGrid 업데이트 (renderKPI 결과 재사용)
-  const kpiTitleEl = document.getElementById('a-kpiTitle');
-  const kpiGridEl  = document.getElementById('a-kpiGrid');
-  if (kpiTitleEl) kpiTitleEl.innerHTML =
-    document.getElementById('kpiTitle')?.innerHTML || '';
-  if (kpiGridEl) kpiGridEl.innerHTML =
-    document.getElementById('kpiGrid')?.innerHTML || '';
-  // 코호트/품질/성장은 기존 render 함수 재사용 (동일 element id 공유)
-}
-
-// ── 페이지 네비게이션 ──
-const PERIOD_TAB_PAGES = ['home', 'analytics'];
-
-function goPage(pageId) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + pageId).classList.add('active');
-  document.getElementById('nav-' + pageId).classList.add('active');
-  const wrap = document.getElementById('periodTabsWrap');
-  if (PERIOD_TAB_PAGES.includes(pageId)) {
-    wrap.classList.add('visible');
-  } else {
-    wrap.classList.remove('visible');
-  }
-  if (pageId === 'analytics' && _data) renderAnalytics(_data);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('periodTabsWrap').classList.add('visible');
-});
-
 // 초기 로드
 loadAll();
 </script>
@@ -1530,47 +1244,5 @@ loadAll();
     </div>
   </div>
 </div>
-
-<!-- ── 하단 네비게이션 ── -->
-<nav class="bottom-nav">
-  <button class="nav-item active" id="nav-home" onclick="goPage('home')">
-    <svg viewBox="0 0 24 24">
-      <rect x="3" y="3" width="7" height="7" rx="1"/>
-      <rect x="14" y="3" width="7" height="7" rx="1"/>
-      <rect x="3" y="14" width="7" height="7" rx="1"/>
-      <rect x="14" y="14" width="7" height="7" rx="1"/>
-    </svg>
-    <span class="nav-label">홈</span>
-  </button>
-  <button class="nav-item" id="nav-analytics" onclick="goPage('analytics')">
-    <svg viewBox="0 0 24 24">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-    </svg>
-    <span class="nav-label">분석</span>
-  </button>
-  <button class="nav-item" id="nav-programs" onclick="goPage('programs')">
-    <svg viewBox="0 0 24 24">
-      <circle cx="12" cy="8" r="4"/>
-      <path d="M6 20v-1a6 6 0 0 1 12 0v1"/>
-      <path d="M19 11l2 2-2 2"/>
-      <path d="M5 11l-2 2 2 2"/>
-    </svg>
-    <span class="nav-label">프로그램</span>
-  </button>
-  <button class="nav-item" id="nav-ai" onclick="goPage('ai')">
-    <svg viewBox="0 0 24 24">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    </svg>
-    <span class="nav-label">AI</span>
-  </button>
-  <button class="nav-item" id="nav-settings" onclick="goPage('settings')">
-    <svg viewBox="0 0 24 24">
-      <line x1="3" y1="6" x2="21" y2="6"/>
-      <line x1="3" y1="12" x2="21" y2="12"/>
-      <line x1="3" y1="18" x2="21" y2="18"/>
-    </svg>
-    <span class="nav-label">더보기</span>
-  </button>
-</nav>
 </body>
 </html>
