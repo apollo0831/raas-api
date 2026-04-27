@@ -83,10 +83,11 @@ body{
   display:flex;gap:4px;
   background:var(--bg2);
   border-radius:10px;padding:3px;
+  width:100%;
 }
 .period-tab{
   flex:1;text-align:center;
-  padding:6px 0;font-size:20px;font-weight:600;
+  padding:4px 0;font-size:20px;font-weight:600;
   border-radius:8px;cursor:pointer;
   color:var(--sub);border:none;background:transparent;
   font-family:var(--sans);transition:all .2s;
@@ -481,6 +482,8 @@ body{
 }
 .pr-badge.deep{background:rgba(167,139,250,.12);color:var(--purple)}
 .pr-badge.warn{background:rgba(255,77,106,.12);color:var(--red)}
+.pr-badge.weekend{background:rgba(167,139,250,.12);color:var(--purple);font-size:12px}
+.pr-badge.weekday{background:rgba(59,130,246,.12);color:#60a5fa;font-size:12px}
 
 /* ── Claude 브리핑 ── */
 .brief-card{
@@ -524,6 +527,18 @@ body{
   white-space:pre-wrap;display:none;
   color:var(--text);
 }
+
+/* ── 청취 전환 퍼널 ── */
+.qlty-funnel{background:var(--bg2);border-radius:12px;padding:12px 14px;border:1px solid var(--line);}
+.qlty-funnel-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+.qlty-funnel-label{font-size:15px;font-weight:500;color:var(--sub);}
+.qlty-funnel-denom{font-size:13px;color:var(--dim);}
+.qlty-funnel-row{display:grid;grid-template-columns:1fr 14px 1fr 14px 1fr;align-items:center;gap:4px;}
+.qlty-fi{background:var(--bg3);border-radius:8px;padding:10px 6px;text-align:center;}
+.qlty-fi-name{font-size:15px;font-weight:500;color:var(--sub);margin-bottom:4px;}
+.qlty-fi-pct{font-size:33px;font-weight:600;font-family:var(--mono);line-height:1.1;}
+.qlty-fi-val{font-size:16px;font-weight:600;font-family:var(--mono);color:var(--sub);margin-top:3px;}
+.qlty-arr{text-align:center;color:var(--dim);font-size:13px;}
 
 /* ── 로딩 ── */
 .loading{
@@ -626,7 +641,7 @@ body{
 .container { padding-bottom: 72px; }
 
 .period-tabs-wrap { display: none; }
-.period-tabs-wrap.visible { display: flex; }
+.period-tabs-wrap.visible { display: flex; width: 100%; }
 
 /* ── 분석 페이지 범위 탭 ── */
 .scope-bar {
@@ -654,6 +669,11 @@ body{
   color: var(--text);
   border-color: var(--accent);
 }
+.program-bar { display:none; flex-wrap:nowrap; gap:6px; padding:6px 0 2px; overflow-x:auto; scrollbar-width:none; }
+.program-bar::-webkit-scrollbar { display:none; }
+.program-bar.visible { display:flex; }
+.program-tab { flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:var(--fs-sm); font-weight:500; cursor:pointer; border:1px solid var(--line2); background:transparent; color:var(--sub); transition:all 0.2s; white-space:nowrap; }
+.program-tab.active { background:var(--bg4); color:var(--text); border-color:var(--accent); }
 </style>
 </head>
 <body>
@@ -753,11 +773,18 @@ body{
     <button class="scope-tab" onclick="setScope('G00')" id="scope-G00">고릴라M</button>
     <button class="scope-tab" onclick="setScope('P00')" id="scope-P00">픽채널</button>
   </div>
+  <div class="program-bar" id="programBar"></div>
 
   <!-- ZONE 2 (복사): 핵심 지표 -->
   <div class="section">
     <div class="section-title" id="a-kpiTitle">핵심 지표</div>
     <div class="kpi-grid" id="a-kpiGrid"></div>
+  </div>
+
+  <!-- 청취 전환 퍼널 -->
+  <div class="section">
+    <div class="section-title">청취 전환 퍼널</div>
+    <div class="qlty-funnel" id="qfunnel"></div>
   </div>
 
   <!-- ZONE 4: 유지율 코호트 -->
@@ -787,12 +814,17 @@ body{
   <!-- ZONE 9: 프로그램 랭킹 -->
   <div class="section">
     <div class="section-title">프로그램 랭킹</div>
+    <div class="scope-bar" id="pgmChannelBar">
+      <button class="scope-btn active" onclick="setPgmChannel('ALL')">전체</button>
+      <button class="scope-btn" onclick="setPgmChannel('F00')">파워FM</button>
+      <button class="scope-btn" onclick="setPgmChannel('L00')">러브FM</button>
+    </div>
     <div class="pgm-tabs" id="pgmTabs">
-      <button class="pgm-tab active" onclick="showPgmTab('dau')">DAU TOP10</button>
-      <button class="pgm-tab" onclick="showPgmTab('deep')">깊은청취</button>
-      <button class="pgm-tab" onclick="showPgmTab('new')">신규유입</button>
-      <button class="pgm-tab" onclick="showPgmTab('react')">복귀유도</button>
-      <button class="pgm-tab" onclick="showPgmTab('risk')">⚠ 이탈주의</button>
+      <button class="pgm-tab active" data-tab="dau" onclick="showPgmTab('dau')">DAU TOP</button>
+      <button class="pgm-tab" data-tab="deep" onclick="showPgmTab('deep')">깊은청취</button>
+      <button class="pgm-tab" data-tab="new" onclick="showPgmTab('new')">신규유입</button>
+      <button class="pgm-tab" data-tab="react" onclick="showPgmTab('react')">복귀유도</button>
+      <button class="pgm-tab" data-tab="risk" onclick="showPgmTab('risk')">⚠ 이탈주의</button>
     </div>
     <div class="pgm-list" id="pgmList"></div>
   </div>
@@ -853,6 +885,9 @@ let _data = null;
 let _scope = 'T00';
 let _period = 'day';
 let _pgmTab = 'dau';
+let _pgmChannel = 'ALL';
+const WEEKEND_ONLY_CODES = ['M05','M07','M10','M11'];
+const WEEKDAY_ONLY_CODES = ['L05','L06','L07','L11'];
 let _cohortTab = 'all';
 function showCohortTab(tab){
   _cohortTab = tab;
@@ -869,6 +904,15 @@ function setPeriod(p){
     document.getElementById('tab-'+t).classList.toggle('active',t===p);
   });
   if(_data) renderAll(_data);
+  const analyticsPage = document.getElementById('page-analytics');
+  if (analyticsPage?.classList.contains('active') && _data) {
+    renderAnalyticsPage(_data);
+  }
+  const programsPage = document.getElementById('page-programs');
+  if (programsPage?.classList.contains('active') && _data) {
+    const s5 = _data.s5_rankings || {};
+    renderPgm(s5, _pgmTab || 'dau', _period, _pgmChannel);
+  }
 }
 
 // ── 데이터 로드 ──────────────────────────────────────────
@@ -910,6 +954,7 @@ function renderAll(d){
   renderFunnel(s1,s2);
   renderCohort(s2);
   renderQuality(s3);
+  renderQFunnel(s1,s2,s3);
   renderChannels(s6);
   renderGrowth(s4);
   renderAlerts(s7);
@@ -1202,18 +1247,11 @@ function renderQuality(s3){
   const u1min  = p==='day'?s3.dau_1min  : p==='week'?s3.wau_1min  : s3.mau_1min;
   const u10min = p==='day'?s3.dau_10min : p==='week'?s3.wau_10min : s3.mau_10min;
 
-  const ch = s3.channel_deep || {};
-  const chItems = Object.entries(ch).map(([c,d])=>{
-    const rate = p==='day'?d.rate : p==='week'?d.rate_week : d.rate_mon;
-    return `<div class="qcm"><span class="qcm-l">${d.name}</span><span class="qcm-v">${fmtP(rate)}</span></div>`;
-  }).join('');
-
   document.getElementById('qualityGrid').innerHTML = `
     <div class="quality-card">
       <div class="qc-label">깊은청취율 <span style="color:var(--dim);font-size:14px">(10분이상/1분이상)</span></div>
       <div><span class="qc-big" style="color:var(--purple)">${fmtP(dr)}</span></div>
       <div class="qc-diff ${drD>0?'up':'dn'}">${fmtD(drD,'pp')} 전기간 대비</div>
-      <div class="qc-multi">${chItems}</div>
       <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;gap:4px;">
         <div style="flex:1;">
           <span style="font-size:var(--fs-xs);color:var(--sub);display:block;margin-bottom:2px;">1분이상</span>
@@ -1262,22 +1300,11 @@ function renderGrowth(s4){
   const p = _period;
   const hr   = p==='day'?s4.habit_rate  : p==='week'?s4.habit_week  : s4.habit_mon;
   const hrD  = p==='day'?s4.habit_diff  : p==='week'?s4.habit_week_diff : s4.habit_mon_diff;
-  const rr   = _data?.s2_funnel;
-  const rrV  = p==='day'?(rr?.react_rate): p==='week'?(rr?.react_rate_week):(rr?.react_rate_mon);
-  const rrD  = p==='day'?(rr?.react_rate_diff): p==='week'?(rr?.react_rate_week_diff):(rr?.react_rate_mon_diff);
+  const rrV  = p==='day'? s4.react_rate      : p==='week'? s4.react_rate_week      : s4.react_rate_mon;
+  const rrD  = p==='day'? s4.react_rate_diff : p==='week'? s4.react_rate_week_diff : s4.react_rate_mon_diff;
   const TARGET_HABIT = 30;
   const habitOk = hr>=TARGET_HABIT;
   const targetPos = Math.min(TARGET_HABIT,100);
-
-  const top3 = (s4.top3_habit||[]).map((p,i)=>{
-    const maxRate = s4.top3_habit[0]?.rate||1;
-    return `<div class="habit-row">
-      <span class="hr-rank">${i+1}</span>
-      <span class="hr-name">${p.name}</span>
-      <div class="hr-bar"><div class="hr-fill" style="width:${(p.rate/Math.max(maxRate,1)*100).toFixed(0)}%"></div></div>
-      <span class="hr-val">${fmtP(p.rate)}</span>
-    </div>`;
-  }).join('');
 
   document.getElementById('growthGrid').innerHTML = `
     <div class="growth-card">
@@ -1288,10 +1315,6 @@ function renderGrowth(s4){
       </div>
       <div class="gc-big" style="color:${habitOk?'var(--green)':'var(--yellow)'}">${fmtP(hr)}</div>
       <div class="gc-status ${habitOk?'ok':'warn'}">${habitOk?'✅ 목표 달성':'⚠ 목표 미달'} ${fmtD(hrD,'pp')}</div>
-      <div class="habit-top3" style="margin-top:10px">
-        <div style="font-size:14px;color:var(--dim);margin-bottom:6px">프로그램 TOP3</div>
-        ${top3}
-      </div>
     </div>
     <div class="growth-card">
       <div class="gc-label">복귀율 <span style="color:var(--dim);font-size:14px">(복귀사용자/휴면풀)</span></div>
@@ -1300,11 +1323,6 @@ function renderGrowth(s4){
       </div>
       <div class="gc-big" style="color:var(--accent)">${fmtP(rrV)}</div>
       <div class="gc-status ${rrD>0?'ok':'warn'}">${fmtD(rrD,'pp')} 전기간 대비</div>
-      <div style="margin-top:14px;font-size:16px;color:var(--sub)">
-        <div style="margin-bottom:4px">일간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate)}</span></div>
-        <div style="margin-bottom:4px">주간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate_week)}</span></div>
-        <div>월간: <span style="color:var(--text);font-family:var(--mono)">${fmtP(_data?.s2_funnel?.react_rate_mon)}</span></div>
-      </div>
     </div>`;
 }
 
@@ -1322,61 +1340,153 @@ function renderAlerts(s7){
 }
 
 // ── ZONE 9: 프로그램 랭킹 ───────────────────────────────
-function showPgmTab(tab){
-  _pgmTab = tab;
-  document.querySelectorAll('.pgm-tab').forEach(b=>{
-    b.classList.toggle('active', b.textContent.includes(
-      tab==='dau'?'DAU':tab==='deep'?'깊은':tab==='new'?'신규':tab==='react'?'복귀':'이탈'
-    ));
-  });
-  if(_data) renderPgm(_data.s5_rankings||{}, tab);
+function getDataDayType(){
+  const dateStr = _data?.s1_executive?.date;
+  if(dateStr){
+    const d = new Date(dateStr);
+    return (d.getDay()===0||d.getDay()===6) ? 'weekend' : 'weekday';
+  }
+  const d = new Date();
+  return (d.getDay()===0||d.getDay()===6) ? 'weekend' : 'weekday';
 }
 
-function renderPgm(s5, tab){
+function filterAndTagPrograms(programs, period, channelFilter){
+  const dayType = getDataDayType();
+  return programs
+    .filter(p=>{
+      if(channelFilter==='F00') return (p.channel||'').includes('파워') || (p.code||'').startsWith('F');
+      if(channelFilter==='L00') return (p.channel||'').includes('러브') || (p.code||'').startsWith('L') || (p.code||'').startsWith('M');
+      return true;
+    })
+    .filter(p=>{
+      if(period!=='day') return true;
+      if(WEEKEND_ONLY_CODES.includes(p.code) && dayType!=='weekend') return false;
+      if(WEEKDAY_ONLY_CODES.includes(p.code) && dayType!=='weekday') return false;
+      return true;
+    })
+    .map(p=>({
+      ...p,
+      _badge: WEEKEND_ONLY_CODES.includes(p.code) ? 'weekend' :
+              WEEKDAY_ONLY_CODES.includes(p.code) ? 'weekday' : null
+    }));
+}
+
+function setPgmChannel(code){
+  _pgmChannel = code;
+  document.querySelectorAll('#pgmChannelBar .scope-btn').forEach(b=>{
+    const match = b.getAttribute('onclick').includes("'"+code+"'");
+    b.classList.toggle('active', match);
+  });
+  if(_data) renderPgm(_data.s5_rankings||{}, _pgmTab, _period, _pgmChannel);
+}
+
+function showPgmTab(tab){
+  _pgmTab = tab;
+  document.querySelectorAll('#pgmTabs .pgm-tab').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  if(_data) renderPgm(_data.s5_rankings||{}, tab, _period, _pgmChannel);
+}
+
+function renderPgm(s5, tab, period, channelFilter){
+  period       = period       || _period      || 'day';
+  channelFilter= channelFilter|| _pgmChannel  || 'ALL';
+  const allPgms = s5.all_programs || s5.dau_top10 || [];
+  const pgms   = filterAndTagPrograms(allPgms, period, channelFilter);
+
+  const badgeHtml = p =>
+    p._badge ? `<span class="pr-badge ${p._badge}" style="margin-left:4px">${p._badge==='weekend'?'주말':'평일'}</span>` : '';
+  const wowSpan = (v, suffix='%') =>
+    v==null ? '' : `<span class="${wowClass(v)}" style="font-size:13px">${fmtD(v,suffix)}</span>`;
+
   let rows = [];
+
   if(tab==='dau'){
-    rows = (s5.dau_top10||[]).map((p,i)=>`
+    const valKey = period==='mon'?'dau_mon':period==='week'?'dau_week':'dau';
+    const wowKey = period==='mon'?'dau_mon_wow':period==='week'?'dau_week_wow':'dau_wow';
+    const sorted = [...pgms].sort((a,b)=>(b[valKey]||0)-(a[valKey]||0));
+    rows = sorted.map((p,i)=>`
       <div class="pgm-row">
-        <span class="pr-rank ${i<3?'g'+(i+1):''}">${p.rank||i+1}</span>
+        <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
         <div class="pr-info">
-          <div class="pr-name">${p.name||p.code||'—'}</div>
+          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
           <div class="pr-channel">${p.channel||''}</div>
         </div>
-        <span class="pr-val">${fmtK(p.dau)}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="pr-val">${fmtK(p[valKey])}</span>
+          ${wowSpan(p[wowKey],'%')}
+        </div>
       </div>`);
+
   } else if(tab==='deep'){
-    rows = (s5.deep_top5||[]).map((p,i)=>`
+    const rateKey = period==='mon'?'deep_rate_mon':period==='week'?'deep_rate_week':'deep_rate';
+    const u10Key  = period==='mon'?'mau_10min':period==='week'?'wau_10min':'dau_10min';
+    const diffKey = period==='mon'?'deep_rate_mon_diff':period==='week'?'deep_rate_week_diff':'deep_rate_diff';
+    const sorted  = [...pgms].sort((a,b)=>(b[rateKey]||0)-(a[rateKey]||0));
+    rows = sorted.map((p,i)=>`
       <div class="pgm-row">
         <span class="pr-rank">${i+1}</span>
-        <div class="pr-info"><div class="pr-name">${p.name}</div></div>
-        <span class="pr-badge deep">${fmtP(p.rate)}</span>
-        <span class="pr-val" style="color:var(--sub);font-size:16px">${fmtK(p.u1min)}명</span>
+        <div class="pr-info">
+          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
+          <div class="pr-channel">${p.channel||''}</div>
+        </div>
+        <span class="pr-badge deep">${fmtP(p[rateKey])}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="pr-val" style="color:var(--sub);font-size:16px">${fmtK(p[u10Key])}명</span>
+          ${wowSpan(p[diffKey],'pp')}
+        </div>
       </div>`);
+
   } else if(tab==='new'){
-    rows = (s5.new_top5||[]).map((p,i)=>`
+    const valKey = period==='mon'?'new_mon':period==='week'?'new_week':'new_user';
+    const pctKey = period==='mon'?'new_mon_pct':period==='week'?'new_week_pct':'new_pct';
+    const wowKey = period==='mon'?'new_mon_wow':period==='week'?'new_week_wow':'new_wow';
+    const sorted = [...pgms].sort((a,b)=>(b[valKey]||0)-(a[valKey]||0));
+    rows = sorted.map((p,i)=>`
       <div class="pgm-row">
         <span class="pr-rank">${i+1}</span>
-        <div class="pr-info"><div class="pr-name">${p.name}</div></div>
-        <span class="pr-val" style="color:var(--green)">${fmtK(p.count)}</span>
+        <div class="pr-info">
+          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
+          <div class="pr-meta">${p.channel||''} · 신규비율 ${fmtP(p[pctKey])}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="pr-val" style="color:var(--green)">${fmtK(p[valKey])}</span>
+          ${wowSpan(p[wowKey],'%')}
+        </div>
       </div>`);
+
   } else if(tab==='react'){
-    rows = (s5.react_top5||[]).map((p,i)=>`
+    const valKey  = period==='mon'?'react_mon':period==='week'?'react_week':'react_user';
+    const rateKey = period==='mon'?'react_rate_mon':period==='week'?'react_rate_week':'react_rate';
+    const wowKey  = period==='mon'?'react_mon_wow':period==='week'?'react_week_wow':'react_wow';
+    const sorted  = [...pgms].sort((a,b)=>(b[valKey]||0)-(a[valKey]||0));
+    rows = sorted.map((p,i)=>`
       <div class="pgm-row">
         <span class="pr-rank">${i+1}</span>
-        <div class="pr-info"><div class="pr-name">${p.name}</div></div>
-        <span class="pr-val" style="color:var(--purple)">${fmtK(p.count)}</span>
+        <div class="pr-info">
+          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
+          <div class="pr-meta">${p.channel||''} · 복귀율 ${fmtP(p[rateKey])}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="pr-val" style="color:var(--purple)">${fmtK(p[valKey])}</span>
+          ${wowSpan(p[wowKey],'%')}
+        </div>
       </div>`);
+
   } else if(tab==='risk'){
-    const risks = s5.risk_list||[];
-    rows = risks.length ? risks.map(r=>`
+    const wowKey   = period==='mon'?'dau_mon_wow':period==='week'?'dau_week_wow':'dau_wow';
+    const churnKey = period==='mon'?'churn_mon':period==='week'?'churn_week':'churn_rate';
+    const risks = pgms.filter(p=>(p[wowKey]||0)<=-5 || (p[churnKey]||0)>=30);
+    const sorted= [...risks].sort((a,b)=>(a[wowKey]||0)-(b[wowKey]||0));
+    rows = sorted.length ? sorted.map(p=>`
       <div class="pgm-row">
         <span class="pr-rank">⚠</span>
         <div class="pr-info">
-          <div class="pr-name">${r.name}</div>
-          <div class="pr-channel">DAU ${fmtK(r.dau)}</div>
+          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
+          <div class="pr-channel">${p.channel||''} · DAU ${fmtK(p.dau)}</div>
         </div>
-        <span class="pr-badge warn">${fmtD(r.dau_wow||r.drop_rate)}</span>
-        <span class="pr-val" style="color:var(--red)">${fmtP(r.churn_rate)}</span>
+        <span class="pr-badge warn">${fmtD(p[wowKey],'%')}</span>
+        <span class="pr-val" style="color:var(--red)">${fmtP(p[churnKey])}</span>
       </div>`) :
       [`<div style="padding:16px;text-align:center;color:var(--green);font-size:18px">✅ 이탈 위험 프로그램 없음</div>`];
   }
@@ -1422,30 +1532,245 @@ document.getElementById('queryInput').addEventListener('keydown',e=>{
   if(e.key==='Enter') askQuery();
 });
 
-// ── 분석 페이지 ──
-function setScope(code) {
-  _scope = code;
-  document.querySelectorAll('.scope-tab').forEach(t =>
-    t.classList.toggle('active', t.id === 'scope-' + code)
-  );
-  if (_data) renderAnalytics(_data);
+// ── 청취 전환 퍼널 ──
+function renderQFunnel(s1, s2, s3) {
+  const el = document.getElementById('qfunnel');
+  if (!el) return;
+  const p = _period;
+  let base, v1min, v10min, eng_rate, label;
+  if (p === 'week') {
+    base     = s2.dau_week;
+    v1min    = s3.wau_1min;
+    v10min   = s3.wau_10min;
+    eng_rate = s3.engage_week;
+    label    = 'WAU';
+  } else if (p === 'mon') {
+    base     = s2.dau_mon;
+    v1min    = s3.mau_1min;
+    v10min   = s3.mau_10min;
+    eng_rate = s3.engage_mon;
+    label    = 'MAU';
+  } else {
+    base     = s1.dau;
+    v1min    = s3.dau_1min;
+    v10min   = s3.dau_10min;
+    eng_rate = s3.engage_rate;
+    label    = 'DAU';
+  }
+  const pct1     = base && v1min  ? v1min  / base * 100 : null;
+  const pct10    = base && v10min ? v10min / base * 100 : null;
+  const engUsers = base && eng_rate ? Math.round(base * eng_rate / 100) : null;
+  const pctEng   = eng_rate;
+  const fmt = v => {
+    if (v == null || isNaN(v)) return '—';
+    return v >= 1000 ? (v/1000).toFixed(1) + 'k' : String(Math.round(v));
+  };
+  el.innerHTML = `
+    <div class="qlty-funnel-head">
+      <span class="qlty-funnel-label">분모: 청취시작(전체)</span>
+      <span class="qlty-funnel-denom">${label} ${fmt(base)}</span>
+    </div>
+    <div class="qlty-funnel-row">
+      <div class="qlty-fi">
+        <div class="qlty-fi-name">1분이상</div>
+        <div class="qlty-fi-pct" style="color:var(--accent)">${fmtP(pct1)}</div>
+        <div class="qlty-fi-val">${fmt(v1min)}</div>
+      </div>
+      <div class="qlty-arr">→</div>
+      <div class="qlty-fi">
+        <div class="qlty-fi-name">10분이상</div>
+        <div class="qlty-fi-pct" style="color:var(--text)">${fmtP(pct10)}</div>
+        <div class="qlty-fi-val">${fmt(v10min)}</div>
+      </div>
+      <div class="qlty-arr">→</div>
+      <div class="qlty-fi">
+        <div class="qlty-fi-name">참여</div>
+        <div class="qlty-fi-pct" style="color:var(--green)">${fmtP(pctEng)}</div>
+        <div class="qlty-fi-val">${fmt(engUsers)}</div>
+      </div>
+    </div>`;
 }
 
-function renderAnalytics(d) {
-  const s1 = d.s1_executive || {};
-  const s2 = d.s2_funnel || {};
-  // a-kpiTitle, a-kpiGrid 업데이트 (renderKPI 결과 재사용)
+// ── 분석 페이지 ──
+function getScopeData(data, scope) {
+  if (!scope || scope === 'T00') return data;
+  const isChannel = ['F00','L00','G00','P00'].includes(scope);
+  if (isChannel) {
+    const ch = (data.s6_channels?.channels || []).find(c => c.code === scope);
+    if (!ch) return data;
+    return {
+      ...data,
+      s1_executive: { ...data.s1_executive,
+        dau: ch.dau, wau: ch.dau_week, mau: ch.dau_mon,
+        dau_wow: ch.dau_wow, dau_week_wow: ch.dau_week_wow, dau_mon_wow: ch.dau_mon_wow,
+      },
+      s2_funnel: { ...data.s2_funnel,
+        dau_week: ch.dau_week, dau_mon: ch.dau_mon,
+        new_user: ch.new_user, new_pct: ch.new_pct,
+        new_week: ch.new_week, new_week_pct: ch.new_week_pct,
+        new_mon: ch.new_mon, new_mon_pct: ch.new_mon_pct,
+        churn_rate: ch.churn_rate, churn_week: ch.churn_week, churn_mon: ch.churn_mon,
+        react_rate: ch.react_rate, react_week: ch.react_rate_week, react_mon: ch.react_rate_mon,
+        react_user: ch.react_user, react_week: ch.react_week, react_mon: ch.react_mon,
+        react_pct: ch.dau > 0 && ch.react_user != null
+          ? Math.round(ch.react_user / ch.dau * 1000) / 10 : null,
+        react_week_pct: ch.dau_week > 0 && ch.react_week != null
+          ? Math.round(ch.react_week / ch.dau_week * 1000) / 10 : null,
+        react_mon_pct: ch.dau_mon > 0 && ch.react_mon != null
+          ? Math.round(ch.react_mon / ch.dau_mon * 1000) / 10 : null,
+        d1_ret: ch.d1_ret, d7_ret: ch.d7_ret, w1_ret: ch.w1_ret, m1_ret: ch.m1_ret,
+        new_d1_ret: ch.new_d1_ret, new_d1_diff: ch.new_d1_diff,
+        new_d7_ret: ch.new_d7_ret, new_d7_diff: ch.new_d7_diff,
+        new_w1_ret: ch.new_w1_ret, new_w1_diff: ch.new_w1_diff,
+        new_m1_ret: ch.new_m1_ret, new_m1_diff: ch.new_m1_diff,
+        new_wow: ch.new_wow, new_week_wow: ch.new_week_wow, new_mon_wow: ch.new_mon_wow,
+        react_wow: ch.react_wow, react_week_wow: ch.react_week_wow,
+        churn_diff: ch.churn_diff, churn_week_diff: ch.churn_week_diff, churn_mon_diff: ch.churn_mon_diff,
+      },
+      s3_engagement: { ...data.s3_engagement,
+        deep_rate: ch.deep_rate, deep_rate_week: ch.deep_rate_week, deep_rate_mon: ch.deep_rate_mon,
+        dau_1min: ch.dau_1min, dau_10min: ch.dau_10min,
+        wau_1min: ch.wau_1min, wau_10min: ch.wau_10min,
+        mau_1min: ch.mau_1min, mau_10min: ch.mau_10min,
+        engage_rate: ch.engage_rate, engage_week: ch.engage_week, engage_mon: ch.engage_mon,
+        deep_rate_diff: ch.deep_rate_diff, deep_rate_week_diff: ch.deep_rate_week_diff, deep_rate_mon_diff: ch.deep_rate_mon_diff,
+        engage_diff: ch.engage_diff, engage_week_diff: ch.engage_week_diff, engage_mon_diff: ch.engage_mon_diff,
+      },
+      s4_growth: { ...data.s4_growth,
+        habit_rate: ch.habit_rate, habit_week: ch.habit_week, habit_mon: ch.habit_mon,
+        habit_diff: ch.habit_diff, habit_week_diff: ch.habit_week_diff, habit_mon_diff: ch.habit_mon_diff,
+        d1_diff: ch.d1_diff, d7_diff: ch.d7_diff, w1_diff: ch.w1_diff, m1_diff: ch.m1_diff,
+        react_rate: ch.react_rate, react_rate_week: ch.react_rate_week, react_rate_mon: ch.react_rate_mon,
+      },
+    };
+  } else {
+    const allPgms = [
+      ...(data.s5_rankings?.all_programs || []),
+      ...(data.s5_rankings?.dau_top10 || [])
+    ];
+    const pgm = allPgms.find(p => p.code === scope);
+    if (!pgm) return data;
+    return {
+      ...data,
+      s1_executive: { ...data.s1_executive,
+        dau: pgm.dau, wau: pgm.dau_week, mau: pgm.dau_mon,
+        dau_wow: pgm.dau_wow, dau_week_wow: pgm.dau_week_wow, dau_mon_wow: pgm.dau_mon_wow,
+      },
+      s2_funnel: { ...data.s2_funnel,
+        dau_week: pgm.dau_week, dau_mon: pgm.dau_mon,
+        new_user: pgm.new_user, new_pct: pgm.new_pct,
+        new_week: pgm.new_week, new_week_pct: pgm.new_week_pct,
+        new_mon: pgm.new_mon, new_mon_pct: pgm.new_mon_pct,
+        churn_rate: pgm.churn_rate, churn_week: pgm.churn_week, churn_mon: pgm.churn_mon,
+        react_user: pgm.react_user, react_week: pgm.react_week, react_mon: pgm.react_mon,
+        react_rate: pgm.react_rate, react_week_rate: pgm.react_rate_week, react_mon_rate: pgm.react_rate_mon,
+        react_pct: pgm.dau > 0 && pgm.react_user != null
+          ? Math.round(pgm.react_user / pgm.dau * 1000) / 10 : null,
+        react_week_pct: pgm.dau_week > 0 && pgm.react_week != null
+          ? Math.round(pgm.react_week / pgm.dau_week * 1000) / 10 : null,
+        react_mon_pct: pgm.dau_mon > 0 && pgm.react_mon != null
+          ? Math.round(pgm.react_mon / pgm.dau_mon * 1000) / 10 : null,
+        d1_ret: pgm.d1_ret, d7_ret: pgm.d7_ret, w1_ret: pgm.w1_ret,
+        new_d1_ret: pgm.new_d1_ret, new_d1_diff: pgm.new_d1_diff,
+        new_d7_ret: pgm.new_d7_ret, new_d7_diff: pgm.new_d7_diff,
+        new_w1_ret: pgm.new_w1_ret, new_w1_diff: pgm.new_w1_diff,
+        new_m1_ret: pgm.new_m1_ret, new_m1_diff: pgm.new_m1_diff,
+        new_wow: pgm.new_wow, new_week_wow: pgm.new_week_wow, new_mon_wow: pgm.new_mon_wow,
+        react_wow: pgm.react_wow, react_week_wow: pgm.react_week_wow,
+        churn_diff: pgm.churn_diff, churn_week_diff: pgm.churn_week_diff, churn_mon_diff: pgm.churn_mon_diff,
+      },
+      s3_engagement: { ...data.s3_engagement,
+        deep_rate: pgm.deep_rate,
+        deep_rate_week: pgm.deep_rate_week,
+        deep_rate_mon: pgm.deep_rate_mon,
+        dau_1min: pgm.dau_1min, dau_10min: pgm.dau_10min,
+        wau_1min: pgm.wau_1min, wau_10min: pgm.wau_10min,
+        mau_1min: pgm.mau_1min, mau_10min: pgm.mau_10min,
+        engage_rate: pgm.engage_rate, engage_week: pgm.engage_week, engage_mon: pgm.engage_mon,
+        deep_rate_diff: pgm.deep_rate_diff, deep_rate_week_diff: pgm.deep_rate_week_diff, deep_rate_mon_diff: pgm.deep_rate_mon_diff,
+        engage_diff: pgm.engage_diff, engage_week_diff: pgm.engage_week_diff, engage_mon_diff: pgm.engage_mon_diff,
+      },
+      s4_growth: { ...data.s4_growth,
+        habit_rate: pgm.habit_rate, habit_week: pgm.habit_week, habit_mon: pgm.habit_mon,
+        habit_diff: pgm.habit_diff, habit_week_diff: pgm.habit_week_diff, habit_mon_diff: pgm.habit_mon_diff,
+        d1_diff: pgm.d1_diff, d7_diff: pgm.d7_diff, w1_diff: pgm.w1_diff, m1_diff: pgm.m1_diff,
+        react_rate: pgm.react_rate, react_rate_week: pgm.react_rate_week, react_rate_mon: pgm.react_rate_mon,
+      },
+    };
+  }
+}
+
+function renderAnalyticsPage(data) {
+  const d  = getScopeData(data, _scope);
+  const s1 = d.s1_executive  || {};
+  const s2 = d.s2_funnel     || {};
+  const s3 = d.s3_engagement || {};
+  const s4 = d.s4_growth     || {};
+  renderKPI(s1, s2);
   const kpiTitleEl = document.getElementById('a-kpiTitle');
   const kpiGridEl  = document.getElementById('a-kpiGrid');
   if (kpiTitleEl) kpiTitleEl.innerHTML =
     document.getElementById('kpiTitle')?.innerHTML || '';
   if (kpiGridEl) kpiGridEl.innerHTML =
     document.getElementById('kpiGrid')?.innerHTML || '';
-  // 코호트/품질/성장은 기존 render 함수 재사용 (동일 element id 공유)
+  renderCohort(s2);
+  renderQuality(s3);
+  renderGrowth(s4);
+  renderQFunnel(s1, s2, s3);
+}
+
+function renderProgramBar(channelCode) {
+  const bar = document.getElementById('programBar');
+  if (!bar) return;
+  if (channelCode !== 'F00' && channelCode !== 'L00') {
+    bar.innerHTML = '';
+    bar.classList.remove('visible');
+    return;
+  }
+  if (!_data) return;
+  const allPgms = _data.s5_rankings?.all_programs ||
+                  _data.s5_rankings?.dau_top10 || [];
+  const prefix = channelCode === 'F00' ? 'F' : 'L';
+  const programs = allPgms.filter(p => p.code?.startsWith(prefix));
+  if (programs.length === 0) {
+    bar.innerHTML = '';
+    bar.classList.remove('visible');
+    return;
+  }
+  bar.innerHTML = programs.map(p =>
+    `<button class="program-tab" id="prog-${p.code}" onclick="selectProgram('${p.code}')">${p.name}</button>`
+  ).join('');
+  bar.classList.add('visible');
+}
+
+function selectProgram(code) {
+  _scope = code;
+  document.querySelectorAll('.program-tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'prog-' + code)
+  );
+  if (_data) renderAnalyticsPage(_data);
+}
+
+function setScope(code) {
+  _scope = code;
+  document.querySelectorAll('.scope-tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'scope-' + code)
+  );
+  renderProgramBar(code);
+  if (_data) renderAnalyticsPage(_data);
+}
+
+function renderAnalytics(d) {
+  const kpiTitleEl = document.getElementById('a-kpiTitle');
+  const kpiGridEl  = document.getElementById('a-kpiGrid');
+  if (kpiTitleEl) kpiTitleEl.innerHTML =
+    document.getElementById('kpiTitle')?.innerHTML || '';
+  if (kpiGridEl) kpiGridEl.innerHTML =
+    document.getElementById('kpiGrid')?.innerHTML || '';
 }
 
 // ── 페이지 네비게이션 ──
-const PERIOD_TAB_PAGES = ['home', 'analytics'];
+const PERIOD_TAB_PAGES = ['home', 'analytics', 'programs'];
 
 function goPage(pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1458,7 +1783,9 @@ function goPage(pageId) {
   } else {
     wrap.classList.remove('visible');
   }
-  if (pageId === 'analytics' && _data) renderAnalytics(_data);
+  if (pageId === 'analytics' && _data) {
+    renderAnalyticsPage(_data);
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 

@@ -191,12 +191,117 @@ def build_s4(kpi):
         # 월간
         'habit_mon':       _fn(t.get('habit_mon')),
         'habit_mon_diff':  _fn(t.get('habit_mon_diff')),
+        # 복귀율
+        'react_rate':          _fn(t.get('react_rate')),
+        'react_rate_week':     _fn(t.get('react_rate_week')),
+        'react_rate_mon':      _fn(t.get('react_rate_mon')),
+        'react_rate_diff':     _fn(t.get('react_rate_diff')),
+        'react_rate_week_diff':_fn(t.get('react_rate_week_diff')),
+        'react_rate_mon_diff': _fn(t.get('react_rate_mon_diff')),
+    }
+
+def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
+    ch_name = channel or ('파워FM' if code.startswith('F') else '러브FM')
+    return {
+        'rank':    rank,
+        'code':    code,
+        'name':    name or PGM_NAMES.get(code, row.get('pgm_name', code)),
+        'channel': ch_name,
+        'dau':     dau if dau is not None else _i(row.get('dau_today')),
+        # 기간별 규모
+        'dau_week':       _i(row.get('dau_week')),
+        'dau_mon':        _i(row.get('dau_mon')),
+        'dau_1min':       _i(row.get('dau_1min')),
+        'dau_10min':      _i(row.get('dau_10min')),
+        'wau_1min':       _i(row.get('wau_1min')),
+        'wau_10min':      _i(row.get('wau_10min')),
+        'mau_1min':       _i(row.get('mau_1min')),
+        'mau_10min':      _i(row.get('mau_10min')),
+        # 품질
+        'deep_rate':      _fn(row.get('deep_rate')),
+        'deep_rate_week': _fn(row.get('deep_rate_week')),
+        'deep_rate_mon':  _fn(row.get('deep_rate_mon')),
+        'engage_rate':    _fn(row.get('engage_rate')),
+        'engage_week':    _fn(row.get('engage_week')),
+        'engage_mon':     _fn(row.get('engage_mon')),
+        'habit_rate':     _fn(row.get('habit_rate')),
+        'habit_week':     _fn(row.get('habit_week')),
+        'habit_mon':      _fn(row.get('habit_mon')),
+        # 유지율
+        'd1_ret':         _fn(row.get('d1_ret')),
+        'd7_ret':         _fn(row.get('d7_ret')),
+        'w1_ret':         _fn(row.get('w1_ret')),
+        # 신규/이탈/복귀
+        'new_user':       _i(row.get('new_today')),
+        'new_pct':        _fn(row.get('new_pct')),
+        'new_week':       _i(row.get('new_week')),
+        'new_mon':        _i(row.get('new_mon')),
+        'new_week_pct':   _fn(row.get('new_week_pct')),
+        'new_mon_pct':    _fn(row.get('new_mon_pct')),
+        'churn_rate':     _fn(row.get('churn_rate')),
+        'churn_week':     _fn(row.get('churn_week')),
+        'churn_mon':      _fn(row.get('churn_mon')),
+        'react_user':     _i(row.get('react_today')),
+        'react_week':     _i(row.get('react_week')),
+        'react_mon':      _i(row.get('react_mon')),
+        'react_rate':     _fn(row.get('react_rate')),
+        'react_rate_week':_fn(row.get('react_rate_week')),
+        'react_rate_mon': _fn(row.get('react_rate_mon')),
+        'pgm_name':       row.get('pgm_name',''),
+        # 전주 대비 변동
+        'dau_pw':              _fn(row.get('dau_pw')),
+        'dau_wow':             _fn(row.get('dau_wow')),
+        'dau_week_pw':         _fn(row.get('dau_week_pw')),
+        'dau_week_wow':        _fn(row.get('dau_week_wow')),
+        'dau_mon_pw':          _fn(row.get('dau_mon_pw')),
+        'dau_mon_wow':         _fn(row.get('dau_mon_wow')),
+        'new_pw':              _fn(row.get('new_pw')),
+        'new_wow':             _fn(row.get('new_wow')),
+        'new_week_pw':         _fn(row.get('new_week_pw')),
+        'new_week_wow':        _fn(row.get('new_week_wow')),
+        'new_mon_pw':          _fn(row.get('new_mon_pw')),
+        'new_mon_wow':         _fn(row.get('new_mon_wow')),
+        'react_pw':            _fn(row.get('react_pw')),
+        'react_wow':           _fn(row.get('react_wow')),
+        'react_week_pw':       _fn(row.get('react_week_pw')),
+        'react_week_wow':      _fn(row.get('react_week_wow')),
+        'churn_diff':          _fn(row.get('churn_diff')),
+        'churn_week_diff':     _fn(row.get('churn_week_diff')),
+        'churn_mon_diff':      _fn(row.get('churn_mon_diff')),
+        'deep_rate_diff':      _fn(row.get('deep_rate_diff')),
+        'deep_rate_week_diff': _fn(row.get('deep_rate_week_diff')),
+        'deep_rate_mon_diff':  _fn(row.get('deep_rate_mon_diff')),
+        'engage_diff':         _fn(row.get('engage_diff')),
+        'engage_week_diff':    _fn(row.get('engage_week_diff')),
+        'engage_mon_diff':     _fn(row.get('engage_mon_diff')),
+        'habit_diff':          _fn(row.get('habit_diff')),
+        'habit_week_diff':     _fn(row.get('habit_week_diff')),
+        'habit_mon_diff':      _fn(row.get('habit_mon_diff')),
+        'd1_diff':             _fn(row.get('d1_diff')),
+        'd7_diff':             _fn(row.get('d7_diff')),
+        'w1_diff':             _fn(row.get('w1_diff')),
+        'm1_diff':             _fn(row.get('m1_diff')),
     }
 
 def build_s5(kpi, top_programs):
-    dau_top10=[{'rank':_i(r.get('rank')),'code':r.get('pgm_code',''),
-                'name':r.get('pgm_name',''),'channel':r.get('channel',''),
-                'dau':_i(r.get('dau'))} for r in top_programs[:10]]
+    dau_top10=[]
+    for r in top_programs[:10]:
+        pgm_code = r.get('pgm_code','')
+        row = kpi.get(pgm_code, {})
+        dau_top10.append(_pgm_dict(
+            pgm_code, row,
+            rank=_i(r.get('rank')),
+            name=r.get('pgm_name',''),
+            channel=r.get('channel',''),
+            dau=_i(r.get('dau')),
+        ))
+    all_pgm_codes = sorted(
+        [k for k in kpi.keys()
+         if (k.startswith('F') or k.startswith('L'))
+         and k not in ('F00','L00') and len(k)==3],
+        key=lambda c: _f(kpi[c].get('dau_today'),0), reverse=True
+    )
+    all_programs = [_pgm_dict(c, kpi[c]) for c in all_pgm_codes]
     dl,nl,rl=[],[],[]
     for c in ALL:
         row=kpi.get(c,{}); nm=PGM_NAMES.get(c,c)
@@ -211,11 +316,12 @@ def build_s5(kpi, top_programs):
         if ch and w and d>=1000 and ch>=30 and w<=-5:
             risk.append({'code':c,'name':PGM_NAMES.get(c,c),'dau':int(d),'churn_rate':ch,'dau_wow':w})
     return {
-        'dau_top10':  dau_top10,
-        'deep_top5':  sorted(dl,key=lambda x:x['rate'],reverse=True)[:5],
-        'new_top5':   sorted(nl,key=lambda x:x['count'],reverse=True)[:5],
-        'react_top5': sorted(rl,key=lambda x:x['count'],reverse=True)[:5],
-        'risk_list':  sorted(risk,key=lambda x:x['dau_wow'])[:3],
+        'dau_top10':    dau_top10,
+        'all_programs': all_programs,
+        'deep_top5':    sorted(dl,key=lambda x:x['rate'],reverse=True)[:5],
+        'new_top5':     sorted(nl,key=lambda x:x['count'],reverse=True)[:5],
+        'react_top5':   sorted(rl,key=lambda x:x['count'],reverse=True)[:5],
+        'risk_list':    sorted(risk,key=lambda x:x['dau_wow'])[:3],
     }
 
 def build_s6(kpi):
@@ -250,6 +356,8 @@ def build_s6(kpi):
             'react_rate_week': _fn(row.get('react_rate_week')),
             'new_week':        _i(row.get('new_week')),
             'new_week_pct':    _fn(row.get('new_week_pct')),
+            'wau_1min':        wau_1min,
+            'wau_10min':       wau_10min,
             # 월간
             'dau_mon':        _i(row.get('dau_mon')),
             'deep_rate_mon':  deep_rate_mon,
@@ -257,6 +365,57 @@ def build_s6(kpi):
             'react_rate_mon': _fn(row.get('react_rate_mon')),
             'new_mon':        _i(row.get('new_mon')),
             'new_mon_pct':    _fn(row.get('new_mon_pct')),
+            'mau_1min':       mau_1min,
+            'mau_10min':      mau_10min,
+            # 추가 지표
+            'dau_1min':    _i(row.get('dau_1min')),
+            'dau_10min':   _i(row.get('dau_10min')),
+            'engage_rate': _fn(row.get('engage_rate')),
+            'engage_week': _fn(row.get('engage_week')),
+            'engage_mon':  _fn(row.get('engage_mon')),
+            'habit_rate':  _fn(row.get('habit_rate')),
+            'habit_week':  _fn(row.get('habit_week')),
+            'habit_mon':   _fn(row.get('habit_mon')),
+            'd1_ret':      _fn(row.get('d1_ret')),
+            'd7_ret':      _fn(row.get('d7_ret')),
+            'w1_ret':      _fn(row.get('w1_ret')),
+            'm1_ret':      _fn(row.get('m1_ret')),
+            'new_d1_ret':  _fn(row.get('new_d1_ret')),
+            'new_d1_diff': _fn(row.get('new_d1_diff')),
+            'new_d7_ret':  _fn(row.get('new_d7_ret')),
+            'new_d7_diff': _fn(row.get('new_d7_diff')),
+            'new_w1_ret':  _fn(row.get('new_w1_ret')),
+            'new_w1_diff': _fn(row.get('new_w1_diff')),
+            'new_m1_ret':  _fn(row.get('new_m1_ret')),
+            'new_m1_diff': _fn(row.get('new_m1_diff')),
+            'react_user':  _i(row.get('react_today')),
+            'react_week':  _i(row.get('react_week')),
+            'react_mon':   _i(row.get('react_mon')),
+            # 전주 대비 변동
+            'dau_wow':             _fn(row.get('dau_wow')),
+            'dau_week_wow':        _fn(row.get('dau_week_wow')),
+            'dau_mon_wow':         _fn(row.get('dau_mon_wow')),
+            'new_wow':             _fn(row.get('new_wow')),
+            'new_week_wow':        _fn(row.get('new_week_wow')),
+            'new_mon_wow':         _fn(row.get('new_mon_wow')),
+            'react_wow':           _fn(row.get('react_wow')),
+            'react_week_wow':      _fn(row.get('react_week_wow')),
+            'churn_diff':          _fn(row.get('churn_diff')),
+            'churn_week_diff':     _fn(row.get('churn_week_diff')),
+            'churn_mon_diff':      _fn(row.get('churn_mon_diff')),
+            'deep_rate_diff':      _fn(row.get('deep_rate_diff')),
+            'deep_rate_week_diff': _fn(row.get('deep_rate_week_diff')),
+            'deep_rate_mon_diff':  _fn(row.get('deep_rate_mon_diff')),
+            'engage_diff':         _fn(row.get('engage_diff')),
+            'engage_week_diff':    _fn(row.get('engage_week_diff')),
+            'engage_mon_diff':     _fn(row.get('engage_mon_diff')),
+            'habit_diff':          _fn(row.get('habit_diff')),
+            'habit_week_diff':     _fn(row.get('habit_week_diff')),
+            'habit_mon_diff':      _fn(row.get('habit_mon_diff')),
+            'd1_diff':             _fn(row.get('d1_diff')),
+            'd7_diff':             _fn(row.get('d7_diff')),
+            'w1_diff':             _fn(row.get('w1_diff')),
+            'm1_diff':             _fn(row.get('m1_diff')),
         })
     return {'channels':chs}
 

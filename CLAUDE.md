@@ -29,7 +29,7 @@ python raas_query_engine.py "최근 트렌드" --date 2024-04-20
 | `SPLUNK_USER` / `SPLUNK_PASSWORD` | Splunk 인증 |
 | `SPLUNK_APP` | Splunk 앱 내부 ID (예: `gorealra_v4`) |
 | `ANTHROPIC_API_KEY` | Claude API 키 |
-| `CLAUDE_MODEL` | 사용 모델 (예: `claude-sonnet-4-6`) |
+| `CLAUDE_MODEL` | 사용 모델 (현재: `claude-opus-4-7`) |
 | `GMAIL_ADDRESS` / `GMAIL_APP_PW` | 이메일 발송용 Gmail 앱 비밀번호 |
 
 ## Architecture
@@ -51,6 +51,50 @@ raas_query_engine.py  ← 자연어 질의 엔진 (3단계 파이프라인)
     2. get_data_for_intent() → 의도별 Splunk SPL 실행
     3. call_claude()      → 최종 답변 생성
 ```
+
+## 대시보드 페이지 구조 (raas_web.html)
+
+하단 네비게이션 기반 5페이지 SPA:
+
+| page id | 네비 라벨 | 내용 |
+|---------|-----------|------|
+| `page-home` | 홈 | 핵심 지표(KPI), 이상 알림, 프로그램 흐름, 리텐션/품질 섹션 |
+| `page-analytics` | 분석 | 채널 스코프 전환 + KPI/퍼널/코호트/품질/성장 상세 |
+| `page-programs` | 프로그램 | 프로그램 랭킹 (DAU TOP, 깊은청취 TOP) |
+| `page-ai` | AI | AI 브리핑 전문 텍스트 |
+| `page-settings` | 더보기 | Phase 4 예정 (미구현) |
+
+- 기간 탭(일/주/월)은 home·analytics 페이지에서만 표시 (`PERIOD_TAB_PAGES = ['home', 'analytics']`)
+- 전역 상태: `_data`, `_scope` (채널코드), `_period` (day/week/mon), `_pgmTab`, `_cohortTab`
+
+## 분석 페이지 채널 연동 (`page-analytics`)
+
+### scope-bar 탭
+```
+전체(T00) | 파워FM(F00) | 러브FM(L00) | 고릴라M(G00) | 픽채널(P00)
+```
+`setScope(code)` → `_scope` 변경 → `renderAnalyticsPage(_data)` 재호출
+
+### getScopeData(data, scope)
+채널 스코프 선택 시 `s6_channels.channels[]`에서 해당 채널 데이터를 찾아 s1/s2/s3 형태로 재구성하는 어댑터 함수.
+
+```js
+// T00(전체)이면 원본 data 그대로 반환
+// 채널 코드면 ch = s6_channels.channels.find(c => c.code === scope)
+// → { s1_executive: {...}, s2_funnel: {...}, s3_engagement: {...} } 반환
+```
+
+**현재 매핑 완료 필드:**
+- s1: dau, wau(=dau_week), mau(=dau_mon), new_user, new_pct, dau_week, dau_mon
+- s2: dau, dau_week, dau_mon, new_user/week/mon, churn_rate/week/mon, react_rate/week/mon
+- s3: dau, deep_rate/week/mon, wau_1min/10min, mau_1min/10min
+
+**채널 스코프에서 null(미지원) 필드 (진행 중):**
+- s1: dau_wow, react_user, react_pct, dau_week_wow, dau_mon_wow
+- s3: dau_1min, dau_10min, deep_rate_diff, engage_rate/week/mon, channel_deep
+- s4(성장 품질): 채널 스코프 무관하게 항상 전체 data.s4_growth 사용
+
+**TODO:** P00(픽채널) s6_channels 데이터 연결, s4 채널별 스코핑
 
 ## Splunk Lookups
 
