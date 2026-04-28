@@ -34,6 +34,8 @@
   --fs-base: 16px;
   --fs-lg:   18px;
   --fs-xl:   20px;
+  --fs-2xl:  26px;
+  --fs-3xl:  34px;
 }
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -145,6 +147,16 @@ body{
 .hdot{
   font-size:15px;padding:2px 7px;border-radius:4px;
   font-family:var(--mono);
+  cursor:pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.hdot:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+.hdot.active{
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .hdot.g{background:rgba(0,224,122,.1);color:var(--green)}
 .hdot.y{background:rgba(255,184,48,.1);color:var(--yellow)}
@@ -385,6 +397,17 @@ body{
 .ch-tag.churn{background:rgba(255,77,106,.1);color:var(--red)}
 .ch-tag.react{background:rgba(0,200,255,.1);color:var(--accent)}
 .ch-tag.good-churn{background:rgba(0,224,122,.1);color:var(--green)}
+.ch-share-row{
+  display:flex;align-items:baseline;gap:6px;
+  margin-top:8px;margin-bottom:6px;
+}
+.ch-share-pct{font-size:var(--fs-xl);font-weight:600;line-height:1;}
+.ch-share-label{font-size:var(--fs-xs);color:var(--sub);}
+.ch-share-bar{
+  width:100%;height:6px;
+  background:var(--bg3);border-radius:3px;overflow:hidden;
+}
+.ch-share-fill{height:100%;border-radius:3px;transition:width 0.4s ease;}
 
 /* ── 습관형성 / 복귀율 ── */
 .growth-grid{
@@ -754,6 +777,7 @@ body{
 .program-tab { flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:var(--fs-sm); font-weight:500; cursor:pointer; border:1px solid var(--line2); background:transparent; color:var(--sub); transition:all 0.2s; white-space:nowrap; }
 .program-tab.active { background:var(--bg4); color:var(--text); border-color:var(--accent); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -783,28 +807,40 @@ body{
 
   <div id="content" style="display:none">
 
-    <!-- ZONE 1: 헬스 스코어 -->
+    <!-- 사용자 규모 (홈 최상단) -->
     <div class="section">
-      <div class="section-title">앱 건강도 <span id="healthInfoBtn" style="cursor:pointer;font-size:14px;color:var(--accent);margin-left:6px;border:1px solid var(--accent);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;" onclick="document.getElementById('healthModal').style.display='flex'">ⓘ</span></div>
-      <div class="health-bar">
-        <div class="health-top">
-          <div>
-            <div class="health-score-num" id="healthNum" style="color:var(--green)">—</div>
-            <div class="health-label">Health Score / 100</div>
-          </div>
-          <div id="healthStatus" style="font-size:30px">—</div>
-        </div>
-        <div class="health-track">
-          <div class="health-fill" id="healthFill" style="width:0%;background-position:0% 50%"></div>
-        </div>
-        <div class="health-dots" id="healthDots"></div>
-      </div>
-    </div>
+      <div class="section-title">사용자 규모</div>
 
-    <!-- ZONE 2: KPI 카드 -->
-    <div class="section">
-      <div class="section-title" id="kpiTitle">핵심 지표</div>
-      <div class="kpi-grid" id="kpiGrid"></div>
+      <!-- 빅넘버 영역 (기간탭 연동) -->
+      <div class="card" style="padding:16px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;">
+          <!-- 좌: 메인 수치 -->
+          <div>
+            <div id="usMainLabel" style="font-size:var(--fs-sm);color:var(--sub);font-weight:500;margin-bottom:4px;">DAU</div>
+            <div id="usMainVal" style="font-size:var(--fs-3xl);font-weight:600;line-height:1.1;">--</div>
+            <div id="usMainDiff" style="font-size:var(--fs-sm);margin-top:6px;">--</div>
+          </div>
+          <!-- 우: 보조 수치 2개 -->
+          <div style="display:flex;gap:20px;">
+            <div>
+              <div id="usSub1Label" style="font-size:var(--fs-xs);color:var(--sub);">WAU</div>
+              <div id="usSub1Val" style="font-size:var(--fs-lg);font-weight:500;">--</div>
+            </div>
+            <div>
+              <div id="usSub2Label" style="font-size:var(--fs-xs);color:var(--sub);">MAU</div>
+              <div id="usSub2Val" style="font-size:var(--fs-lg);font-weight:500;">--</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 라인그래프 영역 -->
+      <div class="card" style="padding:14px;">
+        <div id="usChartLabel" style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px;">최근 30일 DAU 추이</div>
+        <div style="position:relative;height:180px;">
+          <canvas id="usChart"></canvas>
+        </div>
+      </div>
     </div>
 
     <!-- ZONE 3: 사용자 흐름 (Funnel) -->
@@ -853,6 +889,35 @@ body{
     <button class="scope-tab" onclick="setScope('P00')" id="scope-P00">픽채널</button>
   </div>
   <div class="program-bar" id="programBar"></div>
+
+  <!-- 종합 지표 (분석 페이지 최상단) -->
+  <div class="section">
+    <div class="section-title">종합 지표 <span id="healthInfoBtn" style="cursor:pointer;font-size:14px;color:var(--accent);margin-left:6px;border:1px solid var(--accent);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;" onclick="document.getElementById('healthModal').style.display='flex'">ⓘ</span></div>
+    <div class="health-bar">
+      <div class="health-top">
+        <div>
+          <div class="health-score-num" id="healthNum" style="color:var(--green)">—</div>
+          <div class="health-label">Health Score / 100</div>
+        </div>
+        <div id="healthStatus" style="font-size:30px">—</div>
+      </div>
+      <div class="health-track">
+        <div class="health-fill" id="healthFill" style="width:0%;background-position:0% 50%"></div>
+      </div>
+      <div class="health-dots" id="healthDots"></div>
+    </div>
+    <!-- 라인그래프 영역 (항상 노출 — 진입 시 점수 최저 지표 자동 선택) -->
+    <div class="card health-chart-wrap" id="healthChartWrap"
+         style="margin-top:12px; padding:14px;">
+      <div id="healthChartLabel"
+           style="font-size:var(--fs-sm); color:var(--text); font-weight:500; margin-bottom:8px;">
+        지표를 선택하세요
+      </div>
+      <div style="position:relative; height:180px;">
+        <canvas id="healthChart"></canvas>
+      </div>
+    </div>
+  </div>
 
   <!-- ZONE 2 (복사): 핵심 지표 -->
   <div class="section">
@@ -972,6 +1037,20 @@ body{
 </div><!-- /container -->
 
 <script>
+window.addEventListener('unhandledrejection', e => {
+  console.error('[UNHANDLED REJECTION]');
+  console.error('  name:', e.reason?.name);
+  console.error('  message:', e.reason?.message);
+  console.error('  stack:', e.reason?.stack);
+});
+
+window.addEventListener('error', e => {
+  console.error('[GLOBAL ERROR]');
+  console.error('  message:', e.message);
+  console.error('  source:', e.filename + ':' + e.lineno + ':' + e.colno);
+  console.error('  error:', e.error);
+});
+
 // ── 상수 & 전역 ─────────────────────────────────────────
 const fmt  = n => n==null ? '—' : Number(n).toLocaleString('ko-KR');
 const fmtK = n => {
@@ -1041,6 +1120,7 @@ function setPeriod(p){
     const s5 = _data.s5_rankings || {};
     renderPgm(s5, _pgmTab || 'dau', _period, _pgmChannel);
   }
+  // 종합 지표 그래프 갱신은 renderHealth가 자동 처리 (renderAll/renderAnalyticsPage 경로에서 호출됨)
 }
 
 // ── 데이터 로드 ──────────────────────────────────────────
@@ -1079,6 +1159,7 @@ function renderAll(d){
     s1.date || d.collected_at?.split(' ')[0] || '';
 
   renderHealth(s1,s2,s3,s4);
+  renderUserSize();
   renderKPI(s1,s2);
   renderFunnel(s1,s2);
   renderCohort(s2);
@@ -1099,9 +1180,316 @@ function renderAll(d){
   renderAnalytics(d);
 }
 
+// ── 사용자 규모 (홈 최상단, 기간탭 연동 + Chart.js 라인그래프) ──
+let _usChartInstance = null;
+
+async function renderUserSize() {
+  if (!_data) return;
+  const s1 = _data.s1_executive || {};
+  const s2 = _data.s2_funnel || {};
+  const p = _period;
+
+  let mainLabel, mainVal, mainDiff, sub1Label, sub1Val, sub2Label, sub2Val;
+  let chartMetric, chartLabel, chartDays;
+
+  if (p === 'day') {
+    mainLabel = 'DAU';
+    mainVal = s1.dau;
+    mainDiff = s1.dau_wow;
+    sub1Label = 'WAU'; sub1Val = s1.wau;
+    sub2Label = 'MAU'; sub2Val = s1.mau;
+    chartMetric = 'dau_today'; chartLabel = '최근 30일 DAU 추이'; chartDays = 30;
+  } else if (p === 'week') {
+    mainLabel = 'WAU';
+    mainVal = s1.wau;
+    mainDiff = s2.wau_wow || null;
+    sub1Label = 'DAU'; sub1Val = s1.dau;
+    sub2Label = 'MAU'; sub2Val = s1.mau;
+    chartMetric = 'wau_today'; chartLabel = '최근 12주 WAU 추이'; chartDays = 84;
+  } else {
+    mainLabel = 'MAU';
+    mainVal = s1.mau;
+    mainDiff = s2.mau_wow || null;
+    sub1Label = 'DAU'; sub1Val = s1.dau;
+    sub2Label = 'WAU'; sub2Val = s1.wau;
+    chartMetric = 'mau_today'; chartLabel = '최근 12개월 MAU 추이'; chartDays = 365;
+  }
+
+  document.getElementById('usMainLabel').textContent = mainLabel;
+  document.getElementById('usMainVal').textContent = mainVal ? mainVal.toLocaleString() : '--';
+  const diffEl = document.getElementById('usMainDiff');
+  if (mainDiff != null) {
+    const sign = mainDiff >= 0 ? '▲' : '▼';
+    const color = mainDiff >= 0 ? 'var(--green)' : 'var(--red)';
+    diffEl.innerHTML = `<span style="color:${color};">${sign} ${Math.abs(mainDiff).toFixed(1)}%</span> <span style="color:var(--sub);">전주대비</span>`;
+  } else {
+    diffEl.textContent = '';
+  }
+  document.getElementById('usSub1Label').textContent = sub1Label;
+  document.getElementById('usSub1Val').textContent = sub1Val ? sub1Val.toLocaleString() : '--';
+  document.getElementById('usSub2Label').textContent = sub2Label;
+  document.getElementById('usSub2Val').textContent = sub2Val ? sub2Val.toLocaleString() : '--';
+  document.getElementById('usChartLabel').textContent = chartLabel;
+
+  try {
+    const res = await fetch(`/api/trend?metric=${chartMetric}&scope=T00&days=${chartDays}`);
+    const json = await res.json();
+    if (!json.ok || !json.data) {
+      console.warn('trend 데이터 없음', json);
+      return;
+    }
+
+    let chartData = json.data;
+    if (p === 'week') {
+      chartData = chartData.filter((_, i) => (chartData.length - 1 - i) % 7 === 0).reverse().reverse();
+    } else if (p === 'mon') {
+      const monthMap = {};
+      chartData.forEach(d => {
+        const ym = (d.date || '').substring(0, 7);
+        if (ym) monthMap[ym] = d;
+      });
+      chartData = Object.values(monthMap);
+    }
+
+    drawUserSizeChart(chartData, mainLabel);
+  } catch (e) {
+    console.error('사용자 규모 그래프 로드 실패', e);
+  }
+}
+
+function drawUserSizeChart(data, label) {
+  const ctx = document.getElementById('usChart');
+  if (!ctx || typeof Chart === 'undefined') return;
+  if (_usChartInstance) { _usChartInstance.destroy(); }
+
+  const labels = data.map(d => (d.date || '').substring(5));
+  const values = data.map(d => d.value);
+
+  _usChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data: values,
+        borderColor: '#378ADD',
+        backgroundColor: 'rgba(55,138,221,0.1)',
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        tension: 0.25,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${label}: ${ctx.parsed.y.toLocaleString()}명`
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { font: { size: 10 }, color: 'rgba(120,120,120,0.8)', maxTicksLimit: 8 },
+          grid: { display: false }
+        },
+        y: {
+          ticks: {
+            font: { size: 10 },
+            color: 'rgba(120,120,120,0.8)',
+            callback: (v) => v >= 1000 ? (v/1000).toFixed(0)+'k' : v
+          },
+          grid: { color: 'rgba(120,120,120,0.15)' }
+        }
+      }
+    }
+  });
+}
+
+// ── 종합 지표 인터랙티브 라인그래프 (분석 페이지 dot 클릭 → 시계열) ──
+let _healthChartInstance = null;
+let _currentHealthMetric = null;
+
+async function showHealthChart(metricKey, label) {
+  if (!metricKey) return;
+  _currentHealthMetric = { metricKey, label };
+
+  // dot active 표시
+  document.querySelectorAll('.hdot').forEach(d => d.classList.remove('active'));
+  const activeDot = document.querySelector(`.hdot[data-metric="${metricKey}"]`);
+  if (activeDot) activeDot.classList.add('active');
+
+  const wrap    = document.getElementById('healthChartWrap');
+  const labelEl = document.getElementById('healthChartLabel');
+  if (!wrap || !labelEl) return;
+
+  wrap.style.display = 'block';
+  labelEl.textContent = `${label} 추이`;
+
+  // 활성사용자만 기간탭에 따라 metric이 다름. 그 외는 day-version 고정 + days만 변경.
+  let actualMetric = metricKey;
+  let chartDays, periodLabel;
+  if (metricKey === '__active_users__') {
+    if (_period === 'day')      { actualMetric = 'dau_today'; chartDays = 30;  periodLabel = '최근 30일'; }
+    else if (_period === 'week'){ actualMetric = 'wau_today'; chartDays = 84;  periodLabel = '최근 12주'; }
+    else                         { actualMetric = 'mau_today'; chartDays = 365; periodLabel = '최근 12개월'; }
+  } else {
+    if (_period === 'day')       { chartDays = 30;  periodLabel = '최근 30일'; }
+    else if (_period === 'week') { chartDays = 84;  periodLabel = '최근 12주'; }
+    else                          { chartDays = 365; periodLabel = '최근 12개월'; }
+  }
+
+  labelEl.textContent = `${label} 추이 (${periodLabel})`;
+
+  const sc = _scope || 'T00';
+
+  try {
+    const url = `/api/trend?metric=${actualMetric}&scope=${sc}&days=${chartDays}`;
+    console.log('[showHealthChart] fetch:', url);
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[showHealthChart] HTTP ${res.status}`);
+      labelEl.textContent = `${label} - 데이터 조회 실패`;
+      return;
+    }
+    const json = await res.json();
+    if (!json.ok || !Array.isArray(json.data) || json.data.length === 0) {
+      console.warn('[showHealthChart] 데이터 없음', json);
+      labelEl.textContent = `${label} - 데이터 없음`;
+      return;
+    }
+
+    // 다운샘플링 (사용자 규모 섹션과 동일 패턴)
+    let chartData = json.data;
+    if (_period === 'week') {
+      chartData = chartData.filter((_, i) => (chartData.length - 1 - i) % 7 === 0).reverse().reverse();
+    } else if (_period === 'mon') {
+      const monthMap = {};
+      chartData.forEach(d => {
+        const ym = (d.date || '').substring(0, 7);
+        if (ym) monthMap[ym] = d;
+      });
+      chartData = Object.values(monthMap);
+    }
+
+    drawHealthChart(chartData, label, metricKey);
+  } catch (e) {
+    console.error('[showHealthChart] 예외:', e);
+    labelEl.textContent = `${label} - 오류 발생`;
+  }
+}
+
+function closeHealthChart() {
+  const wrap = document.getElementById('healthChartWrap');
+  if (wrap) wrap.style.display = 'none';
+  if (_healthChartInstance) {
+    try { _healthChartInstance.destroy(); } catch(e) {}
+    _healthChartInstance = null;
+  }
+  _currentHealthMetric = null;
+  document.querySelectorAll('.hdot').forEach(d => d.classList.remove('active'));
+}
+
+function drawHealthChart(data, label, metricKey) {
+  try {
+    const ctx = document.getElementById('healthChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    if (_healthChartInstance) {
+      try { _healthChartInstance.destroy(); } catch(e) {}
+      _healthChartInstance = null;
+    }
+
+    const labels = data.map(d => (d.date || '').substring(5));
+    const values = data.map(d => d.value);
+
+    const isPercent = ['deep_rate','engage_rate','churn_rate','react_rate',
+                       'habit_rate','d1_ret'].includes(metricKey);
+    const colorMap = {
+      '__active_users__': '#378ADD',
+      'deep_rate':   '#1D9E75',
+      'engage_rate': '#534AB7',
+      'churn_rate':  '#E24B4A',
+      'react_rate':  '#BA7517',
+      'habit_rate':  '#D4537E',
+      'd1_ret':      '#0F6E56'
+    };
+    const color = colorMap[metricKey] || '#378ADD';
+
+    _healthChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label,
+          data: values,
+          borderColor: color,
+          backgroundColor: color + '20',
+          borderWidth: 2,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          tension: 0.25,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (c) => isPercent
+                ? `${label}: ${c.parsed.y.toFixed(1)}%`
+                : `${label}: ${c.parsed.y.toLocaleString()}명`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { font: { size: 10 }, color: 'rgba(120,120,120,0.8)', maxTicksLimit: 8 },
+            grid: { display: false }
+          },
+          y: {
+            ticks: {
+              font: { size: 10 },
+              color: 'rgba(120,120,120,0.8)',
+              callback: (v) => isPercent
+                ? v.toFixed(1) + '%'
+                : (v >= 1000 ? (v/1000).toFixed(0)+'k' : v)
+            },
+            grid: { color: 'rgba(120,120,120,0.15)' }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('[drawHealthChart] 예외:', e);
+  }
+}
+
 // ── ZONE 1: 헬스 스코어 ──────────────────────────────────
 function renderHealth(s1,s2,s3,s4){
-  // 6개 지표 점수화
+  // 헬스 스코어 섹션 element가 없으면 early return
+  // (종합 지표가 page-analytics로 이동됨. DOM에는 존재하지만 방어적 가드)
+  if (!document.getElementById('healthNum')) return;
+
+  // scope-aware: 분석 페이지의 채널/프로그램 탭 선택 시 해당 데이터 기준으로 계산
+  // (홈에서 호출 시 _scope='T00'이므로 그대로 통과)
+  const sc = _scope || 'T00';
+  if (sc !== 'T00' && _data) {
+    const scoped = getScopeData(_data, sc);
+    s1 = scoped.s1_executive  || s1;
+    s2 = scoped.s2_funnel     || s2;
+    s3 = scoped.s3_engagement || s3;
+    s4 = scoped.s4_growth     || s4;
+  }
+
+  // 6개 지표 점수화 (필드 누락 시 if(val!=null) 가드로 자동 skip)
   const scores = [];
   const dots   = [];
 
@@ -1113,38 +1501,38 @@ function renderHealth(s1,s2,s3,s4){
   if(dauW!=null){
     const sc = dauW>5?20:dauW>0?15:dauW>-5?10:5;
     scores.push(sc);
-    dots.push({label:dauLabel+' '+fmtD(dauW),cls:dauW>0?'g':dauW>-5?'y':'r'});
+    dots.push({label:dauLabel+' '+fmtD(dauW),chartLabel:dauLabel,cls:dauW>0?'g':dauW>-5?'y':'r',metric:'__active_users__',score:sc});
   }
   // 깊은청취율
   const dr = p==='day'?s3.deep_rate : p==='week'?s3.deep_rate_week : s3.deep_rate_mon;
   if(dr!=null){
     const sc = dr>=90?20:dr>=80?15:dr>=70?10:5;
-    scores.push(sc); dots.push({label:'깊은청취 '+fmtP(dr),cls:dr>=85?'g':dr>=75?'y':'r'});
+    scores.push(sc); dots.push({label:'깊은청취 '+fmtP(dr),chartLabel:'깊은청취',cls:dr>=85?'g':dr>=75?'y':'r',metric:'deep_rate',score:sc});
   }
   // 이탈율 (낮을수록 좋음)
   const cr = p==='day'?s2.churn_rate : p==='week'?s2.churn_week : s2.churn_mon;
   if(cr!=null){
     const sc = cr<15?20:cr<25?15:cr<35?10:5;
-    scores.push(sc); dots.push({label:'이탈율 '+fmtP(cr),cls:cr<20?'g':cr<30?'y':'r'});
+    scores.push(sc); dots.push({label:'이탈율 '+fmtP(cr),chartLabel:'이탈율',cls:cr<20?'g':cr<30?'y':'r',metric:'churn_rate',score:sc});
   }
   // D1/W1/M1 유지율
   const ret = p==='day'?s2.d1_ret : p==='week'?s2.w1_ret : s2.m1_ret;
   const retL= p==='day'?'D1유지' : p==='week'?'W1유지' : 'M1유지';
   if(ret!=null){
     const sc = ret>=50?20:ret>=35?15:ret>=20?10:5;
-    scores.push(sc); dots.push({label:retL+' '+fmtP(ret),cls:ret>=45?'g':ret>=30?'y':'r'});
+    scores.push(sc); dots.push({label:retL+' '+fmtP(ret),chartLabel:retL,cls:ret>=45?'g':ret>=30?'y':'r',metric:'d1_ret',score:sc});
   }
   // 복귀율
   const rr = p==='day'?s2.react_rate : p==='week'?s2.react_rate_week : s2.react_rate_mon;
   if(rr!=null){
     const sc = rr>=5?10:rr>=3?8:5;
-    scores.push(sc); dots.push({label:'복귀율 '+fmtP(rr),cls:rr>=5?'g':rr>=3?'y':'r'});
+    scores.push(sc); dots.push({label:'복귀율 '+fmtP(rr),chartLabel:'복귀율',cls:rr>=5?'g':rr>=3?'y':'r',metric:'react_rate',score:sc});
   }
   // 습관형성률
   const hr = p==='day'?s4.habit_rate : p==='week'?s4.habit_week : s4.habit_mon;
   if(hr!=null){
     const sc = hr>=30?10:hr>=20?8:5;
-    scores.push(sc); dots.push({label:'습관형성 '+fmtP(hr),cls:hr>=30?'g':hr>=20?'y':'r'});
+    scores.push(sc); dots.push({label:'습관형성 '+fmtP(hr),chartLabel:'습관형성',cls:hr>=30?'g':hr>=20?'y':'r',metric:'habit_rate',score:sc});
   }
 
   const total = scores.length ? Math.min(100, scores.reduce((a,b)=>a+b,0)) : 0;
@@ -1157,11 +1545,47 @@ function renderHealth(s1,s2,s3,s4){
   document.getElementById('healthFill').style.width = total+'%';
   document.getElementById('healthFill').style.backgroundPosition = (100-total)+'% 50%';
   document.getElementById('healthDots').innerHTML =
-    dots.map(d=>`<span class="hdot ${d.cls}">${d.label}</span>`).join('');
+    dots.map(d=>{
+      const m  = d.metric     || '';
+      const cl = d.chartLabel || d.label;
+      return `<span class="hdot ${d.cls}" data-metric="${m}" `+
+             `onclick='showHealthChart(${JSON.stringify(m)}, ${JSON.stringify(cl)})' `+
+             `title="클릭하면 추세 그래프 표시">${d.label}</span>`;
+    }).join('');
+
+  // 그래프 자동 갱신:
+  //   - _currentHealthMetric 없음(초기 진입) → 점수 가장 낮은(나쁜) dot 자동 선택
+  //   - _currentHealthMetric 있음(사용자가 이전에 선택) → 해당 metric 유지하며 데이터만 새 scope/period로 재조회
+  //     (단, 라벨은 현재 dot의 chartLabel로 동기화 — D1↔W1↔M1 같은 period 변동 대응)
+  if (_currentHealthMetric) {
+    const cur = dots.find(d => (d.metric||'') === _currentHealthMetric.metricKey);
+    const lbl = cur ? cur.chartLabel : _currentHealthMetric.label;
+    if (cur) {
+      const el = document.querySelector(`.hdot[data-metric="${_currentHealthMetric.metricKey}"]`);
+      if (el) el.classList.add('active');
+    }
+    showHealthChart(_currentHealthMetric.metricKey, lbl);
+  } else if (dots.length) {
+    // 점수 등급(r > y > g) 우선, 같은 등급이면 score 숫자가 낮은 항목
+    const order = { r: 0, y: 1, g: 2 };
+    const lowest = [...dots].sort((a, b) => {
+      const ao = order[a.cls] ?? 3, bo = order[b.cls] ?? 3;
+      if (ao !== bo) return ao - bo;
+      return (a.score ?? 999) - (b.score ?? 999);
+    })[0];
+    if (lowest && lowest.metric) {
+      showHealthChart(lowest.metric, lowest.chartLabel || lowest.label);
+    }
+  }
 }
 
 // ── ZONE 2: KPI 카드 ─────────────────────────────────────
 function renderKPI(s1,s2){
+  // 핵심지표 섹션 element가 없으면 early return
+  // (page-home에서 제거됐으므로 홈에서는 더 이상 렌더링하지 않음.
+  //  analytics 페이지는 a-kpiTitle/a-kpiGrid를 별도 사용 → renderAnalytics 처리)
+  if (!document.getElementById('kpiTitle')) return;
+
   const p = _period;
   document.getElementById('kpiTitle').innerHTML =
     `핵심 지표 <span style="font-size:15px;color:var(--accent);font-weight:400">
@@ -1311,8 +1735,8 @@ function renderFunnel(s1, s2) {
         <div class="fc-val">${fmt(churn_users)}</div>
       </div>
     </div>
-    <div class="funnel-notice">
-      ⚠ 복귀·이탈 수치는 직전 사용일 추적 데이터 안정화 중으로 실제값과 차이가 있을 수 있습니다.
+    <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;text-align:center;opacity:0.7;">
+      * 복귀·이탈 수치 데이터 안정화 중
     </div>
   `;
 }
@@ -1402,19 +1826,26 @@ function renderQuality(s3){
 // ── ZONE 6: 채널 현황 ────────────────────────────────────
 function renderChannels(s6){
   const chs = s6.channels || [];
-  const clsMap = {F00:'',L00:'lv',G00:'gm',P00:'pk'};
+  const clsMap   = {F00:'',  L00:'lv',     G00:'gm',     P00:'pk'};
+  const colorMap = {F00:'#E8593C', L00:'#D4537E', G00:'#1D9E75', P00:'#534AB7'};
   const p = _period;
   document.getElementById('channelGrid').innerHTML = chs.map(ch=>{
     const dau   = p==='day' ? ch.dau        : p==='week' ? ch.dau_week        : ch.dau_mon;
     const dr    = p==='day' ? ch.deep_rate  : p==='week' ? ch.deep_rate_week  : ch.deep_rate_mon;
     const cr    = p==='day' ? ch.churn_rate : p==='week' ? ch.churn_week      : ch.churn_mon;
     const rr    = p==='day' ? ch.react_rate : p==='week' ? ch.react_rate_week : ch.react_rate_mon;
-    const newU  = p==='day' ? ch.new_user   : p==='week' ? ch.new_week        : ch.new_mon;
-    const newP  = p==='day' ? ch.new_pct    : p==='week' ? ch.new_week_pct    : ch.new_mon_pct;
+    const share = +(ch.share || 0);
+    const color = colorMap[ch.code] || 'var(--accent)';
     return `<div class="channel-card ${clsMap[ch.code]||''}">
       <div class="ch-name">${ch.name}</div>
       <div class="ch-dau">${fmtK(dau)}</div>
-      <div class="ch-share">점유 ${fmtP(ch.share)}</div>
+      <div class="ch-share-row">
+        <span class="ch-share-pct">${share.toFixed(1)}%</span>
+        <span class="ch-share-label">점유</span>
+      </div>
+      <div class="ch-share-bar">
+        <div class="ch-share-fill" style="width:${share}%;background:${color};"></div>
+      </div>
       <div class="ch-tags">
         <span class="ch-tag deep">깊은청취 ${fmtP(dr)}</span>
         <span class="ch-tag ${(cr||0)<25?'good-churn':'churn'}">이탈 ${fmtP(cr)}</span>
@@ -1731,7 +2162,7 @@ async function loadPopularChips() {
     '최근 7일 전체 DAU 추이',
     '파워FM vs 러브FM DAU 비교',
     '이번 주 급상승 프로그램은?',
-    '전체 앱 건강도 요약',
+    '전체 종합 지표 요약',
   ];
   try {
     const res = await fetch('/api/query/popular?limit=5&days=7');
@@ -2096,6 +2527,7 @@ function renderAnalyticsPage(data) {
   const s2 = d.s2_funnel     || {};
   const s3 = d.s3_engagement || {};
   const s4 = d.s4_growth     || {};
+  renderHealth(s1, s2, s3, s4);
   renderKPI(s1, s2);
   const kpiTitleEl = document.getElementById('a-kpiTitle');
   const kpiGridEl  = document.getElementById('a-kpiGrid');
@@ -2141,6 +2573,7 @@ function selectProgram(code) {
     t.classList.toggle('active', t.id === 'prog-' + code)
   );
   if (_data) renderAnalyticsPage(_data);
+  // 그래프 갱신은 renderAnalyticsPage → renderHealth 내부에서 자동 처리
 }
 
 function setScope(code) {
@@ -2150,6 +2583,7 @@ function setScope(code) {
   );
   renderProgramBar(code);
   if (_data) renderAnalyticsPage(_data);
+  // 그래프 갱신은 renderAnalyticsPage → renderHealth 내부에서 자동 처리
 }
 
 function renderAnalytics(d) {
@@ -2190,11 +2624,11 @@ document.addEventListener('DOMContentLoaded', () => {
 loadAll();
 </script>
 
-<!-- ── 건강도 모달 ── -->
+<!-- ── 종합 지표 모달 ── -->
 <div id="healthModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
   <div style="background:var(--bg2);border-radius:14px;padding:20px;width:calc(100% - 32px);max-width:480px;border:1px solid var(--line2);">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-      <span style="font-size:var(--fs-xl);font-weight:700;">건강도 점수 계산 방식</span>
+      <span style="font-size:var(--fs-xl);font-weight:700;">종합 지표 점수 계산 방식</span>
       <span style="cursor:pointer;font-size:20px;color:var(--sub);line-height:1;" onclick="document.getElementById('healthModal').style.display='none'">✕</span>
     </div>
     <table style="width:100%;border-collapse:collapse;">
