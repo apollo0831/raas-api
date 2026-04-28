@@ -552,6 +552,61 @@ body{
   color:var(--text);
 }
 
+/* ── AI 어시스턴트 페이지 ── */
+.ai-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:14px;}
+.ai-hint{font-size:13px;color:var(--sub);margin:0 0 8px;}
+.ai-chip-row{display:flex;flex-wrap:wrap;gap:8px;}
+.ai-chip{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 12px;background:var(--bg3);
+  border:0.5px solid var(--line2);border-radius:999px;
+  font-size:13px;cursor:pointer;color:var(--text);
+  transition:background .15s;font-family:var(--sans);
+}
+.ai-chip:hover,.ai-chip:active{background:var(--bg4);}
+.chip-rank{color:var(--dim);font-size:11px;}
+.ai-input-row{display:flex;gap:8px;margin:12px 0 14px;}
+.ai-input-row .query-input{font-size:15px;}
+.btn-ai-hist{
+  background:var(--bg3);border:1px solid var(--line2);
+  color:var(--sub);border-radius:8px;
+  padding:7px 13px;font-size:14px;font-weight:600;
+  cursor:pointer;font-family:var(--sans);
+  transition:all .2s;white-space:nowrap;
+}
+.btn-ai-hist.active{border-color:var(--accent);color:var(--accent);}
+.btn-ai-hist:active{opacity:.8;}
+.ai-history-panel{
+  background:var(--bg2);border-radius:12px;
+  padding:12px 14px;margin-bottom:14px;
+  border:1px solid var(--line);
+}
+.ai-history-panel.hidden{display:none;}
+.ai-history-item{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 10px;background:var(--bg3);border-radius:8px;
+  font-size:13px;cursor:pointer;margin-bottom:6px;
+  transition:background .15s;
+}
+.ai-history-item:last-child{margin-bottom:0;}
+.ai-history-item:hover{background:var(--bg4);}
+.ai-answer-card{
+  background:var(--bg2);border:0.5px solid var(--line);
+  border-radius:12px;padding:14px 16px;margin-bottom:12px;
+}
+.ai-answer-q{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;}
+.ai-q-badge{
+  width:24px;height:24px;border-radius:50%;flex-shrink:0;
+  background:rgba(0,200,255,.12);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;margin-top:2px;
+}
+.ai-answer-text{font-size:14px;line-height:1.75;margin:0 0 10px;color:var(--text);white-space:pre-wrap;}
+.ai-chart-box{background:var(--bg3);border-radius:8px;padding:12px;border:0.5px solid var(--line);}
+.ai-chart-meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--dim);}
+.ai-source{font-size:11px;color:var(--dim);margin:8px 0 0;}
+.ai-loading-msg{font-size:13px;color:var(--sub);padding:12px 0;text-align:center;}
+
 /* ── 청취 전환 퍼널 ── */
 .qlty-funnel{background:var(--bg2);border-radius:12px;padding:12px 14px;border:1px solid var(--line);}
 .qlty-funnel-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
@@ -870,6 +925,7 @@ body{
 </div>
 
 <div class="page" id="page-ai">
+  <!-- AI 브리핑 전문 -->
   <div class="section">
     <div class="section-title">AI 브리핑 전문</div>
     <div class="card" id="briefCardFull">
@@ -877,17 +933,33 @@ body{
     </div>
   </div>
 
-  <!-- ZONE 11: 자연어 질의 -->
+  <!-- AI 어시스턴트 -->
   <div class="section">
-    <div class="section-title">AI 질의</div>
-    <div class="query-box">
-      <div class="query-row">
-        <input class="query-input" id="queryInput"
-          placeholder="예: 오늘 이탈율이 높은 채널은?" />
-        <button class="btn-ask" onclick="askQuery()">전송</button>
+    <div class="ai-header">
+      <div>
+        <div class="section-title" style="margin-bottom:4px;">AI 어시스턴트</div>
+        <p style="font-size:var(--fs-sm);color:var(--sub);margin:0;">자연어로 묻고 데이터로 답을 받으세요</p>
       </div>
-      <div class="query-answer" id="queryAnswer"></div>
+      <button id="btn-toggle-history" class="btn-ai-hist">히스토리</button>
     </div>
+
+    <div style="margin-bottom:12px;">
+      <p class="ai-hint">자주 묻는 질문 · 최근 7일 인기순</p>
+      <div id="ai-chips" class="ai-chip-row"></div>
+    </div>
+
+    <div class="ai-input-row">
+      <input id="ai-input" class="query-input" type="text"
+             placeholder="예: 컬투쇼 최근 14일 DAU 추세를 알려줘" />
+      <button id="btn-ai-send" class="btn-ask">질문</button>
+    </div>
+
+    <div id="ai-history-panel" class="ai-history-panel hidden">
+      <p class="ai-hint">최근 질의 내역</p>
+      <div id="ai-history-list"></div>
+    </div>
+
+    <div id="ai-answers"></div>
   </div>
 </div>
 
@@ -914,6 +986,14 @@ const fmtD = (n,u='%',d=1) => {
   return (n>0?'+':'')+n.toFixed(d)+u;
 };
 const wowClass = v => v==null?'fl':v>0?'up':'dn';
+
+// ── user_id 관리 (추후 SSO 연동 시 이 함수만 교체) ─────
+function getUserId() {
+  let uid = localStorage.getItem('raas_user_id');
+  if (!uid) { uid = 'u-' + crypto.randomUUID(); localStorage.setItem('raas_user_id', uid); }
+  return uid;
+}
+const RAAS_USER_ID = getUserId();
 const diffClass= (v,inv=false) => {
   if(v==null) return '';
   if(inv) return v>0?'bad':'up'; // 이탈율: 오르면 나쁨
@@ -1642,27 +1722,203 @@ function renderBrief(text){
     `<div class="brief-text">${text.replace(/\n/g,'<br>')}</div>`;
 }
 
-// ── 자연어 질의 ──────────────────────────────────────────
-async function askQuery(){
-  const q = document.getElementById('queryInput').value.trim();
-  if(!q) return;
-  const ans = document.getElementById('queryAnswer');
-  ans.style.display='block';
-  ans.textContent='분석 중…';
+// ── AI 어시스턴트 ─────────────────────────────────────────
+async function loadPopularChips() {
+  const container = document.getElementById('ai-chips');
+  if (!container) return;
+  const fallback = [
+    '어제 DAU 1위 프로그램은?',
+    '최근 7일 전체 DAU 추이',
+    '파워FM vs 러브FM DAU 비교',
+    '이번 주 급상승 프로그램은?',
+    '전체 앱 건강도 요약',
+  ];
   try {
-    const ctx = _data?.claude_context||'';
-    const res = await fetch('/api/query',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({question:q,context:ctx})
+    const res = await fetch('/api/query/popular?limit=5&days=7');
+    const data = await res.json();
+    const items = (data.items && data.items.length) ? data.items.map(it => it.question) : fallback;
+    container.innerHTML = items.map((q, i) => makeChipHTML(q, i + 1)).join('');
+  } catch (_) {
+    container.innerHTML = fallback.map((q, i) => makeChipHTML(q, i + 1)).join('');
+  }
+  container.querySelectorAll('.ai-chip').forEach(el => {
+    el.addEventListener('click', () => {
+      document.getElementById('ai-input').value = el.dataset.q;
+      sendQuery();
     });
-    const j = await res.json();
-    ans.textContent = j.ok ? j.answer : '오류: '+j.error;
-  } catch(e){ ans.textContent='오류: '+e.message; }
+  });
 }
 
-document.getElementById('queryInput').addEventListener('keydown',e=>{
-  if(e.key==='Enter') askQuery();
+function makeChipHTML(q, rank) {
+  const sq = escapeHtml(q);
+  return `<span class="ai-chip" data-q="${sq}"><span class="chip-rank">${rank}</span>${sq}</span>`;
+}
+
+async function sendQuery() {
+  const input = document.getElementById('ai-input');
+  if (!input) return;
+  const question = input.value.trim();
+  if (!question) return;
+  const answersEl = document.getElementById('ai-answers');
+  const cardId = 'acard-' + Date.now();
+  answersEl.insertAdjacentHTML('afterbegin', `
+    <div class="ai-answer-card" id="${cardId}">
+      <div class="ai-answer-q">
+        <div class="ai-q-badge">Q</div>
+        <p style="margin:0;font-size:14px;color:var(--text);">${escapeHtml(question)}</p>
+      </div>
+      <div class="ai-loading-msg">분석 중…</div>
+    </div>`);
+  input.value = '';
+  try {
+    const res = await fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': RAAS_USER_ID },
+      body: JSON.stringify({ question }),
+    });
+    const data = await res.json();
+    renderAiAnswer(cardId, question, data);
+    loadPopularChips();
+    const hp = document.getElementById('ai-history-panel');
+    if (hp && !hp.classList.contains('hidden')) loadHistory();
+  } catch (err) {
+    const card = document.getElementById(cardId);
+    if (card) card.querySelector('.ai-loading-msg').textContent = '오류: ' + err.message;
+  }
+}
+
+function renderAiAnswer(cardId, question, data) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  const answer = (data && data.answer) ? data.answer : '(답변 없음)';
+  const chart = data && data.chart_data;
+  let chartHTML = '';
+  if (chart && chart.type === 'timeseries' && chart.points && chart.points.length >= 2) {
+    chartHTML = renderSparkline(chart);
+  } else if (chart && chart.type === 'comparison' && chart.items && chart.items.length >= 2) {
+    chartHTML = renderBarChart(chart);
+  }
+  const pts = chart && chart.points, its = chart && chart.items;
+  const sourceHTML = (chart && chart.source)
+    ? `<p class="ai-source">출처: ${escapeHtml(chart.source)}${pts ? ' · ' + pts.length + '개 포인트' : ''}${its ? ' · ' + its.length + '개 항목' : ''}</p>`
+    : '';
+  card.innerHTML = `
+    <div class="ai-answer-q">
+      <div class="ai-q-badge">Q</div>
+      <p style="margin:0;font-size:14px;color:var(--text);">${escapeHtml(question)}</p>
+    </div>
+    <p class="ai-answer-text">${escapeHtml(answer)}</p>
+    ${chartHTML}${sourceHTML}`;
+}
+
+function renderSparkline(chart) {
+  const pts = chart.points;
+  const W = 600, H = 72, pad = 8;
+  const values = pts.map(p => p.value);
+  const minV = Math.min(...values), maxV = Math.max(...values);
+  const rangeV = maxV - minV || 1;
+  const xStep = (W - pad * 2) / Math.max(pts.length - 1, 1);
+  const coords = pts.map((p, i) => ({
+    x: pad + i * xStep,
+    y: pad + ((maxV - p.value) / rangeV) * (H - pad * 2),
+    date: p.date, value: p.value,
+  }));
+  const polyline = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const area = polyline + ` ${coords[coords.length-1].x.toFixed(1)},${H} ${coords[0].x.toFixed(1)},${H}`;
+  const dots = coords.map(c =>
+    `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3" fill="#185fa5"><title>${c.date}: ${c.value.toLocaleString()}</title></circle>`
+  ).join('');
+  const summary = chart.summary || {};
+  const changeTxt = summary.change_pct != null
+    ? `<span style="color:${summary.change_pct >= 0 ? '#1d9e75' : '#e24b4a'};font-weight:600;">${summary.change_pct >= 0 ? '+' : ''}${summary.change_pct}%</span>`
+    : '';
+  return `<div class="ai-chart-box">
+    <div class="ai-chart-meta">
+      <span>${escapeHtml(chart.title || chart.metric || '')} · ${pts[0].date} ~ ${pts[pts.length-1].date}</span>
+      <span>자동 시각화 ${changeTxt}</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:52px;overflow:visible;display:block;">
+      <polygon points="${area}" fill="#185fa5" opacity="0.1"/>
+      <polyline points="${polyline}" fill="none" stroke="#185fa5" stroke-width="2"/>
+      ${dots}
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-top:3px;">
+      <span>${pts[0].date.slice(5)}</span><span>${pts[pts.length-1].date.slice(5)}</span>
+    </div>
+  </div>`;
+}
+
+function renderBarChart(chart) {
+  const items = chart.items;
+  const maxV = Math.max(...items.map(i => i.value)) || 1;
+  const colors = ['#185fa5','#1d9e75','#d97706','#dc2626','#7c3aed'];
+  const bars = items.map((it, idx) => {
+    const barH = Math.max((it.value / maxV) * 72, 6);
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
+      <span style="font-size:11px;font-weight:600;font-family:var(--mono);color:var(--text);">${it.value.toLocaleString()}</span>
+      <div style="width:80%;height:${barH.toFixed(1)}px;background:${colors[idx % colors.length]};border-radius:3px 3px 0 0;"></div>
+      <span style="font-size:11px;color:var(--sub);text-align:center;word-break:keep-all;line-height:1.3;">${escapeHtml(it.label)}</span>
+    </div>`;
+  }).join('');
+  return `<div class="ai-chart-box">
+    <div class="ai-chart-meta">
+      <span>${escapeHtml(chart.title || '')}${chart.date ? ' · ' + chart.date : ''}</span>
+      <span>자동 시각화</span>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:8px;min-height:88px;">${bars}</div>
+  </div>`;
+}
+
+async function loadHistory() {
+  const list = document.getElementById('ai-history-list');
+  if (!list) return;
+  try {
+    const res = await fetch('/api/query/history?limit=20', {
+      headers: { 'X-User-Id': RAAS_USER_ID },
+    });
+    const data = await res.json();
+    if (!data.items || data.items.length === 0) {
+      list.innerHTML = '<p style="font-size:13px;color:var(--sub);margin:0;">아직 질의 내역이 없습니다.</p>';
+      return;
+    }
+    list.innerHTML = data.items.map(it => {
+      const q = it.question;
+      return `<div class="ai-history-item" data-q="${escapeHtml(q)}">
+        <span>${escapeHtml(q.length > 48 ? q.slice(0, 48) + '…' : q)}</span>
+        <span style="font-size:12px;color:var(--dim);white-space:nowrap;margin-left:8px;">${formatRelTime(it.created_at)}</span>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.ai-history-item').forEach(el => {
+      el.addEventListener('click', () => {
+        document.getElementById('ai-input').value = el.dataset.q;
+        document.getElementById('ai-input').focus();
+      });
+    });
+  } catch (err) { console.error('히스토리 로드 실패', err); }
+}
+
+function formatRelTime(iso) {
+  const d = new Date((iso.includes('Z') || iso.includes('+')) ? iso : iso + 'Z');
+  const m = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (m < 1) return '방금';
+  if (m < 60) return m + '분 전';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + '시간 전';
+  const days = Math.floor(h / 24);
+  if (days < 7) return days + '일 전';
+  return iso.slice(0, 10);
+}
+
+document.getElementById('btn-toggle-history').addEventListener('click', () => {
+  const panel = document.getElementById('ai-history-panel');
+  const btn   = document.getElementById('btn-toggle-history');
+  panel.classList.toggle('hidden');
+  btn.classList.toggle('active');
+  if (!panel.classList.contains('hidden')) loadHistory();
+});
+document.getElementById('btn-ai-send').addEventListener('click', sendQuery);
+document.getElementById('ai-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendQuery();
 });
 
 // ── 청취 전환 퍼널 ──
@@ -1922,6 +2178,7 @@ function goPage(pageId) {
   if (pageId === 'analytics' && _data) {
     renderAnalyticsPage(_data);
   }
+  if (pageId === 'ai') loadPopularChips();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
