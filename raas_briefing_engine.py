@@ -35,21 +35,50 @@ PGM_L=['L01','L02','L03','L04','L05','L06','L07','L08','L09','L10','L11',
 CH=['F00','L00','G00','P00']
 ALL=PGM_F+PGM_L
 
-def _load(search):
+def _load_timeline(search):
+    """raas_kpi_latest.csv를 timeline 구조로 로드.
+    반환: {PGM_CODE: {DATE: row, ...}, ...}
+    같은 PGM_CODE의 여러 날짜 행을 모두 보존.
+    """
     try:
-        rows=search("| inputlookup raas_kpi_latest.csv")
-        return {r['PGM_CODE']:r for r in rows if r.get('PGM_CODE')}
+        rows = search("| inputlookup raas_kpi_latest.csv")
     except Exception as e:
-        local_path=os.path.join(os.path.dirname(__file__),'raas_kpi_latest.csv')
+        local_path = os.path.join(os.path.dirname(__file__), 'raas_kpi_latest.csv')
         if os.path.exists(local_path):
-            print(f"  📂 Splunk 실패({type(e).__name__}) — 로컬 CSV 폴백: {local_path}")
-            df=pd.read_csv(local_path,dtype=str,keep_default_na=False)
-            rows=df.to_dict(orient='records')
-            return {r['PGM_CODE']:r for r in rows if r.get('PGM_CODE')}
-        raise
+            print(f"  [fallback] Splunk {type(e).__name__} - local CSV: {local_path}")
+            df = pd.read_csv(local_path, dtype=str, keep_default_na=False)
+            rows = df.to_dict(orient='records')
+        else:
+            raise
+    timeline = {}
+    for r in rows:
+        code = r.get('PGM_CODE')
+        date = r.get('DATE')
+        if not code or not date:
+            continue
+        timeline.setdefault(code, {})[date] = r
+    if timeline:
+        all_dates = set()
+        for code_rows in timeline.values():
+            all_dates.update(code_rows.keys())
+        print(f"  [timeline] {len(timeline)} codes x {len(all_dates)} dates ({min(all_dates)} ~ {max(all_dates)})")
+    return timeline
 
-def _load_top(search):
-    return search("| inputlookup raas_top_programs_latest.csv | sort rank | head 15")
+def _latest_snapshot(timeline):
+    """timeline에서 각 PGM_CODE의 최신 날짜 행만 추출.
+    반환: {PGM_CODE: row} (기존 _load 결과와 동일 구조)
+    """
+    snapshot = {}
+    for code, date_rows in timeline.items():
+        if not date_rows:
+            continue
+        snapshot[code] = date_rows[max(date_rows.keys())]
+    return snapshot
+
+def _load(search):
+    """[호환성 유지용] _load_timeline + _latest_snapshot 조합."""
+    return _latest_snapshot(_load_timeline(search))
+
 
 def build_s1(kpi):
     t=kpi.get('T00',{})
@@ -281,26 +310,18 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
         'd7_diff':             _fn(row.get('d7_diff')),
         'w1_diff':             _fn(row.get('w1_diff')),
         'm1_diff':             _fn(row.get('m1_diff')),
+        'guestname':           (row.get('guestname') or '').strip(),
     }
 
-def build_s5(kpi, top_programs):
-    dau_top10=[]
-    for r in top_programs[:10]:
-        pgm_code = r.get('pgm_code','')
-        row = kpi.get(pgm_code, {})
-        dau_top10.append(_pgm_dict(
-            pgm_code, row,
-            rank=_i(r.get('rank')),
-            name=r.get('pgm_name',''),
-            channel=r.get('channel',''),
-            dau=_i(r.get('dau')),
-        ))
+def build_s5(kpi):
     all_pgm_codes = sorted(
         [k for k in kpi.keys()
-         if (k.startswith('F') or k.startswith('L'))
-         and k not in ('F00','L00') and len(k)==3],
+         if (k.startswith('F') or k.startswith('L') or k.startswith('M'))
+         and k not in ('F00','L00') and len(k)==3
+         and k != 'L04'],
         key=lambda c: _f(kpi[c].get('dau_today'),0), reverse=True
     )
+    dau_top10    = [_pgm_dict(c, kpi[c], rank=i+1) for i,c in enumerate(all_pgm_codes[:10])]
     all_programs = [_pgm_dict(c, kpi[c]) for c in all_pgm_codes]
     dl,nl,rl=[],[],[]
     for c in ALL:
@@ -445,7 +466,7 @@ def build_s7(s1,s2,s3,s4,s5):
     if not a: a.append({'level':'green','msg':'전 지표 정상 범위 🟢'})
     return {'alerts':a}
 
-def build_context(s1,s2,s3,s4,s5,s6,s7):
+def build_context(s1,s2,s3,s4,s5,s6,s7,timeline=None):
     L=["=== RAAS 고릴라 앱 브리핑 ===\n"]
     if s1:
         L.append(f"[일간] DAU {s1.get('dau',0):,} (WoW{s1.get('dau_wow') or 0:+.1f}%)")
@@ -473,22 +494,175 @@ def build_context(s1,s2,s3,s4,s5,s6,s7):
     if s7:
         L.append("\n[이상징후]")
         for a in s7.get('alerts',[]): L.append(f"  {a['msg']}")
+    if timeline:
+        try:
+            ts_text = _build_timeseries_insights(timeline, days=7)
+            if ts_text:
+                L.append(ts_text)
+        except Exception as e:
+            print(f"  [warn] timeseries insights error: {e}")
     return '\n'.join(L)
 
-def collect_all(search_fn):
+def collect_all(search_fn, return_timeline=False):
+    """KPI 데이터 수집 및 섹션 빌드.
+
+    Args:
+        search_fn: Splunk 쿼리 실행 함수
+        return_timeline: True면 결과에 '_timeline' 추가 (시계열 API용)
+    """
     print(f"[{datetime.now().strftime('%H:%M:%S')}] KPI 수집 시작")
-    def safe(fn,*args,fb=None):
+    def safe(fn, *args, fb=None):
         try: return fn(*args)
         except Exception as e:
             print(f"  ⚠️ {fn.__name__}: {e}")
             return fb if fb is not None else {}
-    kpi  = safe(_load, search_fn, fb={})
-    top  = safe(_load_top, search_fn, fb=[])
+    timeline = safe(_load_timeline, search_fn, fb={})
+    kpi = _latest_snapshot(timeline)
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {len(kpi)}코드 로드, 섹션 계산중...")
     s1=build_s1(kpi); s2=build_s2(kpi); s3=build_s3(kpi); s4=build_s4(kpi)
-    s5=build_s5(kpi,top); s6=build_s6(kpi); s7=build_s7(s1,s2,s3,s4,s5)
-    ctx=build_context(s1,s2,s3,s4,s5,s6,s7)
+    s5=build_s5(kpi); s6=build_s6(kpi); s7=build_s7(s1,s2,s3,s4,s5)
+    ctx=build_context(s1,s2,s3,s4,s5,s6,s7,timeline=timeline)
     print(f"[{datetime.now().strftime('%H:%M:%S')}] 완료")
-    return {'s1_executive':s1,'s2_funnel':s2,'s3_engagement':s3,'s4_growth':s4,
-            's5_rankings':s5,'s6_channels':s6,'s7_anomalies':s7,
-            'claude_context':ctx,'collected_at':datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    result = {
+        's1_executive':s1,'s2_funnel':s2,'s3_engagement':s3,'s4_growth':s4,
+        's5_rankings':s5,'s6_channels':s6,'s7_anomalies':s7,
+        'claude_context':ctx,'collected_at':datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    if return_timeline:
+        result['_timeline'] = timeline
+        all_dates = set()
+        for code_rows in timeline.values():
+            all_dates.update(code_rows.keys())
+        if all_dates:
+            result['_timeline_meta'] = {
+                'date_min': min(all_dates), 'date_max': max(all_dates),
+                'days_count': len(all_dates), 'codes_count': len(timeline)
+            }
+    return result
+
+
+# ── 시계열 조회 헬퍼 (Step 3 이후 활용) ─────────────────────────────────
+
+def get_timeseries(timeline, code, days=30):
+    """특정 PGM_CODE의 최근 N일치 시계열. 날짜 오름차순 반환."""
+    if code not in timeline:
+        return []
+    date_rows = timeline[code]
+    sorted_dates = sorted(date_rows.keys(), reverse=True)[:days]
+    sorted_dates.reverse()
+    return [date_rows[d] for d in sorted_dates]
+
+def get_snapshot_at(timeline, target_date):
+    """특정 날짜의 모든 PGM_CODE 스냅샷. build_s1~s7 호환 형태."""
+    return {code: date_rows[target_date]
+            for code, date_rows in timeline.items()
+            if target_date in date_rows}
+
+def get_metric_trend(timeline, code, metric_field, days=30):
+    """특정 PGM_CODE + 지표의 시계열. [(date, value_or_None), ...] 오름차순."""
+    return [(r.get('DATE'), _fn(r.get(metric_field)))
+            for r in get_timeseries(timeline, code, days)]
+
+def get_available_dates(timeline):
+    """timeline에 존재하는 모든 날짜 목록 (오름차순)."""
+    all_dates = set()
+    for date_rows in timeline.values():
+        all_dates.update(date_rows.keys())
+    return sorted(all_dates)
+
+def get_codes_summary(timeline):
+    """코드별 데이터 가용성 요약. {PGM_CODE: {days, date_min, date_max}}"""
+    summary = {}
+    for code, date_rows in timeline.items():
+        if not date_rows:
+            continue
+        dates = sorted(date_rows.keys())
+        summary[code] = {'days': len(dates), 'date_min': dates[0], 'date_max': dates[-1]}
+    return summary
+
+
+def _build_timeseries_insights(timeline, days=7):
+    """timeline에서 시계열 인사이트 텍스트 생성. claude_context에 추가용."""
+    if not timeline:
+        return ''
+    available_dates = get_available_dates(timeline)
+    if len(available_dates) < 2:
+        return ''
+
+    actual_days = min(days, len(available_dates))
+    lines = ['', f'[최근 {actual_days}일 시계열 추세]']
+
+    # 1. 전체(T00) DAU 추세
+    t00_trend = get_metric_trend(timeline, 'T00', 'dau_today', days=actual_days)
+    valid = [(d, v) for d, v in t00_trend if v is not None]
+    if len(valid) >= 2:
+        avg = sum(v for _, v in valid) / len(valid)
+        first_v, latest_v = valid[0][1], valid[-1][1]
+        chg = (latest_v - first_v) / first_v * 100 if first_v else 0
+        direction = 'up' if chg > 2 else ('down' if chg < -2 else 'flat')
+        dir_str = {'up': '(+) 상승', 'down': '(-) 하락', 'flat': '(=) 안정'}[direction]
+        lines.append(f'  전체 DAU {actual_days}일 평균: {int(avg):,}명')
+        lines.append(f'  추세: {dir_str} ({chg:+.1f}%, {int(first_v):,} -> {int(latest_v):,})')
+
+    # 2. 채널별 변화
+    lines.append(f'  [채널별 {actual_days}일 변화]')
+    for ch in ('F00', 'L00', 'G00', 'P00'):
+        ch_trend = get_metric_trend(timeline, ch, 'dau_today', days=actual_days)
+        vl = [(d, v) for d, v in ch_trend if v is not None]
+        if len(vl) >= 2:
+            fv, lv = vl[0][1], vl[-1][1]
+            chg = (lv - fv) / fv * 100 if fv else 0
+            avg = sum(v for _, v in vl) / len(vl)
+            lines.append(f'    {PGM_NAMES.get(ch, ch)}: avg {int(avg):,} / {chg:+.1f}% ({int(fv):,}->{int(lv):,})')
+
+    # 3. 깊은청취율 추세
+    dr_trend = get_metric_trend(timeline, 'T00', 'deep_rate', days=actual_days)
+    vl_dr = [(d, v) for d, v in dr_trend if v is not None]
+    if len(vl_dr) >= 2:
+        fv, lv = vl_dr[0][1], vl_dr[-1][1]
+        avg_dr = sum(v for _, v in vl_dr) / len(vl_dr)
+        lines.append(f'  [깊은청취율 추세] avg {avg_dr:.1f}%, {fv:.1f}% -> {lv:.1f}% ({lv-fv:+.1f}pp)')
+
+    # 4. 급변 감지 (전일 대비 ±10%, DAU 1000명 이상)
+    if len(available_dates) >= 2:
+        latest_d, prev_d = available_dates[-1], available_dates[-2]
+        spikes, drops = [], []
+        exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
+        for code, date_rows in timeline.items():
+            if code in exclude:
+                continue
+            lr = date_rows.get(latest_d)
+            pr = date_rows.get(prev_d)
+            if not lr or not pr:
+                continue
+            lv = _f(lr.get('dau_today'), 0)
+            pv = _f(pr.get('dau_today'), 0)
+            if pv < 1000:
+                continue
+            chg = (lv - pv) / pv * 100
+            nm = PGM_NAMES.get(code, code)
+            if chg >= 10:
+                spikes.append((nm, chg, int(lv)))
+            elif chg <= -10:
+                drops.append((nm, chg, int(lv)))
+        if spikes or drops:
+            lines.append('  [전일 대비 급변]')
+            for nm, chg, dau in sorted(spikes, key=lambda x: -x[1])[:3]:
+                lines.append(f'    [+] {nm} {chg:+.1f}% (DAU {dau:,})')
+            for nm, chg, dau in sorted(drops, key=lambda x: x[1])[:3]:
+                lines.append(f'    [-] {nm} {chg:+.1f}% (DAU {dau:,})')
+
+    # 5. 어제 vs 최근 평균 비교
+    if len(available_dates) >= 4:
+        hist_dates = available_dates[-actual_days:-1]
+        latest_d = available_dates[-1]
+        hist_dau = [_f(timeline.get('T00', {}).get(d, {}).get('dau_today'), 0)
+                    for d in hist_dates]
+        hist_dau = [v for v in hist_dau if v]
+        latest_dau = _f(timeline.get('T00', {}).get(latest_d, {}).get('dau_today'), 0)
+        if hist_dau and latest_dau:
+            avg = sum(hist_dau) / len(hist_dau)
+            diff_pct = (latest_dau - avg) / avg * 100 if avg else 0
+            lines.append(f'  [어제 vs 최근 평균] DAU {int(latest_dau):,} vs {len(hist_dau)}일 avg {int(avg):,} ({diff_pct:+.1f}%)')
+
+    return '\n'.join(lines)

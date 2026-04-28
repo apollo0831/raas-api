@@ -24,6 +24,9 @@
   --yellow: #ffb830;
   --purple: #a78bfa;
   --orange: #ff8c42;
+  --gold:   #fbbf24;
+  --silver: #c0c0c0;
+  --bronze: #cd7f32;
   --mono:   'JetBrains Mono', monospace;
   --sans:   'Noto Sans KR', sans-serif;
   --fs-xs:   11px;
@@ -451,12 +454,13 @@ body{
   background:var(--bg4);color:var(--text);
   border-color:var(--bg4);
 }
-.pgm-list{display:flex;flex-direction:column;gap:4px}
+.pgm-list{display:flex;flex-direction:column;gap:0}
 .pgm-row{
-  display:flex;align-items:center;gap:10px;
-  background:var(--bg2);border-radius:8px;
-  padding:9px 12px;border:1px solid var(--line);
+  display:flex;align-items:flex-start;gap:10px;
+  padding:11px 4px;
+  border-bottom:0.5px solid rgba(255,255,255,0.08);
 }
+.pgm-row:last-child{border-bottom:none}
 .pr-rank{
   font-family:var(--mono);font-size:16px;
   color:var(--dim);width:18px;flex-shrink:0;
@@ -470,6 +474,7 @@ body{
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .pr-channel{font-size:15px;color:var(--dim)}
+.pr-guest{font-size:14px;color:var(--dim);margin-top:2px;word-break:keep-all;overflow-wrap:break-word;line-height:1.5;}
 .pr-meta{font-size:14px;color:var(--sub);margin-top:1px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .pr-val{
@@ -482,8 +487,27 @@ body{
 }
 .pr-badge.deep{background:rgba(167,139,250,.12);color:var(--purple)}
 .pr-badge.warn{background:rgba(255,77,106,.12);color:var(--red)}
-.pr-badge.weekend{background:rgba(167,139,250,.12);color:var(--purple);font-size:12px}
-.pr-badge.weekday{background:rgba(59,130,246,.12);color:#60a5fa;font-size:12px}
+.pr-badge.weekend{background:rgba(20,184,166,.18);color:#14b8a6;font-size:11px;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600;vertical-align:middle}
+.pr-badge.channel-fm{background:rgba(239,68,68,.10);color:#fca5a5;font-size:11px;padding:2px 7px;border-radius:4px;font-weight:500;margin-left:5px;vertical-align:middle}
+.pr-badge.channel-lm{background:rgba(132,204,22,.10);color:#bef264;font-size:11px;padding:2px 7px;border-radius:4px;font-weight:500;margin-left:5px;vertical-align:middle}
+
+
+/* ── 프로그램 컨트롤 행 ── */
+.pgm-control-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.pgm-control-row .scope-bar{padding-bottom:0;flex:1;min-width:0;}
+.view-toggle{display:flex;gap:4px;flex-shrink:0;margin-left:8px;align-items:center;}
+.view-btn{width:32px;height:32px;padding:0;background:transparent;color:var(--sub);border:0.5px solid #333;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.view-btn.active{background:#2a2a2a;color:var(--text);border-color:#555;}
+.icon-tx{font-family:'Courier New',monospace;font-size:18px;font-weight:600;line-height:1;}
+.icon-tx sub{font-size:13px;vertical-align:sub;}
+/* ── 차트 뷰 ── */
+.chart-row{margin-bottom:13px;}
+.chart-row:last-child{margin-bottom:0;}
+.chart-row-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:13px;}
+.chart-row-name{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
+.chart-row-value{color:var(--text);font-weight:500;flex-shrink:0;margin-left:8px;}
+.chart-bar-track{height:9px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;}
+.chart-bar-fill{height:100%;border-radius:5px;transition:width .4s ease;}
 
 /* ── Claude 브리핑 ── */
 .brief-card{
@@ -811,16 +835,31 @@ body{
 </div>
 
 <div class="page" id="page-programs">
+  <div class="pgm-control-row">
+    <div class="scope-bar" id="pgmChannelBar">
+      <button class="scope-tab active" onclick="setPgmChannel('ALL')">전체</button>
+      <button class="scope-tab" onclick="setPgmChannel('F00')">파워FM</button>
+      <button class="scope-tab" onclick="setPgmChannel('L00')">러브FM</button>
+    </div>
+    <div class="view-toggle">
+      <button class="view-btn active" id="viewListBtn" onclick="setPgmView('list')" title="리스트 뷰">
+        <span class="icon-tx">T<sub>x</sub></span>
+      </button>
+      <button class="view-btn" id="viewChartBtn" onclick="setPgmView('chart')" title="차트 뷰">
+        <svg width="22" height="20" viewBox="0 0 22 20" style="display:block">
+          <rect x="1"    y="11" width="4" height="8"  fill="#ef4444"/>
+          <rect x="6.5"  y="7"  width="4" height="12" fill="#f97316"/>
+          <rect x="12"   y="3"  width="4" height="16" fill="#fbbf24"/>
+          <rect x="17.5" y="8"  width="4" height="11" fill="#84cc16"/>
+        </svg>
+      </button>
+    </div>
+  </div>
   <!-- ZONE 9: 프로그램 랭킹 -->
   <div class="section">
     <div class="section-title">프로그램 랭킹</div>
-    <div class="scope-bar" id="pgmChannelBar">
-      <button class="scope-btn active" onclick="setPgmChannel('ALL')">전체</button>
-      <button class="scope-btn" onclick="setPgmChannel('F00')">파워FM</button>
-      <button class="scope-btn" onclick="setPgmChannel('L00')">러브FM</button>
-    </div>
     <div class="pgm-tabs" id="pgmTabs">
-      <button class="pgm-tab active" data-tab="dau" onclick="showPgmTab('dau')">DAU TOP</button>
+      <button class="pgm-tab active" id="pgmTabDau" data-tab="dau" onclick="showPgmTab('dau')">DAU TOP</button>
       <button class="pgm-tab" data-tab="deep" onclick="showPgmTab('deep')">깊은청취</button>
       <button class="pgm-tab" data-tab="new" onclick="showPgmTab('new')">신규유입</button>
       <button class="pgm-tab" data-tab="react" onclick="showPgmTab('react')">복귀유도</button>
@@ -886,8 +925,10 @@ let _scope = 'T00';
 let _period = 'day';
 let _pgmTab = 'dau';
 let _pgmChannel = 'ALL';
+let _pgmView = 'list';
 const WEEKEND_ONLY_CODES = ['M05','M07','M10','M11'];
 const WEEKDAY_ONLY_CODES = ['L05','L06','L07','L11'];
+const EXCLUDED_CODES     = ['L04'];
 let _cohortTab = 'all';
 function showCohortTab(tab){
   _cohortTab = tab;
@@ -898,11 +939,18 @@ function showCohortTab(tab){
 }
 
 // ── 기간 선택 ────────────────────────────────────────────
+function updatePgmTabLabel(){
+  const labels = {day:'DAU TOP', week:'WAU TOP', mon:'MAU TOP'};
+  const el = document.getElementById('pgmTabDau');
+  if(el) el.textContent = labels[_period] || 'DAU TOP';
+}
+
 function setPeriod(p){
   _period = p;
   ['day','week','mon'].forEach(t=>{
     document.getElementById('tab-'+t).classList.toggle('active',t===p);
   });
+  updatePgmTabLabel();
   if(_data) renderAll(_data);
   const analyticsPage = document.getElementById('page-analytics');
   if (analyticsPage?.classList.contains('active') && _data) {
@@ -927,6 +975,7 @@ async function loadAll(){
     if(!json.ok) throw new Error(json.error);
     _data = json.data;
     renderAll(_data);
+    updatePgmTabLabel();
     document.getElementById('loading').style.display='none';
     document.getElementById('content').style.display='block';
   } catch(e){
@@ -1341,39 +1390,101 @@ function renderAlerts(s7){
 
 // ── ZONE 9: 프로그램 랭킹 ───────────────────────────────
 function getDataDayType(){
-  const dateStr = _data?.s1_executive?.date;
+  const dateStr = (_data?.s1_executive?.date || _data?.collected_at || '');
   if(dateStr){
-    const d = new Date(dateStr);
-    return (d.getDay()===0||d.getDay()===6) ? 'weekend' : 'weekday';
+    const d = new Date(dateStr.split(' ')[0]);
+    if(!isNaN(d)) return (d.getDay()===0||d.getDay()===6) ? 'weekend' : 'weekday';
   }
   const d = new Date();
   return (d.getDay()===0||d.getDay()===6) ? 'weekend' : 'weekday';
 }
 
-function filterAndTagPrograms(programs, period, channelFilter){
+function filterPrograms(programs, period, channelFilter){
   const dayType = getDataDayType();
-  return programs
-    .filter(p=>{
-      if(channelFilter==='F00') return (p.channel||'').includes('파워') || (p.code||'').startsWith('F');
-      if(channelFilter==='L00') return (p.channel||'').includes('러브') || (p.code||'').startsWith('L') || (p.code||'').startsWith('M');
-      return true;
-    })
-    .filter(p=>{
-      if(period!=='day') return true;
-      if(WEEKEND_ONLY_CODES.includes(p.code) && dayType!=='weekend') return false;
-      if(WEEKDAY_ONLY_CODES.includes(p.code) && dayType!=='weekday') return false;
-      return true;
-    })
-    .map(p=>({
-      ...p,
-      _badge: WEEKEND_ONLY_CODES.includes(p.code) ? 'weekend' :
-              WEEKDAY_ONLY_CODES.includes(p.code) ? 'weekday' : null
-    }));
+  return programs.filter(p=>{
+    if(EXCLUDED_CODES.includes(p.code)) return false;
+    if(channelFilter==='F00') {
+      if(!(p.channel||'').includes('파워') && !(p.code||'').startsWith('F')) return false;
+    } else if(channelFilter==='L00') {
+      if(!(p.channel||'').includes('러브') && !(p.code||'').startsWith('L') && !(p.code||'').startsWith('M')) return false;
+    }
+    if(period==='day'){
+      if(dayType==='weekday' && WEEKEND_ONLY_CODES.includes(p.code)) return false;
+      if(dayType==='weekend' && WEEKDAY_ONLY_CODES.includes(p.code)) return false;
+    }
+    return true;
+  });
+}
+
+function getRankColor(rank){
+  if(rank===1) return 'var(--gold,#fbbf24)';
+  if(rank===2) return 'var(--silver,#c0c0c0)';
+  if(rank===3) return 'var(--bronze,#cd7f32)';
+  return 'var(--sub)';
+}
+
+function setPgmView(view){
+  _pgmView = view;
+  document.getElementById('viewListBtn').classList.toggle('active', view==='list');
+  document.getElementById('viewChartBtn').classList.toggle('active', view==='chart');
+  if(_data) renderPgm(_data.s5_rankings||{}, _pgmTab, _period, _pgmChannel);
+}
+
+function getMetricField(tab, period){
+  const map = {
+    dau:   {day:'dau',         week:'dau_week',         mon:'dau_mon'},
+    deep:  {day:'deep_rate',   week:'deep_rate_week',   mon:'deep_rate_mon'},
+    new:   {day:'new_user',    week:'new_week',         mon:'new_mon'},
+    react: {day:'react_user',  week:'react_week',       mon:'react_mon'},
+    risk:  {day:'churn_rate',  week:'churn_week',       mon:'churn_mon'},
+  };
+  return map[tab]?.[period] || 'dau';
+}
+
+function fmtChartVal(val, tab){
+  if(val==null) return '—';
+  if(tab==='deep'||tab==='risk') return val.toFixed(1)+'%';
+  return fmtK(val);
+}
+const formatValue = fmtChartVal;
+
+function isPercentMetric(tab){ return tab === 'deep' || tab === 'risk'; }
+
+function renderPgmChart(programs, tab, period){
+  const field      = getMetricField(tab, period);
+  const isRisk     = tab === 'risk';
+  const isPercent  = isPercentMetric(tab);
+  const sorted     = [...programs].sort((a,b)=>(b[field]||0)-(a[field]||0));
+  const maxVal     = sorted.length ? (sorted[0][field]||0) : 0;
+  if(maxVal === 0) return '<div style="padding:16px;text-align:center;color:var(--sub)">데이터 없음</div>';
+
+  const gradient = isRisk
+    ? 'linear-gradient(90deg,#84cc16 0%,#a3e635 25%,#fbbf24 50%,#f97316 75%,#ef4444 100%)'
+    : 'linear-gradient(90deg,#ef4444 0%,#f97316 25%,#fbbf24 50%,#a3e635 75%,#84cc16 100%)';
+
+  return sorted.map((p,i)=>{
+    const val      = p[field]||0;
+    const widthPct = isPercent ? Math.min(100, Math.max(0, val)) : (val/maxVal*100);
+    const bgSize   = widthPct > 0 ? (100/widthPct*100).toFixed(2) : '100';
+    const badge    = WEEKEND_ONLY_CODES.includes(p.code) ? '<span class="pr-badge weekend">주말</span>' : '';
+    return `
+      <div class="chart-row">
+        <div class="chart-row-header">
+          <span class="chart-row-name">
+            <strong style="color:${getRankColor(i+1)};font-weight:600;margin-right:4px">${i+1}</strong>${p.name||p.code}${badge}
+          </span>
+          <span class="chart-row-value">${formatValue(val,tab)}</span>
+        </div>
+        <div class="chart-bar-track">
+          <div class="chart-bar-fill" style="width:${widthPct.toFixed(1)}%;background-image:${gradient};background-size:${bgSize}% 100%;background-position:left;background-repeat:no-repeat"></div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function setPgmChannel(code){
   _pgmChannel = code;
-  document.querySelectorAll('#pgmChannelBar .scope-btn').forEach(b=>{
+  document.querySelectorAll('#pgmChannelBar .scope-tab').forEach(b=>{
     const match = b.getAttribute('onclick').includes("'"+code+"'");
     b.classList.toggle('active', match);
   });
@@ -1388,16 +1499,32 @@ function showPgmTab(tab){
   if(_data) renderPgm(_data.s5_rankings||{}, tab, _period, _pgmChannel);
 }
 
+function escapeHtml(s){
+  if(!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+function getChannelBadge(channel, period, channelFilter){
+  if(period!=='day' || channelFilter!=='ALL') return '';
+  if(channel==='파워FM') return '<span class="pr-badge channel-fm">파워</span>';
+  if(channel==='러브FM') return '<span class="pr-badge channel-lm">러브</span>';
+  return '';
+}
+
 function renderPgm(s5, tab, period, channelFilter){
   period       = period       || _period      || 'day';
   channelFilter= channelFilter|| _pgmChannel  || 'ALL';
   const allPgms = s5.all_programs || s5.dau_top10 || [];
-  const pgms   = filterAndTagPrograms(allPgms, period, channelFilter);
+  const pgms   = filterPrograms(allPgms, period, channelFilter);
 
-  const badgeHtml = p =>
-    p._badge ? `<span class="pr-badge ${p._badge}" style="margin-left:4px">${p._badge==='weekend'?'주말':'평일'}</span>` : '';
   const wowSpan = (v, suffix='%') =>
     v==null ? '' : `<span class="${wowClass(v)}" style="font-size:13px">${fmtD(v,suffix)}</span>`;
+  const weekendBadge = p =>
+    WEEKEND_ONLY_CODES.includes(p.code) ? '<span class="pr-badge weekend">주말</span>' : '';
+  const channelBadge = p => getChannelBadge(p.channel, period, channelFilter);
+  const guestRow     = p => (period==='day' && p.guestname)
+    ? `<div class="pr-guest">${escapeHtml(p.guestname)}</div>` : '';
 
   let rows = [];
 
@@ -1409,8 +1536,8 @@ function renderPgm(s5, tab, period, channelFilter){
       <div class="pgm-row">
         <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
         <div class="pr-info">
-          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
-          <div class="pr-channel">${p.channel||''}</div>
+          <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
+          ${period==='day' ? guestRow(p) : `<div class="pr-channel">${p.channel||''}</div>`}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
           <span class="pr-val">${fmtK(p[valKey])}</span>
@@ -1425,10 +1552,10 @@ function renderPgm(s5, tab, period, channelFilter){
     const sorted  = [...pgms].sort((a,b)=>(b[rateKey]||0)-(a[rateKey]||0));
     rows = sorted.map((p,i)=>`
       <div class="pgm-row">
-        <span class="pr-rank">${i+1}</span>
+        <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
         <div class="pr-info">
-          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
-          <div class="pr-channel">${p.channel||''}</div>
+          <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
+          ${period==='day' ? guestRow(p) : `<div class="pr-channel">${p.channel||''}</div>`}
         </div>
         <span class="pr-badge deep">${fmtP(p[rateKey])}</span>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
@@ -1444,10 +1571,11 @@ function renderPgm(s5, tab, period, channelFilter){
     const sorted = [...pgms].sort((a,b)=>(b[valKey]||0)-(a[valKey]||0));
     rows = sorted.map((p,i)=>`
       <div class="pgm-row">
-        <span class="pr-rank">${i+1}</span>
+        <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
         <div class="pr-info">
-          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
-          <div class="pr-meta">${p.channel||''} · 신규비율 ${fmtP(p[pctKey])}</div>
+          <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
+          <div class="pr-meta">${period!=='day'?(p.channel||'')+' · ':''}신규비율 ${fmtP(p[pctKey])}</div>
+          ${guestRow(p)}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
           <span class="pr-val" style="color:var(--green)">${fmtK(p[valKey])}</span>
@@ -1462,10 +1590,11 @@ function renderPgm(s5, tab, period, channelFilter){
     const sorted  = [...pgms].sort((a,b)=>(b[valKey]||0)-(a[valKey]||0));
     rows = sorted.map((p,i)=>`
       <div class="pgm-row">
-        <span class="pr-rank">${i+1}</span>
+        <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
         <div class="pr-info">
-          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
-          <div class="pr-meta">${p.channel||''} · 복귀율 ${fmtP(p[rateKey])}</div>
+          <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
+          <div class="pr-meta">${period!=='day'?(p.channel||'')+' · ':''}복귀율 ${fmtP(p[rateKey])}</div>
+          ${guestRow(p)}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
           <span class="pr-val" style="color:var(--purple)">${fmtK(p[valKey])}</span>
@@ -1482,7 +1611,7 @@ function renderPgm(s5, tab, period, channelFilter){
       <div class="pgm-row">
         <span class="pr-rank">⚠</span>
         <div class="pr-info">
-          <div class="pr-name">${p.name||p.code||'—'}${badgeHtml(p)}</div>
+          <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
           <div class="pr-channel">${p.channel||''} · DAU ${fmtK(p.dau)}</div>
         </div>
         <span class="pr-badge warn">${fmtD(p[wowKey],'%')}</span>
@@ -1490,7 +1619,11 @@ function renderPgm(s5, tab, period, channelFilter){
       </div>`) :
       [`<div style="padding:16px;text-align:center;color:var(--green);font-size:18px">✅ 이탈 위험 프로그램 없음</div>`];
   }
-  document.getElementById('pgmList').innerHTML = rows.join('');
+  if(_pgmView==='chart'){
+    document.getElementById('pgmList').innerHTML = renderPgmChart(pgms, tab, period);
+  } else {
+    document.getElementById('pgmList').innerHTML = rows.join('');
+  }
 }
 
 // ── ZONE 10: AI 브리핑 ──────────────────────────────────
@@ -1644,6 +1777,7 @@ function getScopeData(data, scope) {
       },
     };
   } else {
+    if(EXCLUDED_CODES.includes(scope)) return data;
     const allPgms = [
       ...(data.s5_rankings?.all_programs || []),
       ...(data.s5_rankings?.dau_top10 || [])
@@ -1731,7 +1865,9 @@ function renderProgramBar(channelCode) {
   const allPgms = _data.s5_rankings?.all_programs ||
                   _data.s5_rankings?.dau_top10 || [];
   const prefix = channelCode === 'F00' ? 'F' : 'L';
-  const programs = allPgms.filter(p => p.code?.startsWith(prefix));
+  const programs = allPgms.filter(p =>
+    p.code?.startsWith(prefix) && !EXCLUDED_CODES.includes(p.code)
+  );
   if (programs.length === 0) {
     bar.innerHTML = '';
     bar.classList.remove('visible');

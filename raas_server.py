@@ -63,6 +63,15 @@ def cache_get(key):
 def cache_set(key, data):
     with _cache_lock:
         _cache[key] = {"data": data, "ts": datetime.now()}
+
+def get_cached_timeline():
+    cached = cache_get("timeline")
+    if cached:
+        return cached
+    data = BE.collect_all(splunk_search, return_timeline=True)
+    timeline = data.get("_timeline", {})
+    cache_set("timeline", timeline)
+    return timeline
 # ──────────────────────────────────────────────────────────
 
 def splunk_auth():
@@ -195,17 +204,101 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
-        elif self.path == "/api/top_programs":
+        elif self.path.startswith("/api/timeseries/program/"):
             try:
-                cached = cache_get("top_programs")
-                if cached:
-                    self.send_json({"ok": True, "data": cached, "_cached": True})
+                parts = self.path.split("?", 1)
+                code = parts[0].replace("/api/timeseries/program/", "").strip().upper()
+                params = dict(urllib.parse.parse_qsl(parts[1])) if len(parts) > 1 else {}
+                metric = params.get("metric", "dau_today")
+                days   = int(params.get("days", 30))
+                if not code:
+                    self.send_json({"ok": False, "error": "프로그램 코드가 필요합니다"}, 400)
                     return
+                timeline = get_cached_timeline()
+                if code not in timeline:
+                    self.send_json({"ok": False, "error": f"코드 '{code}' 데이터 없음"}, 404)
+                    return
+                trend = BE.get_metric_trend(timeline, code, metric, days=days)
+                latest_row = timeline[code].get(max(timeline[code].keys()), {})
+                self.send_json({
+                    "ok": True, "code": code,
+                    "name": latest_row.get("PGM_NAME", "") or BE.PGM_NAMES.get(code, code),
+                    "metric": metric, "days": days,
+                    "data": [{"date": d, "value": v} for d, v in trend]
+                })
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
 
-                rows = splunk_search(
-                    "| inputlookup raas_top_programs_latest.csv | sort rank | head 10")
-                cache_set("top_programs", rows)
-                self.send_json({"ok": True, "data": rows})
+        elif self.path.startswith("/api/snapshot/"):
+            try:
+                target_date = self.path.replace("/api/snapshot/", "").strip().replace("-", "/")
+                if not target_date:
+                    self.send_json({"ok": False, "error": "날짜가 필요합니다 (YYYY/MM/DD)"}, 400)
+                    return
+                timeline = get_cached_timeline()
+                snapshot = BE.get_snapshot_at(timeline, target_date)
+                if not snapshot:
+                    self.send_json({
+                        "ok": False, "error": f"'{target_date}' 데이터 없음",
+                        "available_dates": BE.get_available_dates(timeline)
+                    }, 404)
+                    return
+                result = {}
+                for code, row in snapshot.items():
+                    result[code] = {
+                        "code": code,
+                        "name": row.get("PGM_NAME", "") or BE.PGM_NAMES.get(code, code),
+                        "dau": BE._i(row.get("dau_today")),
+                        "dau_wow": BE._fn(row.get("dau_wow")),
+                        "dau_week": BE._i(row.get("dau_week")),
+                        "dau_mon": BE._i(row.get("dau_mon")),
+                        "deep_rate": BE._fn(row.get("deep_rate")),
+                        "engage_rate": BE._fn(row.get("engage_rate")),
+                        "habit_rate": BE._fn(row.get("habit_rate")),
+                        "new_user": BE._i(row.get("new_today")),
+                        "react_user": BE._i(row.get("react_today")),
+                        "churn_rate": BE._fn(row.get("churn_rate"))
+                    }
+                self.send_json({"ok": True, "date": target_date,
+                                "codes_count": len(result), "data": result})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path.startswith("/api/trend"):
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                metric = params.get("metric", "dau_today")
+                scope  = params.get("scope", "T00").upper()
+                days   = int(params.get("days", 30))
+                timeline = get_cached_timeline()
+                if scope not in timeline:
+                    self.send_json({"ok": False, "error": f"스코프 '{scope}' 데이터 없음"}, 404)
+                    return
+                trend = BE.get_metric_trend(timeline, scope, metric, days=days)
+                self.send_json({
+                    "ok": True, "scope": scope,
+                    "name": BE.PGM_NAMES.get(scope, scope),
+                    "metric": metric, "days": days,
+                    "data": [{"date": d, "value": v} for d, v in trend]
+                })
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/timeline/meta":
+            try:
+                timeline = get_cached_timeline()
+                dates = BE.get_available_dates(timeline)
+                self.send_json({
+                    "ok": True,
+                    "codes_count": len(timeline),
+                    "days_count": len(dates),
+                    "date_min": dates[0] if dates else None,
+                    "date_max": dates[-1] if dates else None,
+                    "available_dates": dates,
+                    "codes": list(timeline.keys())
+                })
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
@@ -231,7 +324,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                     return
 
                 if QUERY_ENGINE_AVAILABLE:
-                    answer = QE.query(question, target_date=target_date)
+                    timeline = get_cached_timeline()
+                    answer = QE.query_with_timeline(question, timeline, target_date=target_date)
                 else:
                     # 컨텍스트가 없으면 최신 브리핑 데이터 사용
                     if not context:
@@ -252,14 +346,7 @@ class RAASHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = HTTPServer(("0.0.0.0", PORT), RAASHandler)
-    print(f"""
-╔══════════════════════════════════════╗
-║   RAAS Local Server 시작             ║
-╠══════════════════════════════════════╣
-║  URL : http://localhost:{PORT}         ║
-║  종료: Ctrl+C                        ║
-╚══════════════════════════════════════╝
-""")
+    print(f"RAAS Local Server started: http://localhost:{PORT}  (Ctrl+C to quit)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
