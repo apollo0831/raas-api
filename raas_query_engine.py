@@ -53,6 +53,159 @@ def _build_keyword_index():
 KEYWORD_TO_CODE = _build_keyword_index()
 
 
+# ── 차트 빌더 ──────────────────────────────────────────────
+_METRIC_LABELS = {
+    'dau_today':   ('DAU',       '명'),
+    'new_today':   ('신규 유입',  '명'),
+    'react_today': ('복귀 사용자','명'),
+    'deep_rate':   ('깊은청취율', '%'),
+    'engage_rate': ('참여율',     '%'),
+    'habit_rate':  ('습관형성률', '%'),
+    'churn_rate':  ('이탈률',     '%'),
+    'react_rate':  ('복귀율',     '%'),
+}
+
+def _metric_meta(metric_field: str):
+    return _METRIC_LABELS.get(metric_field, (metric_field, ''))
+
+
+def build_chart_timeseries(title, metric, unit, points, source):
+    """시계열 → sparkline dict. points < 2이면 None."""
+    pts = [p for p in points if p.get('value') is not None]
+    if len(pts) < 2:
+        return None
+    values = [p['value'] for p in pts]
+    first, latest = values[0], values[-1]
+    change_pct = round((latest - first) / first * 100, 1) if first else None
+    return {
+        "type": "timeseries",
+        "title": title,
+        "metric": metric,
+        "unit": unit,
+        "points": pts,
+        "summary": {
+            "min": min(values),
+            "max": max(values),
+            "avg": round(sum(values) / len(values), 1),
+            "latest": latest,
+            "change_pct": change_pct,
+        },
+        "source": source,
+    }
+
+
+def build_chart_comparison(title, metric, unit, date, items, source):
+    """비교 → bar dict. items < 2이면 None."""
+    valid = [it for it in items if it.get('value') is not None]
+    if len(valid) < 2:
+        return None
+    return {
+        "type": "comparison",
+        "title": title,
+        "metric": metric,
+        "unit": unit,
+        "date": date,
+        "items": valid,
+        "source": source,
+    }
+
+
+def build_chart_data(data: dict, intent: dict, question: str):
+    """extract_data 결과 + intent → chart_data dict 또는 None."""
+    try:
+        intent_type = intent.get('intent', 'general')
+        scope       = data.get('scope', 'T00')
+        scope_name  = data.get('scope_name', scope)
+        date_max    = (data.get('date_max') or '').replace('/', '-')
+
+        # trend → timeseries
+        if intent_type == 'trend' and 'trend' in data:
+            t = data['trend']
+            points = [{"date": d.replace('/', '-'), "value": v}
+                      for d, v in t['data'] if v is not None]
+            metric, unit = _metric_meta(t['metric_field'])
+            return build_chart_timeseries(
+                title=f"{scope_name} {metric}",
+                metric=metric, unit=unit, points=points,
+                source=f"timeline:{scope}/{t['metric_field']}"
+            )
+
+        # compare → comparison (채널별 DAU)
+        if intent_type == 'compare' and data.get('compare'):
+            items = [{"label": c['name'], "value": c['dau']}
+                     for c in data['compare'] if c.get('dau')]
+            items.sort(key=lambda x: x['value'], reverse=True)
+            return build_chart_comparison(
+                title="채널별 DAU 비교",
+                metric="DAU", unit="명",
+                date=date_max, items=items,
+                source=f"snapshot:{date_max}"
+            )
+
+        # ranking → comparison (TOP5)
+        if intent_type == 'ranking' and data.get('ranking'):
+            items = [{"label": r['name'], "value": r['dau']}
+                     for r in data['ranking'][:5] if r.get('dau')]
+            return build_chart_comparison(
+                title="프로그램 DAU TOP5",
+                metric="DAU", unit="명",
+                date=date_max, items=items,
+                source=f"snapshot:{date_max}"
+            )
+
+        # health → trend 있으면 timeseries, 없으면 ranking comparison
+        if intent_type == 'health':
+            if 'trend' in data:
+                t = data['trend']
+                points = [{"date": d.replace('/', '-'), "value": v}
+                          for d, v in t['data'] if v is not None]
+                metric, unit = _metric_meta(t['metric_field'])
+                return build_chart_timeseries(
+                    title=f"{scope_name} {metric} 추이",
+                    metric=metric, unit=unit, points=points,
+                    source=f"timeline:{scope}/{t['metric_field']}"
+                )
+            if data.get('ranking'):
+                items = [{"label": r['name'], "value": r['dau']}
+                         for r in data['ranking'][:5] if r.get('dau')]
+                return build_chart_comparison(
+                    title="프로그램 DAU TOP5",
+                    metric="DAU", unit="명",
+                    date=date_max, items=items,
+                    source=f"snapshot:{date_max}"
+                )
+
+        # general / snapshot: 질문 키워드 기반 fallback
+        q = question.lower()
+        trend_kw   = ["추세", "추이", "변화", "최근", "지난주", "이번 주", "트렌드", "흐름"]
+        compare_kw = ["vs", "비교", "차이", "1위", "top", "순위", "어디가"]
+
+        if any(kw in q for kw in trend_kw) and 'trend' in data:
+            t = data['trend']
+            points = [{"date": d.replace('/', '-'), "value": v}
+                      for d, v in t['data'] if v is not None]
+            metric, unit = _metric_meta(t['metric_field'])
+            return build_chart_timeseries(
+                title=f"{scope_name} {metric}",
+                metric=metric, unit=unit, points=points,
+                source=f"timeline:{scope}/{t['metric_field']}"
+            )
+
+        if any(kw in q for kw in compare_kw) and data.get('ranking'):
+            items = [{"label": r['name'], "value": r['dau']}
+                     for r in data['ranking'][:5] if r.get('dau')]
+            return build_chart_comparison(
+                title="프로그램 DAU TOP5",
+                metric="DAU", unit="명",
+                date=date_max, items=items,
+                source=f"snapshot:{date_max}"
+            )
+
+        return None
+    except Exception:
+        return None
+
+
 # ── Claude 호출 ────────────────────────────────────────────
 def call_claude(system: str, user: str, max_tokens: int = 1000) -> str:
     payload = json.dumps({
@@ -353,29 +506,29 @@ ANSWER_SYSTEM = """SBS 고릴라 라디오 앱 데이터 분석 어시스턴트�
 
 
 # ── 메인 질의 함수 ─────────────────────────────────────────
-def query(question: str, target_date: str = None, verbose: bool = False) -> str:
-    """자연어 질의 — timeline 자체 로드"""
+def query(question: str, target_date: str = None, verbose: bool = False) -> dict:
+    """자연어 질의 — timeline 자체 로드. {"answer": str, "chart_data": dict|None} 리턴."""
     if verbose:
         print("  [1/3] timeline 로드 중...", flush=True)
 
     local_path = os.path.join(os.path.dirname(__file__), 'raas_kpi_latest.csv')
     if not os.path.exists(local_path):
-        return "데이터 파일(raas_kpi_latest.csv)을 찾을 수 없습니다."
+        return {"answer": "데이터 파일(raas_kpi_latest.csv)을 찾을 수 없습니다.", "chart_data": None}
     try:
         import pandas as pd
         df = pd.read_csv(local_path, dtype=str, keep_default_na=False)
         rows = df.to_dict(orient='records')
         timeline = BE._load_timeline(lambda spl: rows)
     except Exception as e:
-        return f"데이터 로드 실패: {e}"
+        return {"answer": f"데이터 로드 실패: {e}", "chart_data": None}
 
     return _answer(question, timeline, target_date, verbose)
 
 
-def query_with_timeline(question: str, timeline: dict, target_date: str = None) -> str:
-    """서버 캐시 timeline을 받아 처리 (성능 최적화)."""
+def query_with_timeline(question: str, timeline: dict, target_date: str = None) -> dict:
+    """서버 캐시 timeline을 받아 처리. {"answer": str, "chart_data": dict|None} 리턴."""
     if not timeline:
-        return "데이터를 사용할 수 없습니다."
+        return {"answer": "데이터를 사용할 수 없습니다.", "chart_data": None}
     return _answer(question, timeline, target_date, verbose=False)
 
 
@@ -392,12 +545,14 @@ def _answer(question, timeline, target_date, verbose):
 
     data = extract_data(timeline, intent)
     if 'error' in data:
-        return f"데이터 추출 실패: {data['error']}"
+        return {"answer": f"데이터 추출 실패: {data['error']}", "chart_data": None}
 
     if verbose:
         print("  [3/3] 답변 생성 중...", flush=True)
     context = format_for_claude(data, intent, question)
-    return call_claude(ANSWER_SYSTEM, context, max_tokens=600)
+    answer_text = call_claude(ANSWER_SYSTEM, context, max_tokens=600)
+    chart_data = build_chart_data(data, intent, question)
+    return {"answer": answer_text, "chart_data": chart_data}
 
 
 # ── CLI ───────────────────────────────────────────────────
@@ -419,8 +574,13 @@ if __name__ == "__main__":
         ]
         for q in demos:
             print(f"\n{'='*55}\nQ: {q}\n{'='*55}")
-            print(query(q, verbose=True))
+            result = query(q, verbose=True)
+            print(result["answer"])
+            cd = result.get("chart_data")
+            if cd:
+                print(f"  [chart] type={cd['type']} title={cd['title']}")
     elif args.question:
-        print(query(args.question, verbose=args.verbose))
+        result = query(args.question, verbose=args.verbose)
+        print(result["answer"])
     else:
         parser.print_help()
