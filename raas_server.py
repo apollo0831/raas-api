@@ -33,6 +33,7 @@ load_dotenv()
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 import raas_briefing_engine as BE
+from raas_history_db import init_db, save_query, get_history, get_popular
 
 # ── 설정 ─────────────────────────────────────────────
 PORT            = 5000
@@ -156,7 +157,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-User-Id")
         self.end_headers()
 
     def do_GET(self):
@@ -302,6 +303,38 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path.startswith("/api/query/popular"):
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                limit = int(params.get("limit", 5))
+                days  = int(params.get("days", 7))
+                items = get_popular(limit=limit, days=days)
+                self.send_json({
+                    "ok": True,
+                    "items": items,
+                    "generated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                })
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path.startswith("/api/query/history"):
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                user_id = (self.headers.get("X-User-Id")
+                           or params.get("user_id", "").strip())
+                if not user_id:
+                    self.send_json({"ok": False, "error": "user_id required"}, 400)
+                    return
+                limit = int(params.get("limit", 20))
+                items = get_history(user_id=user_id, limit=limit)
+                self.send_json({"ok": True, "user_id": user_id, "items": items})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/status":
             self.send_json({"ok": True, "server": "RAAS",
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
@@ -318,6 +351,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                 question    = body.get("question", "")
                 context     = body.get("context", "")
                 target_date = body.get("date", None)
+                user_id     = (self.headers.get("X-User-Id")
+                               or body.get("user_id", "anonymous") or "anonymous")
 
                 if not question:
                     self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
@@ -325,26 +360,31 @@ class RAASHandler(BaseHTTPRequestHandler):
 
                 if QUERY_ENGINE_AVAILABLE:
                     timeline = get_cached_timeline()
-                    answer = QE.query_with_timeline(question, timeline, target_date=target_date)
+                    result = QE.query_with_timeline(question, timeline, target_date=target_date)
+                    answer = result["answer"]
+                    chart_data = result.get("chart_data")
                 else:
-                    # 컨텍스트가 없으면 최신 브리핑 데이터 사용
                     if not context:
                         try:
                             bd = BE.collect_all(splunk_search)
                             context = bd.get("claude_context", "")
                         except:
                             pass
-
                     answer = call_claude(
                         "SBS 고릴라 라디오 앱 데이터 분석 어시스턴트. 한국어로 간결하게 답하세요. 수치는 천단위 쉼표.",
                         f"데이터:\\n{context}\\n\\n질문: {question}"
                     )
-                self.send_json({"ok": True, "answer": answer})
+                    chart_data = None
+
+                query_id = save_query(user_id, question, answer, chart_data=chart_data)
+                self.send_json({"ok": True, "answer": answer,
+                                "query_id": query_id, "chart_data": chart_data})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
 
 if __name__ == "__main__":
+    init_db()
     server = HTTPServer(("0.0.0.0", PORT), RAASHandler)
     print(f"RAAS Local Server started: http://localhost:{PORT}  (Ctrl+C to quit)")
     try:
