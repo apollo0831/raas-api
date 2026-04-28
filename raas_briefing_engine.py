@@ -37,9 +37,11 @@ ALL=PGM_F+PGM_L
 
 def _load_timeline(search):
     """raas_kpi_latest.csv를 timeline 구조로 로드.
-    반환: {PGM_CODE: {DATE: row, ...}, ...}
-    같은 PGM_CODE의 여러 날짜 행을 모두 보존.
+    반환: (timeline_dict, source) 튜플.
+      timeline_dict: {PGM_CODE: {DATE: row, ...}, ...}
+      source: 'splunk' | 'csv_fallback'
     """
+    source = 'splunk'
     try:
         rows = search("| inputlookup raas_kpi_latest.csv")
     except Exception as e:
@@ -48,6 +50,7 @@ def _load_timeline(search):
             print(f"  [fallback] Splunk {type(e).__name__} - local CSV: {local_path}")
             df = pd.read_csv(local_path, dtype=str, keep_default_na=False)
             rows = df.to_dict(orient='records')
+            source = 'csv_fallback'
         else:
             raise
     timeline = {}
@@ -61,8 +64,8 @@ def _load_timeline(search):
         all_dates = set()
         for code_rows in timeline.values():
             all_dates.update(code_rows.keys())
-        print(f"  [timeline] {len(timeline)} codes x {len(all_dates)} dates ({min(all_dates)} ~ {max(all_dates)})")
-    return timeline
+        print(f"  [timeline] source={source}, {len(timeline)} codes x {len(all_dates)} dates ({min(all_dates)} ~ {max(all_dates)})")
+    return timeline, source
 
 def _latest_snapshot(timeline):
     """timeline에서 각 PGM_CODE의 최신 날짜 행만 추출.
@@ -77,7 +80,8 @@ def _latest_snapshot(timeline):
 
 def _load(search):
     """[호환성 유지용] _load_timeline + _latest_snapshot 조합."""
-    return _latest_snapshot(_load_timeline(search))
+    timeline, _ = _load_timeline(search)
+    return _latest_snapshot(timeline)
 
 
 def build_s1(kpi):
@@ -511,12 +515,11 @@ def collect_all(search_fn, return_timeline=False):
         return_timeline: True면 결과에 '_timeline' 추가 (시계열 API용)
     """
     print(f"[{datetime.now().strftime('%H:%M:%S')}] KPI 수집 시작")
-    def safe(fn, *args, fb=None):
-        try: return fn(*args)
-        except Exception as e:
-            print(f"  ⚠️ {fn.__name__}: {e}")
-            return fb if fb is not None else {}
-    timeline = safe(_load_timeline, search_fn, fb={})
+    try:
+        timeline, timeline_source = _load_timeline(search_fn)
+    except Exception as e:
+        print(f"  ⚠️ _load_timeline: {e}")
+        timeline, timeline_source = {}, 'error'
     kpi = _latest_snapshot(timeline)
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {len(kpi)}코드 로드, 섹션 계산중...")
     s1=build_s1(kpi); s2=build_s2(kpi); s3=build_s3(kpi); s4=build_s4(kpi)
@@ -526,7 +529,8 @@ def collect_all(search_fn, return_timeline=False):
     result = {
         's1_executive':s1,'s2_funnel':s2,'s3_engagement':s3,'s4_growth':s4,
         's5_rankings':s5,'s6_channels':s6,'s7_anomalies':s7,
-        'claude_context':ctx,'collected_at':datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        'claude_context':ctx,'collected_at':datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        '_timeline_source': timeline_source,
     }
     if return_timeline:
         result['_timeline'] = timeline

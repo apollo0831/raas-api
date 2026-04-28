@@ -43,6 +43,7 @@ SPLUNK_PASSWORD   = os.getenv("SPLUNK_PASSWORD")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL")
 SPLUNK_APP        = os.getenv("SPLUNK_APP")        # ← Splunk 앱 내부 ID
+SPLUNK_TIMEOUT    = int(os.getenv("SPLUNK_TIMEOUT", "10"))  # 초. 미도달 환경에서 빠른 CSV 폴백을 위해 짧게
 # ─────────────────────────────────────────────────────
 
 SSL_CONTEXT = ssl.create_default_context()
@@ -71,8 +72,13 @@ def get_cached_timeline():
         return cached
     data = BE.collect_all(splunk_search, return_timeline=True)
     timeline = data.get("_timeline", {})
+    source = data.get("_timeline_source", "unknown")
     cache_set("timeline", timeline)
+    cache_set("timeline_source", source)
     return timeline
+
+def get_timeline_source() -> str:
+    return cache_get("timeline_source") or "unknown"
 # ──────────────────────────────────────────────────────────
 
 def splunk_auth():
@@ -88,7 +94,7 @@ def splunk_search(spl: str) -> list:
     req.add_header("Authorization", splunk_auth())
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
     try:
-        with urllib.request.urlopen(req, context=SSL_CONTEXT, timeout=60) as resp:
+        with urllib.request.urlopen(req, context=SSL_CONTEXT, timeout=SPLUNK_TIMEOUT) as resp:
             rows = []
             for line in resp:
                 line = line.decode("utf-8").strip()
@@ -291,15 +297,20 @@ class RAASHandler(BaseHTTPRequestHandler):
             try:
                 timeline = get_cached_timeline()
                 dates = BE.get_available_dates(timeline)
-                self.send_json({
+                source = get_timeline_source()
+                resp = {
                     "ok": True,
+                    "source": source,
                     "codes_count": len(timeline),
                     "days_count": len(dates),
                     "date_min": dates[0] if dates else None,
                     "date_max": dates[-1] if dates else None,
                     "available_dates": dates,
                     "codes": list(timeline.keys())
-                })
+                }
+                if source == "csv_fallback":
+                    resp["warning"] = "Splunk unreachable, using CSV snapshot"
+                self.send_json(resp)
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
