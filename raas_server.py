@@ -30,7 +30,7 @@ import threading
 from dotenv import load_dotenv
 import os
 load_dotenv()
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 import raas_briefing_engine as BE
 from raas_history_db import init_db, save_query, get_history, get_popular
@@ -385,7 +385,8 @@ class RAASHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     init_db()
-    server = HTTPServer(("0.0.0.0", PORT), RAASHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), RAASHandler)
+    server.daemon_threads = True
     print(f"RAAS Local Server started: http://localhost:{PORT}  (Ctrl+C to quit)")
     try:
         server.serve_forever()
