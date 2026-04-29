@@ -776,6 +776,73 @@ body{
 .program-bar.visible { display:flex; }
 .program-tab { flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:var(--fs-sm); font-weight:500; cursor:pointer; border:1px solid var(--line2); background:transparent; color:var(--sub); transition:all 0.2s; white-space:nowrap; }
 .program-tab.active { background:var(--bg4); color:var(--text); border-color:var(--accent); }
+
+/* ── 사용자 규모 듀얼 카드 ─────────────────────────────────── */
+.us-section { display:flex; flex-direction:column; gap:10px; }
+
+/* 메인 카드 - 단일 (일간 탭) */
+.us-main-single {
+  background:var(--bg2); border-radius:12px;
+  border:1px solid var(--line); border-left:3px solid #185FA5;
+  padding:16px 20px;
+}
+.us-main-single .us-val { font-size:36px; font-weight:600; line-height:1.1; margin-top:8px; font-family:var(--mono); }
+.us-main-single .us-label { font-size:14px; color:var(--sub); font-weight:500; }
+.us-main-single .us-date  { font-size:12px; color:var(--dim); margin-top:2px; }
+.us-main-single .us-badge-row { margin-top:8px; }
+
+/* 메인 카드 - 듀얼 (주/월 탭) */
+.us-main-dual { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.us-card {
+  background:var(--bg2); border-radius:12px;
+  border:1px solid var(--line);
+  padding:14px 16px;
+}
+.us-card-primary   { border-left:3px solid #185FA5; }
+.us-card-secondary { border-left:3px solid #85B7EB; }
+.us-card .us-label { font-size:13px; color:var(--sub); font-weight:500; }
+.us-card .us-date  { font-size:11px; color:var(--dim); margin-top:2px; min-height:14px; }
+.us-card .us-val   { font-size:28px; font-weight:600; line-height:1.1; margin-top:8px; font-family:var(--mono); }
+.us-card .us-badge-row { margin-top:6px; min-height:20px; }
+
+/* 참고 카드 그리드 */
+.us-sub-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.us-sub-card {
+  background:var(--bg2); border-radius:10px;
+  border:1px solid var(--line);
+  padding:10px 12px;
+}
+.us-sub-card .us-label { font-size:12px; color:var(--sub); }
+.us-sub-card .us-val   { font-size:16px; font-weight:600; margin-top:2px; font-family:var(--mono); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.us-sub-card.muted { opacity:0.55; }
+.us-sub-card.muted .us-val { color:var(--dim); font-size:12px; font-family:var(--sans); font-weight:500; }
+
+/* 뱃지 */
+.us-badge {
+  display:inline-flex; align-items:center;
+  font-size:13px; font-weight:600;
+  padding:2px 8px; border-radius:10px;
+  font-family:var(--mono);
+}
+.us-badge-sm { font-size:11px; padding:1px 6px; }
+.us-badge.pos  { background:#EAF3DE; color:#3B6D11; }
+.us-badge.neg  { background:#FCEBEB; color:#A32D2D; }
+.us-badge.flat { background:rgba(255,255,255,.06); color:var(--sub); }
+.us-cmp { font-size:12px; color:var(--sub); margin-left:6px; font-weight:400; }
+
+/* 그래프 */
+.us-chart-wrap {
+  background:var(--bg2); border-radius:12px;
+  border:1px solid var(--line);
+  padding:14px 16px;
+}
+.us-chart-label { font-size:13px; color:var(--sub); margin-bottom:8px; }
+.us-chart-canvas { position:relative; height:180px; }
+.us-chart-legend { display:flex; gap:14px; margin-top:8px; font-size:11px; color:var(--sub); align-items:center; }
+.us-chart-legend .legend-dot { display:inline-block; width:14px; height:2px; margin-right:4px; vertical-align:middle; }
+.us-chart-legend .legend-dot.solid-step { background:#185FA5; }
+.us-chart-legend .legend-dot.dashed     { background:repeating-linear-gradient(90deg,#85B7EB 0 4px,transparent 4px 7px); }
+.us-chart-caption { font-size:11px; color:var(--dim); margin-top:6px; text-align:right; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -810,37 +877,8 @@ body{
     <!-- 사용자 규모 (홈 최상단) -->
     <div class="section">
       <div class="section-title">사용자 규모</div>
-
-      <!-- 빅넘버 영역 (기간탭 연동) -->
-      <div class="card" style="padding:16px;margin-bottom:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;">
-          <!-- 좌: 메인 수치 -->
-          <div>
-            <div id="usMainLabel" style="font-size:var(--fs-sm);color:var(--sub);font-weight:500;margin-bottom:4px;">DAU</div>
-            <div id="usMainVal" style="font-size:var(--fs-3xl);font-weight:600;line-height:1.1;">--</div>
-            <div id="usMainDiff" style="font-size:var(--fs-sm);margin-top:6px;">--</div>
-          </div>
-          <!-- 우: 보조 수치 2개 -->
-          <div style="display:flex;gap:20px;">
-            <div>
-              <div id="usSub1Label" style="font-size:var(--fs-xs);color:var(--sub);">WAU</div>
-              <div id="usSub1Val" style="font-size:var(--fs-lg);font-weight:500;">--</div>
-            </div>
-            <div>
-              <div id="usSub2Label" style="font-size:var(--fs-xs);color:var(--sub);">MAU</div>
-              <div id="usSub2Val" style="font-size:var(--fs-lg);font-weight:500;">--</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 라인그래프 영역 -->
-      <div class="card" style="padding:14px;">
-        <div id="usChartLabel" style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px;">최근 30일 DAU 추이</div>
-        <div style="position:relative;height:180px;">
-          <canvas id="usChart"></canvas>
-        </div>
-      </div>
+      <!-- 기간 탭(일/주/월) 연동, JS가 마크업 재렌더 -->
+      <div id="usSection"></div>
     </div>
 
     <!-- ZONE 3: 사용자 흐름 (Funnel) -->
@@ -1183,113 +1221,317 @@ function renderAll(d){
 // ── 사용자 규모 (홈 최상단, 기간탭 연동 + Chart.js 라인그래프) ──
 let _usChartInstance = null;
 
+// ─── 헬퍼: 천 단위 콤마 + null/NaN/undefined → "—" ─────────────────
+function formatNumber(num) {
+  if (num === null || num === undefined || num === '' || isNaN(Number(num))) return '—';
+  return Number(num).toLocaleString('ko-KR');
+}
+
+// ─── 헬퍼: 날짜 범위 "2026-04-20 월 ~ 04-26 일 (확정)" ────────────
+function formatDateRange(startISO, endISO, suffix) {
+  if (!startISO || !endISO) return '';
+  const wkdays = ['일','월','화','수','목','금','토'];
+  const parseISO = iso => {
+    const s = iso.replace(/\//g, '-').slice(0, 10);
+    const [y,m,d] = s.split('-').map(Number);
+    return new Date(y, m-1, d);
+  };
+  const fmt = (iso, full) => {
+    const d = parseISO(iso);
+    if (isNaN(d)) return iso;
+    const isoNorm = iso.replace(/\//g, '-').slice(0, 10);
+    return (full ? isoNorm : isoNorm.slice(5)) + ' ' + wkdays[d.getDay()];
+  };
+  const tail = suffix ? ` (${suffix})` : '';
+  // 시작=끝이면 단일 날짜 (예: 일간 탭의 D-1)
+  if (startISO === endISO) return `${fmt(startISO, true)}${tail}`;
+  return `${fmt(startISO, true)} ~ ${fmt(endISO, false)}${tail}`;
+}
+
+// ─── 헬퍼: 변동률 뱃지. null이면 빈 문자열(DOM 미생성) ─────────────
+// options: { size: 'sm'|'md', showLabel: bool, label: string }
+function renderChangeBadge(chgValue, options) {
+  options = options || {};
+  if (chgValue === null || chgValue === undefined || chgValue === '' || isNaN(Number(chgValue))) {
+    return '';
+  }
+  const v = Number(chgValue);
+  const sizeCls = (options.size === 'sm') ? ' us-badge-sm' : '';
+  let cls, sign;
+  if (v > 0)      { cls = 'pos';  sign = '▲'; }
+  else if (v < 0) { cls = 'neg';  sign = '▼'; }
+  else            { cls = 'flat'; sign = '─'; }
+  const abs = Math.abs(v).toFixed(1);
+  const cmp = (options.showLabel && options.label)
+    ? `<span class="us-cmp">${options.label}</span>` : '';
+  return `<span class="us-badge ${cls}${sizeCls}">${sign} ${abs}%</span>${cmp}`;
+}
+
+// ─── 헬퍼: 메인 카드 마크업 (단일/듀얼 좌·우 공통) ────────────────
+function _usCardHTML({tone, label, dateRange, val, chg, cmpLabel}) {
+  const toneCls = tone === 'secondary' ? 'us-card-secondary' : 'us-card-primary';
+  return `
+    <div class="us-card ${toneCls}">
+      <div class="us-label">${label}</div>
+      <div class="us-date">${dateRange || ''}</div>
+      <div class="us-val">${formatNumber(val)}</div>
+      <div class="us-badge-row">${renderChangeBadge(chg, {size:'md', showLabel:!!cmpLabel, label:cmpLabel})}</div>
+    </div>`;
+}
+
+// ─── 헬퍼: 참고 카드 마크업 (값 + 인라인 sm 뱃지) ──────────────────
+function _usSubCardHTML({label, val, chg, muted}) {
+  if (muted) {
+    return `
+      <div class="us-sub-card muted">
+        <div class="us-label">${label}</div>
+        <div class="us-val">데이터 준비 중</div>
+      </div>`;
+  }
+  const badge = renderChangeBadge(chg, {size:'sm'});
+  return `
+    <div class="us-sub-card">
+      <div class="us-label">${label}</div>
+      <div class="us-val">${formatNumber(val)}${badge ? ' ' + badge : ''}</div>
+    </div>`;
+}
+
 async function renderUserSize() {
+  const container = document.getElementById('usSection');
+  if (!container) return;
   if (!_data) return;
+
   const s1 = _data.s1_executive || {};
   const s2 = _data.s2_funnel || {};
-  const p = _period;
+  const p  = _period;
 
-  let mainLabel, mainVal, mainDiff, sub1Label, sub1Val, sub2Label, sub2Val;
-  let chartMetric, chartLabel, chartDays;
+  // ─── 헬퍼: YYYY/MM/DD → ISO YYYY-MM-DD 정규화, 빈 문자열은 null ──
+  const normISO = (s) => (s || '').toString().replace(/\//g,'-').slice(0,10) || null;
+  // ─── 헬퍼: ISO 날짜에 ±일수 더하기 ──────────────────────────
+  const addDays = (iso, n) => {
+    if (!iso) return null;
+    const [y,m,d] = iso.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    dt.setDate(dt.getDate() + n);
+    const yy = dt.getFullYear(), mm = String(dt.getMonth()+1).padStart(2,'0'), dd = String(dt.getDate()).padStart(2,'0');
+    return `${yy}-${mm}-${dd}`;
+  };
+  // ─── 헬퍼: ISO 날짜의 해당 월 말일 ─────────────────────────
+  const lastOfMonth = (iso) => {
+    if (!iso) return null;
+    const [y,m] = iso.split('-').map(Number);
+    const dt = new Date(y, m, 0);  // m=0 indexed +1, day=0 → last day of m-1
+    const dd = String(dt.getDate()).padStart(2,'0');
+    return `${y}-${String(m).padStart(2,'0')}-${dd}`;
+  };
+
+  const dateD1     = normISO(s1.date);                   // D-1 (룩업 기준일)
+  const dateWeekS  = normISO(s1.date_week);              // 전주 월요일
+  const dateWeekE  = dateWeekS ? addDays(dateWeekS, 6) : null;
+  const dateMonS   = normISO(s1.date_mon);               // 전월 1일
+  const dateMonE   = dateMonS ? lastOfMonth(dateMonS) : null;
+  const r7Start    = dateD1 ? addDays(dateD1, -6) : null;
+  const r30Start   = dateD1 ? addDays(dateD1, -29) : null;
 
   if (p === 'day') {
-    mainLabel = 'DAU';
-    mainVal = s1.dau;
-    mainDiff = s1.dau_wow;
-    sub1Label = 'WAU'; sub1Val = s1.wau;
-    sub2Label = 'MAU'; sub2Val = s1.mau;
-    chartMetric = 'dau_today'; chartLabel = '최근 30일 DAU 추이'; chartDays = 30;
+    container.innerHTML = `
+      <div class="us-section">
+        <div class="us-main-single">
+          <div class="us-label">DAU</div>
+          <div class="us-date">${dateD1 ? formatDateRange(dateD1, dateD1, 'D-1') : ''}</div>
+          <div class="us-val">${formatNumber(s1.dau)}</div>
+          <div class="us-badge-row">${renderChangeBadge(s1.dau_chg, {size:'md', showLabel:true, label:'전일 대비'})}</div>
+        </div>
+        <div class="us-sub-grid">
+          ${_usSubCardHTML({label:'7일 롤링',  val:s1.dau_r7,  chg:s1.dau_r7_chg})}
+          ${_usSubCardHTML({label:'30일 롤링', val:s1.dau_r30, chg:s1.dau_r30_chg})}
+        </div>
+        <div class="us-chart-wrap">
+          <div class="us-chart-label">최근 30일 DAU 추이</div>
+          <div class="us-chart-canvas"><canvas id="usChart"></canvas></div>
+        </div>
+      </div>`;
   } else if (p === 'week') {
-    mainLabel = 'WAU';
-    mainVal = s1.wau;
-    mainDiff = s2.wau_wow || null;
-    sub1Label = 'DAU'; sub1Val = s1.dau;
-    sub2Label = 'MAU'; sub2Val = s1.mau;
-    chartMetric = 'wau_today'; chartLabel = '최근 12주 WAU 추이'; chartDays = 84;
-  } else {
-    mainLabel = 'MAU';
-    mainVal = s1.mau;
-    mainDiff = s2.mau_wow || null;
-    sub1Label = 'DAU'; sub1Val = s1.dau;
-    sub2Label = 'WAU'; sub2Val = s1.wau;
-    chartMetric = 'mau_today'; chartLabel = '최근 12개월 MAU 추이'; chartDays = 365;
+    container.innerHTML = `
+      <div class="us-section">
+        <div class="us-main-dual">
+          ${_usCardHTML({tone:'primary',   label:'지난주 WAU', dateRange:(dateWeekS && dateWeekE) ? formatDateRange(dateWeekS, dateWeekE, '확정') : '',         val:s1.wau,    chg:s1.wau_chg,    cmpLabel:'전주 대비'})}
+          ${_usCardHTML({tone:'secondary', label:'롤링 7일',   dateRange:(r7Start && dateD1) ? formatDateRange(r7Start, dateD1, 'D-1 기준') : '',            val:s1.dau_r7, chg:s1.dau_r7_chg, cmpLabel:'전일 롤링 대비'})}
+        </div>
+        <div class="us-sub-grid">
+          <div class="us-sub-card" id="usSubAvg">
+            <div class="us-label">DAU 일평균 (전주 7일)</div>
+            <div class="us-val">${formatNumber(null)}</div>
+          </div>
+          ${_usSubCardHTML({label:'30일 롤링', val:s1.dau_r30, chg:s1.dau_r30_chg})}
+        </div>
+        <div class="us-chart-wrap">
+          <div class="us-chart-label">최근 30일 WAU vs 7일 롤링</div>
+          <div class="us-chart-canvas"><canvas id="usChart"></canvas></div>
+          <div class="us-chart-legend">
+            <span><span class="legend-dot solid-step"></span>지난주 WAU (계단)</span>
+            <span><span class="legend-dot dashed"></span>7일 롤링 (대시)</span>
+          </div>
+        </div>
+      </div>`;
+    // 비동기: 최근 7일 dau 시계열 → 산술평균 → 참고 카드 1 갱신
+    _usFillDailyAvg(7, '전주 7일');
+  } else { // mon
+    container.innerHTML = `
+      <div class="us-section">
+        <div class="us-main-dual">
+          ${_usCardHTML({tone:'primary',   label:'전월 MAU',  dateRange:(dateMonS && dateMonE) ? formatDateRange(dateMonS, dateMonE, '확정') : '',           val:s1.mau,     chg:s1.mau_chg,     cmpLabel:'전월 대비'})}
+          ${_usCardHTML({tone:'secondary', label:'롤링 30일', dateRange:(r30Start && dateD1) ? formatDateRange(r30Start, dateD1, 'D-1 기준') : '',          val:s1.dau_r30, chg:s1.dau_r30_chg, cmpLabel:'전일 롤링 대비'})}
+        </div>
+        <div class="us-sub-grid">
+          <div class="us-sub-card" id="usSubAvg">
+            <div class="us-label">DAU 일평균 (전월 30일)</div>
+            <div class="us-val">${formatNumber(null)}</div>
+          </div>
+          ${_usSubCardHTML({label:'7일 롤링', val:s1.dau_r7, chg:s1.dau_r7_chg})}
+        </div>
+        <div class="us-chart-wrap">
+          <div class="us-chart-label">최근 60일 MAU vs 30일 롤링</div>
+          <div class="us-chart-canvas"><canvas id="usChart"></canvas></div>
+          <div class="us-chart-legend">
+            <span><span class="legend-dot solid-step"></span>전월 MAU (계단)</span>
+            <span><span class="legend-dot dashed"></span>30일 롤링 (대시)</span>
+          </div>
+        </div>
+      </div>`;
+    _usFillDailyAvg(30, '전월 30일');
   }
 
-  document.getElementById('usMainLabel').textContent = mainLabel;
-  document.getElementById('usMainVal').textContent = mainVal ? mainVal.toLocaleString() : '--';
-  const diffEl = document.getElementById('usMainDiff');
-  if (mainDiff != null) {
-    const sign = mainDiff >= 0 ? '▲' : '▼';
-    const color = mainDiff >= 0 ? 'var(--green)' : 'var(--red)';
-    diffEl.innerHTML = `<span style="color:${color};">${sign} ${Math.abs(mainDiff).toFixed(1)}%</span> <span style="color:var(--sub);">전주대비</span>`;
-  } else {
-    diffEl.textContent = '';
-  }
-  document.getElementById('usSub1Label').textContent = sub1Label;
-  document.getElementById('usSub1Val').textContent = sub1Val ? sub1Val.toLocaleString() : '--';
-  document.getElementById('usSub2Label').textContent = sub2Label;
-  document.getElementById('usSub2Val').textContent = sub2Val ? sub2Val.toLocaleString() : '--';
-  document.getElementById('usChartLabel').textContent = chartLabel;
+  _drawUserSizeChart(p);
+}
 
+// ─── 비동기: dau 시계열 fetch → 산술평균 → "DAU 일평균" 카드 갱신 ──
+// 1일치 데이터 상태에서는 단일 점 = 그날의 dau 값. 빈 결과면 '데이터 누적 중' 표시.
+async function _usFillDailyAvg(days, periodLabel) {
+  const card = document.getElementById('usSubAvg');
+  if (!card) return;
   try {
-    const res = await fetch(`/api/trend?metric=${chartMetric}&scope=T00&days=${chartDays}`);
+    const res  = await fetch(`/api/trend?metric=dau&scope=T00&days=${days}`);
     const json = await res.json();
-    if (!json.ok || !json.data) {
-      console.warn('trend 데이터 없음', json);
+    const series = (json && json.ok && Array.isArray(json.data)) ? json.data : [];
+    const vals = series.map(d => d.value).filter(v => typeof v === 'number' && !isNaN(v));
+    if (!vals.length) {
+      card.classList.add('muted');
+      card.innerHTML = `<div class="us-label">DAU 일평균 (${periodLabel})</div><div class="us-val">데이터 준비 중</div>`;
       return;
     }
-
-    let chartData = json.data;
-    if (p === 'week') {
-      chartData = chartData.filter((_, i) => (chartData.length - 1 - i) % 7 === 0).reverse().reverse();
-    } else if (p === 'mon') {
-      const monthMap = {};
-      chartData.forEach(d => {
-        const ym = (d.date || '').substring(0, 7);
-        if (ym) monthMap[ym] = d;
-      });
-      chartData = Object.values(monthMap);
-    }
-
-    drawUserSizeChart(chartData, mainLabel);
+    const avg = Math.round(vals.reduce((a,b)=>a+b,0) / vals.length);
+    const cap = vals.length < days ? ` <span class="us-cmp">(${vals.length}일)</span>` : '';
+    card.classList.remove('muted');
+    card.innerHTML = `<div class="us-label">DAU 일평균 (${periodLabel})</div><div class="us-val">${formatNumber(avg)}${cap}</div>`;
   } catch (e) {
-    console.error('사용자 규모 그래프 로드 실패', e);
+    console.warn('DAU 일평균 fetch 실패', e);
   }
 }
 
-function drawUserSizeChart(data, label) {
-  const ctx = document.getElementById('usChart');
-  if (!ctx || typeof Chart === 'undefined') return;
-  if (_usChartInstance) { _usChartInstance.destroy(); }
+// ─── 그래프 데이터 fetch ─────────────────────────────────────────
+async function _fetchTrend(metric, days) {
+  try {
+    const res  = await fetch(`/api/trend?metric=${metric}&scope=T00&days=${days}`);
+    const json = await res.json();
+    return (json && json.ok && Array.isArray(json.data)) ? json.data : [];
+  } catch (e) {
+    console.warn('trend fetch 실패:', metric, e);
+    return [];
+  }
+}
 
-  const labels = data.map(d => (d.date || '').substring(5));
-  const values = data.map(d => d.value);
+// ─── 사용자 규모 듀얼 라인 그래프 그리기 ─────────────────────────
+async function _drawUserSizeChart(period) {
+  const canvas = document.getElementById('usChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (_usChartInstance) { try { _usChartInstance.destroy(); } catch(e) {} _usChartInstance = null; }
 
-  _usChartInstance = new Chart(ctx, {
+  // 캡션 초기화 (다음 렌더에 재계산)
+  const wrap = canvas.closest('.us-chart-wrap');
+  if (wrap) {
+    const old = wrap.querySelector('.us-chart-caption');
+    if (old) old.remove();
+  }
+
+  let datasets = [], labels = [], targetDays;
+
+  if (period === 'day') {
+    targetDays = 30;
+    const series = await _fetchTrend('dau', targetDays);
+    labels = series.map(d => (d.date || '').slice(5));
+    datasets = [{
+      label: 'DAU',
+      data: series.map(d => d.value),
+      borderColor: '#185FA5',
+      backgroundColor: 'rgba(24,95,165,0.08)',
+      borderWidth: 2,
+      pointRadius: series.length === 1 ? 4 : 1.5,
+      pointHoverRadius: 5,
+      tension: 0.25,
+      fill: true,
+    }];
+  } else if (period === 'week') {
+    targetDays = 30;
+    const [wauS, r7S] = await Promise.all([_fetchTrend('wau', targetDays), _fetchTrend('dau_r7', targetDays)]);
+    const ref = wauS.length >= r7S.length ? wauS : r7S;
+    labels = ref.map(d => (d.date || '').slice(5));
+    datasets = [
+      { label: '지난주 WAU', data: wauS.map(d => d.value),
+        borderColor: '#185FA5', borderWidth: 2,
+        pointRadius: wauS.length === 1 ? 4 : 1.5, pointHoverRadius: 5,
+        stepped: 'after', fill: false },
+      { label: '롤링 7일', data: r7S.map(d => d.value),
+        borderColor: '#85B7EB', borderWidth: 2,
+        pointRadius: r7S.length === 1 ? 4 : 1.5, pointHoverRadius: 5,
+        borderDash: [4, 3], tension: 0.25, fill: false }
+    ];
+  } else {
+    targetDays = 60;
+    const [mauS, r30S] = await Promise.all([_fetchTrend('mau', targetDays), _fetchTrend('dau_r30', targetDays)]);
+    const ref = mauS.length >= r30S.length ? mauS : r30S;
+    labels = ref.map(d => (d.date || '').slice(5));
+    datasets = [
+      { label: '전월 MAU', data: mauS.map(d => d.value),
+        borderColor: '#185FA5', borderWidth: 2,
+        pointRadius: mauS.length === 1 ? 4 : 1.5, pointHoverRadius: 5,
+        stepped: 'after', fill: false },
+      { label: '롤링 30일', data: r30S.map(d => d.value),
+        borderColor: '#85B7EB', borderWidth: 2,
+        pointRadius: r30S.length === 1 ? 4 : 1.5, pointHoverRadius: 5,
+        borderDash: [4, 3], tension: 0.25, fill: false }
+    ];
+  }
+
+  // 빈 데이터 캡션
+  const actualPoints = datasets.length
+    ? Math.max(...datasets.map(ds => (ds.data || []).filter(v => v != null && !isNaN(v)).length))
+    : 0;
+  if (wrap) {
+    if (actualPoints === 0) {
+      const cap = document.createElement('div');
+      cap.className = 'us-chart-caption';
+      cap.textContent = '데이터 없음';
+      wrap.appendChild(cap);
+      return;
+    } else if (actualPoints < targetDays) {
+      const cap = document.createElement('div');
+      cap.className = 'us-chart-caption';
+      cap.textContent = `데이터 누적 중 (${actualPoints}일 / 목표 ${targetDays}일)`;
+      wrap.appendChild(cap);
+    }
+  }
+
+  _usChartInstance = new Chart(canvas, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label,
-        data: values,
-        borderColor: '#378ADD',
-        backgroundColor: 'rgba(55,138,221,0.1)',
-        borderWidth: 2,
-        pointRadius: 2,
-        pointHoverRadius: 5,
-        tension: 0.25,
-        fill: true,
-      }]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
-          callbacks: {
-            label: (ctx) => `${label}: ${ctx.parsed.y.toLocaleString()}명`
-          }
+          callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toLocaleString()}명` }
         }
       },
       scales: {
@@ -1299,8 +1541,7 @@ function drawUserSizeChart(data, label) {
         },
         y: {
           ticks: {
-            font: { size: 10 },
-            color: 'rgba(120,120,120,0.8)',
+            font: { size: 10 }, color: 'rgba(120,120,120,0.8)',
             callback: (v) => v >= 1000 ? (v/1000).toFixed(0)+'k' : v
           },
           grid: { color: 'rgba(120,120,120,0.15)' }
@@ -1602,13 +1843,13 @@ function renderKPI(s1,s2){
 
   const cards = p==='day' ? [
     {label:'DAU', val:fmtK(s1.dau), wow:s1.dau_wow, unit:'%', extra:'전주 동일 요일 대비', color:'c-blue',
-     sub:[{label:'7D 롤링', val:fmtK(s1.wau)},{label:'30D 롤링', val:fmtK(s1.mau)}]},
+     sub:[{label:'7D 롤링', val:fmtK(s1.dau_r7)},{label:'30D 롤링', val:fmtK(s1.dau_r30)}]},
     {label:'신규사용자', val:fmtK(s2.new_user), wow:s2.new_wow, unit:'%', extra:`DAU의 ${fmtP(s2.new_pct)}`, color:'c-green'},
     {label:'복귀사용자', val:fmtK(s2.react_user), wow:s2.react_wow, unit:'%', extra:`DAU의 ${fmtP(s2.react_pct)}`, color:'c-purple'},
     {label:'이탈율', val:fmtP(s2.churn_rate), wow:s2.churn_diff, unit:'pp', extra:`전주 ${fmtP(s2.churn_rate_pw)}`, color:'c-orange', invWow:true},
   ] : p==='week' ? [
     {label:'WAU (주간)', val:fmtK(s2.dau_week), wow:s2.dau_week_wow, unit:'%', extra:'', color:'c-blue',
-     sub:[{label:'DAU 일평균 (전주 월~일)', val:fmtK(s2.dau_week_avg)},{label:'30D 롤링', val:fmtK(s1.mau)}]},
+     sub:[{label:'DAU 일평균 (전주 월~일)', val:fmtK(s2.dau_week_avg)},{label:'30D 롤링', val:fmtK(s1.dau_r30)}]},
     {label:'신규 (주간)', val:fmtK(s2.new_week), wow:s2.new_week_wow, unit:'%', extra:`WAU의 ${fmtP(s2.new_week_pct)}`, color:'c-green'},
     {label:'복귀 (주간)', val:fmtK(s2.react_week), wow:s2.react_week_wow, unit:'%', extra:`WAU의 ${fmtP(s2.react_week_pct)}`, color:'c-purple'},
     {label:'이탈율 (주간)', val:fmtP(s2.churn_week), wow:s2.churn_week_diff, unit:'pp', extra:`전주 ${fmtP(s2.churn_week_pw)}`, color:'c-orange', invWow:true},
@@ -1648,7 +1889,7 @@ function renderFunnel(s1, s2) {
     dau        = s2.dau_week;
     new_u      = s2.new_week;      new_p    = s2.new_week_pct;
     react      = s2.react_week;    react_p  = s2.react_week_pct;
-    dau_prev   = s1.wau;
+    dau_prev   = s2.wau_prev;
     churn_rate = s2.churn_week;
     dau_label  = '이번 활성 (WAU)';
     prev_label = '직전 활성 (전주)';
@@ -1656,7 +1897,7 @@ function renderFunnel(s1, s2) {
     dau        = s2.dau_mon;
     new_u      = s2.new_mon;       new_p    = s2.new_mon_pct;
     react      = s2.react_mon;     react_p  = s2.react_mon_pct;
-    dau_prev   = s1.mau;
+    dau_prev   = s2.mau_prev;
     churn_rate = s2.churn_mon;
     dau_label  = '이번 활성 (MAU)';
     prev_label = '직전 활성 (전월)';
