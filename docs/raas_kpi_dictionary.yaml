@@ -1,0 +1,2346 @@
+# ============================================================================
+# RAAS KPI Metadata Dictionary
+# ============================================================================
+# Version: 1.0
+# Updated: 2026-04-29
+# Lookup:  raas_kpi_latest.csv
+# Owner:   SBS RAAS Team
+#
+# Purpose:
+#   - 룩업 CSV의 모든 필드에 대한 단일 신뢰 출처 (Single Source of Truth)
+#   - 향후 온톨로지(RDF/OWL) 변환의 기초 자료
+#   - AI 분석 시스템의 컨텍스트 자료
+#   - 신규 입사자 교육 및 외부 협업 시 표준 참조 문서
+#
+# Naming Rule:
+#   {indicator}_{aggregation}_{comparison}
+#
+#   indicator:    dau/wau/mau, new, react, churn_rate, engage_rate,
+#                 habit_rate, deep_rate, d1_ret/d7_ret/w1_ret/m1_ret,
+#                 new_d1_ret 등
+#   aggregation:  (none)=current / week / mon / r7 / r30
+#   comparison:   (none)=current value / _prev / _chg(%) / _diff(pp) /
+#                 _share(of DAU) / _avg
+#
+# Categories:
+#   - meta            : 식별/날짜/편성 정보
+#   - user_size       : 사용자 규모 (DAU/WAU/MAU + 1분/10분)
+#   - user_growth     : 신규/복귀 사용자 절대값
+#   - user_quality    : 복귀율/이탈율/깊은청취율/참여율
+#   - user_habit      : 습관형성률 (신규 코호트 정착)
+#   - user_retention  : 유지율 (전체/신규 코호트)
+#
+# _prev Definition Rule (per window):
+#   - 1d window     (DAU):     D-8  (요일 효과 통제 위해 7일 전)
+#   - 7d window     (WAU/r7):  D-8 또는 지지난주 (1주 전)
+#   - 30d window    (MAU/r30): D-31 또는 지지난달 (1달 전)
+#
+# Type Codes:
+#   count : 정수 카운트 (명)
+#   rate  : 비율 (%)
+#   pct   : 변동률 (%, _chg 필드)
+#   pp    : 차이 (percentage point, _diff 필드)
+#   date  : 날짜
+#   string: 문자열
+# ============================================================================
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category A. Metadata & Date Fields
+# 룩업 행을 식별하고 시점을 명시하는 비-KPI 필드
+# ─────────────────────────────────────────────────────────────────────────────
+
+DATE:
+  label_ko: "일간 기준일"
+  label_en: "Reference Date (Daily)"
+  category: meta
+  type: date
+  unit: "YYYY/MM/DD"
+  reference_date: D-1
+  description: "이 행이 보고하는 일간 지표의 기준일. 자정 이후 배치가 도는 다음날 기준이므로 실제로는 D-1(전일)을 가리킴."
+  example: "2026/04/28"
+
+DATE_WEEK:
+  label_ko: "주간 기준일 (전주 월요일)"
+  label_en: "Reference Date (Weekly)"
+  category: meta
+  type: date
+  unit: "YYYY/MM/DD"
+  reference_date: 전주 월요일
+  description: "주간 지표가 집계한 '전주(Mon~Sun)'의 시작일."
+  example: "2026/04/21"
+
+DATE_MON:
+  label_ko: "월간 기준일 (전월 1일)"
+  label_en: "Reference Date (Monthly)"
+  category: meta
+  type: date
+  unit: "YYYY/MM/DD"
+  reference_date: 전월 1일
+  description: "월간 지표가 집계한 '전월(1일~말일)'의 시작일."
+  example: "2026/03/01"
+
+PGM_CODE:
+  label_ko: "프로그램 코드"
+  label_en: "Program Code"
+  category: meta
+  type: string
+  unit: "3자리 코드"
+  description: "프로그램/채널/전체를 식별하는 3자리 코드. 코드별 명칭 매핑은 raas_briefing_engine.py의 PGM_NAMES를 단일 출처로 함."
+  example: "F09"
+  values_total: 41
+  excluded: ["L04"]
+
+PGM_NAME:
+  label_ko: "프로그램명"
+  label_en: "Program Name"
+  category: meta
+  type: string
+  source: BROADPLAN.csv
+  description: "PGM_CODE에 매핑되는 프로그램의 정식 명칭."
+  example: "두시탈출 컬투쇼"
+  note: "채널 단위(T00/F00/L00/G00/P00)는 비어있을 수 있음"
+
+STIME:
+  label_ko: "방송 시작 시간"
+  label_en: "Broadcast Start Time"
+  category: meta
+  type: string
+  unit: "HH:MM"
+  source: BROADPLAN.csv
+  description: "프로그램의 정규 편성 시작 시간."
+  example: "14:00"
+
+program_title:
+  label_ko: "당일 방송 제목"
+  label_en: "Episode Title"
+  category: meta
+  type: string
+  source: index=broadplan
+  description: "DATE 당일 실제 방송된 회차의 제목. 정식 프로그램명(PGM_NAME)과 별개로 그날 회차/특집/주제."
+  example: "게스트 박나래 출연 - 봄 특집"
+  note: "이전 이름: schedule_title"
+
+guestname:
+  label_ko: "게스트명"
+  label_en: "Guest Name"
+  category: meta
+  type: string
+  source: index=broadplan
+  description: "DATE 당일 출연 게스트. 다중 게스트 시 멀티밸류."
+  example: "박나래"
+
+daily_corner:
+  label_ko: "당일 일일 코너"
+  label_en: "Daily Corner"
+  category: meta
+  type: string
+  source: index=broadplan
+  description: "DATE 당일 진행된 일일 코너 정보."
+
+weekly_corner:
+  label_ko: "당일 주간 코너"
+  label_en: "Weekly Corner"
+  category: meta
+  type: string
+  source: index=broadplan
+  description: "DATE 당일 진행된 주간 코너 정보."
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category B. User Size (사용자 규모)
+# 활성 사용자 수 — 일간/주간/월간 + 롤링 7일/30일
+#
+# 일반(absolute window) vs 롤링(rolling window) 구분:
+#   - 일반: 달력 기준 완료된 기간 (전일/전주/전월)
+#   - 롤링: D-1 시점 기준 N일 윈도우 (매일 갱신)
+#
+# 같은 7일을 보더라도:
+#   - wau    = 전주 월~일 7일간 1회 이상 활성한 순 사용자
+#   - dau_r7 = D-1부터 거꾸로 7일간 1회 이상 활성한 순 사용자
+# ─────────────────────────────────────────────────────────────────────────────
+
+# B-1. Daily (DAU)
+
+dau:
+  label_ko: "일간 활성 사용자"
+  label_en: "Daily Active Users"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-1
+  window: 1d
+  source: "program_user_funnel_day.csv (TYPE=ALL, PERIOD=1D)"
+  related:
+    prev: dau_prev
+    chg: dau_chg
+    d2: dau_d2
+  description: "전일(D-1) 24시간 동안 1회 이상 앱을 활성화한 순 사용자 수."
+  example: 123456
+  note: "이전 이름: dau_today"
+
+dau_prev:
+  label_ko: "DAU (D-8 비교값)"
+  label_en: "DAU 7-day Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 DAU. dau_chg 계산의 기준값."
+  example: 121000
+  note: "이전 이름: dau_pw"
+
+dau_chg:
+  label_ko: "DAU 전주 대비 증감률"
+  label_en: "DAU WoW Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (당일 DAU - 7일 전 DAU) / 7일 전 DAU × 100
+    SPL:   (dau - dau_prev) / dau_prev * 100
+  description: "D-1 vs D-8의 DAU 변동률. 요일 효과를 통제한 주간 단위 비교."
+  example: 2.0
+  note: "이전 이름: dau_wow"
+
+dau_d2:
+  label_ko: "DAU (D-2 어제값)"
+  label_en: "DAU 2 days ago"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-2
+  window: 1d
+  description: "전전일(D-2)의 DAU. 사용자 흐름 분석에서 직전 활성 기준 계산용."
+  example: 119500
+  note: "이전 이름: dau_yday"
+
+# B-2. Weekly (WAU = 전주 누적, 일반)
+
+wau:
+  label_ko: "주간 활성 사용자 (전주 누적)"
+  label_en: "Weekly Active Users"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_user_funnel_week.csv (TYPE=ALL, PERIOD=1W)"
+  related:
+    prev: wau_prev
+    chg: wau_chg
+  description: "전주 월요일~일요일 7일간 1회 이상 활성한 순 사용자 수. 달력 기준 완료된 한 주."
+  example: 445678
+  note: "이전 이름: dau_week. WAU(Weekly Active Users) 표준 명칭으로 변경."
+
+wau_prev:
+  label_ko: "WAU (지지난주값)"
+  label_en: "WAU 1 Week Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 월~일의 WAU. wau_chg 계산의 기준값."
+  example: 423000
+  note: "이전 이름: dau_week_pw"
+
+wau_chg:
+  label_ko: "WAU 전주 대비 증감률"
+  label_en: "WAU WoW Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전주 WAU - 지지난주 WAU) / 지지난주 WAU × 100
+    SPL:   (wau - wau_prev) / wau_prev * 100
+  description: "전주 vs 지지난주 WAU 변동률."
+  example: 5.4
+  note: "이전 이름: dau_week_wow"
+
+# B-3. Monthly (MAU = 전월 누적, 일반)
+
+mau:
+  label_ko: "월간 활성 사용자 (전월 누적)"
+  label_en: "Monthly Active Users"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 전월 1일
+  window: "1mon_calendar (1st-last day)"
+  source: "program_user_funnel_mon.csv (TYPE=ALL, PERIOD=1M)"
+  related:
+    prev: mau_prev
+    chg: mau_chg
+  description: "전월 1일~말일 1개월 동안 1회 이상 활성한 순 사용자 수. 달력 기준 완료된 한 달."
+  example: 1756234
+  note: "이전 이름: dau_mon. MAU(Monthly Active Users) 표준 명칭으로 변경."
+
+mau_prev:
+  label_ko: "MAU (지지난달값)"
+  label_en: "MAU 1 Month Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1일~말일의 MAU. mau_chg 계산의 기준값."
+  example: 1725000
+  note: "이전 이름: dau_mon_pw"
+
+mau_chg:
+  label_ko: "MAU 전월 대비 증감률"
+  label_en: "MAU MoM Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전월 MAU - 지지난달 MAU) / 지지난달 MAU × 100
+    SPL:   (mau - mau_prev) / mau_prev * 100
+  description: "전월 vs 지지난달 MAU 변동률. 의미상 MoM이지만 지표명은 _chg로 통일."
+  example: 1.8
+  note: "이전 이름: dau_mon_wow"
+
+# B-4. Rolling 7-day
+
+dau_r7:
+  label_ko: "롤링 7일 활성 사용자"
+  label_en: "Rolling 7-day Active Users"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-1
+  window: 7d_rolling
+  source: "program_user_funnel_day.csv (TYPE=ALL, PERIOD=7D)"
+  related:
+    prev: dau_r7_prev
+    chg: dau_r7_chg
+  description: "D-1 시점 기준 직전 7일간 1회 이상 활성한 순 사용자 수. 매일 새로 계산되며 일반 WAU와 달리 주가 끝나기를 기다리지 않고 추세 변화를 즉시 포착."
+  example: 523456
+  note: |
+    이전 이름: wau_today.
+    DAU의 7일 윈도우 확장으로 보고 dau_r7로 명명.
+    일반 WAU(전주 누적)와 의미가 다르므로 혼동 주의.
+
+dau_r7_prev:
+  label_ko: "롤링 7일 (D-8 비교값)"
+  label_en: "Rolling 7-day Active Users 8 days Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-8
+  window: 7d_rolling
+  description: |
+    D-8 시점 기준 직전 7일간 활성 사용자 수. dau_r7_chg 계산의 기준값.
+    두 7일 윈도우(D-7~D-1, D-14~D-8)는 사실상 분리되어 있어 WoW 비교에 적합.
+  example: 510000
+  note: "이전 이름: wau_pw"
+
+dau_r7_chg:
+  label_ko: "롤링 7일 전주 대비 증감률"
+  label_en: "Rolling 7-day WoW Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (D-1 기준 롤링 7일 - D-8 기준 롤링 7일) / D-8 기준 롤링 7일 × 100
+    SPL:   (dau_r7 - dau_r7_prev) / dau_r7_prev * 100
+  description: "D-1 기준 롤링 7일 vs D-8 기준 롤링 7일 변동률. 실질적 WoW 의미."
+  example: 2.6
+  status: NEW
+  note: "신규 추가 필드."
+
+# B-5. Rolling 30-day
+
+dau_r30:
+  label_ko: "롤링 30일 활성 사용자"
+  label_en: "Rolling 30-day Active Users"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-1
+  window: 30d_rolling
+  source: "program_user_funnel_day.csv (TYPE=ALL, PERIOD=30D)"
+  related:
+    prev: dau_r30_prev
+    chg: dau_r30_chg
+  description: "D-1 시점 기준 직전 30일간 1회 이상 활성한 순 사용자 수. 매일 갱신되는 MAU 변형."
+  example: 1803456
+  note: |
+    이전 이름: mau_today.
+    DAU의 30일 윈도우 확장으로 보고 dau_r30로 명명.
+    일반 MAU(전월 누적)와 의미가 다르므로 혼동 주의.
+
+dau_r30_prev:
+  label_ko: "롤링 30일 (D-31 비교값)"
+  label_en: "Rolling 30-day Active Users 30 days Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-31
+  window: 30d_rolling
+  description: |
+    D-31 시점 기준 직전 30일간 활성 사용자 수. dau_r30_chg 계산의 기준값.
+    윈도우 길이(30일)와 비교 간격(30일)이 같아 두 윈도우가 겹치지 않음.
+  example: 1750000
+  note: |
+    이전 이름: mau_pw (당시는 D-8 기준이었음).
+    SPL 시프트 로직 변경에 따라 비교 시점을 D-8 → D-31로 변경.
+    의미적 일관성을 위해 "동일 길이 윈도우의 1주기 이전" 규칙 적용.
+
+dau_r30_chg:
+  label_ko: "롤링 30일 전월 대비 증감률"
+  label_en: "Rolling 30-day MoM Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (D-1 기준 롤링 30일 - D-31 기준 롤링 30일) / D-31 기준 롤링 30일 × 100
+    SPL:   (dau_r30 - dau_r30_prev) / dau_r30_prev * 100
+  description: |
+    D-1 기준 롤링 30일 vs D-31 기준 롤링 30일 변동률.
+    실질적 MoM 의미 (두 30일 윈도우가 겹치지 않음).
+  example: 3.0
+  status: NEW
+  note: |
+    신규 추가 필드.
+    네이밍은 _chg로 통일하되 의미는 MoM(Month-over-Month).
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category C. Listening Threshold Users (1분/10분 청취 사용자)
+# 깊은청취율(deep_rate) 산출의 분자/분모 데이터.
+#
+# deep_rate = (10분 이상 청취자 / 1분 이상 청취자) × 100
+#
+# 베이스 명명 규칙:
+#   - dau_*  : 일간 (D-1 24시간)
+#   - wau_*  : 주간 일반 (전주 누적)
+#   - mau_*  : 월간 일반 (전월 누적)
+#
+# 1분(_1min): 광고 노출 가능 활성 사용자 (광고 단위 기본)
+# 10분(_10min): 깊이 있는 청취 — 콘텐츠 몰입 사용자
+# ─────────────────────────────────────────────────────────────────────────────
+
+# C-1. Daily 1min/10min
+
+dau_1min:
+  label_ko: "일간 1분 이상 청취자"
+  label_en: "Daily Active Users (1min+)"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-1
+  window: 1d
+  source: "program_user_funnel_day.csv (TYPE=1MIN, PERIOD=1D)"
+  related:
+    prev: dau_1min_prev
+    chg: dau_1min_chg
+  description: "전일(D-1) 24시간 동안 1분 이상 청취한 순 사용자 수. 깊은청취율(deep_rate) 분모이자 광고 단위 기본 활성 지표."
+  example: 98765
+
+dau_1min_prev:
+  label_ko: "일간 1분 이상 청취자 (D-8 비교값)"
+  label_en: "Daily 1min+ Active Users 7-day Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 1분 이상 청취자 수. dau_1min_chg 및 깊은청취율 변동(deep_rate_diff) 계산용."
+  example: 95000
+  note: "이전 이름: dau_1min_pw"
+
+dau_1min_chg:
+  label_ko: "일간 1분 청취자 전주 대비 증감률"
+  label_en: "Daily 1min+ Users WoW Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (당일 1분 청취자 - 7일 전 1분 청취자) / 7일 전 1분 청취자 × 100
+    SPL:   (dau_1min - dau_1min_prev) / dau_1min_prev * 100
+  description: "D-1 vs D-8의 1분 이상 청취자 수 변동률. 광고 노출 가능 활성 사용자 추세 파악용."
+  example: 4.0
+  status: NEW
+  note: "신규 추가 필드."
+
+dau_10min:
+  label_ko: "일간 10분 이상 청취자"
+  label_en: "Daily Active Users (10min+)"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-1
+  window: 1d
+  source: "program_user_funnel_day.csv (TYPE=10MIN, PERIOD=1D)"
+  related:
+    prev: dau_10min_prev
+    chg: dau_10min_chg
+  description: "전일(D-1) 24시간 동안 10분 이상 청취한 순 사용자 수. 깊은청취율(deep_rate) 분자이자 콘텐츠 몰입 지표."
+  example: 56789
+
+dau_10min_prev:
+  label_ko: "일간 10분 이상 청취자 (D-8 비교값)"
+  label_en: "Daily 10min+ Active Users 7-day Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 10분 이상 청취자 수. dau_10min_chg 및 깊은청취율 변동 계산용."
+  example: 54000
+  note: "이전 이름: dau_10min_pw"
+
+dau_10min_chg:
+  label_ko: "일간 10분 청취자 전주 대비 증감률"
+  label_en: "Daily 10min+ Users WoW Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (당일 10분 청취자 - 7일 전 10분 청취자) / 7일 전 10분 청취자 × 100
+    SPL:   (dau_10min - dau_10min_prev) / dau_10min_prev * 100
+  description: "D-1 vs D-8의 10분 이상 청취자 수 변동률. 콘텐츠 몰입도 추세 파악용."
+  example: 5.2
+  status: NEW
+  note: "신규 추가 필드."
+
+# C-2. Weekly 1min/10min (전주 누적)
+
+wau_1min:
+  label_ko: "주간 1분 이상 청취자"
+  label_en: "Weekly Active Users (1min+)"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_user_funnel_week.csv (TYPE=1MIN, PERIOD=1W)"
+  related:
+    prev: wau_1min_prev
+    chg: wau_1min_chg
+  description: "전주 월~일 7일간 1분 이상 청취한 순 사용자 수. 주간 깊은청취율(deep_rate_week) 분모."
+  example: 387654
+
+wau_1min_prev:
+  label_ko: "주간 1분 이상 청취자 (지지난주값)"
+  label_en: "Weekly 1min+ Active Users 1 Week Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 월~일의 1분 이상 청취자 수. wau_1min_chg 및 주간 깊은청취율 변동 계산용."
+  example: 375000
+  note: "이전 이름: wau_1min_pw"
+
+wau_1min_chg:
+  label_ko: "주간 1분 청취자 전주 대비 증감률"
+  label_en: "Weekly 1min+ Users WoW Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전주 1분 청취자 - 지지난주 1분 청취자) / 지지난주 1분 청취자 × 100
+    SPL:   (wau_1min - wau_1min_prev) / wau_1min_prev * 100
+  description: "전주 vs 지지난주의 1분 이상 청취자 수 변동률."
+  example: 3.4
+  status: NEW
+  note: "신규 추가 필드."
+
+wau_10min:
+  label_ko: "주간 10분 이상 청취자"
+  label_en: "Weekly Active Users (10min+)"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_user_funnel_week.csv (TYPE=10MIN, PERIOD=1W)"
+  related:
+    prev: wau_10min_prev
+    chg: wau_10min_chg
+  description: "전주 월~일 7일간 10분 이상 청취한 순 사용자 수. 주간 깊은청취율 분자."
+  example: 234567
+
+wau_10min_prev:
+  label_ko: "주간 10분 이상 청취자 (지지난주값)"
+  label_en: "Weekly 10min+ Active Users 1 Week Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 월~일의 10분 이상 청취자 수."
+  example: 228000
+  note: "이전 이름: wau_10min_pw"
+
+wau_10min_chg:
+  label_ko: "주간 10분 청취자 전주 대비 증감률"
+  label_en: "Weekly 10min+ Users WoW Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전주 10분 청취자 - 지지난주 10분 청취자) / 지지난주 10분 청취자 × 100
+    SPL:   (wau_10min - wau_10min_prev) / wau_10min_prev * 100
+  description: "전주 vs 지지난주의 10분 이상 청취자 수 변동률."
+  example: 2.9
+  status: NEW
+  note: "신규 추가 필드."
+
+# C-3. Monthly 1min/10min (전월 누적)
+
+mau_1min:
+  label_ko: "월간 1분 이상 청취자"
+  label_en: "Monthly Active Users (1min+)"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_user_funnel_mon.csv (TYPE=1MIN, PERIOD=1M)"
+  related:
+    prev: mau_1min_prev
+    chg: mau_1min_chg
+  description: "전월 1일~말일 1개월간 1분 이상 청취한 순 사용자 수. 월간 깊은청취율(deep_rate_mon) 분모."
+  example: 1456789
+
+mau_1min_prev:
+  label_ko: "월간 1분 이상 청취자 (지지난달값)"
+  label_en: "Monthly 1min+ Active Users 1 Month Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1일~말일의 1분 이상 청취자 수. mau_1min_chg 및 월간 깊은청취율 변동 계산용."
+  example: 1430000
+  note: "이전 이름: mau_1min_pw"
+
+mau_1min_chg:
+  label_ko: "월간 1분 청취자 전월 대비 증감률"
+  label_en: "Monthly 1min+ Users MoM Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전월 1분 청취자 - 지지난달 1분 청취자) / 지지난달 1분 청취자 × 100
+    SPL:   (mau_1min - mau_1min_prev) / mau_1min_prev * 100
+  description: "전월 vs 지지난달의 1분 이상 청취자 수 변동률. 월 단위 광고 도달 가능 사용자 추세."
+  example: 1.9
+  status: NEW
+  note: "신규 추가 필드."
+
+mau_10min:
+  label_ko: "월간 10분 이상 청취자"
+  label_en: "Monthly Active Users (10min+)"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_user_funnel_mon.csv (TYPE=10MIN, PERIOD=1M)"
+  related:
+    prev: mau_10min_prev
+    chg: mau_10min_chg
+  description: "전월 1일~말일 1개월간 10분 이상 청취한 순 사용자 수. 월간 깊은청취율 분자."
+  example: 876543
+
+mau_10min_prev:
+  label_ko: "월간 10분 이상 청취자 (지지난달값)"
+  label_en: "Monthly 10min+ Active Users 1 Month Prior"
+  category: user_size
+  type: count
+  unit: 명
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1일~말일의 10분 이상 청취자 수."
+  example: 850000
+  note: "이전 이름: mau_10min_pw"
+
+mau_10min_chg:
+  label_ko: "월간 10분 청취자 전월 대비 증감률"
+  label_en: "Monthly 10min+ Users MoM Change"
+  category: user_size
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전월 10분 청취자 - 지지난달 10분 청취자) / 지지난달 10분 청취자 × 100
+    SPL:   (mau_10min - mau_10min_prev) / mau_10min_prev * 100
+  description: "전월 vs 지지난달의 10분 이상 청취자 수 변동률. 월 단위 콘텐츠 몰입도 추세."
+  example: 3.1
+  status: NEW
+  note: "신규 추가 필드."
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category D. New Users (신규 사용자)
+# 처음 앱을 활성화한 사용자 — 일간/주간/월간
+#
+# 신규 사용자 정의:
+#   - SBS 라디오 앱(고릴라)은 별도 회원가입 단계 없음
+#   - "신규 사용자" = 앱 신규 설치 후 처음 청취한 사용자
+#   - 첫 청취 시점이 곧 사용자 발생 시점
+#
+# 베이스 명명:
+#   - new      : 일간 (D-1)
+#   - new_week : 주간 일반 (전주 누적)
+#   - new_mon  : 월간 일반 (전월 누적)
+#
+# 각 기간마다 4종 필드 세트:
+#   - 절대값       : new, new_week, new_mon
+#   - 비교 기준값   : new_prev, new_week_prev, new_mon_prev
+#   - 변동률(%)    : new_chg, new_week_chg, new_mon_chg
+#   - DAU 대비 비율 : new_share, new_week_share, new_mon_share
+# ─────────────────────────────────────────────────────────────────────────────
+
+# D-1. Daily New Users
+
+new:
+  label_ko: "일간 신규 사용자"
+  label_en: "Daily New Users"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: D-1
+  window: 1d
+  source: "program_newuser_funnel_day.csv (TYPE=ALL, PERIOD=1D)"
+  related:
+    prev: new_prev
+    chg: new_chg
+    share: new_share
+  description: "전일(D-1) 24시간 동안 앱을 신규 설치 후 처음 청취한 순 사용자 수. 신규 유입의 일간 규모."
+  example: 8234
+  note: "이전 이름: new_today"
+
+new_prev:
+  label_ko: "일간 신규 사용자 (D-8 비교값)"
+  label_en: "Daily New Users 7-day Prior"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 신규 사용자 수. new_chg 계산의 기준값."
+  example: 7800
+  note: "이전 이름: new_pw"
+
+new_chg:
+  label_ko: "일간 신규 전주 대비 증감률"
+  label_en: "Daily New Users WoW Change"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (당일 신규 - 7일 전 신규) / 7일 전 신규 × 100
+    SPL:   (new - new_prev) / new_prev * 100
+  description: "D-1 vs D-8의 신규 사용자 수 변동률. 신규 유입 추세 파악용."
+  example: 5.6
+  note: "이전 이름: new_wow"
+
+new_share:
+  label_ko: "일간 신규 비중 (DAU 대비)"
+  label_en: "Daily New Users Share of DAU"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: 당일 신규 사용자 / 당일 DAU × 100
+    SPL:   new / dau * 100
+  description: "DAU 중 신규 사용자가 차지하는 비율. 신규 유입의 상대적 강도 지표."
+  example: 6.7
+  note: |
+    이전 이름: new_pct.
+    같은 카테고리의 react_rate(휴면 대비 복귀율)와 의미 구분을 위해 _share로 명명.
+
+# D-2. Weekly New Users (전주 누적)
+
+new_week:
+  label_ko: "주간 신규 사용자 (전주 누적)"
+  label_en: "Weekly New Users"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_newuser_funnel_week.csv (TYPE=ALL)"
+  related:
+    prev: new_week_prev
+    chg: new_week_chg
+    share: new_week_share
+  description: "전주 월~일 7일간 앱을 신규 설치 후 처음 청취한 순 사용자 수."
+  example: 52345
+
+new_week_prev:
+  label_ko: "주간 신규 사용자 (지지난주값)"
+  label_en: "Weekly New Users 1 Week Prior"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 월~일의 주간 신규 사용자 수. new_week_chg 계산의 기준값."
+  example: 49500
+  note: "이전 이름: new_week_pw"
+
+new_week_chg:
+  label_ko: "주간 신규 전주 대비 증감률"
+  label_en: "Weekly New Users WoW Change"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전주 신규 - 지지난주 신규) / 지지난주 신규 × 100
+    SPL:   (new_week - new_week_prev) / new_week_prev * 100
+  description: "전주 vs 지지난주 신규 사용자 변동률."
+  example: 5.7
+  note: "이전 이름: new_week_wow"
+
+new_week_share:
+  label_ko: "주간 신규 비중 (WAU 대비)"
+  label_en: "Weekly New Users Share of WAU"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: 전주 신규 사용자 / 전주 WAU × 100
+    SPL:   new_week / wau * 100
+  description: "WAU 중 주간 신규 사용자가 차지하는 비율."
+  example: 11.7
+  note: "이전 이름: new_week_pct"
+
+# D-3. Monthly New Users (전월 누적)
+
+new_mon:
+  label_ko: "월간 신규 사용자 (전월 누적)"
+  label_en: "Monthly New Users"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_newuser_funnel_mon.csv (TYPE=ALL)"
+  related:
+    prev: new_mon_prev
+    chg: new_mon_chg
+    share: new_mon_share
+  description: "전월 1일~말일 1개월간 앱을 신규 설치 후 처음 청취한 순 사용자 수."
+  example: 198765
+
+new_mon_prev:
+  label_ko: "월간 신규 사용자 (지지난달값)"
+  label_en: "Monthly New Users 1 Month Prior"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1일~말일의 월간 신규 사용자 수. new_mon_chg 계산의 기준값."
+  example: 192000
+  note: "이전 이름: new_mon_pw"
+
+new_mon_chg:
+  label_ko: "월간 신규 전월 대비 증감률"
+  label_en: "Monthly New Users MoM Change"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전월 신규 - 지지난달 신규) / 지지난달 신규 × 100
+    SPL:   (new_mon - new_mon_prev) / new_mon_prev * 100
+  description: "전월 vs 지지난달 신규 사용자 변동률. 월 단위 신규 유입 트렌드."
+  example: 3.5
+  note: |
+    이전 이름: new_mon_wow.
+    의미상 MoM이지만 명명은 _chg로 통일.
+
+new_mon_share:
+  label_ko: "월간 신규 비중 (MAU 대비)"
+  label_en: "Monthly New Users Share of MAU"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: 전월 신규 사용자 / 전월 MAU × 100
+    SPL:   new_mon / mau * 100
+  description: "MAU 중 월간 신규 사용자가 차지하는 비율."
+  example: 11.3
+  note: "이전 이름: new_mon_pct"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category E. Reactivated Users (복귀 사용자) — Absolute Counts
+# 휴면 상태에서 다시 앱을 활성화한 사용자 — 일간/주간/월간
+#
+# 카테고리 분리:
+#   - E (이번): react/react_week/react_mon — 복귀 사용자 수 (절대값)
+#   - F (다음): react_rate/react_rate_week/react_rate_mon — 복귀율 (휴면 대비 %)
+#
+# 베이스 명명:
+#   - react      : 일간 (D-1)
+#   - react_week : 주간 일반 (전주 누적)
+#   - react_mon  : 월간 일반 (전월 누적)
+#
+# 각 기간마다 4종 필드 세트 (D 카테고리와 동일 패턴):
+#   - 절대값       : react, react_week, react_mon
+#   - 비교 기준값   : react_prev, react_week_prev, react_mon_prev
+#   - 변동률(%)    : react_chg, react_week_chg, react_mon_chg
+#   - DAU 대비 비율 : react_share, react_week_share, react_mon_share
+# ─────────────────────────────────────────────────────────────────────────────
+
+# E-1. Daily Reactivated Users
+
+react:
+  label_ko: "일간 복귀 사용자"
+  label_en: "Daily Reactivated Users"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: D-1
+  window: 1d
+  source: "program_reactuser_funnel_day.csv (TYPE=ALL, PERIOD=1D)"
+  related:
+    prev: react_prev
+    chg: react_chg
+    share: react_share
+    rate: react_rate
+  description: "전일(D-1) 24시간 동안 휴면 상태에서 다시 앱을 활성화한 순 사용자 수. 휴면 풀에서의 복귀 규모."
+  example: 5123
+  note: "이전 이름: react_today"
+
+react_prev:
+  label_ko: "일간 복귀 사용자 (D-8 비교값)"
+  label_en: "Daily Reactivated Users 7-day Prior"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 복귀 사용자 수. react_chg 계산의 기준값."
+  example: 4900
+  note: "이전 이름: react_pw"
+
+react_chg:
+  label_ko: "일간 복귀 전주 대비 증감률"
+  label_en: "Daily Reactivated Users WoW Change"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (당일 복귀 - 7일 전 복귀) / 7일 전 복귀 × 100
+    SPL:   (react - react_prev) / react_prev * 100
+  description: "D-1 vs D-8의 복귀 사용자 수 변동률. 휴면 사용자 재유입 추세 파악용."
+  example: 4.6
+  note: "이전 이름: react_wow"
+
+react_share:
+  label_ko: "일간 복귀 비중 (DAU 대비)"
+  label_en: "Daily Reactivated Users Share of DAU"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: 당일 복귀 사용자 / 당일 DAU × 100
+    SPL:   react / dau * 100
+  description: "DAU 중 복귀 사용자가 차지하는 비율. 복귀 유입의 상대적 강도 지표."
+  example: 4.2
+  note: |
+    이전 이름: react_pct.
+    react_rate(휴면 대비 복귀율, 카테고리 F)와 의미 구분을 위해 _share로 명명.
+    - react_share: 복귀자/DAU (활성 사용자 중 복귀자 비중)
+    - react_rate:  복귀자/휴면풀 (휴면 사용자 중 복귀한 비율)
+
+# E-2. Weekly Reactivated Users (전주 누적)
+
+react_week:
+  label_ko: "주간 복귀 사용자 (전주 누적)"
+  label_en: "Weekly Reactivated Users"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_reactuser_funnel_week.csv (TYPE=ALL)"
+  related:
+    prev: react_week_prev
+    chg: react_week_chg
+    share: react_week_share
+    rate: react_rate_week
+  description: "전주 월~일 7일간 휴면 상태에서 복귀한 순 사용자 수."
+  example: 28456
+
+react_week_prev:
+  label_ko: "주간 복귀 사용자 (지지난주값)"
+  label_en: "Weekly Reactivated Users 1 Week Prior"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 월~일의 주간 복귀 사용자 수. react_week_chg 계산의 기준값."
+  example: 27200
+  note: "이전 이름: react_week_pw"
+
+react_week_chg:
+  label_ko: "주간 복귀 전주 대비 증감률"
+  label_en: "Weekly Reactivated Users WoW Change"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전주 복귀 - 지지난주 복귀) / 지지난주 복귀 × 100
+    SPL:   (react_week - react_week_prev) / react_week_prev * 100
+  description: "전주 vs 지지난주 복귀 사용자 변동률."
+  example: 4.6
+  note: "이전 이름: react_week_wow"
+
+react_week_share:
+  label_ko: "주간 복귀 비중 (WAU 대비)"
+  label_en: "Weekly Reactivated Users Share of WAU"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: 전주 복귀 사용자 / 전주 WAU × 100
+    SPL:   react_week / wau * 100
+  description: "WAU 중 주간 복귀 사용자가 차지하는 비율."
+  example: 6.4
+  note: "이전 이름: react_week_pct"
+
+# E-3. Monthly Reactivated Users (전월 누적)
+
+react_mon:
+  label_ko: "월간 복귀 사용자 (전월 누적)"
+  label_en: "Monthly Reactivated Users"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_reactuser_funnel_mon.csv (TYPE=ALL)"
+  related:
+    prev: react_mon_prev
+    chg: react_mon_chg
+    share: react_mon_share
+    rate: react_rate_mon
+  description: "전월 1일~말일 1개월간 휴면 상태에서 복귀한 순 사용자 수."
+  example: 124567
+
+react_mon_prev:
+  label_ko: "월간 복귀 사용자 (지지난달값)"
+  label_en: "Monthly Reactivated Users 1 Month Prior"
+  category: user_growth
+  type: count
+  unit: 명
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1일~말일의 월간 복귀 사용자 수. react_mon_chg 계산의 기준값."
+  example: 119800
+  note: "이전 이름: react_mon_pw"
+
+react_mon_chg:
+  label_ko: "월간 복귀 전월 대비 증감률"
+  label_en: "Monthly Reactivated Users MoM Change"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: (전월 복귀 - 지지난달 복귀) / 지지난달 복귀 × 100
+    SPL:   (react_mon - react_mon_prev) / react_mon_prev * 100
+  description: "전월 vs 지지난달 복귀 사용자 변동률. 월 단위 휴면 재활성화 트렌드."
+  example: 4.0
+  note: |
+    이전 이름: react_mon_wow.
+    의미상 MoM이지만 명명은 _chg로 통일.
+
+react_mon_share:
+  label_ko: "월간 복귀 비중 (MAU 대비)"
+  label_en: "Monthly Reactivated Users Share of MAU"
+  category: user_growth
+  type: pct
+  unit: "%"
+  formula: |
+    한국어: 전월 복귀 사용자 / 전월 MAU × 100
+    SPL:   react_mon / mau * 100
+  description: "MAU 중 월간 복귀 사용자가 차지하는 비율."
+  example: 7.1
+  note: "이전 이름: react_mon_pct"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category F. Reactivation Rate (복귀율)
+# 휴면 사용자 중 다시 활성화한 비율 — 일간/주간/월간
+#
+# 분모 구분 (E vs F):
+#   - react_share (E): 복귀자 / DAU  → 활성 사용자 중 복귀자 비중
+#   - react_rate  (F): 복귀자 / 휴면풀 → 휴면 사용자 중 복귀한 비율 ★ 본 카테고리
+#
+# 비율 지표 표준 패턴 (3종):
+#   - 현재값      : react_rate, react_rate_week, react_rate_mon
+#   - 비교 기준값  : react_rate_prev, react_rate_week_prev, react_rate_mon_prev
+#   - pp 차이     : react_rate_diff, react_rate_week_diff, react_rate_mon_diff
+#
+# 비율 지표는 % 단위라 변동을 _chg(%)가 아닌 _diff(pp)로 표기.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# F-1. Daily Reactivation Rate
+
+react_rate:
+  label_ko: "일간 복귀율"
+  label_en: "Daily Reactivation Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "program_reactuser_funnel_day.csv ÷ program_dormant_pool_day.csv"
+  formula: |
+    한국어: 당일 복귀 사용자 / 당일 휴면풀 사용자 × 100
+    SPL:   react / dormant_pool * 100
+  related:
+    prev: react_rate_prev
+    diff: react_rate_diff
+    count: react
+    numerator: react
+    denominator: "(SPL 내부) dormant_pool"
+  description: "전일(D-1) 휴면 상태였던 사용자 풀 중에서 다시 활성화한 비율. 휴면 사용자 재활성화 효율 지표."
+  example: 5.2
+  note: |
+    분모(휴면풀 사용자 수)는 룩업에 컬럼으로 저장되지 않고 SPL 내부에서 직접 사용.
+    react_share(DAU 대비)와 분모가 다르므로 혼동 주의.
+
+react_rate_prev:
+  label_ko: "일간 복귀율 (D-8 비교값)"
+  label_en: "Daily Reactivation Rate 7-day Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 일간 복귀율. react_rate_diff 계산의 기준값."
+  example: 4.9
+  note: "이전 이름: react_rate_pw"
+
+react_rate_diff:
+  label_ko: "일간 복귀율 전주 대비 증감"
+  label_en: "Daily Reactivation Rate WoW Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 일간 복귀율 - 7일 전 일간 복귀율
+    SPL:   react_rate - react_rate_prev
+  description: "D-1 vs D-8의 복귀율 차이(percentage point). 휴면 재활성화 효율 변화."
+  example: 0.3
+  note: |
+    비율 지표의 변동은 _chg(%)가 아닌 _diff(pp)로 표기.
+    예: 4.9% → 5.2%면 react_rate_diff=0.3 (pp).
+
+# F-2. Weekly Reactivation Rate (전주 누적 기준)
+
+react_rate_week:
+  label_ko: "주간 복귀율"
+  label_en: "Weekly Reactivation Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_reactuser_funnel_week.csv ÷ program_dormant_pool_week.csv"
+  formula: |
+    한국어: 전주 복귀 사용자 / 전주 휴면풀 사용자 × 100
+    SPL:   react_week / dormant_pool_week * 100
+  related:
+    prev: react_rate_week_prev
+    diff: react_rate_week_diff
+    count: react_week
+    numerator: react_week
+    denominator: "(SPL 내부) dormant_pool_week"
+  description: "전주 월~일 7일간 휴면풀 사용자 중 복귀한 비율."
+  example: 7.8
+
+react_rate_week_prev:
+  label_ko: "주간 복귀율 (지지난주값)"
+  label_en: "Weekly Reactivation Rate 1 Week Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 월~일의 주간 복귀율. react_rate_week_diff 계산의 기준값."
+  example: 7.5
+  note: "이전 이름: react_rate_week_pw"
+
+react_rate_week_diff:
+  label_ko: "주간 복귀율 전주 대비 증감"
+  label_en: "Weekly Reactivation Rate WoW Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 주간 복귀율 - 지지난주 주간 복귀율
+    SPL:   react_rate_week - react_rate_week_prev
+  description: "전주 vs 지지난주 복귀율 차이(pp)."
+  example: 0.3
+
+# F-3. Monthly Reactivation Rate (전월 누적 기준)
+
+react_rate_mon:
+  label_ko: "월간 복귀율"
+  label_en: "Monthly Reactivation Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_reactuser_funnel_mon.csv ÷ program_dormant_pool_mon.csv"
+  formula: |
+    한국어: 전월 복귀 사용자 / 전월 휴면풀 사용자 × 100
+    SPL:   react_mon / dormant_pool_mon * 100
+  related:
+    prev: react_rate_mon_prev
+    diff: react_rate_mon_diff
+    count: react_mon
+    numerator: react_mon
+    denominator: "(SPL 내부) dormant_pool_mon"
+  description: "전월 1일~말일 1개월간 휴면풀 사용자 중 복귀한 비율."
+  example: 12.3
+
+react_rate_mon_prev:
+  label_ko: "월간 복귀율 (지지난달값)"
+  label_en: "Monthly Reactivation Rate 1 Month Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1일~말일의 월간 복귀율. react_rate_mon_diff 계산의 기준값."
+  example: 11.9
+  note: "이전 이름: react_rate_mon_pw"
+
+react_rate_mon_diff:
+  label_ko: "월간 복귀율 전월 대비 증감"
+  label_en: "Monthly Reactivation Rate MoM Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 월간 복귀율 - 지지난달 월간 복귀율
+    SPL:   react_rate_mon - react_rate_mon_prev
+  description: "전월 vs 지지난달 복귀율 차이(pp). 월 단위 휴면 재활성화 효율 변화."
+  example: 0.4
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category G. Churn Rate (이탈율)
+# 활성 사용자 중 이탈한 비율 — 일간/주간/월간
+#
+# 정의 차이 주의:
+#   - 일간: 이탈사용자수 / 전일 DAU × 100 (전일 활성자 중 오늘 이탈한 비율)
+#   - 주간: 이탈사용자수 / 전주 WAU × 100
+#   - 월간: 이탈사용자수 / 전월 MAU × 100
+#
+# 비율 지표 표준 패턴 (3종):
+#   - 현재값      : churn_rate, churn_rate_week, churn_rate_mon
+#   - 비교 기준값  : churn_rate_prev, churn_rate_week_prev, churn_rate_mon_prev
+#   - pp 차이     : churn_rate_diff, churn_rate_week_diff, churn_rate_mon_diff
+#
+# ⚠️ 큰 변경: 기존 churn_week/churn_mon → churn_rate_week/churn_rate_mon
+#    (_rate 접미사 일관 적용)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# G-1. Daily Churn Rate
+
+churn_rate:
+  label_ko: "일간 이탈율"
+  label_en: "Daily Churn Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "program_churnuser_funnel_day.csv ÷ program_user_funnel_day.csv (전일 DAU)"
+  formula: |
+    한국어: 전일 이탈자 수 / 전전일 DAU × 100
+    SPL:   churn_today_count / dau_d2_count * 100
+  related:
+    prev: churn_rate_prev
+    diff: churn_rate_diff
+    numerator: "(SPL 내부) churn_today_count"
+    denominator: dau_d2
+  description: "전일(D-1) 이탈한 사용자 수를 그 전일(D-2) DAU로 나눈 비율. 전일 활성자 중 D-1에 활성하지 않은 사용자 비율."
+  example: 25.4
+  note: |
+    SPL 내부에서 전일 DAU(prev_DATE)와 join하여 계산.
+    분모가 D-2 시점(dau_d2)이라는 점 유의.
+
+churn_rate_prev:
+  label_ko: "일간 이탈율 (D-8 비교값)"
+  label_en: "Daily Churn Rate 7-day Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 일간 이탈율. churn_rate_diff 계산의 기준값."
+  example: 24.8
+  note: "이전 이름: churn_rate_pw"
+
+churn_rate_diff:
+  label_ko: "일간 이탈율 전주 대비 증감"
+  label_en: "Daily Churn Rate WoW Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 일간 이탈율 - 7일 전 일간 이탈율
+    SPL:   churn_rate - churn_rate_prev
+  description: "D-1 vs D-8의 이탈율 차이(pp). 양수일수록 이탈 악화."
+  example: 0.6
+  note: "이전 이름: churn_diff"
+
+# G-2. Weekly Churn Rate
+
+churn_rate_week:
+  label_ko: "주간 이탈율"
+  label_en: "Weekly Churn Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_churnuser_funnel_week.csv ÷ program_user_funnel_week.csv (전주 WAU)"
+  formula: |
+    한국어: 전주 이탈자 수 / 지지난주 WAU × 100
+    SPL:   churn_count_week / wau_prev * 100
+  related:
+    prev: churn_rate_week_prev
+    diff: churn_rate_week_diff
+    numerator: "(SPL 내부) churn_count_week"
+    denominator: wau_prev
+  description: "전주 7일간 이탈한 사용자 수를 지지난주 WAU로 나눈 비율."
+  example: 32.1
+  note: "이전 이름: churn_week. _rate 접미사 추가로 비율 지표임을 명시."
+
+churn_rate_week_prev:
+  label_ko: "주간 이탈율 (지지난주값)"
+  label_en: "Weekly Churn Rate 1 Week Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 7일간의 이탈율. churn_rate_week_diff 계산의 기준값."
+  example: 31.5
+  note: "이전 이름: churn_week_pw"
+
+churn_rate_week_diff:
+  label_ko: "주간 이탈율 전주 대비 증감"
+  label_en: "Weekly Churn Rate WoW Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 주간 이탈율 - 지지난주 주간 이탈율
+    SPL:   churn_rate_week - churn_rate_week_prev
+  description: "전주 vs 지지난주 이탈율 차이(pp)."
+  example: 0.6
+  note: "이전 이름: churn_week_diff"
+
+# G-3. Monthly Churn Rate
+
+churn_rate_mon:
+  label_ko: "월간 이탈율"
+  label_en: "Monthly Churn Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_churnuser_funnel_mon.csv ÷ program_user_funnel_mon.csv (전월 MAU)"
+  formula: |
+    한국어: 전월 이탈자 수 / 지지난달 MAU × 100
+    SPL:   churn_count_mon / mau_prev * 100
+  related:
+    prev: churn_rate_mon_prev
+    diff: churn_rate_mon_diff
+    numerator: "(SPL 내부) churn_count_mon"
+    denominator: mau_prev
+  description: "전월 1개월간 이탈한 사용자 수를 지지난달 MAU로 나눈 비율."
+  example: 45.2
+  note: "이전 이름: churn_mon. _rate 접미사 추가로 비율 지표임을 명시."
+
+churn_rate_mon_prev:
+  label_ko: "월간 이탈율 (지지난달값)"
+  label_en: "Monthly Churn Rate 1 Month Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1개월간의 이탈율. churn_rate_mon_diff 계산의 기준값."
+  example: 44.8
+  note: "이전 이름: churn_mon_pw"
+
+churn_rate_mon_diff:
+  label_ko: "월간 이탈율 전월 대비 증감"
+  label_en: "Monthly Churn Rate MoM Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 월간 이탈율 - 지지난달 월간 이탈율
+    SPL:   churn_rate_mon - churn_rate_mon_prev
+  description: "전월 vs 지지난달 이탈율 차이(pp). 월 단위 이탈 추세."
+  example: 0.4
+  note: "이전 이름: churn_mon_diff"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category H. Deep Listening Rate (깊은청취율)
+# 1분 이상 청취자 중 10분 이상까지 청취한 비율 — 일간/주간/월간
+#
+# 의미:
+#   - 광고 노출 가능 활성자(1분+) 중에서 콘텐츠에 몰입한 사용자(10분+) 비율
+#   - 라디오 콘텐츠의 매력도/유지력 핵심 지표
+#   - 광고 시장에서 핵심 광고 단위 (10분 = 4~5분 광고 + 5분 콘텐츠 청취 가능)
+#
+# 분자/분모는 카테고리 C(1분/10분 청취 사용자)에서 별도 관리.
+#
+# 비율 지표 표준 패턴 (3종):
+#   - 현재값      : deep_rate, deep_rate_week, deep_rate_mon
+#   - 비교 기준값  : deep_rate_prev, deep_rate_week_prev, deep_rate_mon_prev
+#   - pp 차이     : deep_rate_diff, deep_rate_week_diff, deep_rate_mon_diff
+# ─────────────────────────────────────────────────────────────────────────────
+
+# H-1. Daily Deep Listening Rate
+
+deep_rate:
+  label_ko: "일간 깊은청취율"
+  label_en: "Daily Deep Listening Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "카테고리 C (dau_1min, dau_10min)에서 직접 계산"
+  formula: |
+    한국어: 당일 10분 청취자 / 당일 1분 청취자 × 100
+    SPL:   dau_10min / dau_1min * 100
+  related:
+    prev: deep_rate_prev
+    diff: deep_rate_diff
+    numerator: dau_10min
+    denominator: dau_1min
+  description: "전일(D-1) 1분 이상 청취자 중 10분 이상까지 청취한 사용자 비율. 콘텐츠 몰입도와 광고 노출 효과를 동시에 가늠하는 핵심 지표."
+  example: 57.5
+
+deep_rate_prev:
+  label_ko: "일간 깊은청취율 (D-8 비교값)"
+  label_en: "Daily Deep Listening Rate 7-day Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 일간 깊은청취율. deep_rate_diff 계산의 기준값."
+  example: 56.8
+  note: "이전 이름: deep_rate_pw"
+
+deep_rate_diff:
+  label_ko: "일간 깊은청취율 전주 대비 증감"
+  label_en: "Daily Deep Listening Rate WoW Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 일간 깊은청취율 - 7일 전 일간 깊은청취율
+    SPL:   deep_rate - deep_rate_prev
+  description: "D-1 vs D-8의 깊은청취율 차이(pp). 양수일수록 콘텐츠 몰입도 개선."
+  example: 0.7
+
+# H-2. Weekly Deep Listening Rate (전주 누적 기준)
+
+deep_rate_week:
+  label_ko: "주간 깊은청취율"
+  label_en: "Weekly Deep Listening Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "카테고리 C (wau_1min, wau_10min)에서 직접 계산"
+  formula: |
+    한국어: 전주 10분 청취자 / 전주 1분 청취자 × 100
+    SPL:   wau_10min / wau_1min * 100
+  related:
+    prev: deep_rate_week_prev
+    diff: deep_rate_week_diff
+    numerator: wau_10min
+    denominator: wau_1min
+  description: "전주 7일간 1분 이상 청취자 중 10분 이상까지 청취한 비율."
+  example: 60.5
+
+deep_rate_week_prev:
+  label_ko: "주간 깊은청취율 (지지난주값)"
+  label_en: "Weekly Deep Listening Rate 1 Week Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주의 주간 깊은청취율. deep_rate_week_diff 계산의 기준값."
+  example: 60.1
+  note: "이전 이름: deep_rate_week_pw"
+
+deep_rate_week_diff:
+  label_ko: "주간 깊은청취율 전주 대비 증감"
+  label_en: "Weekly Deep Listening Rate WoW Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 주간 깊은청취율 - 지지난주 주간 깊은청취율
+    SPL:   deep_rate_week - deep_rate_week_prev
+  description: "전주 vs 지지난주 깊은청취율 차이(pp)."
+  example: 0.4
+
+# H-3. Monthly Deep Listening Rate (전월 누적 기준)
+
+deep_rate_mon:
+  label_ko: "월간 깊은청취율"
+  label_en: "Monthly Deep Listening Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "카테고리 C (mau_1min, mau_10min)에서 직접 계산"
+  formula: |
+    한국어: 전월 10분 청취자 / 전월 1분 청취자 × 100
+    SPL:   mau_10min / mau_1min * 100
+  related:
+    prev: deep_rate_mon_prev
+    diff: deep_rate_mon_diff
+    numerator: mau_10min
+    denominator: mau_1min
+  description: "전월 1개월간 1분 이상 청취자 중 10분 이상까지 청취한 비율. 월 단위 콘텐츠 몰입도."
+  example: 60.2
+
+deep_rate_mon_prev:
+  label_ko: "월간 깊은청취율 (지지난달값)"
+  label_en: "Monthly Deep Listening Rate 1 Month Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달의 월간 깊은청취율. deep_rate_mon_diff 계산의 기준값."
+  example: 59.5
+  note: "이전 이름: deep_rate_mon_pw"
+
+deep_rate_mon_diff:
+  label_ko: "월간 깊은청취율 전월 대비 증감"
+  label_en: "Monthly Deep Listening Rate MoM Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 월간 깊은청취율 - 지지난달 월간 깊은청취율
+    SPL:   deep_rate_mon - deep_rate_mon_prev
+  description: "전월 vs 지지난달 깊은청취율 차이(pp). 월 단위 콘텐츠 몰입도 변화."
+  example: 0.7
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category I. Engagement Rate (참여율)
+# 활성 사용자 중 핵심 기능을 사용한 비율 — 일간/주간/월간
+#
+# 정의:
+#   참여율 = 참여 사용자 / DAU × 100
+#   "참여"의 정의는 program_user_engage_*.csv의 TYPE=TOTAL_USER에서 결정.
+#
+# "참여" 액션 (3종 중 1개 이상 수행):
+#   1. 공감로그 작성 (방송 청취 중 공감 표시 / 텍스트 입력)
+#   2. 방송 공유하기 (외부 SNS/메신저로 라디오 콘텐츠 공유)
+#   3. 검색 (앱 내 프로그램/게스트/곡 등 검색)
+#
+# 단순 청취(passive listening)와 구분되는 "능동 사용" 지표.
+# 라디오 앱의 양방향성/소셜성 강도를 측정.
+#
+# 비율 지표 표준 패턴 (3종):
+#   - 현재값      : engage_rate, engage_rate_week, engage_rate_mon
+#   - 비교 기준값  : engage_rate_prev, engage_rate_week_prev, engage_rate_mon_prev
+#   - pp 차이     : engage_rate_diff, engage_rate_week_diff, engage_rate_mon_diff
+#
+# ⚠️ 큰 변경: 기존 engage_week/engage_mon → engage_rate_week/engage_rate_mon
+#    (_rate 접미사 일관 적용)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# I-1. Daily Engagement Rate
+
+engage_rate:
+  label_ko: "일간 참여율"
+  label_en: "Daily Engagement Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "program_user_engage_day.csv (TYPE=TOTAL_USER) ÷ program_user_funnel_day.csv (TYPE=ALL)"
+  formula: |
+    한국어: 당일 참여 사용자 / 당일 DAU × 100
+    SPL:   engage_count / dau * 100
+  related:
+    prev: engage_rate_prev
+    diff: engage_rate_diff
+    numerator: "(SPL 내부) engage_count"
+    denominator: dau
+  description: |
+    전일(D-1) DAU 중 참여 액션을 1회 이상 수행한 사용자 비율.
+    참여 액션 = (1) 공감로그 작성, (2) 방송 공유하기, (3) 검색
+    단순 청취를 넘어 능동적인 앱 사용 정도를 측정.
+  example: 38.5
+
+engage_rate_prev:
+  label_ko: "일간 참여율 (D-8 비교값)"
+  label_en: "Daily Engagement Rate 7-day Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 일간 참여율. engage_rate_diff 계산의 기준값."
+  example: 37.8
+  note: "이전 이름: engage_rate_pw"
+
+engage_rate_diff:
+  label_ko: "일간 참여율 전주 대비 증감"
+  label_en: "Daily Engagement Rate WoW Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 일간 참여율 - 7일 전 일간 참여율
+    SPL:   engage_rate - engage_rate_prev
+  description: "D-1 vs D-8의 참여율 차이(pp). 양수일수록 능동 사용 개선."
+  example: 0.7
+  note: "이전 이름: engage_diff"
+
+# I-2. Weekly Engagement Rate (전주 누적 기준)
+
+engage_rate_week:
+  label_ko: "주간 참여율"
+  label_en: "Weekly Engagement Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_user_engage_week.csv (TYPE=TOTAL_USER) ÷ program_user_funnel_week.csv (TYPE=ALL)"
+  formula: |
+    한국어: 전주 참여 사용자 / 전주 WAU × 100
+    SPL:   engage_count_week / wau * 100
+  related:
+    prev: engage_rate_week_prev
+    diff: engage_rate_week_diff
+    numerator: "(SPL 내부) engage_count_week"
+    denominator: wau
+  description: "전주 7일간 WAU 중 참여 액션을 수행한 사용자 비율."
+  example: 52.3
+  note: "이전 이름: engage_week. _rate 접미사 추가로 비율 지표임을 명시."
+
+engage_rate_week_prev:
+  label_ko: "주간 참여율 (지지난주값)"
+  label_en: "Weekly Engagement Rate 1 Week Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 7일간의 주간 참여율. engage_rate_week_diff 계산의 기준값."
+  example: 51.5
+  note: "이전 이름: engage_week_pw"
+
+engage_rate_week_diff:
+  label_ko: "주간 참여율 전주 대비 증감"
+  label_en: "Weekly Engagement Rate WoW Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 주간 참여율 - 지지난주 주간 참여율
+    SPL:   engage_rate_week - engage_rate_week_prev
+  description: "전주 vs 지지난주 참여율 차이(pp)."
+  example: 0.8
+  note: "이전 이름: engage_week_diff"
+
+# I-3. Monthly Engagement Rate (전월 누적 기준)
+
+engage_rate_mon:
+  label_ko: "월간 참여율"
+  label_en: "Monthly Engagement Rate"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_user_engage_mon.csv (TYPE=TOTAL_USER) ÷ program_user_funnel_mon.csv (TYPE=ALL)"
+  formula: |
+    한국어: 전월 참여 사용자 / 전월 MAU × 100
+    SPL:   engage_count_mon / mau * 100
+  related:
+    prev: engage_rate_mon_prev
+    diff: engage_rate_mon_diff
+    numerator: "(SPL 내부) engage_count_mon"
+    denominator: mau
+  description: "전월 1개월간 MAU 중 참여 액션을 수행한 사용자 비율."
+  example: 65.8
+  note: "이전 이름: engage_mon. _rate 접미사 추가로 비율 지표임을 명시."
+
+engage_rate_mon_prev:
+  label_ko: "월간 참여율 (지지난달값)"
+  label_en: "Monthly Engagement Rate 1 Month Prior"
+  category: user_quality
+  type: rate
+  unit: "%"
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1개월간의 월간 참여율. engage_rate_mon_diff 계산의 기준값."
+  example: 64.9
+  note: "이전 이름: engage_mon_pw"
+
+engage_rate_mon_diff:
+  label_ko: "월간 참여율 전월 대비 증감"
+  label_en: "Monthly Engagement Rate MoM Difference"
+  category: user_quality
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 월간 참여율 - 지지난달 월간 참여율
+    SPL:   engage_rate_mon - engage_rate_mon_prev
+  description: "전월 vs 지지난달 참여율 차이(pp). 월 단위 능동 사용 추세."
+  example: 0.9
+  note: "이전 이름: engage_mon_diff"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category J. Habit Formation Rate (습관형성률)
+# 신규 사용자 중 일정 빈도로 앱을 사용해 습관을 형성한 비율 — 일간/주간/월간
+#
+# 정의:
+#   습관형성률 = 3D7D_1M / ALL × 100
+#     - 분자: 신규 사용자 중 7일 윈도우에서 3일 이상(각 1분 이상 청취) 사용한 사용자
+#     - 분모: 동일 코호트의 전체 신규 사용자
+#     - 데이터: program_newuser_funnel_*.csv
+#
+# 코드 해석:
+#   3D = 3 days (3일 이상 사용)
+#   7D = 7-day window (7일 측정 윈도우)
+#   1M = 1 month? (코드명 보존, 정확한 의미는 미확정 — 운영팀 확인 필요)
+#
+# 시점 시프트 (일간 데이터):
+#   - SPL 코드: relative_time(_time,"+6d")
+#   - 7일 측정 윈도우가 끝나는 시점에 결과를 표시하기 위해 +6일 시프트
+#
+# 의미:
+#   - 신규 유입이 단순 1회성 사용으로 끝나지 않고 정착하는 비율
+#   - 앱 사용 습관 형성의 핵심 지표 (그로스 마케팅의 활성화 단계)
+#
+# 비율 지표 표준 패턴 (3종):
+#   - 현재값      : habit_rate, habit_rate_week, habit_rate_mon
+#   - 비교 기준값  : habit_rate_prev, habit_rate_week_prev, habit_rate_mon_prev
+#   - pp 차이     : habit_rate_diff, habit_rate_week_diff, habit_rate_mon_diff
+#
+# ⚠️ 큰 변경: 기존 habit_week/habit_mon → habit_rate_week/habit_rate_mon
+#    (_rate 접미사 일관 적용)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# J-1. Daily Habit Formation Rate
+
+habit_rate:
+  label_ko: "일간 습관형성률"
+  label_en: "Daily Habit Formation Rate"
+  category: user_habit
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "program_newuser_funnel_day.csv (TYPE=3D7D_1M ÷ TYPE=ALL, +6d 시프트)"
+  formula: |
+    한국어: 신규 중 7일 윈도우에서 3일 이상(1분 이상 청취) 사용한 사용자 / 전체 신규 × 100
+    SPL:   habit_count / new_count * 100
+  related:
+    prev: habit_rate_prev
+    diff: habit_rate_diff
+    numerator: "(SPL 내부) habit_count (3D7D_1M)"
+    denominator: "(SPL 내부) new_count (ALL)"
+  description: |
+    전일(D-1) 시점에서 측정한 신규 사용자 중 7일 윈도우에서 3일 이상(각 1분 이상 청취) 사용해 습관을 형성한 비율.
+    SPL에서 +6일 시프트를 적용하는 이유: 코호트 가입 후 7일간의 측정 윈도우가 끝나는 시점에 결과가 표시되도록 정렬.
+    (예: 4월 22일 코호트의 7일 윈도우 측정 결과가 4월 28일 데이터로 표시됨)
+  example: 22.3
+
+habit_rate_prev:
+  label_ko: "일간 습관형성률 (D-8 비교값)"
+  label_en: "Daily Habit Formation Rate 7-day Prior"
+  category: user_habit
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 일간 습관형성률. habit_rate_diff 계산의 기준값."
+  example: 21.8
+  note: "이전 이름: habit_rate_pw"
+
+habit_rate_diff:
+  label_ko: "일간 습관형성률 전주 대비 증감"
+  label_en: "Daily Habit Formation Rate WoW Difference"
+  category: user_habit
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 일간 습관형성률 - 7일 전 일간 습관형성률
+    SPL:   habit_rate - habit_rate_prev
+  description: "D-1 vs D-8의 습관형성률 차이(pp). 양수일수록 신규 사용자 정착 개선."
+  example: 0.5
+  note: "이전 이름: habit_diff"
+
+# J-2. Weekly Habit Formation Rate
+
+habit_rate_week:
+  label_ko: "주간 습관형성률"
+  label_en: "Weekly Habit Formation Rate"
+  category: user_habit
+  type: rate
+  unit: "%"
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_newuser_funnel_week.csv (TYPE=3D7D_1M ÷ TYPE=ALL)"
+  formula: |
+    한국어: 전주 신규 중 7일 윈도우에서 3일 이상(1분 이상 청취) 사용한 사용자 / 전주 전체 신규 × 100
+    SPL:   habit_count_week / new_count_week * 100
+  related:
+    prev: habit_rate_week_prev
+    diff: habit_rate_week_diff
+    numerator: "(SPL 내부) habit_count_week"
+    denominator: "(SPL 내부) new_count_week"
+  description: "전주 7일간 신규 사용자 중 7일 윈도우에서 3일 이상(각 1분 이상 청취) 사용해 습관을 형성한 비율."
+  example: 25.8
+  note: "이전 이름: habit_week. _rate 접미사 추가로 비율 지표임을 명시."
+
+habit_rate_week_prev:
+  label_ko: "주간 습관형성률 (지지난주값)"
+  label_en: "Weekly Habit Formation Rate 1 Week Prior"
+  category: user_habit
+  type: rate
+  unit: "%"
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주 7일간의 주간 습관형성률. habit_rate_week_diff 계산의 기준값."
+  example: 25.2
+  note: "이전 이름: habit_week_pw"
+
+habit_rate_week_diff:
+  label_ko: "주간 습관형성률 전주 대비 증감"
+  label_en: "Weekly Habit Formation Rate WoW Difference"
+  category: user_habit
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 주간 습관형성률 - 지지난주 주간 습관형성률
+    SPL:   habit_rate_week - habit_rate_week_prev
+  description: "전주 vs 지지난주 습관형성률 차이(pp)."
+  example: 0.6
+  note: "이전 이름: habit_week_diff"
+
+# J-3. Monthly Habit Formation Rate
+
+habit_rate_mon:
+  label_ko: "월간 습관형성률"
+  label_en: "Monthly Habit Formation Rate"
+  category: user_habit
+  type: rate
+  unit: "%"
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_newuser_funnel_mon.csv (TYPE=3D7D_1M ÷ TYPE=ALL)"
+  formula: |
+    한국어: 전월 신규 중 7일 윈도우에서 3일 이상(1분 이상 청취) 사용한 사용자 / 전월 전체 신규 × 100
+    SPL:   habit_count_mon / new_count_mon * 100
+  related:
+    prev: habit_rate_mon_prev
+    diff: habit_rate_mon_diff
+    numerator: "(SPL 내부) habit_count_mon"
+    denominator: "(SPL 내부) new_count_mon"
+  description: "전월 1개월간 신규 사용자 중 7일 윈도우에서 3일 이상(각 1분 이상 청취) 사용해 습관을 형성한 비율."
+  example: 28.1
+  note: "이전 이름: habit_mon. _rate 접미사 추가로 비율 지표임을 명시."
+
+habit_rate_mon_prev:
+  label_ko: "월간 습관형성률 (지지난달값)"
+  label_en: "Monthly Habit Formation Rate 1 Month Prior"
+  category: user_habit
+  type: rate
+  unit: "%"
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달 1개월간의 월간 습관형성률. habit_rate_mon_diff 계산의 기준값."
+  example: 27.3
+  note: "이전 이름: habit_mon_pw"
+
+habit_rate_mon_diff:
+  label_ko: "월간 습관형성률 전월 대비 증감"
+  label_en: "Monthly Habit Formation Rate MoM Difference"
+  category: user_habit
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 월간 습관형성률 - 지지난달 월간 습관형성률
+    SPL:   habit_rate_mon - habit_rate_mon_prev
+  description: "전월 vs 지지난달 습관형성률 차이(pp). 월 단위 신규 정착 추세."
+  example: 0.8
+  note: "이전 이름: habit_mon_diff"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category K. Retention - All Cohort (유지율 - 전체 코호트)
+# 특정 시점의 활성 사용자가 N일/주/달 후에도 활성하는 비율
+#
+# 코호트:
+#   - 전체 코호트(COHORT=all): 해당 시점에 활성한 모든 사용자
+#   - 카테고리 L에서는 신규 코호트(가입자만)를 별도 관리
+#
+# 4가지 시점 정의:
+#   - D1 : 1일 후 유지율 (D-2 활성자 중 D-1에도 활성)
+#   - D7 : 7일 후 유지율 (D-8 활성자 중 D-1에도 활성)
+#   - W1 : 1주 후 유지율 (지지난주 활성자 중 전주에도 활성, 주간 단위)
+#   - M1 : 1개월 후 유지율 (지지난달 활성자 중 전월에도 활성, 월간 단위)
+#
+# 비율 지표 표준 패턴 (필드별 3종):
+#   - 현재값      : d1_ret, d7_ret, w1_ret, m1_ret
+#   - 비교 기준값  : *_prev
+#   - pp 차이     : *_diff
+#
+# 데이터 출처:
+#   - program_user_retention_day.csv (D1, D7)
+#   - program_user_retention_week.csv (W1)
+#   - program_user_retention_mon.csv (M1)
+#   - 모두 TYPE=Dn/Wn/Mn AND COHORT=all
+# ─────────────────────────────────────────────────────────────────────────────
+
+# K-1. D1 Retention (1-day after)
+
+d1_ret:
+  label_ko: "D1 유지율 (전체 코호트)"
+  label_en: "D1 Retention Rate (All Cohort)"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "program_user_retention_day.csv (TYPE=D1, COHORT=all)"
+  formula: |
+    한국어: D-2 활성 사용자 중 D-1에도 활성한 비율
+    SPL:   D-1 활성자 ∩ D-2 활성자 / D-2 활성자 × 100
+  related:
+    prev: d1_ret_prev
+    diff: d1_ret_diff
+  description: "전전일(D-2) 활성한 사용자가 그 다음날(D-1)에도 활성하고 있는 비율. 일별 사용자 정착의 가장 짧은 단위 지표."
+  example: 75.3
+
+d1_ret_prev:
+  label_ko: "D1 유지율 (D-8 비교값)"
+  label_en: "D1 Retention 7-day Prior"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 D1 유지율. d1_ret_diff 계산의 기준값."
+  example: 74.5
+  note: "이전 이름: d1_ret_pw"
+
+d1_ret_diff:
+  label_ko: "D1 유지율 전주 대비 증감"
+  label_en: "D1 Retention WoW Difference"
+  category: user_retention
+  type: pp
+  unit: pp
+  formula: |
+    한국어: D1 유지율 - 7일 전 D1 유지율
+    SPL:   d1_ret - d1_ret_prev
+  description: "D-1 vs D-8의 D1 유지율 차이(pp)."
+  example: 0.8
+  note: "이전 이름: d1_diff"
+
+# K-2. D7 Retention (7-day after)
+
+d7_ret:
+  label_ko: "D7 유지율 (전체 코호트)"
+  label_en: "D7 Retention Rate (All Cohort)"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "program_user_retention_day.csv (TYPE=D7, COHORT=all)"
+  formula: |
+    한국어: D-8 활성 사용자 중 D-1에도 활성한 비율
+    SPL:   D-1 활성자 ∩ D-8 활성자 / D-8 활성자 × 100
+  related:
+    prev: d7_ret_prev
+    diff: d7_ret_diff
+  description: "8일 전(D-8) 활성한 사용자가 1주일 후(D-1)에도 활성하고 있는 비율. 주간 단위 사용자 유지력 지표."
+  example: 52.7
+
+d7_ret_prev:
+  label_ko: "D7 유지율 (D-8 비교값)"
+  label_en: "D7 Retention 7-day Prior"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 D7 유지율. d7_ret_diff 계산의 기준값."
+  example: 51.8
+  note: "이전 이름: d7_ret_pw"
+
+d7_ret_diff:
+  label_ko: "D7 유지율 전주 대비 증감"
+  label_en: "D7 Retention WoW Difference"
+  category: user_retention
+  type: pp
+  unit: pp
+  formula: |
+    한국어: D7 유지율 - 7일 전 D7 유지율
+    SPL:   d7_ret - d7_ret_prev
+  description: "D-1 vs D-8의 D7 유지율 차이(pp)."
+  example: 0.9
+  note: "이전 이름: d7_diff"
+
+# K-3. W1 Retention (1-week after, weekly)
+
+w1_ret:
+  label_ko: "W1 유지율 (전체 코호트)"
+  label_en: "W1 Retention Rate (All Cohort)"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_user_retention_week.csv (TYPE=W1, COHORT=all)"
+  formula: |
+    한국어: 지지난주 WAU 중 전주에도 활성한 비율
+    SPL:   전주 WAU ∩ 지지난주 WAU / 지지난주 WAU × 100
+  related:
+    prev: w1_ret_prev
+    diff: w1_ret_diff
+  description: "지지난주에 활성한 사용자가 1주 후(전주)에도 활성하고 있는 비율. 주 단위 사용자 정착 지표."
+  example: 65.4
+
+w1_ret_prev:
+  label_ko: "W1 유지율 (지지난주값)"
+  label_en: "W1 Retention 1 Week Prior"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주의 W1 유지율. w1_ret_diff 계산의 기준값."
+  example: 64.8
+  note: "이전 이름: w1_ret_pw"
+
+w1_ret_diff:
+  label_ko: "W1 유지율 전주 대비 증감"
+  label_en: "W1 Retention WoW Difference"
+  category: user_retention
+  type: pp
+  unit: pp
+  formula: |
+    한국어: W1 유지율 - 지지난주 W1 유지율
+    SPL:   w1_ret - w1_ret_prev
+  description: "전주 vs 지지난주 W1 유지율 차이(pp)."
+  example: 0.6
+  note: "이전 이름: w1_diff"
+
+# K-4. M1 Retention (1-month after, monthly)
+
+m1_ret:
+  label_ko: "M1 유지율 (전체 코호트)"
+  label_en: "M1 Retention Rate (All Cohort)"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_user_retention_mon.csv (TYPE=M1, COHORT=all)"
+  formula: |
+    한국어: 지지난달 MAU 중 전월에도 활성한 비율
+    SPL:   전월 MAU ∩ 지지난달 MAU / 지지난달 MAU × 100
+  related:
+    prev: m1_ret_prev
+    diff: m1_ret_diff
+  description: "지지난달에 활성한 사용자가 1개월 후(전월)에도 활성하고 있는 비율. 월 단위 사용자 정착 지표 — 가장 장기적인 유지력."
+  example: 78.6
+
+m1_ret_prev:
+  label_ko: "M1 유지율 (지지난달값)"
+  label_en: "M1 Retention 1 Month Prior"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달의 M1 유지율. m1_ret_diff 계산의 기준값."
+  example: 77.9
+  note: "이전 이름: m1_ret_pw"
+
+m1_ret_diff:
+  label_ko: "M1 유지율 전월 대비 증감"
+  label_en: "M1 Retention MoM Difference"
+  category: user_retention
+  type: pp
+  unit: pp
+  formula: |
+    한국어: M1 유지율 - 지지난달 M1 유지율
+    SPL:   m1_ret - m1_ret_prev
+  description: "전월 vs 지지난달 M1 유지율 차이(pp). 월 단위 유지력 변화."
+  example: 0.7
+  note: "이전 이름: m1_diff"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Category L. Retention - New User Cohort (유지율 - 신규 코호트)
+# 첫 청취 시점의 신규 사용자가 N일/주/달 후에도 활성하는 비율
+#
+# 카테고리 K와의 차이:
+#   - K (전체 코호트): 해당 시점 모든 활성 사용자 기준
+#   - L (신규 코호트): 신규 설치 후 처음 청취한 사용자만을 추적 ★ 본 카테고리
+#
+# 신규 사용자 정의:
+#   - SBS 라디오 앱(고릴라)은 별도 회원가입 단계 없음
+#   - "신규 사용자" = 앱 신규 설치 후 처음 청취한 사용자
+#   - 카테고리 D(new)와 동일한 신규 정의
+#
+# 의미:
+#   - 신규 유입 사용자가 얼마나 안정적으로 정착하는지 측정
+#   - 마케팅 채널/캠페인 효과 평가의 핵심 지표
+#   - 그로스 펀넬: Acquisition → Activation → Retention 중 Retention 단계
+#
+# 4가지 시점 정의 (K와 동일하나 코호트만 다름):
+#   - new_d1_ret : 첫 청취 후 1일 유지율
+#   - new_d7_ret : 첫 청취 후 7일 유지율
+#   - new_w1_ret : 첫 청취 후 1주 유지율
+#   - new_m1_ret : 첫 청취 후 1개월 유지율
+#
+# 비율 지표 표준 패턴 (필드별 3종):
+#   - 현재값      : new_d1_ret, new_d7_ret, new_w1_ret, new_m1_ret
+#   - 비교 기준값  : *_prev
+#   - pp 차이     : *_diff
+#
+# 데이터 출처:
+#   - program_newuser_retention_day.csv (D1, D7)
+#   - program_newuser_retention_week.csv (W1)
+#   - program_newuser_retention_mon.csv (M1)
+#   - 모두 TYPE=Dn/Wn/Mn AND COHORT=all
+# ─────────────────────────────────────────────────────────────────────────────
+
+# L-1. New User D1 Retention
+
+new_d1_ret:
+  label_ko: "신규 D1 유지율"
+  label_en: "New User D1 Retention Rate"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "program_newuser_retention_day.csv (TYPE=D1, COHORT=all)"
+  formula: |
+    한국어: D-2에 신규 설치 후 처음 청취한 사용자 중 D-1에도 활성한 비율
+    SPL:   D-2 신규자 ∩ D-1 활성자 / D-2 신규자 × 100
+  related:
+    prev: new_d1_ret_prev
+    diff: new_d1_ret_diff
+  description: "전전일(D-2)에 신규 설치 후 처음 청취한 신규 사용자가 그 다음날(D-1)에도 앱을 사용한 비율. 신규 유입 직후 첫 24시간 정착률 — 그로스 마케팅 핵심 지표."
+  example: 42.8
+
+new_d1_ret_prev:
+  label_ko: "신규 D1 유지율 (D-8 비교값)"
+  label_en: "New User D1 Retention 7-day Prior"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 신규 D1 유지율. new_d1_ret_diff 계산의 기준값."
+  example: 41.5
+  note: "이전 이름: new_d1_ret_pw"
+
+new_d1_ret_diff:
+  label_ko: "신규 D1 유지율 전주 대비 증감"
+  label_en: "New User D1 Retention WoW Difference"
+  category: user_retention
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 신규 D1 유지율 - 7일 전 신규 D1 유지율
+    SPL:   new_d1_ret - new_d1_ret_prev
+  description: "D-1 vs D-8의 신규 D1 유지율 차이(pp). 양수일수록 신규 정착 개선."
+  example: 1.3
+  note: "이전 이름: new_d1_diff"
+
+# L-2. New User D7 Retention
+
+new_d7_ret:
+  label_ko: "신규 D7 유지율"
+  label_en: "New User D7 Retention Rate"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: D-1
+  window: 1d
+  source: "program_newuser_retention_day.csv (TYPE=D7, COHORT=all)"
+  formula: |
+    한국어: D-8에 신규 설치 후 처음 청취한 사용자 중 D-1에도 활성한 비율
+    SPL:   D-8 신규자 ∩ D-1 활성자 / D-8 신규자 × 100
+  related:
+    prev: new_d7_ret_prev
+    diff: new_d7_ret_diff
+  description: "8일 전(D-8) 신규 설치 후 처음 청취한 신규 사용자가 1주일 후(D-1)에도 앱을 사용한 비율. 신규 유입의 1주 정착률 — 단기 정착 핵심 지표."
+  example: 28.5
+
+new_d7_ret_prev:
+  label_ko: "신규 D7 유지율 (D-8 비교값)"
+  label_en: "New User D7 Retention 7-day Prior"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: D-8
+  window: 1d
+  description: "전주 동요일(D-8)의 신규 D7 유지율. new_d7_ret_diff 계산의 기준값."
+  example: 27.6
+  note: "이전 이름: new_d7_ret_pw"
+
+new_d7_ret_diff:
+  label_ko: "신규 D7 유지율 전주 대비 증감"
+  label_en: "New User D7 Retention WoW Difference"
+  category: user_retention
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 신규 D7 유지율 - 7일 전 신규 D7 유지율
+    SPL:   new_d7_ret - new_d7_ret_prev
+  description: "D-1 vs D-8의 신규 D7 유지율 차이(pp)."
+  example: 0.9
+  note: "이전 이름: new_d7_diff"
+
+# L-3. New User W1 Retention
+
+new_w1_ret:
+  label_ko: "신규 W1 유지율"
+  label_en: "New User W1 Retention Rate"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: 전주 월요일
+  window: "7d_calendar (Mon-Sun)"
+  source: "program_newuser_retention_week.csv (TYPE=W1, COHORT=all)"
+  formula: |
+    한국어: 지지난주 신규 설치 후 처음 청취한 사용자 중 전주에도 활성한 비율
+    SPL:   지지난주 신규자 ∩ 전주 활성자 / 지지난주 신규자 × 100
+  related:
+    prev: new_w1_ret_prev
+    diff: new_w1_ret_diff
+  description: "지지난주에 신규 설치 후 처음 청취한 신규 사용자가 그 다음 주(전주)에도 앱을 사용한 비율. 주 단위 신규 정착 지표."
+  example: 35.2
+
+new_w1_ret_prev:
+  label_ko: "신규 W1 유지율 (지지난주값)"
+  label_en: "New User W1 Retention 1 Week Prior"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: 지지난주 월요일
+  window: "7d_calendar"
+  description: "지지난주의 신규 W1 유지율. new_w1_ret_diff 계산의 기준값."
+  example: 34.5
+  note: "이전 이름: new_w1_ret_pw"
+
+new_w1_ret_diff:
+  label_ko: "신규 W1 유지율 전주 대비 증감"
+  label_en: "New User W1 Retention WoW Difference"
+  category: user_retention
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 신규 W1 유지율 - 지지난주 신규 W1 유지율
+    SPL:   new_w1_ret - new_w1_ret_prev
+  description: "전주 vs 지지난주 신규 W1 유지율 차이(pp)."
+  example: 0.7
+  note: "이전 이름: new_w1_diff"
+
+# L-4. New User M1 Retention
+
+new_m1_ret:
+  label_ko: "신규 M1 유지율"
+  label_en: "New User M1 Retention Rate"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: 전월 1일
+  window: "1mon_calendar"
+  source: "program_newuser_retention_mon.csv (TYPE=M1, COHORT=all)"
+  formula: |
+    한국어: 지지난달 신규 설치 후 처음 청취한 사용자 중 전월에도 활성한 비율
+    SPL:   지지난달 신규자 ∩ 전월 활성자 / 지지난달 신규자 × 100
+  related:
+    prev: new_m1_ret_prev
+    diff: new_m1_ret_diff
+  description: "지지난달에 신규 설치 후 처음 청취한 신규 사용자가 그 다음 달(전월)에도 앱을 사용한 비율. 월 단위 신규 정착 지표 — 가장 장기적인 신규 유지력."
+  example: 18.7
+
+new_m1_ret_prev:
+  label_ko: "신규 M1 유지율 (지지난달값)"
+  label_en: "New User M1 Retention 1 Month Prior"
+  category: user_retention
+  type: rate
+  unit: "%"
+  reference_date: 지지난달 1일
+  window: "1mon_calendar"
+  description: "지지난달의 신규 M1 유지율. new_m1_ret_diff 계산의 기준값."
+  example: 17.9
+  note: "이전 이름: new_m1_ret_pw"
+
+new_m1_ret_diff:
+  label_ko: "신규 M1 유지율 전월 대비 증감"
+  label_en: "New User M1 Retention MoM Difference"
+  category: user_retention
+  type: pp
+  unit: pp
+  formula: |
+    한국어: 신규 M1 유지율 - 지지난달 신규 M1 유지율
+    SPL:   new_m1_ret - new_m1_ret_prev
+  description: "전월 vs 지지난달 신규 M1 유지율 차이(pp). 월 단위 신규 정착 추세."
+  example: 0.8
+  note: "이전 이름: new_m1_diff"
+
+
+# ============================================================================
+# End of Dictionary
+# Total fields: 137
+#   - meta:           10
+#   - user_size:      34  (B: 16 + C: 18)
+#   - user_growth:    24  (D: 12 + E: 12)
+#   - user_quality:   36  (F: 9 + G: 9 + H: 9 + I: 9)
+#   - user_habit:      9  (J: 9)
+#   - user_retention: 24  (K: 12 + L: 12)
+#
+# New fields (status: NEW): 8
+#   - dau_r7_chg, dau_r30_chg
+#   - dau_1min_chg, dau_10min_chg
+#   - wau_1min_chg, wau_10min_chg
+#   - mau_1min_chg, mau_10min_chg
+# ============================================================================
