@@ -35,11 +35,132 @@ PGM_L=['L01','L02','L03','L04','L05','L06','L07','L08','L09','L10','L11',
 CH=['F00','L00','G00','P00']
 ALL=PGM_F+PGM_L
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 룩업 필드명 마이그레이션을 위한 alias 매핑.
+# 새 이름(SPL 출력, 2026-04 KPI 명명 규칙) → 옛 이름(엔진/화면이 사용 중인 이름)
+# 화면 점진 전환 후 제거 예정. 단일 신뢰 출처: docs/raas_kpi_dictionary.yaml
+# 의 'note: 이전 이름: <old>' 항목 (총 87개).
+# ─────────────────────────────────────────────────────────────────────────────
+FIELD_ALIASES = {
+    # B. user_size — DAU
+    'dau':                  'dau_today',
+    'dau_prev':             'dau_pw',
+    'dau_chg':              'dau_wow',
+    'dau_d2':               'dau_yday',
+    # B. user_size — WAU (의미적 변경: 옛 이름은 dau_week)
+    'wau':                  'dau_week',
+    'wau_prev':             'dau_week_pw',
+    'wau_chg':              'dau_week_wow',
+    # B. user_size — MAU (의미적 변경: 옛 이름은 dau_mon)
+    'mau':                  'dau_mon',
+    'mau_prev':             'dau_mon_pw',
+    'mau_chg':              'dau_mon_wow',
+    # B. user_size — 롤링 7일 (옛: wau_today)
+    'dau_r7':               'wau_today',
+    'dau_r7_prev':          'wau_pw',
+    # B. user_size — 롤링 30일 (옛: mau_today)
+    'dau_r30':              'mau_today',
+    'dau_r30_prev':         'mau_pw',
+    # B. user_size — 1분/10분 *_prev (이름은 _pw였음)
+    'dau_1min_prev':        'dau_1min_pw',
+    'dau_10min_prev':       'dau_10min_pw',
+    'wau_1min_prev':        'wau_1min_pw',
+    'wau_10min_prev':       'wau_10min_pw',
+    'mau_1min_prev':        'mau_1min_pw',
+    'mau_10min_prev':       'mau_10min_pw',
+    # C. user_growth — new
+    'new':                  'new_today',
+    'new_prev':             'new_pw',
+    'new_chg':              'new_wow',
+    'new_share':            'new_pct',
+    'new_week_prev':        'new_week_pw',
+    'new_week_chg':         'new_week_wow',
+    'new_week_share':       'new_week_pct',
+    'new_mon_prev':         'new_mon_pw',
+    'new_mon_chg':          'new_mon_wow',
+    'new_mon_share':        'new_mon_pct',
+    # C. user_growth — react
+    'react':                'react_today',
+    'react_prev':           'react_pw',
+    'react_chg':            'react_wow',
+    'react_share':          'react_pct',
+    'react_week_prev':      'react_week_pw',
+    'react_week_chg':       'react_week_wow',
+    'react_week_share':     'react_week_pct',
+    'react_mon_prev':       'react_mon_pw',
+    'react_mon_chg':        'react_mon_wow',
+    'react_mon_share':      'react_mon_pct',
+    # D. user_quality — react_rate (값/이름 변경 없음, _pw → _prev만)
+    'react_rate_prev':      'react_rate_pw',
+    'react_rate_week_prev': 'react_rate_week_pw',
+    'react_rate_mon_prev':  'react_rate_mon_pw',
+    # D. user_quality — churn (_rate 접미사 추가)
+    'churn_rate_prev':      'churn_rate_pw',
+    'churn_rate_diff':      'churn_diff',
+    'churn_rate_week':      'churn_week',
+    'churn_rate_week_prev': 'churn_week_pw',
+    'churn_rate_week_diff': 'churn_week_diff',
+    'churn_rate_mon':       'churn_mon',
+    'churn_rate_mon_prev':  'churn_mon_pw',
+    'churn_rate_mon_diff':  'churn_mon_diff',
+    # D. user_quality — deep_rate (_pw → _prev)
+    'deep_rate_prev':       'deep_rate_pw',
+    'deep_rate_week_prev':  'deep_rate_week_pw',
+    'deep_rate_mon_prev':   'deep_rate_mon_pw',
+    # D. user_quality — engage (_rate 접미사 추가)
+    'engage_rate_prev':     'engage_rate_pw',
+    'engage_rate_diff':     'engage_diff',
+    'engage_rate_week':     'engage_week',
+    'engage_rate_week_prev':'engage_week_pw',
+    'engage_rate_week_diff':'engage_week_diff',
+    'engage_rate_mon':      'engage_mon',
+    'engage_rate_mon_prev': 'engage_mon_pw',
+    'engage_rate_mon_diff': 'engage_mon_diff',
+    # E. user_habit — habit (_rate 접미사 추가)
+    'habit_rate_prev':      'habit_rate_pw',
+    'habit_rate_diff':      'habit_diff',
+    'habit_rate_week':      'habit_week',
+    'habit_rate_week_prev': 'habit_week_pw',
+    'habit_rate_week_diff': 'habit_week_diff',
+    'habit_rate_mon':       'habit_mon',
+    'habit_rate_mon_prev':  'habit_mon_pw',
+    'habit_rate_mon_diff':  'habit_mon_diff',
+    # F. user_retention — d1/d7/w1/m1 (_pw → _prev, _diff prefix 통일)
+    'd1_ret_prev':          'd1_ret_pw',
+    'd1_ret_diff':          'd1_diff',
+    'd7_ret_prev':          'd7_ret_pw',
+    'd7_ret_diff':          'd7_diff',
+    'w1_ret_prev':          'w1_ret_pw',
+    'w1_ret_diff':          'w1_diff',
+    'm1_ret_prev':          'm1_ret_pw',
+    'm1_ret_diff':          'm1_diff',
+    'new_d1_ret_prev':      'new_d1_ret_pw',
+    'new_d1_ret_diff':      'new_d1_diff',
+    'new_d7_ret_prev':      'new_d7_ret_pw',
+    'new_d7_ret_diff':      'new_d7_diff',
+    'new_w1_ret_prev':      'new_w1_ret_pw',
+    'new_w1_ret_diff':      'new_w1_diff',
+    'new_m1_ret_prev':      'new_m1_ret_pw',
+    'new_m1_ret_diff':      'new_m1_diff',
+    # A. meta — 편성정보
+    'program_title':        'schedule_title',
+}
+
+def _alias_row(row):
+    """row dict에 옛 이름 alias 추가. 새 이름 키가 있으면 옛 이름 키에도 같은 값 복사.
+    옛 이름이 이미 존재하면 덮어쓰지 않음 (방어적)."""
+    for new_name, old_name in FIELD_ALIASES.items():
+        if new_name in row and old_name not in row:
+            row[old_name] = row[new_name]
+    return row
+
+
 def _load_timeline(search):
     """raas_kpi_latest.csv를 timeline 구조로 로드.
     반환: (timeline_dict, source) 튜플.
       timeline_dict: {PGM_CODE: {DATE: row, ...}, ...}
       source: 'splunk' | 'csv_fallback'
+    각 row에는 _alias_row()로 옛 이름 alias가 추가됨 (점진 마이그레이션 호환성).
     """
     source = 'splunk'
     try:
@@ -59,6 +180,7 @@ def _load_timeline(search):
         date = r.get('DATE')
         if not code or not date:
             continue
+        _alias_row(r)
         timeline.setdefault(code, {})[date] = r
     if timeline:
         all_dates = set()
