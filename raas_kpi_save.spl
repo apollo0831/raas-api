@@ -24,7 +24,7 @@
     | search TYPE=ALL AND PERIOD=7D
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="wau_day",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="dau_r7_day",
            metric_value=tonumber(metric_value),
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -34,7 +34,7 @@
     | search TYPE=ALL AND PERIOD=30D
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="mau_day",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="dau_r30_day",
            metric_value=tonumber(metric_value),
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -144,7 +144,7 @@
     | fields - prev_*
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_day",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_rate_day",
            metric_value=tonumber(metric_value),
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -266,7 +266,7 @@
     | xyseries DATE PGM_CODE metric_value
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_day",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_rate_day",
            metric_value=tonumber(metric_value),
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -292,7 +292,7 @@
     | eval DATE=strftime(relative_time(_time,"+6d"),"%Y/%m/%d")
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_day",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_rate_day",
            metric_value=tonumber(metric_value),
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -306,7 +306,7 @@
     | search TYPE=ALL AND PERIOD=1W
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="dau_week",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="wau_week",
            metric_value=tonumber(metric_value), DATE_WEEK=DATE,
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -416,7 +416,7 @@
     | fields - prev_*
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_week",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_rate_week",
            metric_value=tonumber(metric_value), DATE_WEEK=DATE,
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -500,7 +500,7 @@
     | xyseries DATE PGM_CODE metric_value
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_week",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_rate_week",
            metric_value=tonumber(metric_value), DATE_WEEK=DATE,
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -524,7 +524,7 @@
     | xyseries DATE PGM_CODE metric_value
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_week",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_rate_week",
            metric_value=tonumber(metric_value), DATE_WEEK=DATE,
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -538,7 +538,7 @@
     | search TYPE=ALL AND PERIOD=1M
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="dau_mon",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="mau_mon",
            metric_value=tonumber(metric_value), DATE_MON=DATE,
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -648,7 +648,7 @@
     | fields - prev_*
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_mon",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="churn_rate_mon",
            metric_value=tonumber(metric_value), DATE_MON=DATE,
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -732,7 +732,7 @@
     | xyseries DATE PGM_CODE metric_value
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_mon",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="engage_rate_mon",
            metric_value=tonumber(metric_value), DATE_MON=DATE,
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -756,7 +756,7 @@
     | xyseries DATE PGM_CODE metric_value
     | fields DATE T00 F00 L00 G00 P00 F* L* M*
     | untable DATE PGM_CODE metric_value
-    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_mon",
+    | eval PGM_CODE=upper(PGM_CODE), metric_type="habit_rate_mon",
            metric_value=tonumber(metric_value), DATE_MON=DATE,
            _time=strptime(DATE,"%Y/%m/%d"), today_value=metric_value
 ]
@@ -767,12 +767,16 @@
 
 | appendpipe [
     | where isnotnull(metric_value)
-    | eval DATE=strftime(relative_time(_time,"+7d"),"%Y/%m/%d"),
+    | eval shift_days=case(
+        metric_type=="dau_r30_day", 30,
+        true(), 7
+    )
+    | eval DATE=strftime(relative_time(_time, "+".shift_days."d"),"%Y/%m/%d"),
            prev_week_value=metric_value
     | fields DATE PGM_CODE metric_type prev_week_value
 ]
 
-`comment("--- 전일값(+1d 시프트): dau_day 전용 — dau_yday 계산용 ---")`
+`comment("--- 전일값(+1d 시프트): dau_day 전용 — dau_d2 계산용 ---")`
 | appendpipe [
     | where isnotnull(metric_value) AND metric_type="dau_day"
     | eval DATE=strftime(relative_time(_time,"+1d"),"%Y/%m/%d"),
@@ -789,61 +793,6 @@
 | where isnotnull(today_value)
 
 `comment("================================================================")`
-`comment("=== [4-1] 평균 지표 블록 (주간 DAU일평균 / 월간 DAU일평균 / 월간 WAU평균) ===")`
-`comment("================================================================")`
-
-`comment("--- 주간 DAU 일평균: 전주 월~일 7일간 DAU 값의 평균 ---")`
-| append maxout=200000 [
-    | inputlookup program_user_funnel_day.csv
-    | search TYPE=ALL AND PERIOD=1D
-    | eval week_start = strftime(relative_time(now(),"-1w@w1"),         "%Y/%m/%d")
-    | eval week_end   = strftime(relative_time(now(),"-1w@w1+6d@d"),    "%Y/%m/%d")
-    | where DATE>=week_start AND DATE<=week_end
-    | fields DATE T00 F00 L00 G00 P00 F* L* M*
-    | untable DATE PGM_CODE metric_value
-    | eval metric_value=coalesce(tonumber(metric_value),0)
-    | eval PGM_CODE=upper(PGM_CODE)
-    | stats avg(metric_value) as today_value by PGM_CODE
-    | eval metric_type="DAU_WEEK_AVG",
-           DATE=strftime(relative_time(now(),"-1w@w1"),"%Y/%m/%d"),
-           prev_week_value=null()
-]
-
-`comment("--- 월간 DAU 일평균: 전월 1일~말일 각 DAU 값의 평균 ---")`
-| append maxout=200000 [
-    | inputlookup program_user_funnel_day.csv
-    | search TYPE=ALL AND PERIOD=1D
-    | eval mon_start = strftime(relative_time(now(),"-1mon@mon"),    "%Y/%m/%d")
-    | eval mon_end   = strftime(relative_time(now(),"@mon-1d@d"),    "%Y/%m/%d")
-    | where DATE>=mon_start AND DATE<=mon_end
-    | fields DATE T00 F00 L00 G00 P00 F* L* M*
-    | untable DATE PGM_CODE metric_value
-    | eval metric_value=coalesce(tonumber(metric_value),0)
-    | eval PGM_CODE=upper(PGM_CODE)
-    | stats avg(metric_value) as today_value by PGM_CODE
-    | eval metric_type="DAU_MON_AVG",
-           DATE=strftime(relative_time(now(),"-1mon@mon"),"%Y/%m/%d"),
-           prev_week_value=null()
-]
-
-`comment("--- 월간 WAU 평균: 전월 1일~말일 기간의 7D롤링(WAU_day)값 평균 ---")`
-| append maxout=200000 [
-    | inputlookup program_user_funnel_day.csv
-    | search TYPE=ALL AND PERIOD=7D
-    | eval mon_start = strftime(relative_time(now(),"-1mon@mon"),    "%Y/%m/%d")
-    | eval mon_end   = strftime(relative_time(now(),"@mon-1d@d"),    "%Y/%m/%d")
-    | where DATE>=mon_start AND DATE<=mon_end
-    | fields DATE T00 F00 L00 G00 P00 F* L* M*
-    | untable DATE PGM_CODE metric_value
-    | eval metric_value=coalesce(tonumber(metric_value),0)
-    | eval PGM_CODE=upper(PGM_CODE)
-    | stats avg(metric_value) as today_value by PGM_CODE
-    | eval metric_type="WAU_MON_AVG",
-           DATE=strftime(relative_time(now(),"-1mon@mon"),"%Y/%m/%d"),
-           prev_week_value=null()
-]
-
-`comment("================================================================")`
 `comment("=== [5] 날짜 필터 + DATE 분기 보존 ===")`
 `comment("필터 통과 후 metric_type 기준으로 DATE를 분리 보존")`
 `comment("  일간 → DATE_DAY(=DATE) / 주간 → DATE_WEEK / 월간 → DATE_MON")`
@@ -857,10 +806,7 @@
 | where (
     (match(metric_type,"_day")       AND DATE=date_day)  OR
     (match(metric_type,"_week")      AND DATE=date_week) OR
-    (match(metric_type,"_mon")       AND DATE=date_mon)  OR
-    (match(metric_type,"DAU_WEEK_AVG") AND DATE=date_week) OR
-    (match(metric_type,"DAU_MON_AVG")  AND DATE=date_mon)  OR
-    (match(metric_type,"WAU_MON_AVG")  AND DATE=date_mon)
+    (match(metric_type,"_mon")       AND DATE=date_mon)
 )
 
 `comment("--- DATE를 각 기간 컬럼으로 분리 보존 (null이면 stats max()에서 무시됨) ---")`
@@ -875,90 +821,86 @@
 `comment("================================================================")`
 
 `comment("--- 일간 ---")`
-| eval dau_today       = if(metric_type="dau_day",         today_value, null())
-| eval dau_pw          = if(metric_type="dau_day",         prev_week_value, null())
-| eval dau_yday        = if(metric_type="dau_day",         yday_value, null())
-| eval wau_today       = if(metric_type="wau_day",         today_value, null())
-| eval wau_pw          = if(metric_type="wau_day",         prev_week_value, null())
-| eval mau_today       = if(metric_type="mau_day",         today_value, null())
-| eval mau_pw          = if(metric_type="mau_day",         prev_week_value, null())
-| eval new_today       = if(metric_type="new_day",         today_value, null())
-| eval new_pw          = if(metric_type="new_day",         prev_week_value, null())
-| eval react_today     = if(metric_type="react_day",       today_value, null())
-| eval react_pw        = if(metric_type="react_day",       prev_week_value, null())
+| eval dau       = if(metric_type="dau_day",         today_value, null())
+| eval dau_prev          = if(metric_type="dau_day",         prev_week_value, null())
+| eval dau_d2        = if(metric_type="dau_day",         yday_value, null())
+| eval dau_r7       = if(metric_type="dau_r7_day",         today_value, null())
+| eval dau_r7_prev          = if(metric_type="dau_r7_day",         prev_week_value, null())
+| eval dau_r30       = if(metric_type="dau_r30_day",         today_value, null())
+| eval dau_r30_prev          = if(metric_type="dau_r30_day",         prev_week_value, null())
+| eval new       = if(metric_type="new_day",         today_value, null())
+| eval new_prev          = if(metric_type="new_day",         prev_week_value, null())
+| eval react     = if(metric_type="react_day",       today_value, null())
+| eval react_prev        = if(metric_type="react_day",       prev_week_value, null())
 | eval react_rate      = if(metric_type="react_rate_day",  today_value, null())
-| eval react_rate_pw   = if(metric_type="react_rate_day",  prev_week_value, null())
-| eval churn_rate      = if(metric_type="churn_day",       today_value, null())
-| eval churn_rate_pw   = if(metric_type="churn_day",       prev_week_value, null())
+| eval react_rate_prev   = if(metric_type="react_rate_day",  prev_week_value, null())
+| eval churn_rate      = if(metric_type="churn_rate_day",       today_value, null())
+| eval churn_rate_prev   = if(metric_type="churn_rate_day",       prev_week_value, null())
 | eval dau_1min        = if(metric_type="dau_1min_day",    today_value, null())
-| eval dau_1min_pw     = if(metric_type="dau_1min_day",    prev_week_value, null())
+| eval dau_1min_prev     = if(metric_type="dau_1min_day",    prev_week_value, null())
 | eval dau_10min       = if(metric_type="dau_10min_day",   today_value, null())
-| eval dau_10min_pw    = if(metric_type="dau_10min_day",   prev_week_value, null())
+| eval dau_10min_prev    = if(metric_type="dau_10min_day",   prev_week_value, null())
 | eval d1_ret          = if(metric_type="d1_ret_day",      today_value, null())
-| eval d1_ret_pw       = if(metric_type="d1_ret_day",      prev_week_value, null())
+| eval d1_ret_prev       = if(metric_type="d1_ret_day",      prev_week_value, null())
 | eval d7_ret          = if(metric_type="d7_ret_day",      today_value, null())
-| eval d7_ret_pw       = if(metric_type="d7_ret_day",      prev_week_value, null())
+| eval d7_ret_prev       = if(metric_type="d7_ret_day",      prev_week_value, null())
 | eval new_d1_ret      = if(metric_type="new_d1_ret_day",   today_value, null())
-| eval new_d1_ret_pw   = if(metric_type="new_d1_ret_day",   prev_week_value, null())
+| eval new_d1_ret_prev   = if(metric_type="new_d1_ret_day",   prev_week_value, null())
 | eval new_d7_ret      = if(metric_type="new_d7_ret_day",   today_value, null())
-| eval new_d7_ret_pw   = if(metric_type="new_d7_ret_day",   prev_week_value, null())
+| eval new_d7_ret_prev   = if(metric_type="new_d7_ret_day",   prev_week_value, null())
 | eval new_w1_ret      = if(metric_type="new_w1_ret_week",  today_value, null())
-| eval new_w1_ret_pw   = if(metric_type="new_w1_ret_week",  prev_week_value, null())
+| eval new_w1_ret_prev   = if(metric_type="new_w1_ret_week",  prev_week_value, null())
 | eval new_m1_ret      = if(metric_type="new_m1_ret_mon",   today_value, null())
-| eval new_m1_ret_pw   = if(metric_type="new_m1_ret_mon",   prev_week_value, null())
-| eval engage_rate     = if(metric_type="engage_day",      today_value, null())
-| eval engage_rate_pw  = if(metric_type="engage_day",      prev_week_value, null())
-| eval habit_rate      = if(metric_type="habit_day",       today_value, null())
-| eval habit_rate_pw   = if(metric_type="habit_day",       prev_week_value, null())
+| eval new_m1_ret_prev   = if(metric_type="new_m1_ret_mon",   prev_week_value, null())
+| eval engage_rate     = if(metric_type="engage_rate_day",      today_value, null())
+| eval engage_rate_prev  = if(metric_type="engage_rate_day",      prev_week_value, null())
+| eval habit_rate      = if(metric_type="habit_rate_day",       today_value, null())
+| eval habit_rate_prev   = if(metric_type="habit_rate_day",       prev_week_value, null())
 
 `comment("--- 주간 ---")`
-| eval dau_week           = if(metric_type="dau_week",          today_value, null())
-| eval dau_week_pw        = if(metric_type="dau_week",          prev_week_value, null())
+| eval wau           = if(metric_type="wau_week",          today_value, null())
+| eval wau_prev        = if(metric_type="wau_week",          prev_week_value, null())
 | eval new_week           = if(metric_type="new_week",          today_value, null())
-| eval new_week_pw        = if(metric_type="new_week",          prev_week_value, null())
+| eval new_week_prev        = if(metric_type="new_week",          prev_week_value, null())
 | eval react_week         = if(metric_type="react_week",        today_value, null())
-| eval react_week_pw      = if(metric_type="react_week",        prev_week_value, null())
+| eval react_week_prev      = if(metric_type="react_week",        prev_week_value, null())
 | eval react_rate_week    = if(metric_type="react_rate_week",   today_value, null())
-| eval react_rate_week_pw = if(metric_type="react_rate_week",   prev_week_value, null())
-| eval churn_week         = if(metric_type="churn_week",        today_value, null())
-| eval churn_week_pw      = if(metric_type="churn_week",        prev_week_value, null())
+| eval react_rate_week_prev = if(metric_type="react_rate_week",   prev_week_value, null())
+| eval churn_rate_week         = if(metric_type="churn_rate_week",        today_value, null())
+| eval churn_rate_week_prev      = if(metric_type="churn_rate_week",        prev_week_value, null())
 | eval wau_1min           = if(metric_type="wau_1min_week",     today_value, null())
-| eval wau_1min_pw        = if(metric_type="wau_1min_week",     prev_week_value, null())
+| eval wau_1min_prev        = if(metric_type="wau_1min_week",     prev_week_value, null())
 | eval wau_10min          = if(metric_type="wau_10min_week",    today_value, null())
-| eval wau_10min_pw       = if(metric_type="wau_10min_week",    prev_week_value, null())
+| eval wau_10min_prev       = if(metric_type="wau_10min_week",    prev_week_value, null())
 | eval w1_ret             = if(metric_type="w1_ret_week",       today_value, null())
-| eval w1_ret_pw          = if(metric_type="w1_ret_week",       prev_week_value, null())
-| eval engage_week        = if(metric_type="engage_week",       today_value, null())
-| eval engage_week_pw     = if(metric_type="engage_week",       prev_week_value, null())
-| eval habit_week         = if(metric_type="habit_week",        today_value, null())
-| eval habit_week_pw      = if(metric_type="habit_week",        prev_week_value, null())
+| eval w1_ret_prev          = if(metric_type="w1_ret_week",       prev_week_value, null())
+| eval engage_rate_week        = if(metric_type="engage_rate_week",       today_value, null())
+| eval engage_rate_week_prev     = if(metric_type="engage_rate_week",       prev_week_value, null())
+| eval habit_rate_week         = if(metric_type="habit_rate_week",        today_value, null())
+| eval habit_rate_week_prev      = if(metric_type="habit_rate_week",        prev_week_value, null())
 
 `comment("--- 월간 ---")`
-| eval dau_mon            = if(metric_type="dau_mon",           today_value, null())
-| eval dau_mon_pw         = if(metric_type="dau_mon",           prev_week_value, null())
+| eval mau            = if(metric_type="mau_mon",           today_value, null())
+| eval mau_prev         = if(metric_type="mau_mon",           prev_week_value, null())
 | eval new_mon            = if(metric_type="new_mon",           today_value, null())
-| eval new_mon_pw         = if(metric_type="new_mon",           prev_week_value, null())
+| eval new_mon_prev         = if(metric_type="new_mon",           prev_week_value, null())
 | eval react_mon          = if(metric_type="react_mon",         today_value, null())
-| eval react_mon_pw       = if(metric_type="react_mon",         prev_week_value, null())
+| eval react_mon_prev       = if(metric_type="react_mon",         prev_week_value, null())
 | eval react_rate_mon     = if(metric_type="react_rate_mon",    today_value, null())
-| eval react_rate_mon_pw  = if(metric_type="react_rate_mon",    prev_week_value, null())
-| eval churn_mon          = if(metric_type="churn_mon",         today_value, null())
-| eval churn_mon_pw       = if(metric_type="churn_mon",         prev_week_value, null())
+| eval react_rate_mon_prev  = if(metric_type="react_rate_mon",    prev_week_value, null())
+| eval churn_rate_mon          = if(metric_type="churn_rate_mon",         today_value, null())
+| eval churn_rate_mon_prev       = if(metric_type="churn_rate_mon",         prev_week_value, null())
 | eval mau_1min           = if(metric_type="mau_1min_mon",      today_value, null())
-| eval mau_1min_pw        = if(metric_type="mau_1min_mon",      prev_week_value, null())
+| eval mau_1min_prev        = if(metric_type="mau_1min_mon",      prev_week_value, null())
 | eval mau_10min          = if(metric_type="mau_10min_mon",     today_value, null())
-| eval mau_10min_pw       = if(metric_type="mau_10min_mon",     prev_week_value, null())
+| eval mau_10min_prev       = if(metric_type="mau_10min_mon",     prev_week_value, null())
 | eval m1_ret             = if(metric_type="m1_ret_mon",        today_value, null())
-| eval m1_ret_pw          = if(metric_type="m1_ret_mon",        prev_week_value, null())
-| eval engage_mon         = if(metric_type="engage_mon",        today_value, null())
-| eval engage_mon_pw      = if(metric_type="engage_mon",        prev_week_value, null())
-| eval habit_mon          = if(metric_type="habit_mon",         today_value, null())
-| eval habit_mon_pw       = if(metric_type="habit_mon",         prev_week_value, null())
+| eval m1_ret_prev          = if(metric_type="m1_ret_mon",        prev_week_value, null())
+| eval engage_rate_mon         = if(metric_type="engage_rate_mon",        today_value, null())
+| eval engage_rate_mon_prev      = if(metric_type="engage_rate_mon",        prev_week_value, null())
+| eval habit_rate_mon          = if(metric_type="habit_rate_mon",         today_value, null())
+| eval habit_rate_mon_prev       = if(metric_type="habit_rate_mon",         prev_week_value, null())
 
-`comment("--- 평균 지표 ---")`
-| eval dau_week_avg = if(metric_type="DAU_WEEK_AVG", today_value, null())
-| eval dau_mon_avg  = if(metric_type="DAU_MON_AVG",  today_value, null())
-| eval wau_mon_avg  = if(metric_type="WAU_MON_AVG",  today_value, null())
 
 `comment("================================================================")`
 `comment("=== [7] PGM_CODE별 집계 ===")`
@@ -970,50 +912,46 @@
     max(DATE_WEEK) as DATE_WEEK
     max(DATE_MON)  as DATE_MON
     `comment("--- 일간 ---")`
-    max(dau_today)       as dau_today       max(dau_pw)            as dau_pw
-    max(dau_yday)        as dau_yday
-    max(wau_today)       as wau_today       max(wau_pw)            as wau_pw
-    max(mau_today)       as mau_today       max(mau_pw)            as mau_pw
-    max(new_today)       as new_today       max(new_pw)            as new_pw
-    max(react_today)     as react_today     max(react_pw)          as react_pw
-    max(react_rate)      as react_rate      max(react_rate_pw)     as react_rate_pw
-    max(churn_rate)      as churn_rate      max(churn_rate_pw)     as churn_rate_pw
-    max(dau_1min)        as dau_1min        max(dau_1min_pw)       as dau_1min_pw
-    max(dau_10min)       as dau_10min       max(dau_10min_pw)      as dau_10min_pw
-    max(d1_ret)          as d1_ret          max(d1_ret_pw)         as d1_ret_pw
-    max(d7_ret)          as d7_ret          max(d7_ret_pw)         as d7_ret_pw
-    max(new_d1_ret)      as new_d1_ret      max(new_d1_ret_pw)     as new_d1_ret_pw
-    max(new_d7_ret)      as new_d7_ret      max(new_d7_ret_pw)     as new_d7_ret_pw
-    max(new_w1_ret)      as new_w1_ret      max(new_w1_ret_pw)     as new_w1_ret_pw
-    max(new_m1_ret)      as new_m1_ret      max(new_m1_ret_pw)     as new_m1_ret_pw
-    max(engage_rate)     as engage_rate     max(engage_rate_pw)    as engage_rate_pw
-    max(habit_rate)      as habit_rate      max(habit_rate_pw)     as habit_rate_pw
+    max(dau)       as dau       max(dau_prev)            as dau_prev
+    max(dau_d2)        as dau_d2
+    max(dau_r7)       as dau_r7       max(dau_r7_prev)            as dau_r7_prev
+    max(dau_r30)       as dau_r30       max(dau_r30_prev)            as dau_r30_prev
+    max(new)       as new       max(new_prev)            as new_prev
+    max(react)     as react     max(react_prev)          as react_prev
+    max(react_rate)      as react_rate      max(react_rate_prev)     as react_rate_prev
+    max(churn_rate)      as churn_rate      max(churn_rate_prev)     as churn_rate_prev
+    max(dau_1min)        as dau_1min        max(dau_1min_prev)       as dau_1min_prev
+    max(dau_10min)       as dau_10min       max(dau_10min_prev)      as dau_10min_prev
+    max(d1_ret)          as d1_ret          max(d1_ret_prev)         as d1_ret_prev
+    max(d7_ret)          as d7_ret          max(d7_ret_prev)         as d7_ret_prev
+    max(new_d1_ret)      as new_d1_ret      max(new_d1_ret_prev)     as new_d1_ret_prev
+    max(new_d7_ret)      as new_d7_ret      max(new_d7_ret_prev)     as new_d7_ret_prev
+    max(new_w1_ret)      as new_w1_ret      max(new_w1_ret_prev)     as new_w1_ret_prev
+    max(new_m1_ret)      as new_m1_ret      max(new_m1_ret_prev)     as new_m1_ret_prev
+    max(engage_rate)     as engage_rate     max(engage_rate_prev)    as engage_rate_prev
+    max(habit_rate)      as habit_rate      max(habit_rate_prev)     as habit_rate_prev
     `comment("--- 주간 ---")`
-    max(dau_week)        as dau_week        max(dau_week_pw)       as dau_week_pw
-    max(new_week)        as new_week        max(new_week_pw)       as new_week_pw
-    max(react_week)      as react_week      max(react_week_pw)     as react_week_pw
-    max(react_rate_week) as react_rate_week max(react_rate_week_pw) as react_rate_week_pw
-    max(churn_week)      as churn_week      max(churn_week_pw)     as churn_week_pw
-    max(wau_1min)        as wau_1min        max(wau_1min_pw)       as wau_1min_pw
-    max(wau_10min)       as wau_10min       max(wau_10min_pw)      as wau_10min_pw
-    max(w1_ret)          as w1_ret          max(w1_ret_pw)         as w1_ret_pw
-    max(engage_week)     as engage_week     max(engage_week_pw)    as engage_week_pw
-    max(habit_week)      as habit_week      max(habit_week_pw)     as habit_week_pw
+    max(wau)        as wau        max(wau_prev)       as wau_prev
+    max(new_week)        as new_week        max(new_week_prev)       as new_week_prev
+    max(react_week)      as react_week      max(react_week_prev)     as react_week_prev
+    max(react_rate_week) as react_rate_week max(react_rate_week_prev) as react_rate_week_prev
+    max(churn_rate_week)      as churn_rate_week      max(churn_rate_week_prev)     as churn_rate_week_prev
+    max(wau_1min)        as wau_1min        max(wau_1min_prev)       as wau_1min_prev
+    max(wau_10min)       as wau_10min       max(wau_10min_prev)      as wau_10min_prev
+    max(w1_ret)          as w1_ret          max(w1_ret_prev)         as w1_ret_prev
+    max(engage_rate_week)     as engage_rate_week     max(engage_rate_week_prev)    as engage_rate_week_prev
+    max(habit_rate_week)      as habit_rate_week      max(habit_rate_week_prev)     as habit_rate_week_prev
     `comment("--- 월간 ---")`
-    max(dau_mon)         as dau_mon         max(dau_mon_pw)        as dau_mon_pw
-    max(new_mon)         as new_mon         max(new_mon_pw)        as new_mon_pw
-    max(react_mon)       as react_mon       max(react_mon_pw)      as react_mon_pw
-    max(react_rate_mon)  as react_rate_mon  max(react_rate_mon_pw) as react_rate_mon_pw
-    max(churn_mon)       as churn_mon       max(churn_mon_pw)      as churn_mon_pw
-    max(mau_1min)        as mau_1min        max(mau_1min_pw)       as mau_1min_pw
-    max(mau_10min)       as mau_10min       max(mau_10min_pw)      as mau_10min_pw
-    max(m1_ret)          as m1_ret          max(m1_ret_pw)         as m1_ret_pw
-    max(engage_mon)      as engage_mon      max(engage_mon_pw)     as engage_mon_pw
-    max(habit_mon)       as habit_mon       max(habit_mon_pw)      as habit_mon_pw
-    `comment("--- 평균 지표 ---")`
-    max(dau_week_avg) as dau_week_avg
-    max(dau_mon_avg)  as dau_mon_avg
-    max(wau_mon_avg)  as wau_mon_avg
+    max(mau)         as mau         max(mau_prev)        as mau_prev
+    max(new_mon)         as new_mon         max(new_mon_prev)        as new_mon_prev
+    max(react_mon)       as react_mon       max(react_mon_prev)      as react_mon_prev
+    max(react_rate_mon)  as react_rate_mon  max(react_rate_mon_prev) as react_rate_mon_prev
+    max(churn_rate_mon)       as churn_rate_mon       max(churn_rate_mon_prev)      as churn_rate_mon_prev
+    max(mau_1min)        as mau_1min        max(mau_1min_prev)       as mau_1min_prev
+    max(mau_10min)       as mau_10min       max(mau_10min_prev)      as mau_10min_prev
+    max(m1_ret)          as m1_ret          max(m1_ret_prev)         as m1_ret_prev
+    max(engage_rate_mon)      as engage_rate_mon      max(engage_rate_mon_prev)     as engage_rate_mon_prev
+    max(habit_rate_mon)       as habit_rate_mon       max(habit_rate_mon_prev)      as habit_rate_mon_prev
   by PGM_CODE
 
 `comment("================================================================")`
@@ -1022,62 +960,68 @@
 
 `comment("--- 일간 파생 ---")`
 | eval deep_rate        = if(dau_1min>0,    round(dau_10min/dau_1min*100,1),       null())
-| eval deep_rate_pw     = if(dau_1min_pw>0, round(dau_10min_pw/dau_1min_pw*100,1), null())
-| eval deep_rate_diff   = if(isnotnull(deep_rate) AND isnotnull(deep_rate_pw), round(deep_rate-deep_rate_pw,1), null())
-| eval dau_wow          = if(dau_pw>0,      round((dau_today-dau_pw)/dau_pw*100,1),       null())
-| eval new_wow          = if(new_pw>0,      round((new_today-new_pw)/new_pw*100,1),        null())
-| eval react_wow        = if(react_pw>0,    round((react_today-react_pw)/react_pw*100,1),  null())
-| eval churn_diff       = if(isnotnull(churn_rate)  AND isnotnull(churn_rate_pw),  round(churn_rate-churn_rate_pw,1),   null())
-| eval react_rate_diff  = if(isnotnull(react_rate)  AND isnotnull(react_rate_pw),  round(react_rate-react_rate_pw,1),   null())
-| eval d1_diff          = if(isnotnull(d1_ret)      AND isnotnull(d1_ret_pw),      round(d1_ret-d1_ret_pw,1),           null())
-| eval d7_diff          = if(isnotnull(d7_ret)      AND isnotnull(d7_ret_pw),      round(d7_ret-d7_ret_pw,1),           null())
-| eval new_d1_diff      = if(isnotnull(new_d1_ret)  AND isnotnull(new_d1_ret_pw),  round(new_d1_ret-new_d1_ret_pw,1),   null())
-| eval new_d7_diff      = if(isnotnull(new_d7_ret)  AND isnotnull(new_d7_ret_pw),  round(new_d7_ret-new_d7_ret_pw,1),   null())
-| eval new_w1_diff      = if(isnotnull(new_w1_ret)  AND isnotnull(new_w1_ret_pw),  round(new_w1_ret-new_w1_ret_pw,1),   null())
-| eval new_m1_diff      = if(isnotnull(new_m1_ret)  AND isnotnull(new_m1_ret_pw),  round(new_m1_ret-new_m1_ret_pw,1),   null())
-| eval engage_diff      = if(isnotnull(engage_rate) AND isnotnull(engage_rate_pw), round(engage_rate-engage_rate_pw,1), null())
-| eval habit_diff       = if(isnotnull(habit_rate)  AND isnotnull(habit_rate_pw),  round(habit_rate-habit_rate_pw,1),   null())
-| eval new_pct          = if(dau_today>0, round(new_today/dau_today*100,1),   null())
-| eval react_pct        = if(dau_today>0, round(react_today/dau_today*100,1), null())
+| eval deep_rate_prev     = if(dau_1min_prev>0, round(dau_10min_prev/dau_1min_prev*100,1), null())
+| eval deep_rate_diff   = if(isnotnull(deep_rate) AND isnotnull(deep_rate_prev), round(deep_rate-deep_rate_prev,1), null())
+| eval dau_chg          = if(dau_prev>0,      round((dau-dau_prev)/dau_prev*100,1),       null())
+| eval new_chg          = if(new_prev>0,      round((new-new_prev)/new_prev*100,1),        null())
+| eval react_chg        = if(react_prev>0,    round((react-react_prev)/react_prev*100,1),  null())
+| eval churn_rate_diff       = if(isnotnull(churn_rate)  AND isnotnull(churn_rate_prev),  round(churn_rate-churn_rate_prev,1),   null())
+| eval react_rate_diff  = if(isnotnull(react_rate)  AND isnotnull(react_rate_prev),  round(react_rate-react_rate_prev,1),   null())
+| eval d1_ret_diff          = if(isnotnull(d1_ret)      AND isnotnull(d1_ret_prev),      round(d1_ret-d1_ret_prev,1),           null())
+| eval d7_ret_diff          = if(isnotnull(d7_ret)      AND isnotnull(d7_ret_prev),      round(d7_ret-d7_ret_prev,1),           null())
+| eval new_d1_ret_diff      = if(isnotnull(new_d1_ret)  AND isnotnull(new_d1_ret_prev),  round(new_d1_ret-new_d1_ret_prev,1),   null())
+| eval new_d7_ret_diff      = if(isnotnull(new_d7_ret)  AND isnotnull(new_d7_ret_prev),  round(new_d7_ret-new_d7_ret_prev,1),   null())
+| eval new_w1_ret_diff      = if(isnotnull(new_w1_ret)  AND isnotnull(new_w1_ret_prev),  round(new_w1_ret-new_w1_ret_prev,1),   null())
+| eval new_m1_ret_diff      = if(isnotnull(new_m1_ret)  AND isnotnull(new_m1_ret_prev),  round(new_m1_ret-new_m1_ret_prev,1),   null())
+| eval engage_rate_diff      = if(isnotnull(engage_rate) AND isnotnull(engage_rate_prev), round(engage_rate-engage_rate_prev,1), null())
+| eval habit_rate_diff       = if(isnotnull(habit_rate)  AND isnotnull(habit_rate_prev),  round(habit_rate-habit_rate_prev,1),   null())
+| eval new_share          = if(dau>0, round(new/dau*100,1),   null())
+| eval react_share        = if(dau>0, round(react/dau*100,1), null())
+
+| eval dau_1min_chg  = if(dau_1min_prev>0,  round((dau_1min  - dau_1min_prev)  / dau_1min_prev  * 100, 1), null())
+| eval dau_10min_chg = if(dau_10min_prev>0, round((dau_10min - dau_10min_prev) / dau_10min_prev * 100, 1), null())
+| eval wau_1min_chg  = if(wau_1min_prev>0,  round((wau_1min  - wau_1min_prev)  / wau_1min_prev  * 100, 1), null())
+| eval wau_10min_chg = if(wau_10min_prev>0, round((wau_10min - wau_10min_prev) / wau_10min_prev * 100, 1), null())
+| eval mau_1min_chg  = if(mau_1min_prev>0,  round((mau_1min  - mau_1min_prev)  / mau_1min_prev  * 100, 1), null())
+| eval mau_10min_chg = if(mau_10min_prev>0, round((mau_10min - mau_10min_prev) / mau_10min_prev * 100, 1), null())
+| eval dau_r7_chg    = if(dau_r7_prev>0,    round((dau_r7    - dau_r7_prev)    / dau_r7_prev    * 100, 1), null())
+| eval dau_r30_chg   = if(dau_r30_prev>0,   round((dau_r30   - dau_r30_prev)   / dau_r30_prev   * 100, 1), null())
 
 `comment("--- 주간 파생 ---")`
 | eval deep_rate_week      = if(wau_1min>0,    round(wau_10min/wau_1min*100,1),       null())
-| eval deep_rate_week_pw   = if(wau_1min_pw>0, round(wau_10min_pw/wau_1min_pw*100,1), null())
-| eval deep_rate_week_diff = if(isnotnull(deep_rate_week) AND isnotnull(deep_rate_week_pw), round(deep_rate_week-deep_rate_week_pw,1), null())
-| eval dau_week_wow        = if(dau_week_pw>0,   round((dau_week-dau_week_pw)/dau_week_pw*100,1),      null())
-| eval new_week_wow        = if(new_week_pw>0,   round((new_week-new_week_pw)/new_week_pw*100,1),        null())
-| eval react_week_wow      = if(react_week_pw>0, round((react_week-react_week_pw)/react_week_pw*100,1),  null())
-| eval churn_week_diff      = if(isnotnull(churn_week)      AND isnotnull(churn_week_pw),      round(churn_week-churn_week_pw,1),           null())
-| eval react_rate_week_diff = if(isnotnull(react_rate_week) AND isnotnull(react_rate_week_pw), round(react_rate_week-react_rate_week_pw,1), null())
-| eval w1_diff              = if(isnotnull(w1_ret)          AND isnotnull(w1_ret_pw),          round(w1_ret-w1_ret_pw,1),                   null())
-| eval engage_week_diff     = if(isnotnull(engage_week)     AND isnotnull(engage_week_pw),     round(engage_week-engage_week_pw,1),          null())
-| eval habit_week_diff      = if(isnotnull(habit_week)      AND isnotnull(habit_week_pw),      round(habit_week-habit_week_pw,1),            null())
-| eval new_week_pct         = if(dau_week>0, round(new_week/dau_week*100,1),   null())
-| eval react_week_pct       = if(dau_week>0, round(react_week/dau_week*100,1), null())
+| eval deep_rate_week_prev   = if(wau_1min_prev>0, round(wau_10min_prev/wau_1min_prev*100,1), null())
+| eval deep_rate_week_diff = if(isnotnull(deep_rate_week) AND isnotnull(deep_rate_week_prev), round(deep_rate_week-deep_rate_week_prev,1), null())
+| eval wau_chg        = if(wau_prev>0,   round((wau-wau_prev)/wau_prev*100,1),      null())
+| eval new_week_chg        = if(new_week_prev>0,   round((new_week-new_week_prev)/new_week_prev*100,1),        null())
+| eval react_week_chg      = if(react_week_prev>0, round((react_week-react_week_prev)/react_week_prev*100,1),  null())
+| eval churn_rate_week_diff      = if(isnotnull(churn_rate_week)      AND isnotnull(churn_rate_week_prev),      round(churn_rate_week-churn_rate_week_prev,1),           null())
+| eval react_rate_week_diff = if(isnotnull(react_rate_week) AND isnotnull(react_rate_week_prev), round(react_rate_week-react_rate_week_prev,1), null())
+| eval w1_ret_diff              = if(isnotnull(w1_ret)          AND isnotnull(w1_ret_prev),          round(w1_ret-w1_ret_prev,1),                   null())
+| eval engage_rate_week_diff     = if(isnotnull(engage_rate_week)     AND isnotnull(engage_rate_week_prev),     round(engage_rate_week-engage_rate_week_prev,1),          null())
+| eval habit_rate_week_diff      = if(isnotnull(habit_rate_week)      AND isnotnull(habit_rate_week_prev),      round(habit_rate_week-habit_rate_week_prev,1),            null())
+| eval new_week_share         = if(wau>0, round(new_week/wau*100,1),   null())
+| eval react_week_share       = if(wau>0, round(react_week/wau*100,1), null())
 
 `comment("--- 월간 파생 ---")`
 | eval deep_rate_mon      = if(mau_1min>0,    round(mau_10min/mau_1min*100,1),       null())
-| eval deep_rate_mon_pw   = if(mau_1min_pw>0, round(mau_10min_pw/mau_1min_pw*100,1), null())
-| eval deep_rate_mon_diff = if(isnotnull(deep_rate_mon) AND isnotnull(deep_rate_mon_pw), round(deep_rate_mon-deep_rate_mon_pw,1), null())
-| eval dau_mon_wow        = if(dau_mon_pw>0,   round((dau_mon-dau_mon_pw)/dau_mon_pw*100,1),      null())
-| eval new_mon_wow        = if(new_mon_pw>0,   round((new_mon-new_mon_pw)/new_mon_pw*100,1),        null())
-| eval react_mon_wow      = if(react_mon_pw>0, round((react_mon-react_mon_pw)/react_mon_pw*100,1),  null())
-| eval churn_mon_diff      = if(isnotnull(churn_mon)      AND isnotnull(churn_mon_pw),      round(churn_mon-churn_mon_pw,1),           null())
-| eval react_rate_mon_diff = if(isnotnull(react_rate_mon) AND isnotnull(react_rate_mon_pw), round(react_rate_mon-react_rate_mon_pw,1), null())
-| eval m1_diff             = if(isnotnull(m1_ret)         AND isnotnull(m1_ret_pw),         round(m1_ret-m1_ret_pw,1),                 null())
-| eval engage_mon_diff     = if(isnotnull(engage_mon)     AND isnotnull(engage_mon_pw),     round(engage_mon-engage_mon_pw,1),          null())
-| eval habit_mon_diff      = if(isnotnull(habit_mon)      AND isnotnull(habit_mon_pw),      round(habit_mon-habit_mon_pw,1),            null())
-| eval new_mon_pct         = if(dau_mon>0, round(new_mon/dau_mon*100,1),   null())
-| eval react_mon_pct       = if(dau_mon>0, round(react_mon/dau_mon*100,1), null())
+| eval deep_rate_mon_prev   = if(mau_1min_prev>0, round(mau_10min_prev/mau_1min_prev*100,1), null())
+| eval deep_rate_mon_diff = if(isnotnull(deep_rate_mon) AND isnotnull(deep_rate_mon_prev), round(deep_rate_mon-deep_rate_mon_prev,1), null())
+| eval mau_chg        = if(mau_prev>0,   round((mau-mau_prev)/mau_prev*100,1),      null())
+| eval new_mon_chg        = if(new_mon_prev>0,   round((new_mon-new_mon_prev)/new_mon_prev*100,1),        null())
+| eval react_mon_chg      = if(react_mon_prev>0, round((react_mon-react_mon_prev)/react_mon_prev*100,1),  null())
+| eval churn_rate_mon_diff      = if(isnotnull(churn_rate_mon)      AND isnotnull(churn_rate_mon_prev),      round(churn_rate_mon-churn_rate_mon_prev,1),           null())
+| eval react_rate_mon_diff = if(isnotnull(react_rate_mon) AND isnotnull(react_rate_mon_prev), round(react_rate_mon-react_rate_mon_prev,1), null())
+| eval m1_ret_diff             = if(isnotnull(m1_ret)         AND isnotnull(m1_ret_prev),         round(m1_ret-m1_ret_prev,1),                 null())
+| eval engage_rate_mon_diff     = if(isnotnull(engage_rate_mon)     AND isnotnull(engage_rate_mon_prev),     round(engage_rate_mon-engage_rate_mon_prev,1),          null())
+| eval habit_rate_mon_diff      = if(isnotnull(habit_rate_mon)      AND isnotnull(habit_rate_mon_prev),      round(habit_rate_mon-habit_rate_mon_prev,1),            null())
+| eval new_mon_share         = if(mau>0, round(new_mon/mau*100,1),   null())
+| eval react_mon_share       = if(mau>0, round(react_mon/mau*100,1), null())
 
-| eval dau_week_avg = if(isnotnull(dau_week_avg), round(dau_week_avg,0), null())
-| eval dau_mon_avg  = if(isnotnull(dau_mon_avg),  round(dau_mon_avg,0),  null())
-| eval wau_mon_avg  = if(isnotnull(wau_mon_avg),  round(wau_mon_avg,0),  null())
 
 `comment("================================================================")`
 `comment("=== [9] 편성 정보 JOIN ===")`
 `comment("편성 고정 정보: PGM_NAME, STIME (BROADPLAN.csv)")`
-`comment("당일 편성 정보: schedule_title, guestname, daily_corner, weekly_corner (broadplan index)")`
+`comment("당일 편성 정보: program_title, guestname, daily_corner, weekly_corner (broadplan index)")`
 `comment("join_key = DATE||PGM_CODE 로 당일 편성과 매칭")`
 `comment("================================================================")`
 
@@ -1137,12 +1081,12 @@
     | search SEQ=F* OR SEQ=L* OR SEQ=M*
     | eval PGM_CODE=upper(SEQ)
     | eval join_key=DATE."||".PGM_CODE
-    | stats values(title)         as schedule_title
+    | stats values(title)         as program_title
             values(guestname)     as guestname
             values(daily_corner)  as daily_corner
             values(weekly_corner) as weekly_corner
       by join_key
-    | fields join_key schedule_title guestname daily_corner weekly_corner
+    | fields join_key program_title guestname daily_corner weekly_corner
 ]
 
 | fields - join_key
@@ -1160,94 +1104,95 @@
     PGM_CODE PGM_NAME STIME
 
     `comment("--- 당일 방송 편성 상세 ---")`
-    schedule_title guestname daily_corner weekly_corner
+    program_title guestname daily_corner weekly_corner
 
     `comment("--- 일간 ---")`
     `comment("DAU 일간 현재값 / 전주동일일값 / 전주대비증감률(%)")` 
-    dau_today dau_pw dau_wow
+    dau dau_prev dau_chg
     `comment("DAU 일간 어제값 (직전일 활성사용자 — 사용자 흐름 직전 활성 계산용)")`
-    dau_yday
-    `comment("WAU롤링(7일) 현재값 / 전주동일일값")`
-    wau_today wau_pw
-    `comment("MAU롤링(30일) 현재값 / 전주동일일값")`
-    mau_today mau_pw
+    dau_d2
+    `comment("WAU롤링(7일) 현재값 / 전주동일일값 / 전주대비증감률(%)")`
+    dau_r7 dau_r7_prev dau_r7_chg
+    `comment("MAU롤링(30일) 현재값 / 한달전동일일값 / 한달대비증감률(%)")`
+    dau_r30 dau_r30_prev dau_r30_chg
     `comment("신규사용자 현재값 / 전주값 / 전주대비증감률(%) / DAU대비비율(%)")`
-    new_today new_pw new_wow new_pct
+    new new_prev new_chg new_share
     `comment("복귀사용자 현재값 / 전주값 / 전주대비증감률(%) / DAU대비비율(%)")`
-    react_today react_pw react_wow react_pct
+    react react_prev react_chg react_share
     `comment("복귀율(%) 현재값 / 전주값 / 전주대비증감(pp)")`
-    react_rate react_rate_pw react_rate_diff
+    react_rate react_rate_prev react_rate_diff
     `comment("이탈율(%) 현재값 / 전주값 / 전주대비증감(pp)")`
-    churn_rate churn_rate_pw churn_diff
-    `comment("1분이상청취 사용자수 / 10분이상청취 사용자수")`
-    dau_1min dau_10min
+    churn_rate churn_rate_prev churn_rate_diff
+    `comment("1분이상청취 사용자수 (현재값 / 전주값 / 전주대비증감률(%))")`
+    dau_1min dau_1min_prev dau_1min_chg
+    `comment("10분이상청취 사용자수 (현재값 / 전주값 / 전주대비증감률(%))")`
+    dau_10min dau_10min_prev dau_10min_chg
     `comment("깊은청취율(%) 현재값 / 전주값 / 전주대비증감(pp)")`
-    deep_rate deep_rate_pw deep_rate_diff
+    deep_rate deep_rate_prev deep_rate_diff
     `comment("D1유지율(%) 전체코호트 현재값 / 전주동일코호트값 / 전주대비증감(pp)")`
-    d1_ret d1_ret_pw d1_diff
+    d1_ret d1_ret_prev d1_ret_diff
     `comment("D7유지율(%) 전체코호트 현재값 / 전주동일코호트값 / 전주대비증감(pp)")`
-    d7_ret d7_ret_pw d7_diff
+    d7_ret d7_ret_prev d7_ret_diff
     `comment("신규 D1유지율(%) 신규코호트 현재값 / 전주동일코호트값 / 전주대비증감(pp)")`
-    new_d1_ret new_d1_ret_pw new_d1_diff
+    new_d1_ret new_d1_ret_prev new_d1_ret_diff
     `comment("신규 D7유지율(%) 신규코호트 현재값 / 전주동일코호트값 / 전주대비증감(pp)")`
-    new_d7_ret new_d7_ret_pw new_d7_diff
+    new_d7_ret new_d7_ret_prev new_d7_ret_diff
     `comment("참여율(%) 현재값 / 전주값 / 전주대비증감(pp)")`
-    engage_rate engage_rate_pw engage_diff
+    engage_rate engage_rate_prev engage_rate_diff
     `comment("습관형성률(%) 현재값 / 전주값 / 전주대비증감(pp)")`
-    habit_rate habit_rate_pw habit_diff
+    habit_rate habit_rate_prev habit_rate_diff
 
     `comment("--- 주간 ---")`
     `comment("WAU 현재주값 / 전주값 / 전전주대비증감률(%)")`
-    dau_week dau_week_pw dau_week_wow
+    wau wau_prev wau_chg
     `comment("신규사용자 주간 현재주값 / 전주값 / 전전주대비증감률(%) / WAU대비비율(%)")`
-    new_week new_week_pw new_week_wow new_week_pct
+    new_week new_week_prev new_week_chg new_week_share
     `comment("복귀사용자 주간 현재주값 / 전주값 / 전전주대비증감률(%) / WAU대비비율(%)")`
-    react_week react_week_pw react_week_wow react_week_pct
+    react_week react_week_prev react_week_chg react_week_share
     `comment("복귀율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
-    react_rate_week react_rate_week_pw react_rate_week_diff
+    react_rate_week react_rate_week_prev react_rate_week_diff
     `comment("이탈율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
-    churn_week churn_week_pw churn_week_diff
-    `comment("주간 1분이상/10분이상 청취 사용자수 (깊은청취율 분모/분자)")`
-    wau_1min wau_10min
+    churn_rate_week churn_rate_week_prev churn_rate_week_diff
+    `comment("주간 1분이상 청취 사용자수 (현재주값 / 전주값 / 전전주대비증감률(%))")`
+    wau_1min wau_1min_prev wau_1min_chg
+    `comment("주간 10분이상 청취 사용자수 (현재주값 / 전주값 / 전전주대비증감률(%))")`
+    wau_10min wau_10min_prev wau_10min_chg
     `comment("깊은청취율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
-    deep_rate_week deep_rate_week_pw deep_rate_week_diff
+    deep_rate_week deep_rate_week_prev deep_rate_week_diff
     `comment("W1유지율(%) 현재주값 / 전주동일코호트값 / 전전주대비증감(pp)")`
-    w1_ret w1_ret_pw w1_diff
+    w1_ret w1_ret_prev w1_ret_diff
     `comment("신규 W1유지율(%) 신규코호트 현재주값 / 전주동일코호트값 / 전전주대비증감(pp)")`
-    new_w1_ret new_w1_ret_pw new_w1_diff
+    new_w1_ret new_w1_ret_prev new_w1_ret_diff
     `comment("참여율 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
-    engage_week engage_week_pw engage_week_diff
+    engage_rate_week engage_rate_week_prev engage_rate_week_diff
     `comment("습관형성률 주간(%) 현재주값 / 전주값 / 전전주대비증감(pp)")`
-    habit_week habit_week_pw habit_week_diff
+    habit_rate_week habit_rate_week_prev habit_rate_week_diff
 
     `comment("--- 월간 ---")`
     `comment("MAU 현재월값 / 전월값 / 전전월대비증감률(%)")`
-    dau_mon dau_mon_pw dau_mon_wow
+    mau mau_prev mau_chg
     `comment("신규사용자 월간 현재월값 / 전월값 / 전전월대비증감률(%) / MAU대비비율(%)")`
-    new_mon new_mon_pw new_mon_wow new_mon_pct
+    new_mon new_mon_prev new_mon_chg new_mon_share
     `comment("복귀사용자 월간 현재월값 / 전월값 / 전전월대비증감률(%) / MAU대비비율(%)")`
-    react_mon react_mon_pw react_mon_wow react_mon_pct
+    react_mon react_mon_prev react_mon_chg react_mon_share
     `comment("복귀율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
-    react_rate_mon react_rate_mon_pw react_rate_mon_diff
+    react_rate_mon react_rate_mon_prev react_rate_mon_diff
     `comment("이탈율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
-    churn_mon churn_mon_pw churn_mon_diff
-    `comment("월간 1분이상/10분이상 청취 사용자수 (깊은청취율 분모/분자)")`
-    mau_1min mau_10min
+    churn_rate_mon churn_rate_mon_prev churn_rate_mon_diff
+    `comment("월간 1분이상 청취 사용자수 (현재월값 / 전월값 / 전전월대비증감률(%))")`
+    mau_1min mau_1min_prev mau_1min_chg
+    `comment("월간 10분이상 청취 사용자수 (현재월값 / 전월값 / 전전월대비증감률(%))")`
+    mau_10min mau_10min_prev mau_10min_chg
     `comment("깊은청취율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
-    deep_rate_mon deep_rate_mon_pw deep_rate_mon_diff
+    deep_rate_mon deep_rate_mon_prev deep_rate_mon_diff
     `comment("M1유지율(%) 현재월값 / 전월동일코호트값 / 전전월대비증감(pp)")`
-    m1_ret m1_ret_pw m1_diff
+    m1_ret m1_ret_prev m1_ret_diff
     `comment("신규 M1유지율(%) 신규코호트 현재월값 / 전월동일코호트값 / 전전월대비증감(pp)")`
-    new_m1_ret new_m1_ret_pw new_m1_diff
+    new_m1_ret new_m1_ret_prev new_m1_ret_diff
     `comment("참여율 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
-    engage_mon engage_mon_pw engage_mon_diff
+    engage_rate_mon engage_rate_mon_prev engage_rate_mon_diff
     `comment("습관형성률 월간(%) 현재월값 / 전월값 / 전전월대비증감(pp)")`
-    habit_mon habit_mon_pw habit_mon_diff
+    habit_rate_mon habit_rate_mon_prev habit_rate_mon_diff
 
-    `comment("--- 평균 지표 ---")`
-    `comment("dau_week_avg: 전주 월~일 7일간 DAU 일평균")`
-    `comment("dau_mon_avg:  전월 1일~말일 DAU 일평균")`
-    `comment("wau_mon_avg:  전월 1일~말일 7D롤링 평균")`
-    dau_week_avg dau_mon_avg wau_mon_avg
 
 | outputlookup raas_kpi_latest.csv append=true
