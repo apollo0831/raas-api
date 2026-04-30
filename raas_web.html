@@ -1484,20 +1484,13 @@ function drawHealthChart(data, label, metricKey) {
 
 // ── 채널 비교 레이더 차트 ─────────────────────────────────
 const RADAR_DIMENSIONS = [
-  { label:'규모',     fields:{ day:'dau',        week:'dau_week',       mon:'dau_mon'        } },
-  { label:'충성도',   fields:{ day:'d7_ret',      week:'w1_ret',         mon:'m1_ret'         } },
-  { label:'신규유입', fields:{ day:'new_pct',     week:'new_week_pct',   mon:'new_mon_pct'    } },
-  { label:'복귀유도', fields:{ day:'react_rate',  week:'react_rate_week',mon:'react_rate_mon' } },
-  { label:'참여깊이', fields:{ day:'deep_rate',   week:'deep_rate_week', mon:'deep_rate_mon'  } },
+  { label:'규모',     fields:{ day:'dau',       week:'dau_week',       mon:'dau_mon'        } },
+  { label:'충성도',   fields:{ day:'d1_ret',     week:'w1_ret',         mon:'m1_ret'         } },
+  { label:'신규유입', fields:{ day:'new_pct',    week:'new_week_pct',   mon:'new_mon_pct'    } },
+  { label:'복귀유도', fields:{ day:'react_rate', week:'react_rate_week',mon:'react_rate_mon' } },
+  { key:'depth', label:'참여깊이', fields:{} },
   // Phase 3: { label:'성장성', fields:{ day:'new_wow', week:'new_week_wow', mon:'new_mon_wow' } },
 ];
-const RADAR_CH_COLORS = {
-  T00:{ bg:'rgba(150,162,178,0.18)', border:'rgba(150,162,178,0.85)' },
-  F00:{ bg:'rgba(78,195,255,0.18)',  border:'rgba(78,195,255,0.9)'  },
-  L00:{ bg:'rgba(255,107,157,0.18)', border:'rgba(255,107,157,0.9)' },
-  G00:{ bg:'rgba(255,185,70,0.18)',  border:'rgba(255,185,70,0.9)'  },
-  P00:{ bg:'rgba(78,200,140,0.18)',  border:'rgba(78,200,140,0.9)'  },
-};
 
 function getChannelOfProgram(code) {
   if (!code) return 'T00';
@@ -1509,7 +1502,7 @@ function getChannelOfProgram(code) {
 }
 
 function getRadarComparisonSet(data, scope) {
-  const channels = (data.s6_channels?.channels || []).filter(c => c.code !== 'T00');
+  const channels = (data.s6_channels?.channels || []);
   const isChannelScope = ['T00','F00','L00','G00','P00'].includes(scope);
   if (isChannelScope) return channels;
   const chCode = getChannelOfProgram(scope);
@@ -1528,13 +1521,21 @@ function getRadarComparisonSet(data, scope) {
   return peers.length >= 2 ? peers : channels;
 }
 
+function _radarRawValue(item, dim, period) {
+  if (dim.key === 'depth') {
+    if (period === 'day')  return item.dau      ? item.dau_1min / item.dau      * 100 : null;
+    if (period === 'week') return item.dau_week ? item.wau_1min / item.dau_week * 100 : null;
+    if (period === 'mon')  return item.dau_mon  ? item.mau_1min / item.dau_mon  * 100 : null;
+    return null;
+  }
+  const field = dim.fields[period] || dim.fields.day;
+  const v = item[field];
+  return (v != null && isFinite(v)) ? +v : null;
+}
+
 function _radarNormalize(compSet, period) {
   const raw = compSet.map(item =>
-    RADAR_DIMENSIONS.map(dim => {
-      const field = dim.fields[period] || dim.fields.day;
-      const v = item[field];
-      return (v != null && isFinite(v)) ? +v : null;
-    })
+    RADAR_DIMENSIONS.map(dim => _radarRawValue(item, dim, period))
   );
   const nD = RADAR_DIMENSIONS.length;
   const scores = raw.map(row => row.slice());
@@ -1559,23 +1560,19 @@ function renderRadarChart(data) {
   if (!compSet || compSet.length === 0) return;
 
   const scores = _radarNormalize(compSet, _period);
-  const isChannelScope = ['T00','F00','L00','G00','P00'].includes(_scope);
 
   const datasets = compSet.map((item, i) => {
-    const chKey = isChannelScope ? item.code : getChannelOfProgram(item.code);
-    const col = RADAR_CH_COLORS[chKey] || RADAR_CH_COLORS.T00;
-    const isActive = isChannelScope
-      ? (_scope === 'T00' || item.code === _scope)
-      : item.code === _scope;
+    const isActive = item.code === _scope;
     return {
       label: item.name || item.code,
       data:  scores[i],
-      backgroundColor:   isActive ? col.bg.replace('0.18','0.28') : col.bg,
-      borderColor:       col.border,
-      borderWidth:       isActive ? 2.5 : 1.5,
-      pointBackgroundColor: col.border,
-      pointRadius:       isActive ? 4 : 2.5,
-      pointHoverRadius:  5,
+      backgroundColor:      isActive ? 'rgba(24,95,165,0.1)' : 'transparent',
+      borderColor:          isActive ? '#185FA5' : '#D5D5D5',
+      borderWidth:          isActive ? 2.5 : 1,
+      pointBackgroundColor: isActive ? '#185FA5' : '#D5D5D5',
+      pointRadius:          isActive ? 4 : 0,
+      pointHoverRadius:     isActive ? 5 : 3,
+      order:                isActive ? 0 : 1,
     };
   });
 
@@ -1606,12 +1603,11 @@ function renderRadarChart(data) {
   });
 
   if (legendEl) {
-    legendEl.innerHTML = compSet.map((item, i) => {
-      const chKey = isChannelScope ? item.code : getChannelOfProgram(item.code);
-      const col = RADAR_CH_COLORS[chKey] || RADAR_CH_COLORS.T00;
-      const isActive = isChannelScope ? (_scope === 'T00' || item.code === _scope) : item.code === _scope;
+    legendEl.innerHTML = compSet.map(item => {
+      const isActive = item.code === _scope;
+      const dotColor = isActive ? '#185FA5' : '#D5D5D5';
       return `<span style="display:inline-flex;align-items:center;gap:4px;${isActive?'font-weight:600;color:var(--text);':''}">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col.border};"></span>${item.name || item.code}
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotColor};"></span>${item.name || item.code}
       </span>`;
     }).join('');
   }
