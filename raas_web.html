@@ -1825,7 +1825,7 @@ function renderQuality(s3){
 
 // ── ZONE 6: 채널 현황 ────────────────────────────────────
 function renderChannels(s6){
-  const chs = s6.channels || [];
+  const chs = (s6.channels || []).filter(c => c.code !== 'T00');
   const clsMap   = {F00:'',  L00:'lv',     G00:'gm',     P00:'pk'};
   const colorMap = {F00:'#E8593C', L00:'#D4537E', G00:'#1D9E75', P00:'#534AB7'};
   const p = _period;
