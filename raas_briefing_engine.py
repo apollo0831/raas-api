@@ -797,10 +797,12 @@ def get_snapshot_at(timeline, target_date):
             for code, date_rows in timeline.items()
             if target_date in date_rows}
 
-def get_metric_trend(timeline, code, metric_field, days=30):
+def get_metric_trend(timeline, code, metric_field, days=30, date_field=None):
     """특정 PGM_CODE + 지표의 시계열. [(date, value_or_None), ...] 오름차순."""
-    return [(r.get('DATE'), _fn(r.get(metric_field)))
-            for r in get_timeseries(timeline, code, days)]
+    rows = get_timeseries(timeline, code, days)
+    if date_field:
+        return [(r.get(date_field) or r.get('DATE'), _fn(r.get(metric_field))) for r in rows]
+    return [(r.get('DATE'), _fn(r.get(metric_field))) for r in rows]
 
 def get_available_dates(timeline):
     """timeline에 존재하는 모든 날짜 목록 (오름차순)."""

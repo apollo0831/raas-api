@@ -1430,9 +1430,11 @@ async function _usFillDailyAvg(days, periodLabel) {
 }
 
 // ─── 그래프 데이터 fetch ─────────────────────────────────────────
-async function _fetchTrend(metric, days) {
+async function _fetchTrend(metric, days, dateKey) {
   try {
-    const res  = await fetch(`/api/trend?metric=${metric}&scope=T00&days=${days}`);
+    let url = `/api/trend?metric=${metric}&scope=T00&days=${days}`;
+    if (dateKey) url += `&date_key=${encodeURIComponent(dateKey)}`;
+    const res  = await fetch(url);
     const json = await res.json();
     return (json && json.ok && Array.isArray(json.data)) ? json.data : [];
   } catch (e) {
@@ -1445,7 +1447,12 @@ async function _fetchTrend(metric, days) {
 async function _drawUserSizeChart(period) {
   const canvas = document.getElementById('usChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  if (_usChartInstance) { try { _usChartInstance.destroy(); } catch(e) {} _usChartInstance = null; }
+  if (_usChartInstance) {
+    try { _usChartInstance.destroy(); } catch(e) {}
+    _usChartInstance = null;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
 
   // 캡션 초기화 (다음 렌더에 재계산)
   const wrap = canvas.closest('.us-chart-wrap');
@@ -1473,13 +1480,28 @@ async function _drawUserSizeChart(period) {
     }];
   } else if (period === 'week') {
     targetDays = 30;
-    const [wauS, r7S] = await Promise.all([_fetchTrend('wau', targetDays), _fetchTrend('dau_r7', targetDays)]);
-    const ref = wauS.length >= r7S.length ? wauS : r7S;
-    labels = ref.map(d => (d.date || '').slice(5));
+    const [wauRaw, r7S] = await Promise.all([
+      _fetchTrend('wau', targetDays, 'DATE_WEEK'),
+      _fetchTrend('dau_r7', targetDays)
+    ]);
+    // dedup by DATE_WEEK (same week-start repeats for every day in the week)
+    const wauMap = new Map();
+    for (const pt of wauRaw) if (pt.date) wauMap.set(pt.date, pt.value);
+    const wauDates = Array.from(wauMap.keys()).sort();
+    // fill-forward WAU onto the daily r7S X-axis
+    const wauAligned = r7S.map(pt => {
+      let val = null;
+      for (const wd of wauDates) {
+        if (wd <= pt.date) val = wauMap.get(wd);
+        else break;
+      }
+      return val;
+    });
+    labels = r7S.map(d => (d.date || '').slice(5));
     datasets = [
-      { label: '지난주 WAU', data: wauS.map(d => d.value),
+      { label: '지난주 WAU', data: wauAligned,
         borderColor: '#185FA5', borderWidth: 2,
-        pointRadius: wauS.length === 1 ? 4 : 1.5, pointHoverRadius: 5,
+        pointRadius: 1.5, pointHoverRadius: 5,
         stepped: 'after', fill: false },
       { label: '롤링 7일', data: r7S.map(d => d.value),
         borderColor: '#85B7EB', borderWidth: 2,
@@ -1488,13 +1510,28 @@ async function _drawUserSizeChart(period) {
     ];
   } else {
     targetDays = 60;
-    const [mauS, r30S] = await Promise.all([_fetchTrend('mau', targetDays), _fetchTrend('dau_r30', targetDays)]);
-    const ref = mauS.length >= r30S.length ? mauS : r30S;
-    labels = ref.map(d => (d.date || '').slice(5));
+    const [mauRaw, r30S] = await Promise.all([
+      _fetchTrend('mau', targetDays, 'DATE_MON'),
+      _fetchTrend('dau_r30', targetDays)
+    ]);
+    // dedup by DATE_MON (same month-start repeats for every day in the month)
+    const mauMap = new Map();
+    for (const pt of mauRaw) if (pt.date) mauMap.set(pt.date, pt.value);
+    const mauDates = Array.from(mauMap.keys()).sort();
+    // fill-forward MAU onto the daily r30S X-axis
+    const mauAligned = r30S.map(pt => {
+      let val = null;
+      for (const md of mauDates) {
+        if (md <= pt.date) val = mauMap.get(md);
+        else break;
+      }
+      return val;
+    });
+    labels = r30S.map(d => (d.date || '').slice(5));
     datasets = [
-      { label: '전월 MAU', data: mauS.map(d => d.value),
+      { label: '전월 MAU', data: mauAligned,
         borderColor: '#185FA5', borderWidth: 2,
-        pointRadius: mauS.length === 1 ? 4 : 1.5, pointHoverRadius: 5,
+        pointRadius: 1.5, pointHoverRadius: 5,
         stepped: 'after', fill: false },
       { label: '롤링 30일', data: r30S.map(d => d.value),
         borderColor: '#85B7EB', borderWidth: 2,
