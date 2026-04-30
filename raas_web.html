@@ -957,6 +957,15 @@ body{
     </div>
   </div>
 
+  <!-- 채널 비교 레이더 -->
+  <div class="section" id="radarSection">
+    <div class="section-title">채널 비교</div>
+    <div style="position:relative;max-width:340px;margin:0 auto;height:280px;">
+      <canvas id="radarChart"></canvas>
+    </div>
+    <div id="radarLegend" style="display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;margin-top:10px;font-size:12px;color:var(--sub);"></div>
+  </div>
+
   <!-- ZONE 2 (복사): 핵심 지표 -->
   <div class="section">
     <div class="section-title" id="a-kpiTitle">핵심 지표</div>
@@ -1590,6 +1599,7 @@ async function _drawUserSizeChart(period) {
 
 // ── 종합 지표 인터랙티브 라인그래프 (분석 페이지 dot 클릭 → 시계열) ──
 let _healthChartInstance = null;
+let _radarChartInstance = null;
 let _currentHealthMetric = null;
 
 async function showHealthChart(metricKey, label) {
@@ -1747,6 +1757,137 @@ function drawHealthChart(data, label, metricKey) {
     });
   } catch (e) {
     console.error('[drawHealthChart] 예외:', e);
+  }
+}
+
+// ── 채널 비교 레이더 차트 ─────────────────────────────────
+const RADAR_DIMENSIONS = [
+  { label:'규모',     fields:{ day:'dau',       week:'dau_week',       mon:'dau_mon'        } },
+  { label:'충성도',   fields:{ day:'d1_ret',     week:'w1_ret',         mon:'m1_ret'         } },
+  { label:'신규유입', fields:{ day:'new_pct',    week:'new_week_pct',   mon:'new_mon_pct'    } },
+  { label:'복귀유도', fields:{ day:'react_rate', week:'react_rate_week',mon:'react_rate_mon' } },
+  { key:'depth', label:'참여깊이', fields:{} },
+  // Phase 3: { label:'성장성', fields:{ day:'new_wow', week:'new_week_wow', mon:'new_mon_wow' } },
+];
+
+function getChannelOfProgram(code) {
+  if (!code) return 'T00';
+  if (code.startsWith('F')) return 'F00';
+  if (code.startsWith('L') || code.startsWith('M')) return 'L00';
+  if (code.startsWith('G')) return 'G00';
+  if (code.startsWith('P')) return 'P00';
+  return 'T00';
+}
+
+function getRadarComparisonSet(data, scope) {
+  const channels = (data.s6_channels?.channels || []);
+  const isChannelScope = ['T00','F00','L00','G00','P00'].includes(scope);
+  if (isChannelScope) return channels;
+  const chCode = getChannelOfProgram(scope);
+  const pfx = chCode[0];
+  const allPgms = [
+    ...(data.s5_rankings?.all_programs || []),
+    ...(data.s5_rankings?.dau_top10 || [])
+  ];
+  const seen = new Set();
+  const peers = allPgms.filter(p => {
+    if (seen.has(p.code) || EXCLUDED_CODES.includes(p.code)) return false;
+    if (!p.code?.startsWith(pfx)) return false;
+    seen.add(p.code);
+    return true;
+  });
+  return peers.length >= 2 ? peers : channels;
+}
+
+function _radarRawValue(item, dim, period) {
+  if (dim.key === 'depth') {
+    if (period === 'day')  return item.dau      ? item.dau_1min / item.dau      * 100 : null;
+    if (period === 'week') return item.dau_week ? item.wau_1min / item.dau_week * 100 : null;
+    if (period === 'mon')  return item.dau_mon  ? item.mau_1min / item.dau_mon  * 100 : null;
+    return null;
+  }
+  const field = dim.fields[period] || dim.fields.day;
+  const v = item[field];
+  return (v != null && isFinite(v)) ? +v : null;
+}
+
+function _radarNormalize(compSet, period) {
+  const raw = compSet.map(item =>
+    RADAR_DIMENSIONS.map(dim => _radarRawValue(item, dim, period))
+  );
+  const nD = RADAR_DIMENSIONS.length;
+  const scores = raw.map(row => row.slice());
+  for (let d = 0; d < nD; d++) {
+    const vals = raw.map(r => r[d]).filter(v => v !== null);
+    if (vals.length === 0) { scores.forEach((s,i) => s[d] = 0); continue; }
+    const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn;
+    raw.forEach((row, i) => {
+      scores[i][d] = row[d] === null ? 0 : rng === 0 ? 50 : Math.round((row[d] - mn) / rng * 100);
+    });
+  }
+  return scores;
+}
+
+function renderRadarChart(data) {
+  const canvas = document.getElementById('radarChart');
+  const legendEl = document.getElementById('radarLegend');
+  if (!canvas) return;
+  if (_radarChartInstance) { try { _radarChartInstance.destroy(); } catch(e){} _radarChartInstance = null; }
+
+  const compSet = getRadarComparisonSet(data, _scope);
+  if (!compSet || compSet.length === 0) return;
+
+  const scores = _radarNormalize(compSet, _period);
+
+  const datasets = compSet.map((item, i) => {
+    const isActive = item.code === _scope;
+    return {
+      label: item.name || item.code,
+      data:  scores[i],
+      backgroundColor:      isActive ? 'rgba(24,95,165,0.1)' : 'transparent',
+      borderColor:          isActive ? '#185FA5' : '#D5D5D5',
+      borderWidth:          isActive ? 2.5 : 1,
+      pointBackgroundColor: isActive ? '#185FA5' : '#D5D5D5',
+      pointRadius:          isActive ? 4 : 0,
+      pointHoverRadius:     isActive ? 5 : 3,
+      order:                isActive ? 0 : 1,
+    };
+  });
+
+  _radarChartInstance = new Chart(canvas, {
+    type: 'radar',
+    data: { labels: RADAR_DIMENSIONS.map(d => d.label), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        r: {
+          min: 0, max: 100,
+          ticks: { stepSize: 25, font:{size:9}, color:'rgba(160,170,185,0.7)', backdropColor:'transparent' },
+          grid:        { color:'rgba(255,255,255,0.06)' },
+          angleLines:  { color:'rgba(255,255,255,0.08)' },
+          pointLabels: { font:{size:12, family:"'Pretendard','Noto Sans KR',sans-serif"}, color:'var(--text)' },
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.raw}점`
+          }
+        }
+      }
+    }
+  });
+
+  if (legendEl) {
+    legendEl.innerHTML = compSet.map(item => {
+      const isActive = item.code === _scope;
+      const dotColor = isActive ? '#185FA5' : '#D5D5D5';
+      return `<span style="display:inline-flex;align-items:center;gap:4px;${isActive?'font-weight:600;color:var(--text);':''}">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotColor};"></span>${item.name || item.code}
+      </span>`;
+    }).join('');
   }
 }
 
@@ -2817,6 +2958,7 @@ function renderAnalyticsPage(data) {
   renderQuality(s3);
   renderGrowth(s4);
   renderQFunnel(s1, s2, s3);
+  renderRadarChart(data);
 }
 
 function renderProgramBar(channelCode) {
