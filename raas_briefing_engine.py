@@ -207,81 +207,194 @@ def _load(search):
 
 
 def build_s1(kpi):
-    t=kpi.get('T00',{})
+    """홈 'Executive' 섹션 데이터.
+    KPI 명명 규칙(2026-04 dictionary) 기준 신 의미 키를 정식으로 탑재하며,
+    옛 키(dau_week / dau_mon / dau_wow / new_pct ...)는 동일 값으로 alias 유지.
+    의미 변경 주의:
+      - s1.wau(신) = 주간 누적(전주 월~일). 이전엔 wau_today=롤링7일이었으나,
+        롤링은 s1.dau_r7로 이동.
+      - s1.mau(신) = 월간 누적(전월 1~말일). 롤링30일은 s1.dau_r30로 이동.
+    """
+    t = kpi.get('T00', {})
     if not t: return {}
     return {
-        'dau':        _i(t.get('dau_today')),
-        'dau_wow':    _fn(t.get('dau_wow')),
-        'wau':        _i(t.get('wau_today')) or None,
-        'mau':        _i(t.get('mau_today')) or None,
-        'new_user':   _i(t.get('new_today')),
-        'react_user': _i(t.get('react_today')),
-        'new_pct':    _fn(t.get('new_pct')),
-        'react_pct':  _fn(t.get('react_pct')),
-        # 주간
+        # ── 기준일 (룩업 row의 DATE/DATE_WEEK/DATE_MON 직접 노출) ──
+        # YYYY/MM/DD 형식, 화면에서 날짜 범위 라벨에 사용.
+        'date':        t.get('DATE') or '',
+        'date_week':   t.get('DATE_WEEK') or '',   # 전주 월요일
+        'date_mon':    t.get('DATE_MON') or '',    # 전월 1일
+
+        # ── 일간 (DAU) ────────────────────────────────────────────
+        'dau':         _i(t.get('dau_today')),
+        'dau_prev':    _i(t.get('dau_pw')) or None,         # 신: D-8
+        'dau_chg':     _fn(t.get('dau_wow')),                # 신: 변동률
+        'dau_d2':      _i(t.get('dau_yday')) or None,        # 신: D-2
+        # 옛 alias (동일 값)
+        'dau_wow':     _fn(t.get('dau_wow')),
+        'dau_yday':    _i(t.get('dau_yday')) or None,
+
+        # ── 주간 누적 (전주 월~일) — 신 wau ────────────────────────
+        'wau':         _i(t.get('dau_week')) or None,
+        'wau_prev':    _i(t.get('dau_week_pw')) or None,
+        'wau_chg':     _fn(t.get('dau_week_wow')),
+        # 옛 alias (동일 의미였음)
         'dau_week':     _i(t.get('dau_week')) or None,
         'dau_week_wow': _fn(t.get('dau_week_wow')),
-        # 월간
+
+        # ── 월간 누적 (전월 1~말일) — 신 mau ───────────────────────
+        'mau':         _i(t.get('dau_mon')) or None,
+        'mau_prev':    _i(t.get('dau_mon_pw')) or None,
+        'mau_chg':     _fn(t.get('dau_mon_wow')),
+        # 옛 alias
         'dau_mon':      _i(t.get('dau_mon')) or None,
         'dau_mon_wow':  _fn(t.get('dau_mon_wow')),
+
+        # ── 롤링 7일 — 옛 s1.wau의 의미를 흡수 ─────────────────────
+        # (예전 코드의 s1.wau "7D 롤링" 의도는 이제 s1.dau_r7로 이동)
+        'dau_r7':      _i(t.get('wau_today')) or None,
+        'dau_r7_prev': _i(t.get('wau_pw')) or None,
+        'dau_r7_chg':  _fn(t.get('dau_r7_chg')),
+
+        # ── 롤링 30일 ─────────────────────────────────────────────
+        'dau_r30':      _i(t.get('mau_today')) or None,
+        'dau_r30_prev': _i(t.get('mau_pw')) or None,
+        'dau_r30_chg':  _fn(t.get('dau_r30_chg')),
+
+        # ── 신규/복귀 ─────────────────────────────────────────────
+        'new_user':   _i(t.get('new_today')),
+        'new_chg':    _fn(t.get('new_wow')),       # 신
+        'new_share':  _fn(t.get('new_pct')),       # 신
+        'react_user': _i(t.get('react_today')),
+        'react_chg':  _fn(t.get('react_wow')),     # 신
+        'react_share':_fn(t.get('react_pct')),     # 신
+        # 옛 alias
+        'new_wow':    _fn(t.get('new_wow')),
+        'new_pct':    _fn(t.get('new_pct')),
+        'react_wow':  _fn(t.get('react_wow')),
+        'react_pct':  _fn(t.get('react_pct')),
     }
 
 def build_s2(kpi):
-    t=kpi.get('T00',{})
+    """홈 'Funnel' 섹션 데이터.
+    s1과 동일하게 신 명명 키 + 옛 키 alias 동시 탑재. 의미 변경:
+      - s2.wau / s2.mau (신, 누적) — 신규로 노출 (= 이전 s2.dau_week / s2.dau_mon)
+      - 롤링 지표(dau_r7 / dau_r30) 신규 노출 — 듀얼 카드 그래프용
+      - 평균지표(dau_week_avg 등)는 SPL에서 제거됨, 빈 값으로 유지(레거시 화면 호환).
+    """
+    t = kpi.get('T00', {})
     if not t: return {}
     return {
-        # 일간
+        # ── 일간 ──────────────────────────────────────────────────
         'dau':             _i(t.get('dau_today')),
-        'dau_yday':        _i(t.get('dau_yday')),
+        'dau_d2':          _i(t.get('dau_yday')),       # 신
+        'dau_yday':        _i(t.get('dau_yday')),       # 옛 alias
         'new_user':        _i(t.get('new_today')),
-        'new_wow':         _fn(t.get('new_wow')),
+        'new_chg':         _fn(t.get('new_wow')),       # 신
+        'new_wow':         _fn(t.get('new_wow')),       # 옛 alias
         'react_user':      _i(t.get('react_today')),
-        'react_wow':       _fn(t.get('react_wow')),
+        'react_chg':       _fn(t.get('react_wow')),     # 신
+        'react_wow':       _fn(t.get('react_wow')),     # 옛 alias
         'churn_rate':      _fn(t.get('churn_rate')),
-        'churn_diff':      _fn(t.get('churn_diff')),
+        'churn_rate_diff': _fn(t.get('churn_diff')),    # 신
+        'churn_diff':      _fn(t.get('churn_diff')),    # 옛 alias
         'react_rate':      _fn(t.get('react_rate')),
         'react_rate_diff': _fn(t.get('react_rate_diff')),
+
+        # 유지율 (전체 코호트)
         'd1_ret':          _fn(t.get('d1_ret')),
+        'd1_ret_diff':     _fn(t.get('d1_diff')),       # 신
+        'd1_diff':         _fn(t.get('d1_diff')),       # 옛 alias
         'd7_ret':          _fn(t.get('d7_ret')),
+        'd7_ret_diff':     _fn(t.get('d7_diff')),       # 신
+        'd7_diff':         _fn(t.get('d7_diff')),       # 옛 alias
+
+        # 유지율 (신규 코호트) — _diff 신 명칭 추가
         'new_d1_ret':      _fn(t.get('new_d1_ret')),
         'new_d1_ret_pw':   _fn(t.get('new_d1_ret_pw')),
-        'new_d1_diff':     _fn(t.get('new_d1_diff')),
+        'new_d1_ret_diff': _fn(t.get('new_d1_diff')),   # 신
+        'new_d1_diff':     _fn(t.get('new_d1_diff')),   # 옛 alias
         'new_d7_ret':      _fn(t.get('new_d7_ret')),
         'new_d7_ret_pw':   _fn(t.get('new_d7_ret_pw')),
+        'new_d7_ret_diff': _fn(t.get('new_d7_diff')),
         'new_d7_diff':     _fn(t.get('new_d7_diff')),
         'new_w1_ret':      _fn(t.get('new_w1_ret')),
         'new_w1_ret_pw':   _fn(t.get('new_w1_ret_pw')),
+        'new_w1_ret_diff': _fn(t.get('new_w1_diff')),
         'new_w1_diff':     _fn(t.get('new_w1_diff')),
         'new_m1_ret':      _fn(t.get('new_m1_ret')),
         'new_m1_ret_pw':   _fn(t.get('new_m1_ret_pw')),
+        'new_m1_ret_diff': _fn(t.get('new_m1_diff')),
         'new_m1_diff':     _fn(t.get('new_m1_diff')),
-        'd1_diff':         _fn(t.get('d1_diff')),
-        'd7_diff':         _fn(t.get('d7_diff')),
-        'new_pct':         _fn(t.get('new_pct')),
-        'react_pct':       _fn(t.get('react_pct')),
-        # 주간
-        'dau_week':          _i(t.get('dau_week')) or None,
-        'new_week':          _i(t.get('new_week')) or None,
-        'new_week_wow':      _fn(t.get('new_week_wow')),
-        'react_week':        _i(t.get('react_week')) or None,
-        'churn_week':        _fn(t.get('churn_week')),
-        'churn_week_diff':   _fn(t.get('churn_week_diff')),
-        'react_rate_week':   _fn(t.get('react_rate_week')),
-        'w1_ret':            _fn(t.get('w1_ret')),
-        'w1_diff':           _fn(t.get('w1_diff')),
-        # 월간
-        'dau_mon':           _i(t.get('dau_mon')) or None,
-        'new_mon':           _i(t.get('new_mon')) or None,
-        'new_mon_wow':       _fn(t.get('new_mon_wow')),
-        'react_mon':         _i(t.get('react_mon')) or None,
-        'churn_mon':         _fn(t.get('churn_mon')),
-        'churn_mon_diff':    _fn(t.get('churn_mon_diff')),
-        'react_rate_mon':    _fn(t.get('react_rate_mon')),
-        'm1_ret':            _fn(t.get('m1_ret')),
-        'm1_diff':           _fn(t.get('m1_diff')),
-        'dau_week_avg':      _fn(t.get('dau_week_avg')),
-        'dau_mon_avg':       _fn(t.get('dau_mon_avg')),
-        'wau_mon_avg':       _fn(t.get('wau_mon_avg')),
+
+        'new_share':       _fn(t.get('new_pct')),       # 신
+        'new_pct':         _fn(t.get('new_pct')),       # 옛 alias
+        'react_share':     _fn(t.get('react_pct')),     # 신
+        'react_pct':       _fn(t.get('react_pct')),     # 옛 alias
+
+        # ── 주간 누적 ────────────────────────────────────────────
+        'wau':                _i(t.get('dau_week')) or None,    # 신
+        'wau_prev':           _i(t.get('dau_week_pw')) or None, # 신 — renderFunnel '직전 활성(전주)'용
+        'wau_chg':            _fn(t.get('dau_week_wow')),       # 신
+        'dau_week':           _i(t.get('dau_week')) or None,    # 옛 alias
+        'dau_week_pw':        _i(t.get('dau_week_pw')) or None, # 옛 alias
+        'dau_week_wow':       _fn(t.get('dau_week_wow')),       # 옛 alias
+        'new_week':           _i(t.get('new_week')) or None,
+        'new_week_chg':       _fn(t.get('new_week_wow')),       # 신
+        'new_week_wow':       _fn(t.get('new_week_wow')),       # 옛 alias
+        'new_week_share':     _fn(t.get('new_week_pct')),       # 신
+        'new_week_pct':       _fn(t.get('new_week_pct')),       # 옛 alias
+        'react_week':         _i(t.get('react_week')) or None,
+        'react_week_chg':     _fn(t.get('react_week_wow')),     # 신
+        'react_week_wow':     _fn(t.get('react_week_wow')),     # 옛 alias
+        'react_week_share':   _fn(t.get('react_week_pct')),     # 신
+        'react_week_pct':     _fn(t.get('react_week_pct')),     # 옛 alias
+        'churn_rate_week':    _fn(t.get('churn_week')),         # 신
+        'churn_rate_week_diff': _fn(t.get('churn_week_diff')),  # 신
+        'churn_week':         _fn(t.get('churn_week')),         # 옛 alias
+        'churn_week_diff':    _fn(t.get('churn_week_diff')),    # 옛 alias
+        'react_rate_week':    _fn(t.get('react_rate_week')),
+        'w1_ret':             _fn(t.get('w1_ret')),
+        'w1_ret_diff':        _fn(t.get('w1_diff')),            # 신
+        'w1_diff':            _fn(t.get('w1_diff')),            # 옛 alias
+
+        # ── 월간 누적 ────────────────────────────────────────────
+        'mau':                _i(t.get('dau_mon')) or None,     # 신
+        'mau_prev':           _i(t.get('dau_mon_pw')) or None,  # 신 — renderFunnel '직전 활성(전월)'용
+        'mau_chg':            _fn(t.get('dau_mon_wow')),        # 신
+        'dau_mon':            _i(t.get('dau_mon')) or None,     # 옛 alias
+        'dau_mon_pw':         _i(t.get('dau_mon_pw')) or None,  # 옛 alias
+        'dau_mon_wow':        _fn(t.get('dau_mon_wow')),        # 옛 alias
+        'new_mon':            _i(t.get('new_mon')) or None,
+        'new_mon_chg':        _fn(t.get('new_mon_wow')),        # 신
+        'new_mon_wow':        _fn(t.get('new_mon_wow')),        # 옛 alias
+        'new_mon_share':      _fn(t.get('new_mon_pct')),        # 신
+        'new_mon_pct':        _fn(t.get('new_mon_pct')),        # 옛 alias
+        'react_mon':          _i(t.get('react_mon')) or None,
+        'react_mon_chg':      _fn(t.get('react_mon_wow')),      # 신
+        'react_mon_wow':      _fn(t.get('react_mon_wow')),      # 옛 alias
+        'react_mon_share':    _fn(t.get('react_mon_pct')),      # 신
+        'react_mon_pct':      _fn(t.get('react_mon_pct')),      # 옛 alias
+        'churn_rate_mon':     _fn(t.get('churn_mon')),          # 신
+        'churn_rate_mon_diff':_fn(t.get('churn_mon_diff')),     # 신
+        'churn_mon':          _fn(t.get('churn_mon')),          # 옛 alias
+        'churn_mon_diff':     _fn(t.get('churn_mon_diff')),     # 옛 alias
+        'react_rate_mon':     _fn(t.get('react_rate_mon')),
+        'm1_ret':             _fn(t.get('m1_ret')),
+        'm1_ret_diff':        _fn(t.get('m1_diff')),            # 신
+        'm1_diff':            _fn(t.get('m1_diff')),            # 옛 alias
+
+        # ── 롤링 지표 (신규 노출) ─────────────────────────────────
+        'dau_r7':             _i(t.get('wau_today')) or None,
+        'dau_r7_prev':        _i(t.get('wau_pw')) or None,
+        'dau_r7_chg':         _fn(t.get('dau_r7_chg')),
+        'dau_r30':            _i(t.get('mau_today')) or None,
+        'dau_r30_prev':       _i(t.get('mau_pw')) or None,
+        'dau_r30_chg':        _fn(t.get('dau_r30_chg')),
+
+        # ── 평균지표 (SPL에서 제거됨; 레거시 화면 호환을 위해 빈 값 키 유지) ─
+        'dau_week_avg':       _fn(t.get('dau_week_avg')),
+        'dau_mon_avg':        _fn(t.get('dau_mon_avg')),
+        'wau_mon_avg':        _fn(t.get('wau_mon_avg')),
     }
 
 def build_s3(kpi):
