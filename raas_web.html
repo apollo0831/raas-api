@@ -1447,7 +1447,12 @@ async function _fetchTrend(metric, days, dateKey) {
 async function _drawUserSizeChart(period) {
   const canvas = document.getElementById('usChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  if (_usChartInstance) { try { _usChartInstance.destroy(); } catch(e) {} _usChartInstance = null; }
+  if (_usChartInstance) {
+    try { _usChartInstance.destroy(); } catch(e) {}
+    _usChartInstance = null;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
 
   // 캡션 초기화 (다음 렌더에 재계산)
   const wrap = canvas.closest('.us-chart-wrap');
