@@ -276,14 +276,15 @@ class RAASHandler(BaseHTTPRequestHandler):
                 params = {}
                 if "?" in self.path:
                     params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
-                metric = params.get("metric", "dau_today")
-                scope  = params.get("scope", "T00").upper()
-                days   = int(params.get("days", 30))
+                metric   = params.get("metric", "dau_today")
+                scope    = params.get("scope", "T00").upper()
+                days     = int(params.get("days", 30))
+                date_key = params.get("date_key") or None
                 timeline = get_cached_timeline()
                 if scope not in timeline:
                     self.send_json({"ok": False, "error": f"스코프 '{scope}' 데이터 없음"}, 404)
                     return
-                trend = BE.get_metric_trend(timeline, scope, metric, days=days)
+                trend = BE.get_metric_trend(timeline, scope, metric, days=days, date_field=date_key)
                 self.send_json({
                     "ok": True, "scope": scope,
                     "name": BE.PGM_NAMES.get(scope, scope),
