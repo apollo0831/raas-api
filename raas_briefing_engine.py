@@ -499,6 +499,7 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
         'd1_ret':         _fn(row.get('d1_ret')),
         'd7_ret':         _fn(row.get('d7_ret')),
         'w1_ret':         _fn(row.get('w1_ret')),
+        'm1_ret':         _fn(row.get('m1_ret')),
         # 신규/이탈/복귀
         'new_user':       _i(row.get('new_today')),
         'new_pct':        _fn(row.get('new_pct')),
@@ -587,7 +588,7 @@ def build_s5(kpi):
 def build_s6(kpi):
     t00=_f(kpi.get('T00',{}).get('dau_today'),1) or 1
     chs=[]
-    for c in CH:
+    for c in ['T00'] + CH:
         row=kpi.get(c,{}); d=_f(row.get('dau_today'),0)
         # deep_rate 폴백 계산 (1min/10min 직접 비율 우선, 없으면 CSV 값)
         dau_1min  = _i(row.get('dau_1min'))
