@@ -919,6 +919,15 @@ body{
     </div>
   </div>
 
+  <!-- 채널 비교 레이더 -->
+  <div class="section" id="radarSection">
+    <div class="section-title">채널 비교</div>
+    <div style="position:relative;max-width:340px;margin:0 auto;height:280px;">
+      <canvas id="radarChart"></canvas>
+    </div>
+    <div id="radarLegend" style="display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;margin-top:10px;font-size:12px;color:var(--sub);"></div>
+  </div>
+
   <!-- ZONE 2 (복사): 핵심 지표 -->
   <div class="section">
     <div class="section-title" id="a-kpiTitle">핵심 지표</div>
@@ -1312,6 +1321,7 @@ function drawUserSizeChart(data, label) {
 
 // ── 종합 지표 인터랙티브 라인그래프 (분석 페이지 dot 클릭 → 시계열) ──
 let _healthChartInstance = null;
+let _radarChartInstance = null;
 let _currentHealthMetric = null;
 
 async function showHealthChart(metricKey, label) {
@@ -1469,6 +1479,141 @@ function drawHealthChart(data, label, metricKey) {
     });
   } catch (e) {
     console.error('[drawHealthChart] 예외:', e);
+  }
+}
+
+// ── 채널 비교 레이더 차트 ─────────────────────────────────
+const RADAR_DIMENSIONS = [
+  { label:'규모',     fields:{ day:'dau',        week:'dau_week',       mon:'dau_mon'        } },
+  { label:'충성도',   fields:{ day:'d7_ret',      week:'w1_ret',         mon:'m1_ret'         } },
+  { label:'신규유입', fields:{ day:'new_pct',     week:'new_week_pct',   mon:'new_mon_pct'    } },
+  { label:'복귀유도', fields:{ day:'react_rate',  week:'react_rate_week',mon:'react_rate_mon' } },
+  { label:'참여깊이', fields:{ day:'deep_rate',   week:'deep_rate_week', mon:'deep_rate_mon'  } },
+  // Phase 3: { label:'성장성', fields:{ day:'new_wow', week:'new_week_wow', mon:'new_mon_wow' } },
+];
+const RADAR_CH_COLORS = {
+  T00:{ bg:'rgba(150,162,178,0.18)', border:'rgba(150,162,178,0.85)' },
+  F00:{ bg:'rgba(78,195,255,0.18)',  border:'rgba(78,195,255,0.9)'  },
+  L00:{ bg:'rgba(255,107,157,0.18)', border:'rgba(255,107,157,0.9)' },
+  G00:{ bg:'rgba(255,185,70,0.18)',  border:'rgba(255,185,70,0.9)'  },
+  P00:{ bg:'rgba(78,200,140,0.18)',  border:'rgba(78,200,140,0.9)'  },
+};
+
+function getChannelOfProgram(code) {
+  if (!code) return 'T00';
+  if (code.startsWith('F')) return 'F00';
+  if (code.startsWith('L') || code.startsWith('M')) return 'L00';
+  if (code.startsWith('G')) return 'G00';
+  if (code.startsWith('P')) return 'P00';
+  return 'T00';
+}
+
+function getRadarComparisonSet(data, scope) {
+  const channels = (data.s6_channels?.channels || []).filter(c => c.code !== 'T00');
+  const isChannelScope = ['T00','F00','L00','G00','P00'].includes(scope);
+  if (isChannelScope) return channels;
+  const chCode = getChannelOfProgram(scope);
+  const pfx = chCode[0];
+  const allPgms = [
+    ...(data.s5_rankings?.all_programs || []),
+    ...(data.s5_rankings?.dau_top10 || [])
+  ];
+  const seen = new Set();
+  const peers = allPgms.filter(p => {
+    if (seen.has(p.code) || EXCLUDED_CODES.includes(p.code)) return false;
+    if (!p.code?.startsWith(pfx)) return false;
+    seen.add(p.code);
+    return true;
+  });
+  return peers.length >= 2 ? peers : channels;
+}
+
+function _radarNormalize(compSet, period) {
+  const raw = compSet.map(item =>
+    RADAR_DIMENSIONS.map(dim => {
+      const field = dim.fields[period] || dim.fields.day;
+      const v = item[field];
+      return (v != null && isFinite(v)) ? +v : null;
+    })
+  );
+  const nD = RADAR_DIMENSIONS.length;
+  const scores = raw.map(row => row.slice());
+  for (let d = 0; d < nD; d++) {
+    const vals = raw.map(r => r[d]).filter(v => v !== null);
+    if (vals.length === 0) { scores.forEach((s,i) => s[d] = 0); continue; }
+    const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn;
+    raw.forEach((row, i) => {
+      scores[i][d] = row[d] === null ? 0 : rng === 0 ? 50 : Math.round((row[d] - mn) / rng * 100);
+    });
+  }
+  return scores;
+}
+
+function renderRadarChart(data) {
+  const canvas = document.getElementById('radarChart');
+  const legendEl = document.getElementById('radarLegend');
+  if (!canvas) return;
+  if (_radarChartInstance) { try { _radarChartInstance.destroy(); } catch(e){} _radarChartInstance = null; }
+
+  const compSet = getRadarComparisonSet(data, _scope);
+  if (!compSet || compSet.length === 0) return;
+
+  const scores = _radarNormalize(compSet, _period);
+  const isChannelScope = ['T00','F00','L00','G00','P00'].includes(_scope);
+
+  const datasets = compSet.map((item, i) => {
+    const chKey = isChannelScope ? item.code : getChannelOfProgram(item.code);
+    const col = RADAR_CH_COLORS[chKey] || RADAR_CH_COLORS.T00;
+    const isActive = isChannelScope
+      ? (_scope === 'T00' || item.code === _scope)
+      : item.code === _scope;
+    return {
+      label: item.name || item.code,
+      data:  scores[i],
+      backgroundColor:   isActive ? col.bg.replace('0.18','0.28') : col.bg,
+      borderColor:       col.border,
+      borderWidth:       isActive ? 2.5 : 1.5,
+      pointBackgroundColor: col.border,
+      pointRadius:       isActive ? 4 : 2.5,
+      pointHoverRadius:  5,
+    };
+  });
+
+  _radarChartInstance = new Chart(canvas, {
+    type: 'radar',
+    data: { labels: RADAR_DIMENSIONS.map(d => d.label), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        r: {
+          min: 0, max: 100,
+          ticks: { stepSize: 25, font:{size:9}, color:'rgba(160,170,185,0.7)', backdropColor:'transparent' },
+          grid:        { color:'rgba(255,255,255,0.06)' },
+          angleLines:  { color:'rgba(255,255,255,0.08)' },
+          pointLabels: { font:{size:12, family:"'Pretendard','Noto Sans KR',sans-serif"}, color:'var(--text)' },
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.raw}점`
+          }
+        }
+      }
+    }
+  });
+
+  if (legendEl) {
+    legendEl.innerHTML = compSet.map((item, i) => {
+      const chKey = isChannelScope ? item.code : getChannelOfProgram(item.code);
+      const col = RADAR_CH_COLORS[chKey] || RADAR_CH_COLORS.T00;
+      const isActive = isChannelScope ? (_scope === 'T00' || item.code === _scope) : item.code === _scope;
+      return `<span style="display:inline-flex;align-items:center;gap:4px;${isActive?'font-weight:600;color:var(--text);':''}">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col.border};"></span>${item.name || item.code}
+      </span>`;
+    }).join('');
   }
 }
 
@@ -2539,6 +2684,7 @@ function renderAnalyticsPage(data) {
   renderQuality(s3);
   renderGrowth(s4);
   renderQFunnel(s1, s2, s3);
+  renderRadarChart(data);
 }
 
 function renderProgramBar(channelCode) {
