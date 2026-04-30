@@ -791,6 +791,21 @@ body{
 .us-main-single .us-date  { font-size:12px; color:var(--dim); margin-top:2px; }
 .us-main-single .us-badge-row { margin-top:8px; }
 
+/* 메인 카드 내부 좌우 분할 (일간 DAU + 우측 롤링 미니) */
+.us-main-split { display:flex; gap:20px; align-items:stretch; }
+.us-main-split .us-main-left { flex:1; min-width:0; }
+.us-main-split .us-main-side {
+  display:flex; flex-direction:column; gap:14px;
+  justify-content:center; min-width:140px;
+  padding-left:20px; border-left:1px solid var(--line);
+}
+.us-main-split .us-side-label { font-size:12px; color:var(--sub); }
+.us-main-split .us-side-date  { font-size:11px; color:var(--dim); margin-top:1px; }
+.us-main-split .us-side-val   {
+  font-size:18px; font-weight:600; font-family:var(--mono);
+  margin-top:2px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+}
+
 /* 메인 카드 - 듀얼 (주/월 탭) */
 .us-main-dual { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .us-card {
@@ -832,8 +847,7 @@ body{
 
 /* 그래프 */
 .us-chart-wrap {
-  background:var(--bg2); border-radius:12px;
-  border:1px solid var(--line);
+  background:transparent;
   padding:14px 16px;
 }
 .us-chart-label { font-size:13px; color:var(--sub); margin-bottom:8px; }
@@ -928,7 +942,15 @@ body{
   </div>
   <div class="program-bar" id="programBar"></div>
 
-  <!-- 종합 지표 (분석 페이지 최상단) -->
+  <!-- 채널 비교 레이더 -->
+  <div class="section" id="radarSection">
+    <div class="section-title">채널 비교</div>
+    <div style="position:relative;max-width:480px;margin:0 auto;height:400px;">
+      <canvas id="radarChart"></canvas>
+    </div>
+  </div>
+
+  <!-- 종합 지표 -->
   <div class="section">
     <div class="section-title">종합 지표 <span id="healthInfoBtn" style="cursor:pointer;font-size:14px;color:var(--accent);margin-left:6px;border:1px solid var(--accent);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;" onclick="document.getElementById('healthModal').style.display='flex'">ⓘ</span></div>
     <div class="health-bar">
@@ -955,15 +977,6 @@ body{
         <canvas id="healthChart"></canvas>
       </div>
     </div>
-  </div>
-
-  <!-- 채널 비교 레이더 -->
-  <div class="section" id="radarSection">
-    <div class="section-title">채널 비교</div>
-    <div style="position:relative;max-width:340px;margin:0 auto;height:280px;">
-      <canvas id="radarChart"></canvas>
-    </div>
-    <div id="radarLegend" style="display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;margin-top:10px;font-size:12px;color:var(--sub);"></div>
   </div>
 
   <!-- ZONE 2 (복사): 핵심 지표 -->
@@ -1345,15 +1358,23 @@ async function renderUserSize() {
   if (p === 'day') {
     container.innerHTML = `
       <div class="us-section">
-        <div class="us-main-single">
-          <div class="us-label">DAU</div>
-          <div class="us-date">${dateD1 ? formatDateRange(dateD1, dateD1, 'D-1') : ''}</div>
-          <div class="us-val">${formatNumber(s1.dau)}</div>
-          <div class="us-badge-row">${renderChangeBadge(s1.dau_chg, {size:'md', showLabel:true, label:'전일 대비'})}</div>
-        </div>
-        <div class="us-sub-grid">
-          ${_usSubCardHTML({label:'7일 롤링',  val:s1.dau_r7,  chg:s1.dau_r7_chg})}
-          ${_usSubCardHTML({label:'30일 롤링', val:s1.dau_r30, chg:s1.dau_r30_chg})}
+        <div class="us-main-single us-main-split">
+          <div class="us-main-left">
+            <div class="us-label">DAU</div>
+            <div class="us-date">${dateD1 ? formatDateRange(dateD1, dateD1, 'D-1') : ''}</div>
+            <div class="us-val">${formatNumber(s1.dau)}</div>
+            <div class="us-badge-row">${renderChangeBadge(s1.dau_chg, {size:'md', showLabel:true, label:'전일 대비'})}</div>
+          </div>
+          <div class="us-main-side">
+            <div>
+              <div class="us-side-label">7일 롤링</div>
+              <div class="us-side-val">${formatNumber(s1.dau_r7)}${(() => { const b = renderChangeBadge(s1.dau_r7_chg, {size:'sm'}); return b ? ' ' + b : ''; })()}</div>
+            </div>
+            <div>
+              <div class="us-side-label">30일 롤링</div>
+              <div class="us-side-val">${formatNumber(s1.dau_r30)}${(() => { const b = renderChangeBadge(s1.dau_r30_chg, {size:'sm'}); return b ? ' ' + b : ''; })()}</div>
+            </div>
+          </div>
         </div>
         <div class="us-chart-wrap">
           <div class="us-chart-label">최근 30일 DAU 추이</div>
@@ -1363,16 +1384,20 @@ async function renderUserSize() {
   } else if (p === 'week') {
     container.innerHTML = `
       <div class="us-section">
-        <div class="us-main-dual">
-          ${_usCardHTML({tone:'primary',   label:'지난주 WAU', dateRange:(dateWeekS && dateWeekE) ? formatDateRange(dateWeekS, dateWeekE, '확정') : '',         val:s1.wau,    chg:s1.wau_chg,    cmpLabel:'전주 대비'})}
-          ${_usCardHTML({tone:'secondary', label:'롤링 7일',   dateRange:(r7Start && dateD1) ? formatDateRange(r7Start, dateD1, 'D-1 기준') : '',            val:s1.dau_r7, chg:s1.dau_r7_chg, cmpLabel:'전일 롤링 대비'})}
-        </div>
-        <div class="us-sub-grid">
-          <div class="us-sub-card" id="usSubAvg">
-            <div class="us-label">DAU 일평균 (전주 7일)</div>
-            <div class="us-val">${formatNumber(null)}</div>
+        <div class="us-main-single us-main-split">
+          <div class="us-main-left">
+            <div class="us-label">롤링 7일</div>
+            <div class="us-date">${(r7Start && dateD1) ? formatDateRange(r7Start, dateD1, 'D-1 기준') : ''}</div>
+            <div class="us-val">${formatNumber(s1.dau_r7)}</div>
+            <div class="us-badge-row">${renderChangeBadge(s1.dau_r7_chg, {size:'md', showLabel:true, label:'전일 롤링 대비'})}</div>
           </div>
-          ${_usSubCardHTML({label:'30일 롤링', val:s1.dau_r30, chg:s1.dau_r30_chg})}
+          <div class="us-main-side">
+            <div>
+              <div class="us-side-label">지난주 WAU</div>
+              <div class="us-side-date">${(dateWeekS && dateWeekE) ? formatDateRange(dateWeekS, dateWeekE, '확정') : ''}</div>
+              <div class="us-side-val">${formatNumber(s1.wau)}${(() => { const b = renderChangeBadge(s1.wau_chg, {size:'sm'}); return b ? ' ' + b : ''; })()}</div>
+            </div>
+          </div>
         </div>
         <div class="us-chart-wrap">
           <div class="us-chart-label">최근 30일 WAU vs 7일 롤링</div>
@@ -1383,21 +1408,23 @@ async function renderUserSize() {
           </div>
         </div>
       </div>`;
-    // 비동기: 최근 7일 dau 시계열 → 산술평균 → 참고 카드 1 갱신
-    _usFillDailyAvg(7, '전주 7일');
   } else { // mon
     container.innerHTML = `
       <div class="us-section">
-        <div class="us-main-dual">
-          ${_usCardHTML({tone:'primary',   label:'전월 MAU',  dateRange:(dateMonS && dateMonE) ? formatDateRange(dateMonS, dateMonE, '확정') : '',           val:s1.mau,     chg:s1.mau_chg,     cmpLabel:'전월 대비'})}
-          ${_usCardHTML({tone:'secondary', label:'롤링 30일', dateRange:(r30Start && dateD1) ? formatDateRange(r30Start, dateD1, 'D-1 기준') : '',          val:s1.dau_r30, chg:s1.dau_r30_chg, cmpLabel:'전일 롤링 대비'})}
-        </div>
-        <div class="us-sub-grid">
-          <div class="us-sub-card" id="usSubAvg">
-            <div class="us-label">DAU 일평균 (전월 30일)</div>
-            <div class="us-val">${formatNumber(null)}</div>
+        <div class="us-main-single us-main-split">
+          <div class="us-main-left">
+            <div class="us-label">롤링 30일</div>
+            <div class="us-date">${(r30Start && dateD1) ? formatDateRange(r30Start, dateD1, 'D-1 기준') : ''}</div>
+            <div class="us-val">${formatNumber(s1.dau_r30)}</div>
+            <div class="us-badge-row">${renderChangeBadge(s1.dau_r30_chg, {size:'md', showLabel:true, label:'전일 롤링 대비'})}</div>
           </div>
-          ${_usSubCardHTML({label:'7일 롤링', val:s1.dau_r7, chg:s1.dau_r7_chg})}
+          <div class="us-main-side">
+            <div>
+              <div class="us-side-label">전월 MAU</div>
+              <div class="us-side-date">${(dateMonS && dateMonE) ? formatDateRange(dateMonS, dateMonE, '확정') : ''}</div>
+              <div class="us-side-val">${formatNumber(s1.mau)}${(() => { const b = renderChangeBadge(s1.mau_chg, {size:'sm'}); return b ? ' ' + b : ''; })()}</div>
+            </div>
+          </div>
         </div>
         <div class="us-chart-wrap">
           <div class="us-chart-label">최근 60일 MAU vs 30일 롤링</div>
@@ -1408,7 +1435,6 @@ async function renderUserSize() {
           </div>
         </div>
       </div>`;
-    _usFillDailyAvg(30, '전월 30일');
   }
 
   _drawUserSizeChart(p);
@@ -1497,8 +1523,22 @@ async function _drawUserSizeChart(period) {
     const wauMap = new Map();
     for (const pt of wauRaw) if (pt.date) wauMap.set(pt.date, pt.value);
     const wauDates = Array.from(wauMap.keys()).sort();
+    // 캘린더 기준 '이번주 월요일' (최신 데이터 일자 포함 주의 월요일).
+    // 그 이후는 진행 중인 주이므로 step 라인을 비우고 롤링 라인만 남긴다.
+    const _lastDate = r7S.length ? r7S[r7S.length - 1].date : '';
+    let curWeekMonday = '';
+    if (_lastDate) {
+      const [_y, _m, _d] = _lastDate.split('/').map(Number);
+      const _dt = new Date(_y, _m - 1, _d);
+      const _dow = _dt.getDay();              // 0=Sun … 6=Sat
+      _dt.setDate(_dt.getDate() - ((_dow === 0) ? 6 : (_dow - 1)));
+      const _mm = String(_dt.getMonth() + 1).padStart(2, '0');
+      const _dd = String(_dt.getDate()).padStart(2, '0');
+      curWeekMonday = `${_dt.getFullYear()}/${_mm}/${_dd}`;
+    }
     // fill-forward WAU onto the daily r7S X-axis
     const wauAligned = r7S.map(pt => {
+      if (curWeekMonday && pt.date >= curWeekMonday) return null;
       let val = null;
       for (const wd of wauDates) {
         if (wd <= pt.date) val = wauMap.get(wd);
@@ -1527,8 +1567,17 @@ async function _drawUserSizeChart(period) {
     const mauMap = new Map();
     for (const pt of mauRaw) if (pt.date) mauMap.set(pt.date, pt.value);
     const mauDates = Array.from(mauMap.keys()).sort();
+    // 캘린더 기준 '이번달 1일' (최신 데이터 일자가 속한 월의 1일).
+    // 그 이후는 진행 중인 월이므로 step 라인을 비우고 롤링 라인만 남긴다.
+    const _lastMDate = r30S.length ? r30S[r30S.length - 1].date : '';
+    let curMonthFirst = '';
+    if (_lastMDate) {
+      const _parts = _lastMDate.split('/');
+      curMonthFirst = `${_parts[0]}/${_parts[1]}/01`;
+    }
     // fill-forward MAU onto the daily r30S X-axis
     const mauAligned = r30S.map(pt => {
+      if (curMonthFirst && pt.date >= curMonthFirst) return null;
       let val = null;
       for (const md of mauDates) {
         if (md <= pt.date) val = mauMap.get(md);
@@ -2260,7 +2309,7 @@ function renderChannels(s6){
       <div class="ch-dau">${fmtK(dau)}</div>
       <div class="ch-share-row">
         <span class="ch-share-pct">${share.toFixed(1)}%</span>
-        <span class="ch-share-label">점유</span>
+        <span class="ch-share-label">점유(1분이상)</span>
       </div>
       <div class="ch-share-bar">
         <div class="ch-share-fill" style="width:${share}%;background:${color};"></div>

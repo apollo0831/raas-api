@@ -586,10 +586,12 @@ def build_s5(kpi):
     }
 
 def build_s6(kpi):
-    t00=_f(kpi.get('T00',{}).get('dau_today'),1) or 1
+    # 점유(share)는 dau_1min(1분 이상 청취 사용자) 기준으로 산출
+    t00_share=_f(kpi.get('T00',{}).get('dau_1min'),1) or 1
     chs=[]
     for c in ['T00'] + CH:
         row=kpi.get(c,{}); d=_f(row.get('dau_today'),0)
+        d_share=_f(row.get('dau_1min'),0)
         # deep_rate 폴백 계산 (1min/10min 직접 비율 우선, 없으면 CSV 값)
         dau_1min  = _i(row.get('dau_1min'))
         dau_10min = _i(row.get('dau_10min'))
@@ -602,7 +604,7 @@ def build_s6(kpi):
         deep_rate_mon = round(mau_10min/mau_1min*100, 1) if mau_1min and mau_1min > 0 else _fn(row.get('deep_rate_mon'))
         chs.append({
             'code':c,'name':PGM_NAMES[c],
-            'share':round(d/t00*100,1),
+            'share':round(d_share/t00_share*100,1),
             # 일간
             'dau':         int(d),
             'deep_rate':   deep_rate,
