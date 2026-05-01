@@ -104,7 +104,7 @@ body{
 
 /* ── 컨테이너 ── */
 .container{padding:0 16px 80px}
-.section{margin-bottom:24px}
+.section{margin-bottom:40px}
 .section-title{
   font-size:16px;font-weight:700;
   color:var(--sub);text-transform:uppercase;
@@ -397,6 +397,9 @@ body{
 .ch-tag.churn{background:rgba(255,77,106,.1);color:var(--red)}
 .ch-tag.react{background:rgba(0,200,255,.1);color:var(--accent)}
 .ch-tag.good-churn{background:rgba(0,224,122,.1);color:var(--green)}
+.ch-tag.g{background:rgba(0,224,122,.1);color:var(--green)}
+.ch-tag.y{background:rgba(255,184,48,.1);color:var(--yellow)}
+.ch-tag.r{background:rgba(255,77,106,.1);color:var(--red)}
 .ch-share-row{
   display:flex;align-items:baseline;gap:6px;
   margin-top:8px;margin-bottom:6px;
@@ -636,6 +639,31 @@ body{
 .qlty-funnel-label{font-size:15px;font-weight:500;color:var(--sub);}
 .qlty-funnel-denom{font-size:13px;color:var(--dim);}
 .qlty-funnel-row{display:grid;grid-template-columns:1fr 14px 1fr 14px 1fr;align-items:center;gap:4px;}
+/* 세로 깔때기 그래프 (독립 컨테이너) */
+.qlty-funnel-chart{
+  position:relative;background:transparent;padding:14px 0 4px;margin-top:10px;
+  aspect-ratio:2/1;min-height:180px;max-height:640px;
+}
+.vf-wrap{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  height:100%;
+}
+.vf-stage{width:100%;display:flex;flex-direction:column;align-items:center;}
+.vf-bar{
+  display:flex;justify-content:space-between;align-items:center;gap:14px;
+  min-width:220px;padding:12px 40px;
+  color:#fff;font-size:13px;font-weight:500;
+  clip-path:polygon(0 0,100% 0,96% 100%,4% 100%);
+  transition:width 0.4s ease;
+}
+.vf-bar .vf-name{white-space:nowrap;font-size:14px;}
+.vf-bar .vf-val{font-family:var(--mono);font-size:12px;opacity:0.95;white-space:nowrap;}
+.vf-bar .vf-pct{font-size:11px;opacity:0.85;margin-left:6px;}
+.vf-drop{
+  font-size:11px;color:var(--sub);padding:3px 0;
+  display:flex;align-items:center;gap:4px;
+}
+.vf-drop .vf-arrow{color:var(--dim);font-size:13px;}
 .qlty-fi{background:var(--bg3);border-radius:8px;padding:10px 6px;text-align:center;}
 .qlty-fi-name{font-size:15px;font-weight:500;color:var(--sub);margin-bottom:4px;}
 .qlty-fi-pct{font-size:33px;font-weight:600;font-family:var(--mono);line-height:1.1;}
@@ -851,7 +879,7 @@ body{
   padding:14px 16px;
 }
 .us-chart-label { font-size:13px; color:var(--sub); margin-bottom:8px; }
-.us-chart-canvas { position:relative; height:180px; }
+.us-chart-canvas { position:relative; aspect-ratio: 2 / 1; min-height:180px; max-height:640px; }
 .us-chart-legend { display:flex; gap:14px; margin-top:8px; font-size:11px; color:var(--sub); align-items:center; }
 .us-chart-legend .legend-dot { display:inline-block; width:14px; height:2px; margin-right:4px; vertical-align:middle; }
 .us-chart-legend .legend-dot.solid-step { background:#185FA5; }
@@ -909,7 +937,7 @@ body{
 
     <!-- ZONE 8: 이상징후 -->
     <div class="section">
-      <div class="section-title">이상징후</div>
+      <div class="section-title">이상징후 <span id="anomalyInfoBtn" style="cursor:pointer;font-size:14px;color:var(--accent);margin-left:6px;border:1px solid var(--accent);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;" onclick="document.getElementById('anomalyModal').style.display='flex'">?</span></div>
       <div class="alerts-list" id="alertsList"></div>
     </div>
 
@@ -942,17 +970,17 @@ body{
   </div>
   <div class="program-bar" id="programBar"></div>
 
-  <!-- 채널 비교 레이더 -->
+  <!-- 다차원 프로파일 레이더 -->
   <div class="section" id="radarSection">
-    <div class="section-title">채널 비교</div>
-    <div style="position:relative;max-width:480px;margin:0 auto;height:400px;">
+    <div class="section-title">다차원 프로파일</div>
+    <div style="position:relative;width:min(640px, 100%);aspect-ratio:1/1;margin:0 auto;">
       <canvas id="radarChart"></canvas>
     </div>
   </div>
 
   <!-- 종합 지표 -->
   <div class="section">
-    <div class="section-title">종합 지표 <span id="healthInfoBtn" style="cursor:pointer;font-size:14px;color:var(--accent);margin-left:6px;border:1px solid var(--accent);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;" onclick="document.getElementById('healthModal').style.display='flex'">ⓘ</span></div>
+    <div class="section-title">종합 지표 <span id="healthInfoBtn" style="cursor:pointer;font-size:14px;color:var(--accent);margin-left:6px;border:1px solid var(--accent);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;" onclick="document.getElementById('healthModal').style.display='flex'">?</span></div>
     <div class="health-bar">
       <div class="health-top">
         <div>
@@ -973,7 +1001,8 @@ body{
            style="font-size:var(--fs-sm); color:var(--text); font-weight:500; margin-bottom:8px;">
         지표를 선택하세요
       </div>
-      <div style="position:relative; height:180px;">
+      <div id="healthChartExtra" style="display:none;font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;"></div>
+      <div style="position:relative; aspect-ratio: 2 / 1; min-height:180px; max-height:640px;">
         <canvas id="healthChart"></canvas>
       </div>
     </div>
@@ -987,8 +1016,9 @@ body{
 
   <!-- 청취 전환 퍼널 -->
   <div class="section">
-    <div class="section-title">청취 전환 퍼널</div>
+    <div class="section-title">전환 퍼널</div>
     <div class="qlty-funnel" id="qfunnel"></div>
+    <div class="qlty-funnel-chart" id="qfunnelChart"></div>
   </div>
 
   <!-- ZONE 4: 유지율 코호트 -->
@@ -999,19 +1029,13 @@ body{
       <button class="pgm-tab" data-tab="new" onclick="showCohortTab('new')">신규 코호트</button>
     </div>
     <div class="cohort-grid" id="cohortGrid"></div>
+    <div style="position:relative; aspect-ratio: 2 / 1; min-height:180px; max-height:640px; margin-top:14px;">
+      <canvas id="cohortChart"></canvas>
+    </div>
+    <div id="cohortChartLegend" style="display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;margin-top:8px;font-size:11px;color:var(--sub);"></div>
   </div>
 
-  <!-- ZONE 5: 청취 품질 -->
-  <div class="section">
-    <div class="section-title">청취 품질</div>
-    <div class="quality-grid" id="qualityGrid"></div>
-  </div>
-
-  <!-- ZONE 7: 성장 품질 -->
-  <div class="section">
-    <div class="section-title">성장 품질</div>
-    <div class="growth-grid" id="growthGrid"></div>
-  </div>
+  <!-- 청취 품질·성장 품질 섹션 제거됨 (종합지표 + 다차원 프로파일 + 채널 카드에 통합) -->
 </div>
 
 <div class="page" id="page-programs">
@@ -1223,10 +1247,8 @@ function renderAll(d){
   renderKPI(s1,s2);
   renderFunnel(s1,s2);
   renderCohort(s2);
-  renderQuality(s3);
   renderQFunnel(s1,s2,s3);
   renderChannels(s6);
-  renderGrowth(s4);
   renderAlerts(s7);
   renderPgm(s5, _pgmTab);
   renderBrief(d.brief||'');
@@ -1682,6 +1704,22 @@ async function showHealthChart(metricKey, label) {
 
   labelEl.textContent = `${label} 추이 (${periodLabel})`;
 
+  // 깊은청취 선택 시 1분이상/10분이상 절대 사용자 수 부가 노출 (기간탭 연동, 스코프 연동)
+  const extraEl = document.getElementById('healthChartExtra');
+  if (extraEl) {
+    if (metricKey === 'deep_rate' && _data) {
+      const sc0 = _scope || 'T00';
+      const scopedS3 = (sc0 !== 'T00') ? (getScopeData(_data, sc0).s3_engagement || {}) : (_data.s3_engagement || {});
+      const u1min  = _period==='day' ? scopedS3.dau_1min  : _period==='week' ? scopedS3.wau_1min  : scopedS3.mau_1min;
+      const u10min = _period==='day' ? scopedS3.dau_10min : _period==='week' ? scopedS3.wau_10min : scopedS3.mau_10min;
+      extraEl.innerHTML = `1분이상 <b style="color:var(--text);">${fmtK(u1min)}명</b> &nbsp;·&nbsp; 10분이상 <b style="color:var(--text);">${fmtK(u10min)}명</b>`;
+      extraEl.style.display = 'block';
+    } else {
+      extraEl.innerHTML = '';
+      extraEl.style.display = 'none';
+    }
+  }
+
   const sc = _scope || 'T00';
 
   try {
@@ -1745,7 +1783,7 @@ function drawHealthChart(data, label, metricKey) {
     const values = data.map(d => d.value);
 
     const isPercent = ['deep_rate','engage_rate','churn_rate','react_rate',
-                       'habit_rate','d1_ret'].includes(metricKey);
+                       'habit_rate','d1_ret','new_pct'].includes(metricKey);
     const colorMap = {
       '__active_users__': '#378ADD',
       'deep_rate':   '#1D9E75',
@@ -1753,7 +1791,8 @@ function drawHealthChart(data, label, metricKey) {
       'churn_rate':  '#E24B4A',
       'react_rate':  '#BA7517',
       'habit_rate':  '#D4537E',
-      'd1_ret':      '#0F6E56'
+      'd1_ret':      '#0F6E56',
+      'new_pct':     '#3B6D11'
     };
     const color = colorMap[metricKey] || '#378ADD';
 
@@ -1811,11 +1850,11 @@ function drawHealthChart(data, label, metricKey) {
 
 // ── 채널 비교 레이더 차트 ─────────────────────────────────
 const RADAR_DIMENSIONS = [
-  { label:'규모',     fields:{ day:'dau',       week:'dau_week',       mon:'dau_mon'        } },
-  { label:'충성도',   fields:{ day:'d1_ret',     week:'w1_ret',         mon:'m1_ret'         } },
-  { label:'신규유입', fields:{ day:'new_pct',    week:'new_week_pct',   mon:'new_mon_pct'    } },
-  { label:'복귀유도', fields:{ day:'react_rate', week:'react_rate_week',mon:'react_rate_mon' } },
-  { key:'depth', label:'참여깊이', fields:{} },
+  { label:'사용자규모',  fields:{ day:'dau',       week:'dau_week',       mon:'dau_mon'        } },
+  { label:'충성도(유지)', fields:{ day:'d1_ret',     week:'w1_ret',         mon:'m1_ret'         } },
+  { label:'신규유입',    fields:{ day:'new_pct',    week:'new_week_pct',   mon:'new_mon_pct'    } },
+  { label:'복귀유도',    fields:{ day:'react_rate', week:'react_rate_week',mon:'react_rate_mon' } },
+  { key:'depth', label:'깊은청취', fields:{} },
   // Phase 3: { label:'성장성', fields:{ day:'new_wow', week:'new_week_wow', mon:'new_mon_wow' } },
 ];
 
@@ -1877,6 +1916,20 @@ function _radarNormalize(compSet, period) {
   return scores;
 }
 
+// 라벨 사라짐 방어: window resize에 debounce 걸어 chart.update('none') 강제 호출
+if (typeof window !== 'undefined' && !window._radarResizeBound) {
+  window._radarResizeBound = true;
+  let _radarResizeTimer = null;
+  window.addEventListener('resize', () => {
+    if (_radarResizeTimer) clearTimeout(_radarResizeTimer);
+    _radarResizeTimer = setTimeout(() => {
+      if (_radarChartInstance) {
+        try { _radarChartInstance.resize(); _radarChartInstance.update('none'); } catch(e){}
+      }
+    }, 150);
+  });
+}
+
 function renderRadarChart(data) {
   const canvas = document.getElementById('radarChart');
   const legendEl = document.getElementById('radarLegend');
@@ -1909,13 +1962,20 @@ function renderRadarChart(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: 16 },
+      transitions: { resize: { animation: { duration: 0 } } },
       scales: {
         r: {
           min: 0, max: 100,
           ticks: { stepSize: 25, font:{size:9}, color:'rgba(160,170,185,0.7)', backdropColor:'transparent' },
           grid:        { color:'rgba(255,255,255,0.06)' },
           angleLines:  { color:'rgba(255,255,255,0.08)' },
-          pointLabels: { font:{size:12, family:"'Pretendard','Noto Sans KR',sans-serif"}, color:'var(--text)' },
+          pointLabels: {
+            display: true,
+            font: { size: 11, family: "'Pretendard','Noto Sans KR',sans-serif" },
+            color: 'var(--text)',
+            padding: 6
+          },
         }
       },
       plugins: {
@@ -1963,44 +2023,60 @@ function renderHealth(s1,s2,s3,s4){
 
   const p = _period;
 
-  // DAU/WAU/MAU WoW
+  // 사용자 라이프사이클 순서: 활성 → 신규 → 습관형성 → 유지 → 참여 → 깊은청취 → 복귀 → 이탈
+  // 가중치: Tier 1 (max 15, 활성·유지·깊은청취·이탈) + Tier 2 (max 10, 나머지) = 합 100점
+  // DAU/WAU/MAU WoW (Tier 1, max 15)
   const dauW = p==='day'?s1.dau_wow : p==='week'?s1.dau_week_wow : s1.dau_mon_wow;
   const dauLabel = p==='day'?'DAU' : p==='week'?'WAU' : 'MAU';
   if(dauW!=null){
-    const sc = dauW>5?20:dauW>0?15:dauW>-5?10:5;
+    const sc = dauW>0?15:dauW>-5?10:5;
     scores.push(sc);
     dots.push({label:dauLabel+' '+fmtD(dauW),chartLabel:dauLabel,cls:dauW>0?'g':dauW>-5?'y':'r',metric:'__active_users__',score:sc});
   }
-  // 깊은청취율
-  const dr = p==='day'?s3.deep_rate : p==='week'?s3.deep_rate_week : s3.deep_rate_mon;
-  if(dr!=null){
-    const sc = dr>=90?20:dr>=80?15:dr>=70?10:5;
-    scores.push(sc); dots.push({label:'깊은청취 '+fmtP(dr),chartLabel:'깊은청취',cls:dr>=85?'g':dr>=75?'y':'r',metric:'deep_rate',score:sc});
+  // 신규유입 (Tier 2, max 10) — 채널 비교 레이더와 동일 원본 지표
+  const np = p==='day'?s2.new_pct : p==='week'?s2.new_week_pct : s2.new_mon_pct;
+  if(np!=null){
+    const thG = p==='day'?5  : p==='week'?15 : 25;
+    const thY = p==='day'?3  : p==='week'?10 : 18;
+    const sc = np>=thG?10:np>=thY?8:5;
+    scores.push(sc); dots.push({label:'신규유입 '+fmtP(np),chartLabel:'신규유입',cls:np>=thG?'g':np>=thY?'y':'r',metric:'new_pct',score:sc});
   }
-  // 이탈율 (낮을수록 좋음)
-  const cr = p==='day'?s2.churn_rate : p==='week'?s2.churn_week : s2.churn_mon;
-  if(cr!=null){
-    const sc = cr<15?20:cr<25?15:cr<35?10:5;
-    scores.push(sc); dots.push({label:'이탈율 '+fmtP(cr),chartLabel:'이탈율',cls:cr<20?'g':cr<30?'y':'r',metric:'churn_rate',score:sc});
+  // 습관형성률 (Tier 2, max 10) — 신규 사용자의 7일 내 3일 이상 청취 비율
+  const hr = p==='day'?s4.habit_rate : p==='week'?s4.habit_week : s4.habit_mon;
+  if(hr!=null){
+    const sc = hr>=30?10:hr>=20?8:5;
+    scores.push(sc); dots.push({label:'습관형성 '+fmtP(hr),chartLabel:'습관형성',cls:hr>=30?'g':hr>=20?'y':'r',metric:'habit_rate',score:sc});
   }
-  // D1/W1/M1 유지율
+  // D1/W1/M1 유지율 (Tier 1, max 15) — 전체 사용자
   const ret = p==='day'?s2.d1_ret : p==='week'?s2.w1_ret : s2.m1_ret;
   const retL= p==='day'?'D1유지' : p==='week'?'W1유지' : 'M1유지';
   if(ret!=null){
-    const sc = ret>=50?20:ret>=35?15:ret>=20?10:5;
+    const sc = ret>=45?15:ret>=30?10:5;
     scores.push(sc); dots.push({label:retL+' '+fmtP(ret),chartLabel:retL,cls:ret>=45?'g':ret>=30?'y':'r',metric:'d1_ret',score:sc});
   }
-  // 복귀율
+  // 참여율 (Tier 2, max 10)
+  const er = p==='day'?s3.engage_rate : p==='week'?s3.engage_week : s3.engage_mon;
+  if(er!=null){
+    const sc = er>=5?10:er>=3?8:5;
+    scores.push(sc); dots.push({label:'참여율 '+fmtP(er),chartLabel:'참여율',cls:er>=5?'g':er>=3?'y':'r',metric:'engage_rate',score:sc});
+  }
+  // 깊은청취율 (Tier 1, max 15)
+  const dr = p==='day'?s3.deep_rate : p==='week'?s3.deep_rate_week : s3.deep_rate_mon;
+  if(dr!=null){
+    const sc = dr>=85?15:dr>=75?10:5;
+    scores.push(sc); dots.push({label:'깊은청취 '+fmtP(dr),chartLabel:'깊은청취',cls:dr>=85?'g':dr>=75?'y':'r',metric:'deep_rate',score:sc});
+  }
+  // 복귀율 (Tier 2, max 10)
   const rr = p==='day'?s2.react_rate : p==='week'?s2.react_rate_week : s2.react_rate_mon;
   if(rr!=null){
     const sc = rr>=5?10:rr>=3?8:5;
     scores.push(sc); dots.push({label:'복귀율 '+fmtP(rr),chartLabel:'복귀율',cls:rr>=5?'g':rr>=3?'y':'r',metric:'react_rate',score:sc});
   }
-  // 습관형성률
-  const hr = p==='day'?s4.habit_rate : p==='week'?s4.habit_week : s4.habit_mon;
-  if(hr!=null){
-    const sc = hr>=30?10:hr>=20?8:5;
-    scores.push(sc); dots.push({label:'습관형성 '+fmtP(hr),chartLabel:'습관형성',cls:hr>=30?'g':hr>=20?'y':'r',metric:'habit_rate',score:sc});
+  // 이탈율 (Tier 1, max 15) — 낮을수록 좋음
+  const cr = p==='day'?s2.churn_rate : p==='week'?s2.churn_week : s2.churn_mon;
+  if(cr!=null){
+    const sc = cr<20?15:cr<30?10:5;
+    scores.push(sc); dots.push({label:'이탈율 '+fmtP(cr),chartLabel:'이탈율',cls:cr<20?'g':cr<30?'y':'r',metric:'churn_rate',score:sc});
   }
 
   const total = scores.length ? Math.min(100, scores.reduce((a,b)=>a+b,0)) : 0;
@@ -2181,7 +2257,7 @@ function renderFunnel(s1, s2) {
         <div class="fc-val">${fmt(maint)}</div>
       </div>
       <div class="funnel-cell">
-        <div class="fc-name">복귀 *</div>
+        <div class="fc-name">복귀 ⚠</div>
         <div class="fc-pct" style="color:var(--yellow)">${fmtP(react_p)}</div>
         <div class="fc-val">${fmt(react)}</div>
       </div>
@@ -2198,13 +2274,13 @@ function renderFunnel(s1, s2) {
         <div class="fc-val">${fmt(maint)}</div>
       </div>
       <div class="funnel-cell">
-        <div class="fc-name">이탈 *</div>
+        <div class="fc-name">이탈 ⚠</div>
         <div class="fc-pct" style="color:var(--red)">${fmtP(churn_p2)}</div>
         <div class="fc-val">${fmt(churn_users)}</div>
       </div>
     </div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;text-align:center;opacity:0.7;">
-      * 복귀·이탈 수치 데이터 안정화 중
+    <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;text-align:left;opacity:0.7;">
+      ⚠ 복귀·이탈 수치 데이터 안정화 중
     </div>
   `;
 }
@@ -2255,40 +2331,94 @@ function renderCohort(s2){
         </div>
       </div>`;
   }
+  _drawCohortChart();
 }
 
-// ── ZONE 5: 청취 품질 ────────────────────────────────────
-function renderQuality(s3){
-  const p = _period;
-  const dr   = p==='day'?s3.deep_rate     : p==='week'?s3.deep_rate_week    : s3.deep_rate_mon;
-  const drD  = p==='day'?s3.deep_rate_diff: p==='week'?s3.deep_rate_week_diff: s3.deep_rate_mon_diff;
-  const er   = p==='day'?s3.engage_rate   : p==='week'?s3.engage_week        : s3.engage_mon;
-  const erD  = p==='day'?s3.engage_diff   : p==='week'?s3.engage_week_diff   : s3.engage_mon_diff;
-
-  const u1min  = p==='day'?s3.dau_1min  : p==='week'?s3.wau_1min  : s3.mau_1min;
-  const u10min = p==='day'?s3.dau_10min : p==='week'?s3.wau_10min : s3.mau_10min;
-
-  document.getElementById('qualityGrid').innerHTML = `
-    <div class="quality-card">
-      <div class="qc-label">깊은청취율 <span style="color:var(--dim);font-size:14px">(10분이상/1분이상)</span></div>
-      <div><span class="qc-big" style="color:var(--purple)">${fmtP(dr)}</span></div>
-      <div class="qc-diff ${drD>0?'up':'dn'}">${fmtD(drD,'pp')} 전기간 대비</div>
-      <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;gap:4px;">
-        <div style="flex:1;">
-          <span style="font-size:var(--fs-xs);color:var(--sub);display:block;margin-bottom:2px;">1분이상</span>
-          <span style="font-size:var(--fs-lg);font-weight:600;">${fmtK(u1min)}명</span>
-        </div>
-        <div style="flex:1;">
-          <span style="font-size:var(--fs-xs);color:var(--sub);display:block;margin-bottom:2px;">10분이상</span>
-          <span style="font-size:var(--fs-lg);font-weight:600;">${fmtK(u10min)}명</span>
-        </div>
-      </div>
-    </div>
-    <div class="quality-card">
-      <div class="qc-label">참여율 <span style="color:var(--dim);font-size:14px">(공감·공유·검색)</span></div>
-      <div><span class="qc-big" style="color:var(--orange)">${fmtP(er)}</span></div>
-      <div class="qc-diff ${erD>0?'up':'dn'}">${fmtD(erD,'pp')} 전기간 대비</div>
-    </div>`;
+// ── 코호트 추이 라인 차트 (D1/D7/D7 + W1/M1 stepped) ─────
+let _cohortChartInstance = null;
+async function _drawCohortChart() {
+  const canvas = document.getElementById('cohortChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (_cohortChartInstance) {
+    try { _cohortChartInstance.destroy(); } catch(e) {}
+    _cohortChartInstance = null;
+  }
+  const isNew = _cohortTab === 'new';
+  const metrics = isNew
+    ? [
+        {key:'new_d1_ret', label:'D1 (신규)', color:'#378ADD', stepped:false},
+        {key:'new_d7_ret', label:'D7 (신규)', color:'#A78BFA', stepped:false},
+        {key:'new_w1_ret', label:'W1 (신규)', color:'#1D9E75', stepped:'after'},
+        {key:'new_m1_ret', label:'M1 (신규)', color:'#D4A93A', stepped:'after'},
+      ]
+    : [
+        {key:'d1_ret', label:'D1', color:'#378ADD', stepped:false},
+        {key:'d7_ret', label:'D7', color:'#A78BFA', stepped:false},
+        {key:'w1_ret', label:'W1', color:'#1D9E75', stepped:'after'},
+        {key:'m1_ret', label:'M1', color:'#D4A93A', stepped:'after'},
+      ];
+  const days = 30;
+  const sc = _scope || 'T00';
+  const series = await Promise.all(
+    metrics.map(m =>
+      fetch(`/api/trend?metric=${m.key}&scope=${sc}&days=${days}`)
+        .then(r => r.json())
+        .then(j => (j && j.ok) ? j.data : [])
+        .catch(() => [])
+    )
+  );
+  const baseSeries = series[0] || [];
+  const labels = baseSeries.map(p => (p.date || '').slice(5));
+  if (!labels.length) return;
+  const datasets = metrics.map((m, i) => {
+    const data = (series[i] || []).map(p => p.value);
+    return {
+      label: m.label,
+      data,
+      borderColor: m.color,
+      backgroundColor: m.color + '15',
+      borderWidth: 2,
+      pointRadius: m.stepped ? 0 : 1.5,
+      pointHoverRadius: 5,
+      tension: m.stepped ? 0 : 0.25,
+      stepped: m.stepped,
+      fill: false,
+    };
+  });
+  _cohortChartInstance = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y!=null ? c.parsed.y.toFixed(1) : '—'}%` }
+        }
+      },
+      scales: {
+        y: {
+          min: 0, max: 100,
+          ticks: { callback: v => v + '%', font: { size: 10 }, color: 'rgba(160,170,185,0.7)' },
+          grid: { color: 'rgba(255,255,255,0.06)' }
+        },
+        x: {
+          ticks: { font: { size: 9 }, color: 'rgba(160,170,185,0.7)', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+  const legendEl = document.getElementById('cohortChartLegend');
+  if (legendEl) {
+    legendEl.innerHTML = metrics.map(m =>
+      `<span style="display:inline-flex;align-items:center;gap:4px;">
+        <span style="display:inline-block;width:14px;height:2px;background:${m.color};"></span>
+        ${m.label}${m.stepped ? ' (계단)' : ''}
+      </span>`
+    ).join('');
+  }
 }
 
 // ── ZONE 6: 채널 현황 ────────────────────────────────────
@@ -2297,11 +2427,34 @@ function renderChannels(s6){
   const clsMap   = {F00:'',  L00:'lv',     G00:'gm',     P00:'pk'};
   const colorMap = {F00:'#E8593C', L00:'#D4537E', G00:'#1D9E75', P00:'#534AB7'};
   const p = _period;
+  const retLbl = p==='day' ? 'D1유지' : p==='week' ? 'W1유지' : 'M1유지';
+  // 종합지표와 동일한 임계값으로 g/y/r 상태 색상 결정
+  const cls = (m, v) => {
+    if (v == null) return 'y';
+    if (m==='dauW')   return v>0   ? 'g' : v>-5 ? 'y' : 'r';
+    if (m==='deep')   return v>=85 ? 'g' : v>=75 ? 'y' : 'r';
+    if (m==='engage') return v>=5  ? 'g' : v>=3  ? 'y' : 'r';
+    if (m==='react')  return v>=5  ? 'g' : v>=3  ? 'y' : 'r';
+    if (m==='ret')    return v>=45 ? 'g' : v>=30 ? 'y' : 'r';
+    if (m==='newPct') {
+      const thG = p==='day' ? 5  : p==='week' ? 15 : 25;
+      const thY = p==='day' ? 3  : p==='week' ? 10 : 18;
+      return v>=thG ? 'g' : v>=thY ? 'y' : 'r';
+    }
+    if (m==='habit')  return v>=30 ? 'g' : v>=20 ? 'y' : 'r';
+    if (m==='churn')  return v<20  ? 'g' : v<30  ? 'y' : 'r';  // 낮을수록 좋음
+    return 'y';
+  };
   document.getElementById('channelGrid').innerHTML = chs.map(ch=>{
-    const dau   = p==='day' ? ch.dau        : p==='week' ? ch.dau_week        : ch.dau_mon;
-    const dr    = p==='day' ? ch.deep_rate  : p==='week' ? ch.deep_rate_week  : ch.deep_rate_mon;
-    const cr    = p==='day' ? ch.churn_rate : p==='week' ? ch.churn_week      : ch.churn_mon;
-    const rr    = p==='day' ? ch.react_rate : p==='week' ? ch.react_rate_week : ch.react_rate_mon;
+    const dau   = p==='day' ? ch.dau         : p==='week' ? ch.dau_week         : ch.dau_mon;
+    const dauW  = p==='day' ? ch.dau_wow     : p==='week' ? ch.dau_week_wow     : ch.dau_mon_wow;
+    const dr    = p==='day' ? ch.deep_rate   : p==='week' ? ch.deep_rate_week   : ch.deep_rate_mon;
+    const er    = p==='day' ? ch.engage_rate : p==='week' ? ch.engage_week      : ch.engage_mon;
+    const cr    = p==='day' ? ch.churn_rate  : p==='week' ? ch.churn_week       : ch.churn_mon;
+    const rr    = p==='day' ? ch.react_rate  : p==='week' ? ch.react_rate_week  : ch.react_rate_mon;
+    const np    = p==='day' ? ch.new_pct     : p==='week' ? ch.new_week_pct     : ch.new_mon_pct;
+    const hr    = p==='day' ? ch.habit_rate  : p==='week' ? ch.habit_week       : ch.habit_mon;
+    const ret   = p==='day' ? ch.d1_ret      : p==='week' ? ch.w1_ret           : ch.m1_ret;
     const share = +(ch.share || 0);
     const color = colorMap[ch.code] || 'var(--accent)';
     return `<div class="channel-card ${clsMap[ch.code]||''}">
@@ -2315,43 +2468,17 @@ function renderChannels(s6){
         <div class="ch-share-fill" style="width:${share}%;background:${color};"></div>
       </div>
       <div class="ch-tags">
-        <span class="ch-tag deep">깊은청취 ${fmtP(dr)}</span>
-        <span class="ch-tag ${(cr||0)<25?'good-churn':'churn'}">이탈 ${fmtP(cr)}</span>
-        <span class="ch-tag react">복귀율 ${fmtP(rr)}</span>
+        <span class="ch-tag ${cls('dauW', dauW)}">활성 ${fmtP(dauW)}</span>
+        <span class="ch-tag ${cls('newPct', np)}">신규 ${fmtP(np)}</span>
+        <span class="ch-tag ${cls('habit', hr)}">습관형성 ${fmtP(hr)}</span>
+        <span class="ch-tag ${cls('ret', ret)}">${retLbl} ${fmtP(ret)}</span>
+        <span class="ch-tag ${cls('engage', er)}">참여 ${fmtP(er)}</span>
+        <span class="ch-tag ${cls('deep', dr)}">깊은청취 ${fmtP(dr)}</span>
+        <span class="ch-tag ${cls('react', rr)}">복귀 ${fmtP(rr)}</span>
+        <span class="ch-tag ${cls('churn', cr)}">이탈 ${fmtP(cr)}</span>
       </div>
     </div>`;
   }).join('');
-}
-
-// ── ZONE 7: 성장 품질 ────────────────────────────────────
-function renderGrowth(s4){
-  const p = _period;
-  const hr   = p==='day'?s4.habit_rate  : p==='week'?s4.habit_week  : s4.habit_mon;
-  const hrD  = p==='day'?s4.habit_diff  : p==='week'?s4.habit_week_diff : s4.habit_mon_diff;
-  const rrV  = p==='day'? s4.react_rate      : p==='week'? s4.react_rate_week      : s4.react_rate_mon;
-  const rrD  = p==='day'? s4.react_rate_diff : p==='week'? s4.react_rate_week_diff : s4.react_rate_mon_diff;
-  const TARGET_HABIT = 30;
-  const habitOk = hr>=TARGET_HABIT;
-  const targetPos = Math.min(TARGET_HABIT,100);
-
-  document.getElementById('growthGrid').innerHTML = `
-    <div class="growth-card">
-      <div class="gc-label">습관형성률 <span style="color:var(--dim);font-size:14px">(목표 ${TARGET_HABIT}%)</span></div>
-      <div class="gc-gauge">
-        <div class="gc-fill" style="width:${Math.min(hr||0,100)}%;background:${habitOk?'var(--green)':'var(--yellow)'}"></div>
-        <div class="gc-target" style="left:${targetPos}%"></div>
-      </div>
-      <div class="gc-big" style="color:${habitOk?'var(--green)':'var(--yellow)'}">${fmtP(hr)}</div>
-      <div class="gc-status ${habitOk?'ok':'warn'}">${habitOk?'✅ 목표 달성':'⚠ 목표 미달'} ${fmtD(hrD,'pp')}</div>
-    </div>
-    <div class="growth-card">
-      <div class="gc-label">복귀율 <span style="color:var(--dim);font-size:14px">(복귀사용자/휴면풀)</span></div>
-      <div class="gc-gauge">
-        <div class="gc-fill" style="width:${Math.min((rrV||0)*10,100)}%;background:var(--accent)"></div>
-      </div>
-      <div class="gc-big" style="color:var(--accent)">${fmtP(rrV)}</div>
-      <div class="gc-status ${rrD>0?'ok':'warn'}">${fmtD(rrD,'pp')} 전기간 대비</div>
-    </div>`;
 }
 
 // ── ZONE 8: 이상징후 ─────────────────────────────────────
@@ -2853,6 +2980,34 @@ function renderQFunnel(s1, s2, s3) {
     if (v == null || isNaN(v)) return '—';
     return v >= 1000 ? (v/1000).toFixed(1) + 'k' : String(Math.round(v));
   };
+  // 세로 깔때기용 단계 정의 (단계별 절대 사용자 수 기반 폭 산정)
+  const stages = [
+    {name:'청취시작 ('+label+')', val:base,    pct:100,                          color:'#3A607D'},
+    {name:'1분이상',               val:v1min,   pct:pct1!=null?+pct1.toFixed(1):null,  color:'#577B97'},
+    {name:'10분이상',              val:v10min,  pct:pct10!=null?+pct10.toFixed(1):null, color:'#7A99AF'},
+    {name:'참여',                  val:engUsers,pct:pctEng,                       color:'#5C8674'},
+  ];
+  const maxV = stages[0].val || 1;
+  const vfHTML = stages.map((s, i) => {
+    const w = (s.val && maxV) ? Math.max(15, s.val / maxV * 100) : 15;
+    const pctTxt = (s.pct != null && !isNaN(s.pct)) ? `${(+s.pct).toFixed(1)}%` : '—';
+    const valTxt = fmt(s.val);
+    let dropHTML = '';
+    if (i < stages.length - 1) {
+      const next = stages[i+1];
+      const passPct = (s.val && next.val) ? (next.val / s.val * 100).toFixed(1) : null;
+      dropHTML = `<div class="vf-drop"><span class="vf-arrow">↓</span> 다음 단계 통과 ${passPct!=null?passPct+'%':'—'}</div>`;
+    }
+    return `
+      <div class="vf-stage">
+        <div class="vf-bar" style="width:${w}%;background:${s.color};">
+          <span class="vf-name">${s.name}</span>
+          <span class="vf-val">${valTxt}<span class="vf-pct">${pctTxt}</span></span>
+        </div>
+        ${dropHTML}
+      </div>`;
+  }).join('');
+
   el.innerHTML = `
     <div class="qlty-funnel-head">
       <span class="qlty-funnel-label">분모: 청취시작(전체)</span>
@@ -2877,6 +3032,8 @@ function renderQFunnel(s1, s2, s3) {
         <div class="qlty-fi-val">${fmt(engUsers)}</div>
       </div>
     </div>`;
+  const chartEl = document.getElementById('qfunnelChart');
+  if (chartEl) chartEl.innerHTML = `<div class="vf-wrap">${vfHTML}</div>`;
 }
 
 // ── 분석 페이지 ──
@@ -3004,8 +3161,6 @@ function renderAnalyticsPage(data) {
   if (kpiGridEl) kpiGridEl.innerHTML =
     document.getElementById('kpiGrid')?.innerHTML || '';
   renderCohort(s2);
-  renderQuality(s3);
-  renderGrowth(s4);
   renderQFunnel(s1, s2, s3);
   renderRadarChart(data);
 }
@@ -3094,6 +3249,82 @@ loadAll();
 </script>
 
 <!-- ── 종합 지표 모달 ── -->
+<!-- ── 이상징후 모달 ── -->
+<div id="anomalyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--bg2);border-radius:14px;padding:20px;width:calc(100% - 32px);max-width:520px;border:1px solid var(--line2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <span style="font-size:var(--fs-xl);font-weight:700;">이상징후 포착 기준</span>
+      <span style="cursor:pointer;font-size:20px;color:var(--sub);line-height:1;" onclick="document.getElementById('anomalyModal').style.display='none'">✕</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--bg3);">
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:left;font-weight:600;">알림</th>
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:left;font-weight:600;">조건</th>
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:center;font-weight:600;">레벨</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">DAU 급락</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">전주 대비 −10% 이하</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--red);">🔴</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">DAU 급증</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">전주 대비 +10% 이상</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--green);">🟢</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">깊은청취율 급락</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">전주 대비 −3pp 이하</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--red);">🔴</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">신규 급감</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">전주 대비 −20% 이하</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--red);">🔴</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">일간 이탈율 상승</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">전주 대비 +3pp 이상</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--yellow);">🟡</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">주간 이탈율 상승</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">전주 대비 +3pp 이상</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--yellow);">🟡</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">복귀율 달성</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">5% 이상</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--green);">🟢</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">습관형성률 달성</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">30% 이상</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--green);">🟢</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">습관형성률 부진</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">15% 이하</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--yellow);">🟡</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">리스크 프로그램</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--sub);">상위 2개 (이탈율↑·DAU WoW↓ 기준)</td>
+          <td style="padding:7px 8px;text-align:center;color:var(--yellow);">🟡</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="font-size:var(--fs-sm);color:var(--sub);text-align:left;margin-top:14px;line-height:1.6;">
+      &middot; 모든 알림은 <b>T00(전체) 기준</b>이며 채널/프로그램별 평가는 아닙니다.<br>
+      &middot; 일간 데이터 기준이 대부분이며, 기간탭(일/주/월) 변경과 무관하게 동일하게 산출됩니다.<br>
+      &middot; 해당 알림이 모두 없으면 "전 지표 정상 범위 🟢" 메시지가 표시됩니다.
+    </div>
+  </div>
+</div>
+
 <div id="healthModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
   <div style="background:var(--bg2);border-radius:14px;padding:20px;width:calc(100% - 32px);max-width:480px;border:1px solid var(--line2);">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -3112,44 +3343,56 @@ loadAll();
       <tbody>
         <tr style="border-bottom:1px solid var(--line);">
           <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">활성사용자 WoW</td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">+5% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">±5% 이내<br><span style="font-size:var(--fs-sm);">13점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">-5% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">+0% 이상<br><span style="font-size:var(--fs-sm);">15점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">-5%~0%<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">-5% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">신규유입 <span style="color:var(--dim);font-size:var(--fs-sm);">(활성 대비)</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">5% 이상<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">3~5%<br><span style="font-size:var(--fs-sm);">8점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">3% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">습관형성률 <span style="color:var(--dim);font-size:var(--fs-sm);">(신규 7일내 3일↑)</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">30% 이상<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">20~30%<br><span style="font-size:var(--fs-sm);">8점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">20% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">D1/W1/M1 유지율 <span style="color:var(--dim);font-size:var(--fs-sm);">(전체 사용자)</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">45% 이상<br><span style="font-size:var(--fs-sm);">15점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">30~45%<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">30% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">참여율</td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">5% 이상<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">3~5%<br><span style="font-size:var(--fs-sm);">8점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">3% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
         </tr>
         <tr style="border-bottom:1px solid var(--line);">
           <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">깊은청취율</td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">90% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">75~90%<br><span style="font-size:var(--fs-sm);">13점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">75% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
-        </tr>
-        <tr style="border-bottom:1px solid var(--line);">
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">이탈율 <span style="color:var(--dim);font-size:var(--fs-sm);">(낮을수록↑)</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">15% 미만<br><span style="font-size:var(--fs-sm);">20점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">15~30%<br><span style="font-size:var(--fs-sm);">13점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">30% 이상<br><span style="font-size:var(--fs-sm);">6점</span></td>
-        </tr>
-        <tr style="border-bottom:1px solid var(--line);">
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">D1/W1/M1 유지율</td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">45% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">25~45%<br><span style="font-size:var(--fs-sm);">13점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">25% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">85% 이상<br><span style="font-size:var(--fs-sm);">15점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">75~85%<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">75% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
         </tr>
         <tr style="border-bottom:1px solid var(--line);">
           <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">복귀율</td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">5% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">3~5%<br><span style="font-size:var(--fs-sm);">13점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">3% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">5% 이상<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">3~5%<br><span style="font-size:var(--fs-sm);">8점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">3% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
         </tr>
         <tr>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">습관형성률</td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">30% 이상<br><span style="font-size:var(--fs-sm);">20점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">18~30%<br><span style="font-size:var(--fs-sm);">13점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">18% 미만<br><span style="font-size:var(--fs-sm);">6점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">이탈율 <span style="color:var(--dim);font-size:var(--fs-sm);">(낮을수록↑)</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">20% 미만<br><span style="font-size:var(--fs-sm);">15점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">20~30%<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">30% 이상<br><span style="font-size:var(--fs-sm);">5점</span></td>
         </tr>
       </tbody>
     </table>
     <div style="font-size:var(--fs-sm);color:var(--sub);text-align:center;margin-top:14px;">
-      6개 지표 합산 &middot; 최대 100점 &middot; 75점↑🟢 &nbsp;50점↑🟡 &nbsp;50점↓🔴
+      활성·신규·습관형성·유지·참여·깊은청취·복귀·이탈 8개 지표 합산 &middot; 최대 100점 &middot; 75점↑🟢 &nbsp;50점↑🟡 &nbsp;50점↓🔴
     </div>
   </div>
 </div>
