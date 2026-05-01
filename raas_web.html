@@ -513,6 +513,10 @@ body{
 }
 .pr-badge.deep{background:rgba(167,139,250,.12);color:var(--purple)}
 .pr-badge.warn{background:rgba(255,77,106,.12);color:var(--red)}
+.pr-badge.habit{background:rgba(212,83,126,.12);color:#D4537E}
+.pr-badge.ret{background:rgba(15,110,86,.18);color:#0F6E56}
+.pr-badge.engage{background:rgba(186,117,23,.15);color:#BA7517}
+.pr-badge.react{background:rgba(0,200,255,.12);color:var(--accent)}
 .pr-badge.weekend{background:rgba(20,184,166,.18);color:#14b8a6;font-size:11px;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600;vertical-align:middle}
 .pr-badge.channel-fm{background:rgba(239,68,68,.10);color:#fca5a5;font-size:11px;padding:2px 7px;border-radius:4px;font-weight:500;margin-left:5px;vertical-align:middle}
 .pr-badge.channel-lm{background:rgba(132,204,22,.10);color:#bef264;font-size:11px;padding:2px 7px;border-radius:4px;font-weight:500;margin-left:5px;vertical-align:middle}
@@ -1064,8 +1068,11 @@ body{
     <div class="section-title">프로그램 랭킹</div>
     <div class="pgm-tabs" id="pgmTabs">
       <button class="pgm-tab active" id="pgmTabDau" data-tab="dau" onclick="showPgmTab('dau')">DAU TOP</button>
-      <button class="pgm-tab" data-tab="deep" onclick="showPgmTab('deep')">깊은청취</button>
       <button class="pgm-tab" data-tab="new" onclick="showPgmTab('new')">신규유입</button>
+      <button class="pgm-tab" data-tab="habit" onclick="showPgmTab('habit')">습관형성</button>
+      <button class="pgm-tab" data-tab="ret" onclick="showPgmTab('ret')">유지</button>
+      <button class="pgm-tab" data-tab="engage" onclick="showPgmTab('engage')">참여</button>
+      <button class="pgm-tab" data-tab="deep" onclick="showPgmTab('deep')">깊은청취</button>
       <button class="pgm-tab" data-tab="react" onclick="showPgmTab('react')">복귀유도</button>
       <button class="pgm-tab" data-tab="risk" onclick="showPgmTab('risk')">⚠ 이탈주의</button>
     </div>
@@ -1689,18 +1696,22 @@ async function showHealthChart(metricKey, label) {
   wrap.style.display = 'block';
   labelEl.textContent = `${label} 추이`;
 
-  // 활성사용자만 기간탭에 따라 metric이 다름. 그 외는 day-version 고정 + days만 변경.
-  let actualMetric = metricKey;
+  // 기간탭(일/주/월)에 맞춰 실제 시계열 컬럼을 선택해 닷이 표시하는 값과 일치시킴.
+  const PERIOD_FIELD = {
+    '__active_users__': {day:'dau_today',  week:'wau_today',     mon:'mau_today'},
+    'react_rate':       {day:'react_rate', week:'react_rate_week',mon:'react_rate_mon'},
+    'deep_rate':        {day:'deep_rate',  week:'deep_rate_week', mon:'deep_rate_mon'},
+    'engage_rate':      {day:'engage_rate',week:'engage_week',    mon:'engage_mon'},
+    'churn_rate':       {day:'churn_rate', week:'churn_week',     mon:'churn_mon'},
+    'habit_rate':       {day:'habit_rate', week:'habit_week',     mon:'habit_mon'},
+    'd1_ret':           {day:'d1_ret',     week:'w1_ret',         mon:'m1_ret'},
+    'new_pct':          {day:'new_pct',    week:'new_week_pct',   mon:'new_mon_pct'},
+  };
+  const actualMetric = PERIOD_FIELD[metricKey]?.[_period] || metricKey;
   let chartDays, periodLabel;
-  if (metricKey === '__active_users__') {
-    if (_period === 'day')      { actualMetric = 'dau_today'; chartDays = 30;  periodLabel = '최근 30일'; }
-    else if (_period === 'week'){ actualMetric = 'wau_today'; chartDays = 84;  periodLabel = '최근 12주'; }
-    else                         { actualMetric = 'mau_today'; chartDays = 365; periodLabel = '최근 12개월'; }
-  } else {
-    if (_period === 'day')       { chartDays = 30;  periodLabel = '최근 30일'; }
-    else if (_period === 'week') { chartDays = 84;  periodLabel = '최근 12주'; }
-    else                          { chartDays = 365; periodLabel = '최근 12개월'; }
-  }
+  if (_period === 'day')       { chartDays = 30;  periodLabel = '최근 30일'; }
+  else if (_period === 'week') { chartDays = 84;  periodLabel = '최근 12주'; }
+  else                          { chartDays = 365; periodLabel = '최근 12개월'; }
 
   labelEl.textContent = `${label} 추이 (${periodLabel})`;
 
@@ -2066,11 +2077,13 @@ function renderHealth(s1,s2,s3,s4){
     const sc = dr>=85?15:dr>=75?10:5;
     scores.push(sc); dots.push({label:'깊은청취 '+fmtP(dr),chartLabel:'깊은청취',cls:dr>=85?'g':dr>=75?'y':'r',metric:'deep_rate',score:sc});
   }
-  // 복귀율 (Tier 2, max 10)
+  // 복귀율 (Tier 2, max 10) — 기간별 차등 임계값 (누적 윈도우 특성 반영)
   const rr = p==='day'?s2.react_rate : p==='week'?s2.react_rate_week : s2.react_rate_mon;
   if(rr!=null){
-    const sc = rr>=5?10:rr>=3?8:5;
-    scores.push(sc); dots.push({label:'복귀율 '+fmtP(rr),chartLabel:'복귀율',cls:rr>=5?'g':rr>=3?'y':'r',metric:'react_rate',score:sc});
+    const rrThG = p==='day'?5  : p==='week'?15 : 25;
+    const rrThY = p==='day'?3  : p==='week'?10 : 18;
+    const sc = rr>=rrThG?10:rr>=rrThY?8:5;
+    scores.push(sc); dots.push({label:'복귀율 '+fmtP(rr),chartLabel:'복귀율',cls:rr>=rrThG?'g':rr>=rrThY?'y':'r',metric:'react_rate',score:sc});
   }
   // 이탈율 (Tier 1, max 15) — 낮을수록 좋음
   const cr = p==='day'?s2.churn_rate : p==='week'?s2.churn_week : s2.churn_mon;
@@ -2434,7 +2447,11 @@ function renderChannels(s6){
     if (m==='dauW')   return v>0   ? 'g' : v>-5 ? 'y' : 'r';
     if (m==='deep')   return v>=85 ? 'g' : v>=75 ? 'y' : 'r';
     if (m==='engage') return v>=5  ? 'g' : v>=3  ? 'y' : 'r';
-    if (m==='react')  return v>=5  ? 'g' : v>=3  ? 'y' : 'r';
+    if (m==='react') {
+      const thG = p==='day' ? 5  : p==='week' ? 15 : 25;
+      const thY = p==='day' ? 3  : p==='week' ? 10 : 18;
+      return v>=thG ? 'g' : v>=thY ? 'y' : 'r';
+    }
     if (m==='ret')    return v>=45 ? 'g' : v>=30 ? 'y' : 'r';
     if (m==='newPct') {
       const thG = p==='day' ? 5  : p==='week' ? 15 : 25;
@@ -2538,23 +2555,27 @@ function setPgmView(view){
 
 function getMetricField(tab, period){
   const map = {
-    dau:   {day:'dau',         week:'dau_week',         mon:'dau_mon'},
-    deep:  {day:'deep_rate',   week:'deep_rate_week',   mon:'deep_rate_mon'},
-    new:   {day:'new_user',    week:'new_week',         mon:'new_mon'},
-    react: {day:'react_user',  week:'react_week',       mon:'react_mon'},
-    risk:  {day:'churn_rate',  week:'churn_week',       mon:'churn_mon'},
+    dau:    {day:'dau',         week:'dau_week',         mon:'dau_mon'},
+    new:    {day:'new_user',    week:'new_week',         mon:'new_mon'},
+    habit:  {day:'habit_rate',  week:'habit_week',       mon:'habit_mon'},
+    ret:    {day:'d1_ret',      week:'w1_ret',           mon:'m1_ret'},
+    engage: {day:'engage_rate', week:'engage_week',      mon:'engage_mon'},
+    deep:   {day:'deep_rate',   week:'deep_rate_week',   mon:'deep_rate_mon'},
+    react:  {day:'react_rate',  week:'react_rate_week',  mon:'react_rate_mon'},
+    risk:   {day:'churn_rate',  week:'churn_week',       mon:'churn_mon'},
   };
   return map[tab]?.[period] || 'dau';
 }
 
+const PCT_TABS = new Set(['deep','risk','habit','ret','engage','react']);
 function fmtChartVal(val, tab){
   if(val==null) return '—';
-  if(tab==='deep'||tab==='risk') return val.toFixed(1)+'%';
+  if(PCT_TABS.has(tab)) return val.toFixed(1)+'%';
   return fmtK(val);
 }
 const formatValue = fmtChartVal;
 
-function isPercentMetric(tab){ return tab === 'deep' || tab === 'risk'; }
+function isPercentMetric(tab){ return PCT_TABS.has(tab); }
 
 function renderPgmChart(programs, tab, period){
   const field      = getMetricField(tab, period);
@@ -2689,22 +2710,77 @@ function renderPgm(s5, tab, period, channelFilter){
         </div>
       </div>`);
 
-  } else if(tab==='react'){
-    const valKey  = period==='mon'?'react_mon':period==='week'?'react_week':'react_user';
-    const rateKey = period==='mon'?'react_rate_mon':period==='week'?'react_rate_week':'react_rate';
-    const wowKey  = period==='mon'?'react_mon_wow':period==='week'?'react_week_wow':'react_wow';
-    const sorted  = [...pgms].sort((a,b)=>(b[valKey]||0)-(a[valKey]||0));
+  } else if(tab==='habit'){
+    const rateKey = period==='mon'?'habit_mon':period==='week'?'habit_week':'habit_rate';
+    const diffKey = period==='mon'?'habit_mon_diff':period==='week'?'habit_week_diff':'habit_diff';
+    const sorted  = [...pgms].sort((a,b)=>(b[rateKey]||0)-(a[rateKey]||0));
     rows = sorted.map((p,i)=>`
       <div class="pgm-row">
         <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
         <div class="pr-info">
           <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
-          <div class="pr-meta">${period!=='day'?(p.channel||'')+' · ':''}복귀율 ${fmtP(p[rateKey])}</div>
-          ${guestRow(p)}
+          ${period==='day' ? guestRow(p) : `<div class="pr-channel">${p.channel||''}</div>`}
         </div>
+        <span class="pr-badge habit">${fmtP(p[rateKey])}</span>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-          <span class="pr-val" style="color:var(--purple)">${fmtK(p[valKey])}</span>
-          ${wowSpan(p[wowKey],'%')}
+          <span class="pr-val" style="color:var(--sub);font-size:14px">신규 7일내 3일↑</span>
+          ${wowSpan(p[diffKey],'pp')}
+        </div>
+      </div>`);
+
+  } else if(tab==='ret'){
+    const rateKey = period==='mon'?'m1_ret':period==='week'?'w1_ret':'d1_ret';
+    const diffKey = period==='mon'?'m1_diff':period==='week'?'w1_diff':'d1_diff';
+    const lbl     = period==='mon'?'M1유지':period==='week'?'W1유지':'D1유지';
+    const sorted  = [...pgms].sort((a,b)=>(b[rateKey]||0)-(a[rateKey]||0));
+    rows = sorted.map((p,i)=>`
+      <div class="pgm-row">
+        <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
+        <div class="pr-info">
+          <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
+          ${period==='day' ? guestRow(p) : `<div class="pr-channel">${p.channel||''}</div>`}
+        </div>
+        <span class="pr-badge ret">${fmtP(p[rateKey])}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="pr-val" style="color:var(--sub);font-size:14px">${lbl}</span>
+          ${wowSpan(p[diffKey],'pp')}
+        </div>
+      </div>`);
+
+  } else if(tab==='engage'){
+    const rateKey = period==='mon'?'engage_mon':period==='week'?'engage_week':'engage_rate';
+    const diffKey = period==='mon'?'engage_mon_diff':period==='week'?'engage_week_diff':'engage_diff';
+    const sorted  = [...pgms].sort((a,b)=>(b[rateKey]||0)-(a[rateKey]||0));
+    rows = sorted.map((p,i)=>`
+      <div class="pgm-row">
+        <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
+        <div class="pr-info">
+          <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
+          ${period==='day' ? guestRow(p) : `<div class="pr-channel">${p.channel||''}</div>`}
+        </div>
+        <span class="pr-badge engage">${fmtP(p[rateKey])}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="pr-val" style="color:var(--sub);font-size:14px">참여율</span>
+          ${wowSpan(p[diffKey],'pp')}
+        </div>
+      </div>`);
+
+  } else if(tab==='react'){
+    const rateKey = period==='mon'?'react_rate_mon':period==='week'?'react_rate_week':'react_rate';
+    const diffKey = period==='mon'?'react_rate_mon_diff':period==='week'?'react_rate_week_diff':'react_rate_diff';
+    const cntKey  = period==='mon'?'react_mon':period==='week'?'react_week':'react_user';
+    const sorted  = [...pgms].sort((a,b)=>(b[rateKey]||0)-(a[rateKey]||0));
+    rows = sorted.map((p,i)=>`
+      <div class="pgm-row">
+        <span class="pr-rank ${i<3?'g'+(i+1):''}">${i+1}</span>
+        <div class="pr-info">
+          <div class="pr-name">${p.name||p.code||'—'}${channelBadge(p)}${weekendBadge(p)}</div>
+          ${period==='day' ? guestRow(p) : `<div class="pr-channel">${p.channel||''}</div>`}
+        </div>
+        <span class="pr-badge react">${fmtP(p[rateKey])}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <span class="pr-val" style="color:var(--sub);font-size:14px">복귀자 ${fmtK(p[cntKey])}명</span>
+          ${wowSpan(p[diffKey],'pp')}
         </div>
       </div>`);
 
@@ -3378,10 +3454,10 @@ loadAll();
           <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">75% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
         </tr>
         <tr style="border-bottom:1px solid var(--line);">
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">복귀율</td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">5% 이상<br><span style="font-size:var(--fs-sm);">10점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">3~5%<br><span style="font-size:var(--fs-sm);">8점</span></td>
-          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">3% 미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">복귀율 <span style="color:var(--dim);font-size:var(--fs-sm);">(기간별 차등)</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--green);text-align:center;">일 5%↑ / 주 15%↑ / 월 25%↑<br><span style="font-size:var(--fs-sm);">10점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--yellow);text-align:center;">일 3↑ / 주 10↑ / 월 18↑<br><span style="font-size:var(--fs-sm);">8점</span></td>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--red);text-align:center;">미만<br><span style="font-size:var(--fs-sm);">5점</span></td>
         </tr>
         <tr>
           <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">이탈율 <span style="color:var(--dim);font-size:var(--fs-sm);">(낮을수록↑)</span></td>
