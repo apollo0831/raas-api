@@ -219,6 +219,10 @@ body{
   background:var(--bg2);border-radius:12px;
   padding:14px;border:1px solid var(--line);
 }
+/* 사용자 흐름 다이어그램 (메인 카드 아래 독립 컨테이너) */
+.user-flow-chart{
+  background:transparent;padding:14px 0 4px;margin-top:10px;
+}
 .funnel-flow{
   display:flex;align-items:stretch;gap:0;
   margin-bottom:12px;overflow-x:auto;
@@ -821,7 +825,7 @@ body{
 .us-main-single .us-val { font-size:36px; font-weight:600; line-height:1.1; margin-top:8px; font-family:var(--mono); }
 .us-main-single .us-label { font-size:14px; color:var(--sub); font-weight:500; }
 .us-main-single .us-date  { font-size:12px; color:var(--dim); margin-top:2px; }
-.us-main-single .us-badge-row { margin-top:8px; }
+.us-main-single .us-badge-row { margin-top:2px; }
 
 /* 메인 카드 내부 좌우 분할 (일간 DAU + 우측 롤링 미니) */
 .us-main-split { display:flex; gap:20px; align-items:stretch; }
@@ -850,7 +854,7 @@ body{
 .us-card .us-label { font-size:13px; color:var(--sub); font-weight:500; }
 .us-card .us-date  { font-size:11px; color:var(--dim); margin-top:2px; min-height:14px; }
 .us-card .us-val   { font-size:28px; font-weight:600; line-height:1.1; margin-top:8px; font-family:var(--mono); }
-.us-card .us-badge-row { margin-top:6px; min-height:20px; }
+.us-card .us-badge-row { margin-top:2px; min-height:20px; }
 
 /* 참고 카드 그리드 */
 .us-sub-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -864,17 +868,17 @@ body{
 .us-sub-card.muted { opacity:0.55; }
 .us-sub-card.muted .us-val { color:var(--dim); font-size:12px; font-family:var(--sans); font-weight:500; }
 
-/* 뱃지 */
+/* 뱃지 (배경 없음 · 텍스트만 · 선명한 색) */
 .us-badge {
   display:inline-flex; align-items:center;
-  font-size:13px; font-weight:600;
-  padding:2px 8px; border-radius:10px;
+  font-size:15px; font-weight:700;
+  padding:0; background:transparent; border-radius:0;
   font-family:var(--mono);
 }
-.us-badge-sm { font-size:11px; padding:1px 6px; }
-.us-badge.pos  { background:#EAF3DE; color:#3B6D11; }
-.us-badge.neg  { background:#FCEBEB; color:#A32D2D; }
-.us-badge.flat { background:rgba(255,255,255,.06); color:var(--sub); }
+.us-badge-sm { font-size:13px; }
+.us-badge.pos  { color:var(--green); }
+.us-badge.neg  { color:var(--red); }
+.us-badge.flat { background:transparent; color:var(--sub); }
 .us-cmp { font-size:12px; color:var(--sub); margin-left:6px; font-weight:400; }
 
 /* 그래프 */
@@ -931,6 +935,7 @@ body{
     <div class="section">
       <div class="section-title">사용자 흐름</div>
       <div class="funnel-wrap"></div>
+      <div class="user-flow-chart" id="userFlowChart"></div>
     </div>
 
     <!-- ZONE 6: 채널 현황 -->
@@ -976,7 +981,7 @@ body{
 
   <!-- 다차원 프로파일 레이더 -->
   <div class="section" id="radarSection">
-    <div class="section-title">다차원 프로파일</div>
+    <div class="section-title">다차원 프로파일 <span id="radarInfoBtn" style="cursor:pointer;font-size:14px;color:var(--accent);margin-left:6px;border:1px solid var(--accent);border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;" onclick="document.getElementById('radarModal').style.display='flex'">?</span></div>
     <div style="position:relative;width:min(640px, 100%);aspect-ratio:1/1;margin:0 auto;">
       <canvas id="radarChart"></canvas>
     </div>
@@ -1865,7 +1870,8 @@ const RADAR_DIMENSIONS = [
   { label:'충성도(유지)', fields:{ day:'d1_ret',     week:'w1_ret',         mon:'m1_ret'         } },
   { label:'신규유입',    fields:{ day:'new_pct',    week:'new_week_pct',   mon:'new_mon_pct'    } },
   { label:'복귀유도',    fields:{ day:'react_rate', week:'react_rate_week',mon:'react_rate_mon' } },
-  { key:'depth', label:'깊은청취', fields:{} },
+  // 깊은청취: 종합지표와 동일 정의 (10분이상 / 1분이상 = 몰입도)
+  { label:'깊은청취',    fields:{ day:'deep_rate',  week:'deep_rate_week', mon:'deep_rate_mon'  } },
   // Phase 3: { label:'성장성', fields:{ day:'new_wow', week:'new_week_wow', mon:'new_mon_wow' } },
 ];
 
@@ -1899,12 +1905,6 @@ function getRadarComparisonSet(data, scope) {
 }
 
 function _radarRawValue(item, dim, period) {
-  if (dim.key === 'depth') {
-    if (period === 'day')  return item.dau      ? item.dau_1min / item.dau      * 100 : null;
-    if (period === 'week') return item.dau_week ? item.wau_1min / item.dau_week * 100 : null;
-    if (period === 'mon')  return item.dau_mon  ? item.mau_1min / item.dau_mon  * 100 : null;
-    return null;
-  }
   const field = dim.fields[period] || dim.fields.day;
   const v = item[field];
   return (v != null && isFinite(v)) ? +v : null;
@@ -2252,6 +2252,17 @@ function renderFunnel(s1, s2) {
     return String(Math.round(v));
   };
   const fmtP = v => v != null ? v + '%' : '—';
+  const fmtPP = v => {
+    if (v == null || isNaN(v)) return '—';
+    const sign = v >= 0 ? '+' : '';
+    return sign + (+v).toFixed(1) + 'pp';
+  };
+  // 직전 기간(D-1/D-7/D-30) 비교 pp diff — 엔진에서 timeline lookup해 산출
+  const newPP   = s2[`funnel_new_p_${p}_diff`];
+  const maintPP = s2[`funnel_maint_p_${p}_diff`];     // Row 1 (이번 활성 분모)
+  const reactPP = s2[`funnel_react_p_${p}_diff`];
+  const maintPP2= s2[`funnel_maint_p2_${p}_diff`];    // Row 2 (직전 활성 분모)
+  const churnPP = s2[`funnel_churn_p2_${p}_diff`];
 
   document.querySelector('.funnel-wrap').innerHTML = `
     <div class="funnel-head">
@@ -2262,17 +2273,17 @@ function renderFunnel(s1, s2) {
       <div class="funnel-cell">
         <div class="fc-name">신규</div>
         <div class="fc-pct" style="color:var(--green)">${fmtP(new_p)}</div>
-        <div class="fc-val">${fmt(new_u)}</div>
+        <div class="fc-val">${fmtPP(newPP)}</div>
       </div>
       <div class="funnel-cell">
         <div class="fc-name">유지</div>
         <div class="fc-pct" style="color:var(--text)">${fmtP(maint_p)}</div>
-        <div class="fc-val">${fmt(maint)}</div>
+        <div class="fc-val">${fmtPP(maintPP)}</div>
       </div>
       <div class="funnel-cell">
         <div class="fc-name">복귀 ⚠</div>
         <div class="fc-pct" style="color:var(--yellow)">${fmtP(react_p)}</div>
-        <div class="fc-val">${fmt(react)}</div>
+        <div class="fc-val">${fmtPP(reactPP)}</div>
       </div>
     </div>
     <div style="height:0.5px;background:var(--line);margin:10px 0"></div>
@@ -2284,18 +2295,117 @@ function renderFunnel(s1, s2) {
       <div class="funnel-cell">
         <div class="fc-name">유지</div>
         <div class="fc-pct" style="color:var(--text)">${fmtP(maint_p2)}</div>
-        <div class="fc-val">${fmt(maint)}</div>
+        <div class="fc-val">${fmtPP(maintPP2)}</div>
       </div>
       <div class="funnel-cell">
         <div class="fc-name">이탈 ⚠</div>
         <div class="fc-pct" style="color:var(--red)">${fmtP(churn_p2)}</div>
-        <div class="fc-val">${fmt(churn_users)}</div>
+        <div class="fc-val">${fmtPP(churnPP)}</div>
       </div>
     </div>
     <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;text-align:left;opacity:0.7;">
       ⚠ 복귀·이탈 수치 데이터 안정화 중
     </div>
   `;
+
+  // 사용자 흐름 다이어그램 (Sankey-lite SVG, 항등식 시각화)
+  const flowEl = document.getElementById('userFlowChart');
+  if (flowEl) {
+    flowEl.innerHTML = _buildUserFlowSVG({
+      prev_label, dau_label,
+      dau_prev: +dau_prev || 0,
+      dau:      +dau      || 0,
+      maint:    +maint    || 0,
+      churn:    +churn_users || 0,
+      new_u:    +new_u    || 0,
+      react:    +react    || 0,
+    });
+  }
+}
+
+// 사용자 흐름 Sankey-lite SVG 생성 (항등식 시각화: 직전=유지+이탈, 이번=신규+유지+복귀)
+function _buildUserFlowSVG(d) {
+  const fmt = v => {
+    if (v == null || isNaN(v)) return '—';
+    if (v >= 1000) return (v/1000).toFixed(1) + 'k';
+    return String(Math.round(v));
+  };
+  const W = 480, H = 270;
+  const BW = 110, BH = 200;
+  const LBX = 90, LBY = 50;
+  const RBX = W - LBX - BW, RBY = LBY;
+  const lTotal = d.dau_prev || 1;
+  const rTotal = d.dau      || 1;
+  const maintHL = (d.maint || 0) / lTotal * BH;
+  const churnHL = (d.churn || 0) / lTotal * BH;
+  const newHR   = (d.new_u || 0) / rTotal * BH;
+  const maintHR = (d.maint || 0) / rTotal * BH;
+  const reactHR = (d.react || 0) / rTotal * BH;
+  const lMaintY = LBY;
+  const lChurnY = LBY + maintHL;
+  const rNewY   = RBY;
+  const rMaintY = RBY + newHR;
+  const rReactY = RBY + newHR + maintHR;
+  const segText = (cx, cy, h, color, label, val) => h < 14 ? '' : `
+    <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="12" fill="${color}" font-weight="600">${label} ${fmt(val)}</text>`;
+  // 세그먼트가 너무 좁아 in-segment 텍스트가 안 들어갈 때 외부 화살표 라벨에 수치 함께 표기
+  const newOuter   = newHR   < 14 ? `신규 ${fmt(d.new_u)}` : '신규';
+  const reactOuter = reactHR < 14 ? `복귀 ${fmt(d.react)}` : '복귀';
+  const churnOuter = churnHL < 14 ? `이탈 ${fmt(d.churn)}` : '이탈';
+  return `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
+      <!-- 직전 활성 헤더 -->
+      <text x="${LBX+BW/2}" y="${LBY-26}" text-anchor="middle" font-size="11" font-weight="500" fill="var(--sub)">${d.prev_label}</text>
+      <text x="${LBX+BW/2}" y="${LBY-10}" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" font-family="var(--mono)">${fmt(d.dau_prev)}</text>
+
+      <!-- 직전 박스 외곽 -->
+      <rect x="${LBX}" y="${LBY}" width="${BW}" height="${BH}" fill="none" stroke="var(--line2)" stroke-width="1" rx="6"/>
+
+      <!-- 유지 flow (Sankey 곡선) - 좌박스 유지 → 우박스 유지 -->
+      <path d="M ${LBX+BW} ${lMaintY}
+                C ${(LBX+BW+RBX)/2} ${lMaintY}, ${(LBX+BW+RBX)/2} ${rMaintY}, ${RBX} ${rMaintY}
+                L ${RBX} ${rMaintY+maintHR}
+                C ${(LBX+BW+RBX)/2} ${rMaintY+maintHR}, ${(LBX+BW+RBX)/2} ${lMaintY+maintHL}, ${LBX+BW} ${lMaintY+maintHL}
+                Z" fill="rgba(55,138,221,0.16)" stroke="none"/>
+
+      <!-- 좌박스: 유지 -->
+      <rect x="${LBX}" y="${lMaintY}" width="${BW}" height="${maintHL}" fill="rgba(55,138,221,0.30)" rx="6 6 0 0"/>
+      ${segText(LBX+BW/2, lMaintY+maintHL/2, maintHL, '#378ADD', '유지', d.maint)}
+      <!-- 좌박스: 이탈 -->
+      <rect x="${LBX}" y="${lChurnY}" width="${BW}" height="${churnHL}" fill="rgba(255,77,106,0.28)" rx="0 0 6 6"/>
+      ${segText(LBX+BW/2, lChurnY+churnHL/2, churnHL, 'var(--red)', '이탈', d.churn)}
+
+      <!-- 이번 박스 외곽 -->
+      <rect x="${RBX}" y="${RBY}" width="${BW}" height="${BH}" fill="none" stroke="var(--line2)" stroke-width="1" rx="6"/>
+      <!-- 우박스: 신규 -->
+      <rect x="${RBX}" y="${rNewY}" width="${BW}" height="${newHR}" fill="rgba(0,224,122,0.28)" rx="6 6 0 0"/>
+      ${segText(RBX+BW/2, rNewY+newHR/2, newHR, 'var(--green)', '신규', d.new_u)}
+      <!-- 우박스: 유지 -->
+      <rect x="${RBX}" y="${rMaintY}" width="${BW}" height="${maintHR}" fill="rgba(55,138,221,0.30)"/>
+      ${segText(RBX+BW/2, rMaintY+maintHR/2, maintHR, '#378ADD', '유지', d.maint)}
+      <!-- 우박스: 복귀 -->
+      <rect x="${RBX}" y="${rReactY}" width="${BW}" height="${reactHR}" fill="rgba(255,184,48,0.28)" rx="0 0 6 6"/>
+      ${segText(RBX+BW/2, rReactY+reactHR/2, reactHR, 'var(--yellow)', '복귀', d.react)}
+
+      <!-- 이번 활성 헤더 -->
+      <text x="${RBX+BW/2}" y="${RBY-26}" text-anchor="middle" font-size="11" font-weight="500" fill="var(--sub)">${d.dau_label}</text>
+      <text x="${RBX+BW/2}" y="${RBY-10}" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" font-family="var(--mono)">${fmt(d.dau)}</text>
+
+      <!-- 이탈 외부 화살표 (좌박스 → 밖) -->
+      <line x1="${LBX-8}" y1="${lChurnY+churnHL/2}" x2="${LBX-32}" y2="${lChurnY+churnHL/2}" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <polygon points="${LBX-32},${lChurnY+churnHL/2-4} ${LBX-42},${lChurnY+churnHL/2} ${LBX-32},${lChurnY+churnHL/2+4}" fill="var(--red)"/>
+      <text x="${LBX-46}" y="${lChurnY+churnHL/2-6}" text-anchor="end" font-size="10" fill="var(--red)" font-weight="500">${churnOuter}</text>
+
+      <!-- 신규 입력 화살표 (위에서 우박스 신규로) -->
+      <line x1="${RBX+BW+32}" y1="${rNewY+newHR/2}" x2="${RBX+BW+8}" y2="${rNewY+newHR/2}" stroke="var(--green)" stroke-width="1.5"/>
+      <polygon points="${RBX+BW+8},${rNewY+newHR/2-4} ${RBX+BW-2},${rNewY+newHR/2} ${RBX+BW+8},${rNewY+newHR/2+4}" fill="var(--green)"/>
+      <text x="${RBX+BW+34}" y="${rNewY+newHR/2-6}" font-size="10" fill="var(--green)" font-weight="500">${newOuter}</text>
+
+      <!-- 복귀 입력 화살표 (외부에서 우박스 복귀로) -->
+      <line x1="${RBX+BW+32}" y1="${rReactY+reactHR/2}" x2="${RBX+BW+8}" y2="${rReactY+reactHR/2}" stroke="var(--yellow)" stroke-width="1.5"/>
+      <polygon points="${RBX+BW+8},${rReactY+reactHR/2-4} ${RBX+BW-2},${rReactY+reactHR/2} ${RBX+BW+8},${rReactY+reactHR/2+4}" fill="var(--yellow)"/>
+      <text x="${RBX+BW+34}" y="${rReactY+reactHR/2-6}" font-size="10" fill="var(--yellow)" font-weight="500">${reactOuter}</text>
+    </svg>`;
 }
 
 // ── ZONE 4: 유지율 코호트 ────────────────────────────────
@@ -2349,86 +2459,89 @@ function renderCohort(s2){
 
 // ── 코호트 추이 라인 차트 (D1/D7/D7 + W1/M1 stepped) ─────
 let _cohortChartInstance = null;
+// 색상은 두 코호트 동일 (D1/D7/W1/M1 매핑 일관). 라벨만 코호트별로 갱신.
+const _COHORT_COLORS  = ['#378ADD', '#A78BFA', '#1D9E75', '#D4A93A'];
+const _COHORT_STEPPED = [false, false, 'after', 'after'];
 async function _drawCohortChart() {
   const canvas = document.getElementById('cohortChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  if (_cohortChartInstance) {
-    try { _cohortChartInstance.destroy(); } catch(e) {}
-    _cohortChartInstance = null;
-  }
+
   const isNew = _cohortTab === 'new';
-  const metrics = isNew
-    ? [
-        {key:'new_d1_ret', label:'D1 (신규)', color:'#378ADD', stepped:false},
-        {key:'new_d7_ret', label:'D7 (신규)', color:'#A78BFA', stepped:false},
-        {key:'new_w1_ret', label:'W1 (신규)', color:'#1D9E75', stepped:'after'},
-        {key:'new_m1_ret', label:'M1 (신규)', color:'#D4A93A', stepped:'after'},
-      ]
-    : [
-        {key:'d1_ret', label:'D1', color:'#378ADD', stepped:false},
-        {key:'d7_ret', label:'D7', color:'#A78BFA', stepped:false},
-        {key:'w1_ret', label:'W1', color:'#1D9E75', stepped:'after'},
-        {key:'m1_ret', label:'M1', color:'#D4A93A', stepped:'after'},
-      ];
+  const keys   = isNew
+    ? ['new_d1_ret','new_d7_ret','new_w1_ret','new_m1_ret']
+    : ['d1_ret','d7_ret','w1_ret','m1_ret'];
+  const labels4 = isNew
+    ? ['D1 (신규)','D7 (신규)','W1 (신규)','M1 (신규)']
+    : ['D1','D7','W1','M1'];
+
   const days = 30;
   const sc = _scope || 'T00';
   const series = await Promise.all(
-    metrics.map(m =>
-      fetch(`/api/trend?metric=${m.key}&scope=${sc}&days=${days}`)
+    keys.map(k =>
+      fetch(`/api/trend?metric=${k}&scope=${sc}&days=${days}`)
         .then(r => r.json())
         .then(j => (j && j.ok) ? j.data : [])
         .catch(() => [])
     )
   );
   const baseSeries = series[0] || [];
-  const labels = baseSeries.map(p => (p.date || '').slice(5));
-  if (!labels.length) return;
-  const datasets = metrics.map((m, i) => {
-    const data = (series[i] || []).map(p => p.value);
-    return {
-      label: m.label,
-      data,
-      borderColor: m.color,
-      backgroundColor: m.color + '15',
+  const xLabels = baseSeries.map(p => (p.date || '').slice(5));
+  if (!xLabels.length) return;
+
+  // 인스턴스가 이미 있으면 데이터만 갱신 → Chart.js가 기존 라인에서 새 값으로 morph 애니메이션
+  if (_cohortChartInstance) {
+    _cohortChartInstance.data.labels = xLabels;
+    _cohortChartInstance.data.datasets.forEach((ds, i) => {
+      ds.label = labels4[i];
+      ds.data  = (series[i] || []).map(p => p.value);
+    });
+    _cohortChartInstance.update();
+  } else {
+    const datasets = keys.map((_, i) => ({
+      label: labels4[i],
+      data: (series[i] || []).map(p => p.value),
+      borderColor: _COHORT_COLORS[i],
+      backgroundColor: _COHORT_COLORS[i] + '15',
       borderWidth: 2,
-      pointRadius: m.stepped ? 0 : 1.5,
+      pointRadius: _COHORT_STEPPED[i] ? 0 : 1.5,
       pointHoverRadius: 5,
-      tension: m.stepped ? 0 : 0.25,
-      stepped: m.stepped,
+      tension: _COHORT_STEPPED[i] ? 0 : 0.25,
+      stepped: _COHORT_STEPPED[i],
       fill: false,
-    };
-  });
-  _cohortChartInstance = new Chart(canvas, {
-    type: 'line',
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y!=null ? c.parsed.y.toFixed(1) : '—'}%` }
-        }
-      },
-      scales: {
-        y: {
-          min: 0, max: 100,
-          ticks: { callback: v => v + '%', font: { size: 10 }, color: 'rgba(160,170,185,0.7)' },
-          grid: { color: 'rgba(255,255,255,0.06)' }
+    }));
+    _cohortChartInstance = new Chart(canvas, {
+      type: 'line',
+      data: { labels: xLabels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y!=null ? c.parsed.y.toFixed(1) : '—'}%` }
+          }
         },
-        x: {
-          ticks: { font: { size: 9 }, color: 'rgba(160,170,185,0.7)', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
-          grid: { display: false }
+        scales: {
+          y: {
+            min: 0, max: 100,
+            ticks: { callback: v => v + '%', font: { size: 10 }, color: 'rgba(160,170,185,0.7)' },
+            grid: { color: 'rgba(255,255,255,0.06)' }
+          },
+          x: {
+            ticks: { font: { size: 9 }, color: 'rgba(160,170,185,0.7)', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+            grid: { display: false }
+          }
         }
       }
-    }
-  });
+    });
+  }
+
   const legendEl = document.getElementById('cohortChartLegend');
   if (legendEl) {
-    legendEl.innerHTML = metrics.map(m =>
+    legendEl.innerHTML = labels4.map((lbl, i) =>
       `<span style="display:inline-flex;align-items:center;gap:4px;">
-        <span style="display:inline-block;width:14px;height:2px;background:${m.color};"></span>
-        ${m.label}${m.stepped ? ' (계단)' : ''}
+        <span style="display:inline-block;width:14px;height:2px;background:${_COHORT_COLORS[i]};"></span>
+        ${lbl}${_COHORT_STEPPED[i] ? ' (계단)' : ''}
       </span>`
     ).join('');
   }
@@ -3397,6 +3510,73 @@ loadAll();
       &middot; 모든 알림은 <b>T00(전체) 기준</b>이며 채널/프로그램별 평가는 아닙니다.<br>
       &middot; 일간 데이터 기준이 대부분이며, 기간탭(일/주/월) 변경과 무관하게 동일하게 산출됩니다.<br>
       &middot; 해당 알림이 모두 없으면 "전 지표 정상 범위 🟢" 메시지가 표시됩니다.
+    </div>
+  </div>
+</div>
+
+<!-- ── 다차원 프로파일 모달 ── -->
+<div id="radarModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--bg2);border-radius:14px;padding:20px;width:calc(100% - 32px);max-width:560px;max-height:85vh;overflow-y:auto;border:1px solid var(--line2);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <span style="font-size:var(--fs-xl);font-weight:700;">다차원 프로파일 설명</span>
+      <span style="cursor:pointer;font-size:20px;color:var(--sub);line-height:1;" onclick="document.getElementById('radarModal').style.display='none'">✕</span>
+    </div>
+    <div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:14px;line-height:1.6;">
+      비교군(채널 또는 동일 채널 내 프로그램) 안에서 5개 축의 상대 위치를 0~100점으로 환산해 펜타곤 형태로 표시합니다.
+      절대 평가가 아닌 <b>상대 비교 프로파일</b>입니다.
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--bg3);">
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:left;font-weight:600;">축</th>
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:left;font-weight:600;">의미</th>
+          <th style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);text-align:left;font-weight:600;">기준 컬럼 (일/주/월)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">사용자규모</td>
+          <td style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);">활성 사용자 절대 수 (DAU/WAU/MAU)</td>
+          <td style="padding:7px 8px;font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono);">dau / dau_week / dau_mon</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">충성도(유지)</td>
+          <td style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);">전체 사용자 D1/W1/M1 유지율 (%)</td>
+          <td style="padding:7px 8px;font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono);">d1_ret / w1_ret / m1_ret</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">신규유입</td>
+          <td style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);">활성 대비 신규 사용자 비율 (%)</td>
+          <td style="padding:7px 8px;font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono);">new_pct / new_week_pct / new_mon_pct</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">복귀유도</td>
+          <td style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);">휴면풀 대비 복귀자 비율 = 복귀자/휴면풀×100 (%)</td>
+          <td style="padding:7px 8px;font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono);">react_rate / react_rate_week / react_rate_mon</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 8px;font-size:var(--fs-base);color:var(--text);font-weight:500;">깊은청취</td>
+          <td style="padding:7px 8px;font-size:var(--fs-sm);color:var(--sub);">10분이상 / 1분이상 (몰입도, %) — 종합지표 동일 정의</td>
+          <td style="padding:7px 8px;font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono);">deep_rate / deep_rate_week / deep_rate_mon</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:16px;padding:12px 14px;background:var(--bg3);border-radius:8px;">
+      <div style="font-size:var(--fs-sm);font-weight:600;color:var(--text);margin-bottom:6px;">정규화 공식</div>
+      <div style="font-family:var(--mono);font-size:var(--fs-sm);color:var(--accent);margin-bottom:8px;">
+        score = (raw − min) / (max − min) × 100
+      </div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7;">
+        &middot; 비교군의 <b>최댓값 = 100점</b>, <b>최솟값 = 0점</b><br>
+        &middot; 비교군이 모두 동일 값이면 <b>50점</b><br>
+        &middot; raw가 null이면 <b>0점</b><br>
+        &middot; 5개 축은 모두 동일 정규화 적용 (단위·범위 무관하게 시각 비교 가능)
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6;">
+      <b>비교군 결정:</b><br>
+      &middot; 채널 스코프(T00/F00/L00/G00/P00) → 5개 채널 전체와 비교<br>
+      &middot; 프로그램 스코프(예: F01) → 같은 채널의 다른 프로그램과 비교 (peer ≥ 2개일 때, 미만이면 채널 비교로 폴백)
     </div>
   </div>
 </div>

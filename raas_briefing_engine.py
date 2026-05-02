@@ -4,7 +4,7 @@ raas_kpi_latest.csv 단일 룩업 — 일간 + 주간 + 월간 통합
 """
 import os
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def _f(v,d=0.0):
     try: return float(v) if v not in (None,'','None','null') else d
@@ -274,16 +274,81 @@ def build_s1(kpi):
         'react_pct':  _fn(t.get('react_pct')),
     }
 
-def build_s2(kpi):
+def _funnel_row_metrics(row, period):
+    """사용자 흐름 셀 5종(new_p, maint_p, react_p, maint_p2, churn_p2)을
+    주어진 timeline T00 row에서 period 별로 계산. JS renderFunnel과 동일 산식."""
+    if not row: return {}
+    if period == 'day':
+        dau      = _f(row.get('dau_today'), 0)
+        dau_prev = _f(row.get('dau_yday'),  0)        # D-1 (어제 DAU)
+        d1_ret   = _fn(row.get('d1_ret'))
+        new_p    = _fn(row.get('new_share'))   if row.get('new_share')   is not None else _fn(row.get('new_pct'))
+        react_p  = _fn(row.get('react_share')) if row.get('react_share') is not None else _fn(row.get('react_pct'))
+        churn_p2 = _fn(row.get('churn_rate'))
+        if dau and dau_prev and d1_ret is not None:
+            maint = dau_prev * d1_ret / 100
+        else:
+            maint = None
+    elif period == 'week':
+        dau      = _f(row.get('dau_week'),    0)
+        dau_prev = _f(row.get('dau_week_pw'), 0)
+        new_u    = _f(row.get('new_week'),    0)
+        react    = _f(row.get('react_week'),  0)
+        new_p    = _fn(row.get('new_week_share'))   if row.get('new_week_share')   is not None else _fn(row.get('new_week_pct'))
+        react_p  = _fn(row.get('react_week_share')) if row.get('react_week_share') is not None else _fn(row.get('react_week_pct'))
+        churn_p2 = _fn(row.get('churn_week'))
+        maint    = (dau - new_u - react) if dau else None
+    else:  # mon
+        dau      = _f(row.get('dau_mon'),    0)
+        dau_prev = _f(row.get('dau_mon_pw'), 0)
+        new_u    = _f(row.get('new_mon'),    0)
+        react    = _f(row.get('react_mon'),  0)
+        new_p    = _fn(row.get('new_mon_share'))   if row.get('new_mon_share')   is not None else _fn(row.get('new_mon_pct'))
+        react_p  = _fn(row.get('react_mon_share')) if row.get('react_mon_share') is not None else _fn(row.get('react_mon_pct'))
+        churn_p2 = _fn(row.get('churn_mon'))
+        maint    = (dau - new_u - react) if dau else None
+    maint_p  = (maint / dau * 100)      if (maint is not None and dau)      else None
+    maint_p2 = (maint / dau_prev * 100) if (maint is not None and dau_prev) else None
+    return {
+        'new_p':    new_p,
+        'maint_p':  maint_p,
+        'react_p':  react_p,
+        'maint_p2': maint_p2,
+        'churn_p2': churn_p2,
+    }
+
+def _compute_funnel_diffs(timeline, today_date, period):
+    """사용자 흐름 5개 셀의 직전기간 row 기준 pp diff 산출.
+    period 별 직전기간: day=D-1 / week=D-7 / mon=D-30 (근사)"""
+    delta_days = {'day': 1, 'week': 7, 'mon': 30}.get(period, 1)
+    try:
+        today_dt = datetime.strptime(today_date, '%Y/%m/%d')
+        prev_date = (today_dt - timedelta(days=delta_days)).strftime('%Y/%m/%d')
+    except Exception:
+        return {}
+    t00 = (timeline or {}).get('T00', {})
+    today_row = t00.get(today_date)
+    prev_row  = t00.get(prev_date)
+    if not today_row or not prev_row: return {}
+    today_m = _funnel_row_metrics(today_row, period)
+    prev_m  = _funnel_row_metrics(prev_row,  period)
+    out = {}
+    for k in ('new_p','maint_p','react_p','maint_p2','churn_p2'):
+        a = today_m.get(k); b = prev_m.get(k)
+        out[k] = round(a - b, 1) if (a is not None and b is not None) else None
+    return out
+
+def build_s2(kpi, timeline=None, today_date=None):
     """홈 'Funnel' 섹션 데이터.
     s1과 동일하게 신 명명 키 + 옛 키 alias 동시 탑재. 의미 변경:
       - s2.wau / s2.mau (신, 누적) — 신규로 노출 (= 이전 s2.dau_week / s2.dau_mon)
       - 롤링 지표(dau_r7 / dau_r30) 신규 노출 — 듀얼 카드 그래프용
       - 평균지표(dau_week_avg 등)는 SPL에서 제거됨, 빈 값으로 유지(레거시 화면 호환).
+      - timeline이 주어지면 사용자 흐름 셀별 직전기간(D-1/D-7/D-30) pp diff 5×3=15개 노출.
     """
     t = kpi.get('T00', {})
     if not t: return {}
-    return {
+    result = {
         # ── 일간 ──────────────────────────────────────────────────
         'dau':             _i(t.get('dau_today')),
         'dau_d2':          _i(t.get('dau_yday')),       # 신
@@ -396,6 +461,13 @@ def build_s2(kpi):
         'dau_mon_avg':        _fn(t.get('dau_mon_avg')),
         'wau_mon_avg':        _fn(t.get('wau_mon_avg')),
     }
+    # 사용자 흐름 셀별 직전기간(D-1/D-7/D-30) pp diff — 5셀 × 3기간 = 15필드
+    if timeline and today_date:
+        for period in ('day', 'week', 'mon'):
+            diffs = _compute_funnel_diffs(timeline, today_date, period)
+            for cell_key in ('new_p','maint_p','react_p','maint_p2','churn_p2'):
+                result[f'funnel_{cell_key}_{period}_diff'] = diffs.get(cell_key)
+    return result
 
 def build_s3(kpi):
     t=kpi.get('T00',{})
@@ -762,8 +834,11 @@ def collect_all(search_fn, return_timeline=False):
         print(f"  ⚠️ _load_timeline: {e}")
         timeline, timeline_source = {}, 'error'
     kpi = _latest_snapshot(timeline)
+    # 사용자 흐름 셀별 직전기간 diff 계산용 — timeline에서 최신 날짜 추출
+    _t00_dates = sorted((timeline.get('T00') or {}).keys()) if timeline else []
+    _today_date = _t00_dates[-1] if _t00_dates else None
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {len(kpi)}코드 로드, 섹션 계산중...")
-    s1=build_s1(kpi); s2=build_s2(kpi); s3=build_s3(kpi); s4=build_s4(kpi)
+    s1=build_s1(kpi); s2=build_s2(kpi, timeline=timeline, today_date=_today_date); s3=build_s3(kpi); s4=build_s4(kpi)
     s5=build_s5(kpi); s6=build_s6(kpi); s7=build_s7(s1,s2,s3,s4,s5)
     ctx=build_context(s1,s2,s3,s4,s5,s6,s7,timeline=timeline)
     print(f"[{datetime.now().strftime('%H:%M:%S')}] 완료")
