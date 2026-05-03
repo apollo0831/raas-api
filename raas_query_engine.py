@@ -270,12 +270,25 @@ def classify_intent(question: str) -> dict:
         intent = json.loads(result.strip())
 
         # scope_keyword → PGM_CODE 매핑
+        # Phase 5 Step 4: 어댑터 우선 → SCOPE_MAP/KEYWORD_TO_CODE fallback
         if intent.get('scope_keyword') and not intent.get('scope'):
-            kw = intent['scope_keyword'].lower().strip()
+            kw_raw = intent['scope_keyword'].strip()
+            kw = kw_raw.lower()
+            # 1) SCOPE_MAP 우선 (채널/플랫폼 영문/한글 매핑은 어댑터에 없음)
             for key, code in SCOPE_MAP.items():
                 if key.lower() in kw:
                     intent['scope'] = code
                     break
+            # 2) 어댑터 find_program_by_keyword (정식명/별칭/영문명 검색)
+            if not intent.get('scope'):
+                try:
+                    from raas_onto import get_adapter
+                    matches = get_adapter().find_program_by_keyword(kw_raw)
+                    if matches:
+                        intent['scope'] = matches[0]['code']
+                except Exception:
+                    pass
+            # 3) KEYWORD_TO_CODE fallback (기존 하드코딩 별칭)
             if not intent.get('scope'):
                 for kw_key, code in KEYWORD_TO_CODE.items():
                     if kw_key in kw or kw in kw_key:
@@ -320,7 +333,7 @@ def extract_data(timeline, intent: dict) -> dict:
 
     data = {
         'scope': scope,
-        'scope_name': BE.PGM_NAMES.get(scope, scope),
+        'scope_name': BE._pgm_name(scope),
         'metric': metric,
         'date_min': available_dates[0],
         'date_max': available_dates[-1],
@@ -370,7 +383,7 @@ def extract_data(timeline, intent: dict) -> dict:
             if not dau or dau <= 0:
                 continue
             rows.append({
-                'code': code, 'name': BE.PGM_NAMES.get(code, code), 'dau': dau,
+                'code': code, 'name': BE._pgm_name(code, row=row), 'dau': dau,
                 'deep_rate': BE._fn(row.get('deep_rate')),
                 'churn_rate': BE._fn(row.get('churn_rate')),
                 'dau_wow': BE._fn(row.get('dau_wow')),
@@ -387,7 +400,7 @@ def extract_data(timeline, intent: dict) -> dict:
             if not row:
                 continue
             ch_rows.append({
-                'code': ch, 'name': BE.PGM_NAMES.get(ch, ch),
+                'code': ch, 'name': BE._pgm_name(ch, row=row),
                 'dau': BE._i(row.get('dau_today')),
                 'dau_wow': BE._fn(row.get('dau_wow')),
                 'deep_rate': BE._fn(row.get('deep_rate')),
@@ -396,23 +409,59 @@ def extract_data(timeline, intent: dict) -> dict:
         data['compare'] = ch_rows
 
     # health — 위험 프로그램
+    # Phase 5 Step 4: 어댑터의 find_at_risk_programs 우선 + 인라인 룰 fallback
     if intent_type == 'health':
         latest_date = available_dates[-1]
         exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
-        risks = []
-        for code, date_rows in timeline.items():
-            if code in exclude:
-                continue
-            row = date_rows.get(latest_date, {})
-            churn = BE._fn(row.get('churn_rate'))
-            wow   = BE._fn(row.get('dau_wow'))
-            dau   = BE._i(row.get('dau_today'))
-            if churn and wow and dau and dau >= 1000 and churn >= 30 and wow <= -5:
-                risks.append({
-                    'code': code, 'name': BE.PGM_NAMES.get(code, code),
-                    'dau': dau, 'churn_rate': churn, 'dau_wow': wow,
-                })
-        risks.sort(key=lambda x: x['dau_wow'])
+        risks = None
+        try:
+            from raas_onto import get_adapter
+            # 어댑터는 latest snapshot의 dict를 받음 (code → row)
+            snapshot = {}
+            for code, date_rows in timeline.items():
+                if code in exclude:
+                    continue
+                row = date_rows.get(latest_date)
+                if not row:
+                    continue
+                # 어댑터 룰은 dau/churn_rate/dau_chg 사용 (alias된 row가 들어와야 함)
+                snapshot[code] = {
+                    'dau':         BE._i(row.get('dau_today')),
+                    'churn_rate':  BE._fn(row.get('churn_rate')),
+                    'dau_chg':     BE._fn(row.get('dau_wow')),
+                }
+            adapter_risks = get_adapter().find_at_risk_programs(snapshot)
+            # 어댑터 결과를 quey_engine 포맷으로 변환 (name/dau_wow 키 호환)
+            if adapter_risks:
+                risks = []
+                for r in adapter_risks:
+                    code = r.get('code')
+                    row = (timeline.get(code, {}) or {}).get(latest_date, {})
+                    risks.append({
+                        'code': code,
+                        'name': BE._pgm_name(code, row=row),
+                        'dau':        BE._i(row.get('dau_today')),
+                        'churn_rate': BE._fn(row.get('churn_rate')),
+                        'dau_wow':    BE._fn(row.get('dau_wow')),
+                    })
+        except Exception:
+            risks = None
+        if risks is None:
+            # fallback: 인라인 룰
+            risks = []
+            for code, date_rows in timeline.items():
+                if code in exclude:
+                    continue
+                row = date_rows.get(latest_date, {})
+                churn = BE._fn(row.get('churn_rate'))
+                wow   = BE._fn(row.get('dau_wow'))
+                dau   = BE._i(row.get('dau_today'))
+                if churn and wow and dau and dau >= 1000 and churn >= 30 and wow <= -5:
+                    risks.append({
+                        'code': code, 'name': BE._pgm_name(code, row=row),
+                        'dau': dau, 'churn_rate': churn, 'dau_wow': wow,
+                    })
+        risks.sort(key=lambda x: x.get('dau_wow') or 0)
         data['risks'] = risks[:5]
 
     return data
