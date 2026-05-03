@@ -511,9 +511,15 @@ def query(question: str, target_date: str = None, verbose: bool = False) -> dict
     if verbose:
         print("  [1/3] timeline 로드 중...", flush=True)
 
-    local_path = os.path.join(os.path.dirname(__file__), 'raas_kpi_latest.csv')
-    if not os.path.exists(local_path):
-        return {"answer": "데이터 파일(raas_kpi_latest.csv)을 찾을 수 없습니다.", "chart_data": None}
+    # data/ 우선, 같은 폴더 fallback (구 위치 호환)
+    _base = os.path.dirname(__file__)
+    _candidates = [
+        os.path.join(_base, 'data', 'raas_kpi_latest.csv'),
+        os.path.join(_base, 'raas_kpi_latest.csv'),
+    ]
+    local_path = next((p for p in _candidates if os.path.exists(p)), None)
+    if not local_path:
+        return {"answer": "데이터 파일(raas_kpi_latest.csv)을 찾을 수 없습니다. data/ 폴더에 두세요.", "chart_data": None}
     try:
         import pandas as pd
         df = pd.read_csv(local_path, dtype=str, keep_default_na=False)

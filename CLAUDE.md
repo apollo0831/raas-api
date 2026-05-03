@@ -100,10 +100,14 @@ raas_query_engine.py  ← 자연어 질의 엔진 (3단계 파이프라인)
 
 코드 전반에서 사용하는 Splunk lookup 테이블:
 
-- `raas_kpi_latest.csv` — PGM_CODE별 일간/주간/월간 KPI 전체 (briefing engine 전용)
+- `data/raas_kpi_latest.csv` — PGM_CODE별 일간/주간/월간 KPI 전체 (briefing/query engine 로컬 fallback)
 - `raas_top_programs_latest.csv` — 프로그램 순위 (rank, pgm_name, channel, dau)
 - `raas_briefing_latest.csv` — 집계된 일간 요약 단일 행
 - `raas_llm_context_day.csv` — 날짜별 트렌드 히스토리 (query engine 트렌드/비교 쿼리)
+
+**로컬 CSV 경로 우선순위** (Splunk 미접속 환경):
+1. `data/raas_kpi_latest.csv` (권장)
+2. `raas_kpi_latest.csv` (구 위치, 호환용 fallback)
 
 ## Briefing Engine Sections (raas_briefing_engine.py)
 

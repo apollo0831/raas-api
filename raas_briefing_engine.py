@@ -166,8 +166,14 @@ def _load_timeline(search):
     try:
         rows = search("| inputlookup raas_kpi_latest.csv")
     except Exception as e:
-        local_path = os.path.join(os.path.dirname(__file__), 'raas_kpi_latest.csv')
-        if os.path.exists(local_path):
+        # data/ 우선, 같은 폴더 fallback (구 위치 호환)
+        base = os.path.dirname(__file__)
+        candidates = [
+            os.path.join(base, 'data', 'raas_kpi_latest.csv'),
+            os.path.join(base, 'raas_kpi_latest.csv'),
+        ]
+        local_path = next((p for p in candidates if os.path.exists(p)), None)
+        if local_path:
             print(f"  [fallback] Splunk {type(e).__name__} - local CSV: {local_path}")
             df = pd.read_csv(local_path, dtype=str, keep_default_na=False)
             rows = df.to_dict(orient='records')
