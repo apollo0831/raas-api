@@ -176,8 +176,19 @@ FIELD_ALIASES = {
 
 def _alias_row(row):
     """row dict에 옛 이름 alias 추가. 새 이름 키가 있으면 옛 이름 키에도 같은 값 복사.
-    옛 이름이 이미 존재하면 덮어쓰지 않음 (방어적)."""
-    for new_name, old_name in FIELD_ALIASES.items():
+    옛 이름이 이미 존재하면 덮어쓰지 않음 (방어적).
+
+    Phase 5 Step 3: 어댑터의 SSoT를 우선 사용. 어댑터 실패 시 로컬 FIELD_ALIASES fallback.
+    """
+    aliases = None
+    try:
+        from raas_onto import get_adapter
+        aliases = get_adapter().get_legacy_field_aliases()
+        if not aliases:
+            aliases = FIELD_ALIASES
+    except Exception:
+        aliases = FIELD_ALIASES
+    for new_name, old_name in aliases.items():
         if new_name in row and old_name not in row:
             row[old_name] = row[new_name]
     return row

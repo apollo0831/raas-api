@@ -67,6 +67,116 @@ ONTOLOGY_FILES = [
 ]
 
 
+# ─── 레거시 KPI 필드 alias 매핑 (Phase 5 Step 3) ──────────────────────────────
+# 새 이름(SPL 출력, 2026-04 KPI 명명 규칙) → 옛 이름(엔진/화면이 사용 중인 이름)
+# 단일 신뢰 출처: docs/raas_kpi_dictionary.yaml의 'note: 이전 이름: <old>'
+# 향후 .ttl의 raas:legacyName 속성으로 마이그레이션 예정.
+LEGACY_FIELD_ALIASES = {
+    # B. user_size — DAU
+    'dau':                  'dau_today',
+    'dau_prev':             'dau_pw',
+    'dau_chg':              'dau_wow',
+    'dau_d2':               'dau_yday',
+    # B. user_size — WAU (의미적 변경: 옛 이름은 dau_week)
+    'wau':                  'dau_week',
+    'wau_prev':             'dau_week_pw',
+    'wau_chg':              'dau_week_wow',
+    # B. user_size — MAU (의미적 변경: 옛 이름은 dau_mon)
+    'mau':                  'dau_mon',
+    'mau_prev':             'dau_mon_pw',
+    'mau_chg':              'dau_mon_wow',
+    # B. user_size — 롤링 7일 (옛: wau_today)
+    'dau_r7':               'wau_today',
+    'dau_r7_prev':          'wau_pw',
+    # B. user_size — 롤링 30일 (옛: mau_today)
+    'dau_r30':              'mau_today',
+    'dau_r30_prev':         'mau_pw',
+    # B. user_size — 1분/10분 *_prev (이름은 _pw였음)
+    'dau_1min_prev':        'dau_1min_pw',
+    'dau_10min_prev':       'dau_10min_pw',
+    'wau_1min_prev':        'wau_1min_pw',
+    'wau_10min_prev':       'wau_10min_pw',
+    'mau_1min_prev':        'mau_1min_pw',
+    'mau_10min_prev':       'mau_10min_pw',
+    # C. user_growth — new
+    'new':                  'new_today',
+    'new_prev':             'new_pw',
+    'new_chg':              'new_wow',
+    'new_share':            'new_pct',
+    'new_week_prev':        'new_week_pw',
+    'new_week_chg':         'new_week_wow',
+    'new_week_share':       'new_week_pct',
+    'new_mon_prev':         'new_mon_pw',
+    'new_mon_chg':          'new_mon_wow',
+    'new_mon_share':        'new_mon_pct',
+    # C. user_growth — react
+    'react':                'react_today',
+    'react_prev':           'react_pw',
+    'react_chg':            'react_wow',
+    'react_share':          'react_pct',
+    'react_week_prev':      'react_week_pw',
+    'react_week_chg':       'react_week_wow',
+    'react_week_share':     'react_week_pct',
+    'react_mon_prev':       'react_mon_pw',
+    'react_mon_chg':        'react_mon_wow',
+    'react_mon_share':      'react_mon_pct',
+    # D. user_quality — react_rate (값/이름 변경 없음, _pw → _prev만)
+    'react_rate_prev':      'react_rate_pw',
+    'react_rate_week_prev': 'react_rate_week_pw',
+    'react_rate_mon_prev':  'react_rate_mon_pw',
+    # D. user_quality — churn (_rate 접미사 추가)
+    'churn_rate_prev':      'churn_rate_pw',
+    'churn_rate_diff':      'churn_diff',
+    'churn_rate_week':      'churn_week',
+    'churn_rate_week_prev': 'churn_week_pw',
+    'churn_rate_week_diff': 'churn_week_diff',
+    'churn_rate_mon':       'churn_mon',
+    'churn_rate_mon_prev':  'churn_mon_pw',
+    'churn_rate_mon_diff':  'churn_mon_diff',
+    # D. user_quality — deep_rate (_pw → _prev)
+    'deep_rate_prev':       'deep_rate_pw',
+    'deep_rate_week_prev':  'deep_rate_week_pw',
+    'deep_rate_mon_prev':   'deep_rate_mon_pw',
+    # D. user_quality — engage (_rate 접미사 추가)
+    'engage_rate_prev':     'engage_rate_pw',
+    'engage_rate_diff':     'engage_diff',
+    'engage_rate_week':     'engage_week',
+    'engage_rate_week_prev':'engage_week_pw',
+    'engage_rate_week_diff':'engage_week_diff',
+    'engage_rate_mon':      'engage_mon',
+    'engage_rate_mon_prev': 'engage_mon_pw',
+    'engage_rate_mon_diff': 'engage_mon_diff',
+    # E. user_habit — habit (_rate 접미사 추가)
+    'habit_rate_prev':      'habit_rate_pw',
+    'habit_rate_diff':      'habit_diff',
+    'habit_rate_week':      'habit_week',
+    'habit_rate_week_prev': 'habit_week_pw',
+    'habit_rate_week_diff': 'habit_week_diff',
+    'habit_rate_mon':       'habit_mon',
+    'habit_rate_mon_prev':  'habit_mon_pw',
+    'habit_rate_mon_diff':  'habit_mon_diff',
+    # F. user_retention — d1/d7/w1/m1 (_pw → _prev, _diff prefix 통일)
+    'd1_ret_prev':          'd1_ret_pw',
+    'd1_ret_diff':          'd1_diff',
+    'd7_ret_prev':          'd7_ret_pw',
+    'd7_ret_diff':          'd7_diff',
+    'w1_ret_prev':          'w1_ret_pw',
+    'w1_ret_diff':          'w1_diff',
+    'm1_ret_prev':          'm1_ret_pw',
+    'm1_ret_diff':          'm1_diff',
+    'new_d1_ret_prev':      'new_d1_ret_pw',
+    'new_d1_ret_diff':      'new_d1_diff',
+    'new_d7_ret_prev':      'new_d7_ret_pw',
+    'new_d7_ret_diff':      'new_d7_diff',
+    'new_w1_ret_prev':      'new_w1_ret_pw',
+    'new_w1_ret_diff':      'new_w1_diff',
+    'new_m1_ret_prev':      'new_m1_ret_pw',
+    'new_m1_ret_diff':      'new_m1_diff',
+    # A. meta — 편성정보
+    'program_title':        'schedule_title',
+}
+
+
 # =============================================================================
 # 1. Turtle 파서 (PoC에서 검증된 코드 재사용)
 # =============================================================================
@@ -337,11 +447,11 @@ class OntologyAdapter:
 
     def get_legacy_field_aliases(self) -> dict[str, str]:
         """레거시 alias 매핑 (briefing_engine FIELD_ALIASES 호환).
-        
-        주의: PoC 단계에서는 비어있음. 운영 통합 시 .ttl에 legacy_alias 속성 추가.
+
+        Phase 5 Step 3 통합: briefing_engine의 87개 alias를 SSoT(어댑터)로 이전.
+        TODO (장기): .ttl에 raas:legacyName 속성 추가 후 그래프에서 추출.
         """
-        # TODO: 온톨로지에 raas:legacyName 속성 추가 후 여기서 추출
-        return {}
+        return dict(LEGACY_FIELD_ALIASES)
 
     # ─── 3.2 프로그램/채널 조회 ─────────────────────────────────────────────
 
