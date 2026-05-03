@@ -35,6 +35,34 @@ PGM_L=['L01','L02','L03','L04','L05','L06','L07','L08','L09','L10','L11',
 CH=['F00','L00','G00','P00']
 ALL=PGM_F+PGM_L
 
+
+def _pgm_name(code, row=None, default=None):
+    """프로그램/채널 코드 → 표시 이름.
+
+    Phase 5 Step 2 (호환성 우선 하이브리드):
+      1. PGM_NAMES (운영 약칭) — 기존 출력 호환 유지
+      2. 어댑터 (raas_onto, 정식 풀네임) — PGM_NAMES에 없는 코드 fallback
+      3. row.pgm_name — CSV에 있는 SPL 출력 이름
+      4. code — 최종 fallback
+
+    Step 2의 의도: 어댑터 통합 인프라 도입 + 출력은 PGM_NAMES와 동일 유지.
+    향후 Step 6 정리 단계에서 PGM_NAMES 제거하면 자동으로 어댑터 우선이 됨.
+    """
+    if code in PGM_NAMES:
+        return PGM_NAMES[code]
+    try:
+        from raas_onto import get_adapter
+        meta = get_adapter().get_program_meta(code)
+        if meta and meta.get('label'):
+            return meta['label']
+    except Exception:
+        pass
+    if row is not None:
+        nm = (row.get('pgm_name') or '').strip()
+        if nm:
+            return nm
+    return default if default is not None else code
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 룩업 필드명 마이그레이션을 위한 alias 매핑.
 # 새 이름(SPL 출력, 2026-04 KPI 명명 규칙) → 옛 이름(엔진/화면이 사용 중인 이름)
@@ -484,7 +512,7 @@ def build_s3(kpi):
         v1w,v10w=_fn(row.get('wau_1min')),_fn(row.get('wau_10min'))
         v1m,v10m=_fn(row.get('mau_1min')),_fn(row.get('mau_10min'))
         ch_deep[c]={
-            'name':      PGM_NAMES.get(c,c),
+            'name':      _pgm_name(c),
             'rate':      _fn(row.get('deep_rate')),
             'rate_week': round(v10w/v1w*100,2) if v1w and v10w and v1w>0 else None,
             'rate_mon':  round(v10m/v1m*100,2) if v1m and v10m and v1m>0 else None,
@@ -521,7 +549,7 @@ def build_s4(kpi):
     hl=[]
     for c in ALL:
         row=kpi.get(c,{}); h=_fn(row.get('habit_rate')); n=_f(row.get('new_today'),0)
-        if h is not None and n>=500: hl.append({'code':c,'name':PGM_NAMES.get(c,c),'rate':h,'count':int(n)})
+        if h is not None and n>=500: hl.append({'code':c,'name':_pgm_name(c),'rate':h,'count':int(n)})
     top3=sorted(hl,key=lambda x:x['rate'],reverse=True)[:3]
     return {
         'new_today':   _i(t.get('new_today')),
@@ -551,7 +579,7 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
     return {
         'rank':    rank,
         'code':    code,
-        'name':    name or PGM_NAMES.get(code, row.get('pgm_name', code)),
+        'name':    name or _pgm_name(code, row=row),
         'channel': ch_name,
         'dau':     dau if dau is not None else _i(row.get('dau_today')),
         # 기간별 규모
@@ -646,7 +674,7 @@ def build_s5(kpi):
     all_programs = [_pgm_dict(c, kpi[c]) for c in all_pgm_codes]
     dl,nl,rl=[],[],[]
     for c in ALL:
-        row=kpi.get(c,{}); nm=PGM_NAMES.get(c,c)
+        row=kpi.get(c,{}); nm=_pgm_name(c, row=row)
         dr=_fn(row.get('deep_rate')); u1=_f(row.get('dau_1min'),0)
         n=_f(row.get('new_today'),0); rc=_f(row.get('react_today'),0)
         if dr is not None and u1>=500: dl.append({'code':c,'name':nm,'rate':dr,'u1min':int(u1)})
@@ -656,7 +684,7 @@ def build_s5(kpi):
     for c in ALL:
         row=kpi.get(c,{}); ch=_fn(row.get('churn_rate')); w=_fn(row.get('dau_wow')); d=_f(row.get('dau_today'),0)
         if ch and w and d>=1000 and ch>=30 and w<=-5:
-            risk.append({'code':c,'name':PGM_NAMES.get(c,c),'dau':int(d),'churn_rate':ch,'dau_wow':w})
+            risk.append({'code':c,'name':_pgm_name(c, row=row),'dau':int(d),'churn_rate':ch,'dau_wow':w})
     return {
         'dau_top10':    dau_top10,
         'all_programs': all_programs,
@@ -684,7 +712,7 @@ def build_s6(kpi):
         mau_10min = _i(row.get('mau_10min'))
         deep_rate_mon = round(mau_10min/mau_1min*100, 1) if mau_1min and mau_1min > 0 else _fn(row.get('deep_rate_mon'))
         chs.append({
-            'code':c,'name':PGM_NAMES[c],
+            'code':c,'name':_pgm_name(c),
             'share':round(d_share/t00_share*100,1),
             # 일간
             'dau':         int(d),
@@ -941,7 +969,7 @@ def _build_timeseries_insights(timeline, days=7):
             fv, lv = vl[0][1], vl[-1][1]
             chg = (lv - fv) / fv * 100 if fv else 0
             avg = sum(v for _, v in vl) / len(vl)
-            lines.append(f'    {PGM_NAMES.get(ch, ch)}: avg {int(avg):,} / {chg:+.1f}% ({int(fv):,}->{int(lv):,})')
+            lines.append(f'    {_pgm_name(ch)}: avg {int(avg):,} / {chg:+.1f}% ({int(fv):,}->{int(lv):,})')
 
     # 3. 깊은청취율 추세
     dr_trend = get_metric_trend(timeline, 'T00', 'deep_rate', days=actual_days)
@@ -968,7 +996,7 @@ def _build_timeseries_insights(timeline, days=7):
             if pv < 1000:
                 continue
             chg = (lv - pv) / pv * 100
-            nm = PGM_NAMES.get(code, code)
+            nm = _pgm_name(code)
             if chg >= 10:
                 spikes.append((nm, chg, int(lv)))
             elif chg <= -10:
