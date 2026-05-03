@@ -223,6 +223,18 @@ body{
 .user-flow-chart{
   background:transparent;padding:14px 0 4px;margin-top:10px;
 }
+/* 사용자 흐름 자동 요약 (한 줄, 섹션 끝 결론) */
+.user-flow-summary{
+  background:var(--bg3);
+  border-radius:6px;
+  padding:10px 14px;
+  margin-top:14px;
+  font-size:13px;
+  font-weight:500;
+  color:var(--text);
+  text-align:left;
+  line-height:1.55;
+}
 .funnel-flow{
   display:flex;align-items:stretch;gap:0;
   margin-bottom:12px;overflow-x:auto;
@@ -281,23 +293,31 @@ body{
   text-align: center;
 }
 .fc-name {
-  font-size: 15px;        /* 항목명 → kpi-label과 동일 */
+  font-size: 14px;        /* 항목명 */
   font-weight: 500;
   color: var(--sub);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  display:flex;align-items:baseline;justify-content:center;gap:4px;flex-wrap:wrap;
+}
+.fc-name .fc-sub {
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 400;
 }
 .fc-pct {
-  font-size: 33px;        /* 비율 → kpi-val과 동일 */
-  font-weight: 600;
+  font-size: 22px;        /* 비율 — 메인 강조 약화 (SVG 깔때기에 동일 정보 있음) */
+  font-weight: 500;
   font-family: var(--mono);
   line-height: 1.1;
+  color: var(--sub);
+  opacity: 0.85;
 }
 .fc-val {
-  font-size: 16px;        /* 수치 → kpi-wow와 동일 */
-  font-weight: 600;
+  font-size: 24px;        /* pp diff — 강조 (트렌드 신호) */
+  font-weight: 700;
   font-family: var(--mono);
-  color: var(--sub);
-  margin-top: 3px;
+  margin-top: 4px;
+  line-height: 1.1;
 }
 .funnel-head {
   display: flex;
@@ -936,6 +956,7 @@ body{
       <div class="section-title">사용자 흐름</div>
       <div class="funnel-wrap"></div>
       <div class="user-flow-chart" id="userFlowChart"></div>
+      <div class="user-flow-summary" id="userFlowSummary"></div>
     </div>
 
     <!-- ZONE 6: 채널 현황 -->
@@ -1397,7 +1418,7 @@ async function renderUserSize() {
             <div class="us-label">DAU</div>
             <div class="us-date">${dateD1 ? formatDateRange(dateD1, dateD1, 'D-1') : ''}</div>
             <div class="us-val">${formatNumber(s1.dau)}</div>
-            <div class="us-badge-row">${renderChangeBadge(s1.dau_chg, {size:'md', showLabel:true, label:'전일 대비'})}</div>
+            <div class="us-badge-row">${renderChangeBadge(s1.dau_chg, {size:'md', showLabel:true, label:'전주 같은 요일 대비'})}</div>
           </div>
           <div class="us-main-side">
             <div>
@@ -2257,6 +2278,13 @@ function renderFunnel(s1, s2) {
     const sign = v >= 0 ? '+' : '';
     return sign + (+v).toFixed(1) + 'pp';
   };
+  // pp diff 색상 신호 — 양수=긍정/음수=부정 (이탈만 반전)
+  const ppColor = (v, isInverse) => {
+    if (v == null || isNaN(v)) return 'var(--sub)';
+    if (Math.abs(v) < 0.5) return 'var(--sub)';   // 미세 변화 = 중립
+    const isGood = isInverse ? (v < 0) : (v > 0);
+    return isGood ? 'var(--green)' : 'var(--red)';
+  };
   // 직전 기간(D-1/D-7/D-30) 비교 pp diff — 엔진에서 timeline lookup해 산출
   const newPP   = s2[`funnel_new_p_${p}_diff`];
   const maintPP = s2[`funnel_maint_p_${p}_diff`];     // Row 1 (이번 활성 분모)
@@ -2272,18 +2300,18 @@ function renderFunnel(s1, s2) {
     <div class="funnel-row r3">
       <div class="funnel-cell">
         <div class="fc-name">신규</div>
-        <div class="fc-pct" style="color:var(--green)">${fmtP(new_p)}</div>
-        <div class="fc-val">${fmtPP(newPP)}</div>
+        <div class="fc-pct">${fmtP(new_p)}</div>
+        <div class="fc-val" style="color:${ppColor(newPP)}">${fmtPP(newPP)}</div>
       </div>
       <div class="funnel-cell">
-        <div class="fc-name">유지</div>
-        <div class="fc-pct" style="color:var(--text)">${fmtP(maint_p)}</div>
-        <div class="fc-val">${fmtPP(maintPP)}</div>
+        <div class="fc-name">유지 <span class="fc-sub">이번 활성 중</span></div>
+        <div class="fc-pct">${fmtP(maint_p)}</div>
+        <div class="fc-val" style="color:${ppColor(maintPP)}">${fmtPP(maintPP)}</div>
       </div>
       <div class="funnel-cell">
         <div class="fc-name">복귀 ⚠</div>
-        <div class="fc-pct" style="color:var(--yellow)">${fmtP(react_p)}</div>
-        <div class="fc-val">${fmtPP(reactPP)}</div>
+        <div class="fc-pct">${fmtP(react_p)}</div>
+        <div class="fc-val" style="color:${ppColor(reactPP)}">${fmtPP(reactPP)}</div>
       </div>
     </div>
     <div style="height:0.5px;background:var(--line);margin:10px 0"></div>
@@ -2293,20 +2321,29 @@ function renderFunnel(s1, s2) {
     </div>
     <div class="funnel-row r2">
       <div class="funnel-cell">
-        <div class="fc-name">유지</div>
-        <div class="fc-pct" style="color:var(--text)">${fmtP(maint_p2)}</div>
-        <div class="fc-val">${fmtPP(maintPP2)}</div>
+        <div class="fc-name">유지 <span class="fc-sub">직전 활성 중 살아남음</span></div>
+        <div class="fc-pct">${fmtP(maint_p2)}</div>
+        <div class="fc-val" style="color:${ppColor(maintPP2)}">${fmtPP(maintPP2)}</div>
       </div>
       <div class="funnel-cell">
         <div class="fc-name">이탈 ⚠</div>
-        <div class="fc-pct" style="color:var(--red)">${fmtP(churn_p2)}</div>
-        <div class="fc-val">${fmtPP(churnPP)}</div>
+        <div class="fc-pct">${fmtP(churn_p2)}</div>
+        <div class="fc-val" style="color:${ppColor(churnPP, true)}">${fmtPP(churnPP)}</div>
       </div>
     </div>
     <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;text-align:left;opacity:0.7;">
       ⚠ 복귀·이탈 수치 데이터 안정화 중
     </div>
   `;
+
+  // 자동 요약 (한 줄, 활성 변화 분해 산식 기반)
+  const sumEl = document.getElementById('userFlowSummary');
+  if (sumEl) {
+    sumEl.innerHTML = _buildFlowSummaryHTML({
+      dau: +dau || 0, dau_prev: +dau_prev || 0,
+      new_u: +new_u || 0, react: +react || 0, churn: +churn_users || 0,
+    });
+  }
 
   // 사용자 흐름 다이어그램 (Sankey-lite SVG, 항등식 시각화)
   const flowEl = document.getElementById('userFlowChart');
@@ -2319,8 +2356,51 @@ function renderFunnel(s1, s2) {
       churn:    +churn_users || 0,
       new_u:    +new_u    || 0,
       react:    +react    || 0,
+      // 비율 (%) — 각 세그먼트의 박스 분모 기준
+      pctMaintLeft:  maint_p2 != null ? +maint_p2 : null,   // 좌박스 유지 (직전 활성 분모)
+      pctChurn:      churn_p2 != null ? +churn_p2 : null,   // 좌박스 이탈
+      pctNew:        new_p    != null ? +new_p    : null,   // 우박스 신규 (이번 활성 분모)
+      pctMaintRight: maint_p  != null ? +maint_p  : null,   // 우박스 유지 (이번 활성 분모)
+      pctReact:      react_p  != null ? +react_p  : null,   // 우박스 복귀
     });
   }
+}
+
+// 사용자 흐름 한 줄 요약 — 활성 변화 = (신규 + 복귀) − 이탈 분해 산식 기반 인과 설명
+function _buildFlowSummaryHTML(d) {
+  const fmt = v => {
+    if (v == null || isNaN(v)) return '—';
+    if (Math.abs(v) >= 1000) return (v/1000).toFixed(1) + 'k';
+    return String(Math.round(v));
+  };
+
+  // 결과: 활성 변화 톤
+  const dau = d.dau || 0, dau_prev = d.dau_prev || 0;
+  const pct = dau_prev > 0 ? ((dau - dau_prev) / dau_prev * 100) : 0;
+  let trend;
+  if (pct >  10) trend = '급증';
+  else if (pct >  3) trend = '증가';
+  else if (pct >= -3) trend = '보합';
+  else if (pct >= -10) trend = '감소';
+  else trend = '급감';
+
+  if (!dau || !dau_prev) {
+    return `이번 활성 직전 대비 ${trend}.`;
+  }
+
+  // 직접 산식: 활성 변화 ≈ (신규 + 복귀) − 이탈
+  const inflow  = (d.new_u || 0) + (d.react || 0);
+  const outflow = (d.churn || 0);
+  let cause;
+  if (outflow > inflow * 1.2) {
+    cause = `이탈 ${fmt(outflow)}이 신규+복귀 보충(${fmt(inflow)})을 압도`;
+  } else if (inflow > outflow * 1.2) {
+    cause = `신규+복귀 ${fmt(inflow)}이 이탈(${fmt(outflow)})을 상회`;
+  } else {
+    cause = `이탈 ${fmt(outflow)} ≈ 신규+복귀 ${fmt(inflow)} 균형`;
+  }
+
+  return `이번 활성 직전 대비 ${trend} — ${cause}.`;
 }
 
 // 사용자 흐름 Sankey-lite SVG 생성 (항등식 시각화: 직전=유지+이탈, 이번=신규+유지+복귀)
@@ -2331,27 +2411,54 @@ function _buildUserFlowSVG(d) {
     return String(Math.round(v));
   };
   const W = 480, H = 270;
-  const BW = 110, BH = 200;
+  const BW = 110, BH_MAX = 200;
   const LBX = 90, LBY = 50;
   const RBX = W - LBX - BW, RBY = LBY;
   const lTotal = d.dau_prev || 1;
   const rTotal = d.dau      || 1;
-  const maintHL = (d.maint || 0) / lTotal * BH;
-  const churnHL = (d.churn || 0) / lTotal * BH;
-  const newHR   = (d.new_u || 0) / rTotal * BH;
-  const maintHR = (d.maint || 0) / rTotal * BH;
-  const reactHR = (d.react || 0) / rTotal * BH;
+  // 박스 높이도 max(직전, 이번) 기준으로 비례 — 절대 크기 차이 시각화
+  const maxTotal = Math.max(lTotal, rTotal) || 1;
+  const lBoxH = lTotal / maxTotal * BH_MAX;
+  const rBoxH = rTotal / maxTotal * BH_MAX;
+  const maintHL = (d.maint || 0) / lTotal * lBoxH;
+  const churnHL = (d.churn || 0) / lTotal * lBoxH;
+  const newHR   = (d.new_u || 0) / rTotal * rBoxH;
+  const maintHR = (d.maint || 0) / rTotal * rBoxH;
+  const reactHR = (d.react || 0) / rTotal * rBoxH;
   const lMaintY = LBY;
   const lChurnY = LBY + maintHL;
   const rNewY   = RBY;
   const rMaintY = RBY + newHR;
   const rReactY = RBY + newHR + maintHR;
-  const segText = (cx, cy, h, color, label, val) => h < 14 ? '' : `
-    <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="12" fill="${color}" font-weight="600">${label} ${fmt(val)}</text>`;
-  // 세그먼트가 너무 좁아 in-segment 텍스트가 안 들어갈 때 외부 화살표 라벨에 수치 함께 표기
-  const newOuter   = newHR   < 14 ? `신규 ${fmt(d.new_u)}` : '신규';
-  const reactOuter = reactHR < 14 ? `복귀 ${fmt(d.react)}` : '복귀';
-  const churnOuter = churnHL < 14 ? `이탈 ${fmt(d.churn)}` : '이탈';
+  const fmtPct = p => (p != null && !isNaN(p)) ? `${(+p).toFixed(1)}%` : '';
+  // 세그먼트가 충분히 넓으면 2줄(상: label N, 하: P%), 좁으면 1줄(label N)만, 더 좁으면 비표시
+  const segText = (cx, cy, h, color, label, val, pct) => {
+    if (h < 14) return '';
+    const valTxt = `${label} ${fmt(val)}`;
+    const pctTxt = fmtPct(pct);
+    if (h >= 30 && pctTxt) {
+      return `
+        <text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="12" fill="${color}" font-weight="600">${valTxt}</text>
+        <text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="11" fill="${color}" font-weight="500" opacity="0.85">${pctTxt}</text>`;
+    }
+    return `<text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="12" fill="${color}" font-weight="600">${valTxt}</text>`;
+  };
+  // 세그먼트가 너무 좁아 in-segment 텍스트가 안 들어갈 때 외부 라벨로 표기 (좁으면 2줄)
+  const outerInfo = (label, val, pct, narrow) => {
+    if (!narrow) return { line1: label, line2: '' };
+    const pctTxt = fmtPct(pct);
+    return {
+      line1: `${label} ${fmt(val)}`,
+      line2: pctTxt ? `(${pctTxt})` : ''
+    };
+  };
+  const newInfo   = outerInfo('신규', d.new_u, d.pctNew,    newHR   < 14);
+  const reactInfo = outerInfo('복귀', d.react, d.pctReact,  reactHR < 14);
+  const churnInfo = outerInfo('이탈', d.churn, d.pctChurn,  churnHL < 14);
+  // 2줄 라벨 SVG 헬퍼 (text-anchor는 상위에서 지정)
+  const outerText = (x, y, info) => info.line2
+    ? `<tspan x="${x}" dy="0">${info.line1}</tspan><tspan x="${x}" dy="11">${info.line2}</tspan>`
+    : info.line1;
   return `
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;">
       <!-- 직전 활성 헤더 -->
@@ -2359,7 +2466,7 @@ function _buildUserFlowSVG(d) {
       <text x="${LBX+BW/2}" y="${LBY-10}" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)" font-family="var(--mono)">${fmt(d.dau_prev)}</text>
 
       <!-- 직전 박스 외곽 -->
-      <rect x="${LBX}" y="${LBY}" width="${BW}" height="${BH}" fill="none" stroke="var(--line2)" stroke-width="1" rx="6"/>
+      <rect x="${LBX}" y="${LBY}" width="${BW}" height="${lBoxH}" fill="none" stroke="var(--line2)" stroke-width="1" rx="6"/>
 
       <!-- 유지 flow (Sankey 곡선) - 좌박스 유지 → 우박스 유지 -->
       <path d="M ${LBX+BW} ${lMaintY}
@@ -2370,22 +2477,22 @@ function _buildUserFlowSVG(d) {
 
       <!-- 좌박스: 유지 -->
       <rect x="${LBX}" y="${lMaintY}" width="${BW}" height="${maintHL}" fill="rgba(55,138,221,0.30)" rx="6 6 0 0"/>
-      ${segText(LBX+BW/2, lMaintY+maintHL/2, maintHL, '#378ADD', '유지', d.maint)}
+      ${segText(LBX+BW/2, lMaintY+maintHL/2, maintHL, '#378ADD', '유지', d.maint, d.pctMaintLeft)}
       <!-- 좌박스: 이탈 -->
       <rect x="${LBX}" y="${lChurnY}" width="${BW}" height="${churnHL}" fill="rgba(255,77,106,0.28)" rx="0 0 6 6"/>
-      ${segText(LBX+BW/2, lChurnY+churnHL/2, churnHL, 'var(--red)', '이탈', d.churn)}
+      ${segText(LBX+BW/2, lChurnY+churnHL/2, churnHL, 'var(--red)', '이탈', d.churn, d.pctChurn)}
 
       <!-- 이번 박스 외곽 -->
-      <rect x="${RBX}" y="${RBY}" width="${BW}" height="${BH}" fill="none" stroke="var(--line2)" stroke-width="1" rx="6"/>
+      <rect x="${RBX}" y="${RBY}" width="${BW}" height="${rBoxH}" fill="none" stroke="var(--line2)" stroke-width="1" rx="6"/>
       <!-- 우박스: 신규 -->
       <rect x="${RBX}" y="${rNewY}" width="${BW}" height="${newHR}" fill="rgba(0,224,122,0.28)" rx="6 6 0 0"/>
-      ${segText(RBX+BW/2, rNewY+newHR/2, newHR, 'var(--green)', '신규', d.new_u)}
+      ${segText(RBX+BW/2, rNewY+newHR/2, newHR, 'var(--green)', '신규', d.new_u, d.pctNew)}
       <!-- 우박스: 유지 -->
       <rect x="${RBX}" y="${rMaintY}" width="${BW}" height="${maintHR}" fill="rgba(55,138,221,0.30)"/>
-      ${segText(RBX+BW/2, rMaintY+maintHR/2, maintHR, '#378ADD', '유지', d.maint)}
+      ${segText(RBX+BW/2, rMaintY+maintHR/2, maintHR, '#378ADD', '유지', d.maint, d.pctMaintRight)}
       <!-- 우박스: 복귀 -->
       <rect x="${RBX}" y="${rReactY}" width="${BW}" height="${reactHR}" fill="rgba(255,184,48,0.28)" rx="0 0 6 6"/>
-      ${segText(RBX+BW/2, rReactY+reactHR/2, reactHR, 'var(--yellow)', '복귀', d.react)}
+      ${segText(RBX+BW/2, rReactY+reactHR/2, reactHR, 'var(--yellow)', '복귀', d.react, d.pctReact)}
 
       <!-- 이번 활성 헤더 -->
       <text x="${RBX+BW/2}" y="${RBY-26}" text-anchor="middle" font-size="11" font-weight="500" fill="var(--sub)">${d.dau_label}</text>
@@ -2394,17 +2501,17 @@ function _buildUserFlowSVG(d) {
       <!-- 이탈 외부 화살표 (좌박스 → 밖) -->
       <line x1="${LBX-8}" y1="${lChurnY+churnHL/2}" x2="${LBX-32}" y2="${lChurnY+churnHL/2}" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="3 3"/>
       <polygon points="${LBX-32},${lChurnY+churnHL/2-4} ${LBX-42},${lChurnY+churnHL/2} ${LBX-32},${lChurnY+churnHL/2+4}" fill="var(--red)"/>
-      <text x="${LBX-46}" y="${lChurnY+churnHL/2-6}" text-anchor="end" font-size="10" fill="var(--red)" font-weight="500">${churnOuter}</text>
+      <text x="${LBX-46}" y="${lChurnY+churnHL/2-6}" text-anchor="end" font-size="10" fill="var(--red)" font-weight="500">${outerText(LBX-46, lChurnY+churnHL/2-6, churnInfo)}</text>
 
       <!-- 신규 입력 화살표 (위에서 우박스 신규로) -->
       <line x1="${RBX+BW+32}" y1="${rNewY+newHR/2}" x2="${RBX+BW+8}" y2="${rNewY+newHR/2}" stroke="var(--green)" stroke-width="1.5"/>
       <polygon points="${RBX+BW+8},${rNewY+newHR/2-4} ${RBX+BW-2},${rNewY+newHR/2} ${RBX+BW+8},${rNewY+newHR/2+4}" fill="var(--green)"/>
-      <text x="${RBX+BW+34}" y="${rNewY+newHR/2-6}" font-size="10" fill="var(--green)" font-weight="500">${newOuter}</text>
+      <text x="${RBX+BW+34}" y="${rNewY+newHR/2-6}" font-size="10" fill="var(--green)" font-weight="500">${outerText(RBX+BW+34, rNewY+newHR/2-6, newInfo)}</text>
 
       <!-- 복귀 입력 화살표 (외부에서 우박스 복귀로) -->
       <line x1="${RBX+BW+32}" y1="${rReactY+reactHR/2}" x2="${RBX+BW+8}" y2="${rReactY+reactHR/2}" stroke="var(--yellow)" stroke-width="1.5"/>
       <polygon points="${RBX+BW+8},${rReactY+reactHR/2-4} ${RBX+BW-2},${rReactY+reactHR/2} ${RBX+BW+8},${rReactY+reactHR/2+4}" fill="var(--yellow)"/>
-      <text x="${RBX+BW+34}" y="${rReactY+reactHR/2-6}" font-size="10" fill="var(--yellow)" font-weight="500">${reactOuter}</text>
+      <text x="${RBX+BW+34}" y="${rReactY+reactHR/2-6}" font-size="10" fill="var(--yellow)" font-weight="500">${outerText(RBX+BW+34, rReactY+reactHR/2-6, reactInfo)}</text>
     </svg>`;
 }
 
