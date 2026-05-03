@@ -1241,13 +1241,34 @@ function setPeriod(p){
 }
 
 // ── 데이터 로드 ──────────────────────────────────────────
+// Phase 5 Step 5: 온톨로지 스키마 (어댑터에서 동적 로드, 5분 캐시)
+let SCHEMA = null;
+let _schemaLoadedAt = 0;
+async function loadSchema(force=false){
+  const now = Date.now();
+  if (!force && SCHEMA && (now - _schemaLoadedAt) < 5*60*1000) return SCHEMA;
+  try {
+    const res = await fetch('/api/schema');
+    const json = await res.json();
+    if (json && json.ok && json.data) {
+      SCHEMA = json.data;
+      _schemaLoadedAt = now;
+      window.SCHEMA = SCHEMA;  // 디버그/추후 활용
+    }
+  } catch (e) {
+    console.warn('[loadSchema] 실패 — 하드코딩 fallback 사용:', e);
+  }
+  return SCHEMA;
+}
+
 async function loadAll(){
   const btn = document.getElementById('btnRefresh');
   btn.disabled=true;
   document.getElementById('loading').style.display='flex';
   document.getElementById('content').style.display='none';
   try {
-    const res = await fetch('/api/briefing');
+    // 스키마는 브리핑과 병렬 로드 (5분 캐시)
+    const [_, res] = await Promise.all([loadSchema(), fetch('/api/briefing')]);
     const json = await res.json();
     if(!json.ok) throw new Error(json.error);
     _data = json.data;

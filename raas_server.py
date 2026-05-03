@@ -347,6 +347,51 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path == "/api/schema":
+            # Phase 5 Step 5: 온톨로지 스키마 덤프 (web.html 동적 메타지식 로드용)
+            try:
+                from raas_onto import get_adapter
+                schema = get_adapter().get_schema_dump()
+                self.send_json({"ok": True, "data": schema})
+            except Exception as e:
+                self.send_json({"ok": False, "error": {
+                    "code": "ONTOLOGY_LOAD_FAILED",
+                    "message": str(e),
+                    "fallback_available": True,
+                }}, 503)
+
+        elif self.path.startswith("/api/concept/search"):
+            # Phase 5 Step 5: 키워드 자동완성/검색 (?q=...)
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                q = params.get("q", "").strip()
+                if not q:
+                    self.send_json({"ok": True, "query": "", "matches": []})
+                    return
+                from raas_onto import get_adapter
+                matches = get_adapter().find_program_by_keyword(q)
+                self.send_json({"ok": True, "query": q, "matches": matches})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path.startswith("/api/concept/"):
+            # Phase 5 Step 5: 개념 정의 조회 (?) 모달 동적화
+            try:
+                name = self.path.replace("/api/concept/", "").strip()
+                if not name:
+                    self.send_json({"ok": False, "error": "concept name 필요"}, 400)
+                    return
+                from raas_onto import get_adapter
+                concept = get_adapter().get_concept_definition(name)
+                if not concept:
+                    self.send_json({"ok": False, "error": f"개념 '{name}' 미존재"}, 404)
+                    return
+                self.send_json({"ok": True, "data": concept})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/status":
             self.send_json({"ok": True, "server": "RAAS",
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
