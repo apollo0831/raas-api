@@ -1,0 +1,290 @@
+# =============================================================================
+# RAAS Business Rules Ontology — Phase 4
+# 
+# 비즈니스 룰의 온톨로지화:
+# 1. 프로그램/채널 개념 클래스 (AtRiskProgram, GrowingProgram 등)
+# 2. 실시간 알림 룰 (DAU 급락, 신규 급감 등 9개)
+# 3. SPARQL 쿼리 (실제 분류/감지에 사용)
+#
+# 출처:
+# - briefing_engine.py build_s7() 함수
+# - query_engine.py extract_data() risks 룰
+# 양쪽에 중복으로 박혀있던 룰을 단일 출처로 통합.
+# =============================================================================
+
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+
+# =============================================================================
+# 1. 추가 클래스 정의
+# =============================================================================
+
+# ─── 1.1 추론 개념 클래스 (Inferred Concepts) ─────────────────────────────────
+
+raas:BusinessConcept a owl:Class ;
+    rdfs:label "비즈니스 개념 (추상)"@ko ;
+    rdfs:comment "측정값으로부터 자동 도출되는 의미적 분류"@ko .
+
+raas:ProgramConcept a owl:Class ;
+    rdfs:subClassOf raas:BusinessConcept ;
+    rdfs:label "프로그램 개념"@ko ;
+    rdfs:comment "프로그램에 적용되는 의미적 분류"@ko .
+
+raas:AtRiskProgram a owl:Class ;
+    rdfs:subClassOf raas:ProgramConcept, raas:Program ;
+    rdfs:label "이탈 위험 프로그램"@ko ;
+    raas:altLabel "위험 프로그램"@ko, "At-Risk Program"@en ;
+    rdfs:comment "DAU 1,000 이상이면서 이탈률이 30% 이상이고 WoW가 -5% 이하인 프로그램"@ko ;
+    raas:condition "dau >= 1000 AND churn_rate >= 30 AND dau_wow <= -5" ;
+    raas:alertLevel "yellow" ;
+    raas:recommendedAction "편성 검토, 콘텐츠 분석, 청취층 변화 추적"@ko .
+
+raas:HabitFormingProgram a owl:Class ;
+    rdfs:subClassOf raas:ProgramConcept, raas:Program ;
+    rdfs:label "습관 형성 우수 프로그램"@ko ;
+    raas:altLabel "Habit-Forming Program"@en ;
+    rdfs:comment "신규 사용자 500명 이상이면서 습관형성률이 30% 이상인 프로그램"@ko ;
+    raas:condition "new >= 500 AND habit_rate >= 30" ;
+    raas:alertLevel "green" ;
+    raas:recommendedAction "성공 요인 분석, 다른 프로그램에 적용"@ko .
+
+raas:DecliningProgram a owl:Class ;
+    rdfs:subClassOf raas:ProgramConcept, raas:Program ;
+    rdfs:label "청취 급락 프로그램"@ko ;
+    raas:altLabel "Declining Program"@en ;
+    rdfs:comment "DAU가 1,000 이상인 프로그램 중 WoW가 -10% 이하"@ko ;
+    raas:condition "dau >= 1000 AND dau_wow <= -10" ;
+    raas:alertLevel "red" ;
+    raas:recommendedAction "긴급 원인 분석, 편성 변경 또는 프로모션 검토"@ko .
+
+raas:GrowingProgram a owl:Class ;
+    rdfs:subClassOf raas:ProgramConcept, raas:Program ;
+    rdfs:label "청취 급증 프로그램"@ko ;
+    raas:altLabel "Growing Program"@en ;
+    rdfs:comment "DAU가 1,000 이상인 프로그램 중 WoW가 +10% 이상"@ko ;
+    raas:condition "dau >= 1000 AND dau_wow >= 10" ;
+    raas:alertLevel "green" ;
+    raas:recommendedAction "성장 요인 분석, 광고 영업 활용"@ko .
+
+
+# ─── 1.2 알림 룰 클래스 (Platform Alert) ─────────────────────────────────────
+
+raas:PlatformAlert a owl:Class ;
+    rdfs:label "플랫폼 알림 룰"@ko ;
+    rdfs:comment "전체 플랫폼 KPI에 대한 실시간 알림 룰"@ko .
+
+
+# =============================================================================
+# 2. 추가 속성 정의
+# =============================================================================
+
+raas:condition a owl:DatatypeProperty ;
+    rdfs:label "룰 조건 (자연어 표기)"@ko ;
+    rdfs:comment "사람이 읽기 쉬운 조건 식 (실제 실행은 SPARQL 사용)"@ko .
+
+raas:alertLevel a owl:DatatypeProperty ;
+    rdfs:label "알림 등급"@ko ;
+    rdfs:comment "red(위험), yellow(주의), green(양호)"@ko .
+
+raas:recommendedAction a owl:DatatypeProperty ;
+    rdfs:label "권장 조치"@ko .
+
+raas:thresholdValue a owl:DatatypeProperty ;
+    rdfs:label "임계값"@ko .
+
+raas:thresholdMetric a owl:ObjectProperty ;
+    rdfs:range raas:Metric ;
+    rdfs:label "임계 대상 지표"@ko .
+
+raas:hasSparqlQuery a owl:DatatypeProperty ;
+    rdfs:label "실행 SPARQL 쿼리"@ko ;
+    rdfs:comment "이 룰을 실제로 평가하는 SPARQL CONSTRUCT/SELECT 쿼리"@ko .
+
+raas:alertMessage a owl:DatatypeProperty ;
+    rdfs:label "알림 메시지 템플릿"@ko ;
+    rdfs:comment "{value} 같은 placeholder를 포함한 메시지 템플릿"@ko .
+
+raas:appliedTo a owl:ObjectProperty ;
+    rdfs:label "적용 대상 클래스"@ko .
+
+raas:emoji a owl:DatatypeProperty ;
+    rdfs:label "알림 이모지"@ko .
+
+
+# =============================================================================
+# 3. PlatformAlert 인스턴스 (9개 알림 룰)
+# =============================================================================
+
+# ─── 룰 1: DAU 급락 ────────────────────────────────────────────────────────
+
+raas:Alert_DauPlunge a raas:PlatformAlert ;
+    rdfs:label "DAU 급락 알림"@ko ;
+    raas:appliedTo raas:Platform, raas:Channel ;
+    raas:thresholdMetric raas:DAU ;
+    raas:thresholdValue -10 ;
+    raas:condition "dau_wow <= -10" ;
+    raas:alertLevel "red" ;
+    raas:emoji "🔴" ;
+    raas:alertMessage "DAU {value:+.1f}% 급락 🔴" ;
+    rdfs:comment "전주 동일 요일 대비 DAU가 10% 이상 감소"@ko .
+
+# ─── 룰 2: DAU 급증 ────────────────────────────────────────────────────────
+
+raas:Alert_DauSurge a raas:PlatformAlert ;
+    rdfs:label "DAU 급증 알림"@ko ;
+    raas:appliedTo raas:Platform, raas:Channel ;
+    raas:thresholdMetric raas:DAU ;
+    raas:thresholdValue 10 ;
+    raas:condition "dau_wow >= 10" ;
+    raas:alertLevel "green" ;
+    raas:emoji "🟢" ;
+    raas:alertMessage "DAU {value:+.1f}% 급증 🟢" ;
+    rdfs:comment "전주 동일 요일 대비 DAU가 10% 이상 증가"@ko .
+
+# ─── 룰 3: 깊은청취율 급락 ──────────────────────────────────────────────────
+
+raas:Alert_DeepRatePlunge a raas:PlatformAlert ;
+    rdfs:label "깊은청취율 급락 알림"@ko ;
+    raas:appliedTo raas:Platform, raas:Channel ;
+    raas:thresholdMetric raas:DeepListenRate ;
+    raas:thresholdValue -3 ;
+    raas:condition "deep_rate_diff <= -3" ;
+    raas:alertLevel "red" ;
+    raas:emoji "🔴" ;
+    raas:alertMessage "깊은청취율 {value:+.1f}pp 급락 🔴" ;
+    rdfs:comment "전주 대비 깊은청취율이 3%p 이상 하락. 청취 품질 악화 신호."@ko .
+
+# ─── 룰 4: 신규 사용자 급감 ─────────────────────────────────────────────────
+
+raas:Alert_NewUserPlunge a raas:PlatformAlert ;
+    rdfs:label "신규 사용자 급감 알림"@ko ;
+    raas:appliedTo raas:Platform ;
+    raas:thresholdMetric raas:NewUser ;
+    raas:thresholdValue -20 ;
+    raas:condition "new_wow <= -20" ;
+    raas:alertLevel "red" ;
+    raas:emoji "🔴" ;
+    raas:alertMessage "신규 {value:+.1f}% 급감 🔴" ;
+    rdfs:comment "전주 대비 신규 사용자가 20% 이상 감소. 마케팅·획득 채널 점검 필요."@ko .
+
+# ─── 룰 5: 이탈률 상승 ──────────────────────────────────────────────────────
+
+raas:Alert_ChurnRateRise a raas:PlatformAlert ;
+    rdfs:label "이탈률 상승 알림"@ko ;
+    raas:appliedTo raas:Platform, raas:Channel ;
+    raas:thresholdMetric raas:ChurnRate ;
+    raas:thresholdValue 3 ;
+    raas:condition "churn_diff >= 3" ;
+    raas:alertLevel "yellow" ;
+    raas:emoji "🟡" ;
+    raas:alertMessage "이탈률 {value:+.1f}pp 상승 🟡" ;
+    rdfs:comment "전주 대비 이탈률이 3%p 이상 상승. 사용자 유지 점검 필요."@ko .
+
+# ─── 룰 6: 복귀율 달성 ──────────────────────────────────────────────────────
+
+raas:Alert_ReactRateAchieved a raas:PlatformAlert ;
+    rdfs:label "복귀율 달성 알림"@ko ;
+    raas:appliedTo raas:Platform ;
+    raas:thresholdMetric raas:ReactRate ;
+    raas:thresholdValue 5 ;
+    raas:condition "react_rate >= 5" ;
+    raas:alertLevel "green" ;
+    raas:emoji "🟢" ;
+    raas:alertMessage "복귀율 {value:.1f}% 달성 🟢" ;
+    rdfs:comment "복귀 사용자 비율이 5% 이상. 재참여 캠페인 효과 확인."@ko .
+
+# ─── 룰 7: 습관형성률 목표 달성 ────────────────────────────────────────────
+
+raas:Alert_HabitRateAchieved a raas:PlatformAlert ;
+    rdfs:label "습관형성률 목표 달성 알림"@ko ;
+    raas:appliedTo raas:Platform ;
+    raas:thresholdMetric raas:HabitRate ;
+    raas:thresholdValue 30 ;
+    raas:condition "habit_rate >= 30" ;
+    raas:alertLevel "green" ;
+    raas:emoji "🟢" ;
+    raas:alertMessage "습관형성률 {value:.1f}% 목표달성 🟢" ;
+    rdfs:comment "습관형성률 30% 이상 달성. 충성 사용자층 확보."@ko .
+
+# ─── 룰 8: 습관형성률 부진 ─────────────────────────────────────────────────
+
+raas:Alert_HabitRateLow a raas:PlatformAlert ;
+    rdfs:label "습관형성률 부진 알림"@ko ;
+    raas:appliedTo raas:Platform ;
+    raas:thresholdMetric raas:HabitRate ;
+    raas:thresholdValue 15 ;
+    raas:condition "habit_rate <= 15" ;
+    raas:alertLevel "yellow" ;
+    raas:emoji "🟡" ;
+    raas:alertMessage "습관형성률 {value:.1f}% 부진 🟡" ;
+    rdfs:comment "습관형성률 15% 이하. 사용자 재방문 유도 필요."@ko .
+
+# ─── 룰 9: 이탈 위험 프로그램 감지 ────────────────────────────────────────
+
+raas:Alert_AtRiskProgramDetected a raas:PlatformAlert ;
+    rdfs:label "이탈 위험 프로그램 감지 알림"@ko ;
+    raas:appliedTo raas:Program ;
+    raas:condition "AtRiskProgram 클래스 매칭 (dau>=1000 & churn>=30 & wow<=-5)" ;
+    raas:alertLevel "yellow" ;
+    raas:emoji "🟡" ;
+    raas:alertMessage "{name} 이탈{churn:.1f}%·WoW{wow:+.1f}% 🟡" ;
+    rdfs:comment "AtRiskProgram 분류에 해당하는 프로그램 자동 감지 (개별 프로그램 단위 알림)"@ko .
+
+
+# =============================================================================
+# 4. SPARQL 쿼리 — 실제 분류/감지에 사용
+# =============================================================================
+# 본 쿼리들은 raas:hasSparqlQuery 속성으로 각 룰에 연결됨.
+# rdflib + SPARQL 엔진에서 실행 가능하나, PoC에서는 Python 코드로 동등 구현.
+
+raas:Query_AtRiskProgram a raas:SparqlQuery ;
+    rdfs:label "이탈 위험 프로그램 분류 쿼리"@ko ;
+    raas:executesFor raas:AtRiskProgram ;
+    raas:hasSparqlQuery """
+        PREFIX raas: <http://raas.sbs.co.kr/onto#>
+        CONSTRUCT { ?p a raas:AtRiskProgram }
+        WHERE {
+          ?p a raas:Program .
+          ?dau_m raas:subjectOf ?p ;
+                 raas:usesMetricVariant raas:DAU_Day ;
+                 raas:value ?dau .
+          ?churn_m raas:subjectOf ?p ;
+                   raas:usesMetricVariant raas:ChurnRate_Day ;
+                   raas:value ?churn .
+          # WoW는 measurement에 별도 표현 필요 — PoC에선 Python으로 처리
+          FILTER (?dau >= 1000 && ?churn >= 30)
+        }
+    """ .
+
+raas:Query_HabitFormingProgram a raas:SparqlQuery ;
+    rdfs:label "습관 형성 우수 프로그램 분류 쿼리"@ko ;
+    raas:executesFor raas:HabitFormingProgram ;
+    raas:hasSparqlQuery """
+        PREFIX raas: <http://raas.sbs.co.kr/onto#>
+        CONSTRUCT { ?p a raas:HabitFormingProgram }
+        WHERE {
+          ?p a raas:Program .
+          ?new_m raas:subjectOf ?p ;
+                 raas:usesMetricVariant raas:NewUser_Day ;
+                 raas:value ?new .
+          ?habit_m raas:subjectOf ?p ;
+                   raas:usesMetricVariant raas:HabitRate_Day ;
+                   raas:value ?habit .
+          FILTER (?new >= 500 && ?habit >= 30)
+        }
+    """ .
+
+raas:SparqlQuery a owl:Class ;
+    rdfs:label "SPARQL 실행 쿼리"@ko .
+
+raas:executesFor a owl:ObjectProperty ;
+    rdfs:domain raas:SparqlQuery ;
+    rdfs:label "쿼리가 평가하는 개념"@ko .
+
+
+# =============================================================================
+# 끝
+# =============================================================================

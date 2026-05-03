@@ -1,0 +1,361 @@
+# =============================================================================
+# RAAS Time Schema — Phase 2-C-2
+# 
+# TimeSlot, Daypart, ScheduleType 정식 모델링
+# - TimeSlot: 방송 시간 범위 (시작~종료)
+# - Daypart: 라디오 광고 표준 시간대 분류
+# - ScheduleType: 편성 유형 (Daily, WeekendOnly, Rerun 등)
+#
+# 기준 날짜: 2026/05/02 시간표
+# =============================================================================
+
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+
+# =============================================================================
+# 1. 추가 클래스 정의
+# =============================================================================
+
+raas:Daypart a owl:Class ;
+    rdfs:label "Daypart (방송 시간대 분류)"@ko ;
+    rdfs:comment "라디오 광고 시장 표준 시간대 분류 (Morning Drive, Afternoon Drive 등)"@ko .
+
+
+# =============================================================================
+# 2. ScheduleType 인스턴스 (편성 유형)
+# =============================================================================
+
+raas:Daily a raas:ScheduleType ;
+    rdfs:label "매일 편성"@ko ;
+    raas:altLabel "Daily"@en ;
+    rdfs:comment "월요일~일요일 매일 같은 시간에 방송"@ko .
+
+raas:WeekdayOnly a raas:ScheduleType ;
+    rdfs:label "평일 전용"@ko ;
+    raas:altLabel "Weekday Only"@en ;
+    rdfs:comment "월~금만 방송 (주말에는 다른 프로그램 편성)"@ko .
+
+raas:WeekendOnly a raas:ScheduleType ;
+    rdfs:label "주말 전용"@ko ;
+    raas:altLabel "Weekend Only"@en ;
+    rdfs:comment "토·일만 방송 (평일에는 다른 프로그램 편성)"@ko .
+
+raas:Rerun a raas:ScheduleType ;
+    rdfs:label "재방송"@ko ;
+    raas:altLabel "Rerun"@en ;
+    rdfs:comment "다른 시간대 프로그램의 재방송"@ko .
+
+
+# =============================================================================
+# 3. Daypart 인스턴스 (라디오 광고 표준 분류)
+# =============================================================================
+
+raas:LateNight a raas:Daypart ;
+    rdfs:label "심야"@ko ;
+    raas:altLabel "Late Night"@en ;
+    raas:hourStart 0 ;
+    raas:hourEnd 6 ;
+    raas:adValueLevel "low"@en ;
+    rdfs:comment "00:00 ~ 06:00. 저청취층, 광고 단가 최저"@ko .
+
+raas:MorningDrive a raas:Daypart ;
+    rdfs:label "출근 시간대"@ko ;
+    raas:altLabel "Morning Drive"@en, "아침"@ko ;
+    raas:hourStart 6 ;
+    raas:hourEnd 9 ;
+    raas:adValueLevel "premium"@en ;
+    rdfs:comment "06:00 ~ 09:00. 출근 시간, 차량 청취 활발, 광고 단가 최고급"@ko .
+
+raas:Morning a raas:Daypart ;
+    rdfs:label "오전"@ko ;
+    raas:altLabel "Morning"@en ;
+    raas:hourStart 9 ;
+    raas:hourEnd 12 ;
+    raas:adValueLevel "high"@en ;
+    rdfs:comment "09:00 ~ 12:00. 가정/사무실 청취, 광고 단가 높음"@ko .
+
+raas:Midday a raas:Daypart ;
+    rdfs:label "점심"@ko ;
+    raas:altLabel "Midday"@en ;
+    raas:hourStart 12 ;
+    raas:hourEnd 14 ;
+    raas:adValueLevel "high"@en ;
+    rdfs:comment "12:00 ~ 14:00. 점심시간, 안정적 청취층"@ko .
+
+raas:AfternoonDrive a raas:Daypart ;
+    rdfs:label "퇴근 시간대"@ko ;
+    raas:altLabel "Afternoon Drive"@en, "오후"@ko ;
+    raas:hourStart 14 ;
+    raas:hourEnd 18 ;
+    raas:adValueLevel "premium"@en ;
+    rdfs:comment "14:00 ~ 18:00. 오후 활동 + 퇴근 시간, 광고 단가 최고급"@ko .
+
+raas:Evening a raas:Daypart ;
+    rdfs:label "저녁"@ko ;
+    raas:altLabel "Evening"@en ;
+    raas:hourStart 18 ;
+    raas:hourEnd 22 ;
+    raas:adValueLevel "high"@en ;
+    rdfs:comment "18:00 ~ 22:00. 가정/이동 청취, 광고 단가 높음"@ko .
+
+raas:Night a raas:Daypart ;
+    rdfs:label "밤"@ko ;
+    raas:altLabel "Night"@en ;
+    raas:hourStart 22 ;
+    raas:hourEnd 24 ;
+    raas:adValueLevel "medium"@en ;
+    rdfs:comment "22:00 ~ 24:00. 청취 감소 시작"@ko .
+
+
+# =============================================================================
+# 4. 추가 속성 정의
+# =============================================================================
+
+raas:hourStart a owl:DatatypeProperty ;
+    rdfs:domain raas:Daypart ;
+    rdfs:label "시작 시각 (시 단위)"@ko .
+
+raas:hourEnd a owl:DatatypeProperty ;
+    rdfs:domain raas:Daypart ;
+    rdfs:label "종료 시각 (시 단위)"@ko .
+
+raas:adValueLevel a owl:DatatypeProperty ;
+    rdfs:domain raas:Daypart ;
+    rdfs:label "광고 가치 등급"@ko ;
+    rdfs:comment "premium > high > medium > low (라디오 광고 시장 표준)"@ko .
+
+raas:startTime a owl:DatatypeProperty ;
+    rdfs:domain raas:TimeSlot ;
+    rdfs:label "시작 시각 (HH:MM)"@ko .
+
+raas:endTime a owl:DatatypeProperty ;
+    rdfs:domain raas:TimeSlot ;
+    rdfs:label "종료 시각 (HH:MM)"@ko .
+
+raas:hasDaypart a owl:ObjectProperty ;
+    rdfs:domain raas:TimeSlot ;
+    rdfs:range raas:Daypart .
+
+raas:hasTimeSlot a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:TimeSlot ;
+    rdfs:label "방송 시간대"@ko .
+
+
+# =============================================================================
+# 5. TimeSlot 인스턴스 (자동 추출)
+# =============================================================================
+# 자동 추출 결과 (extract_timeslots.py 출력 기반)
+# - 31개 프로그램 × 1개 TimeSlot = 31개
+# - 명명 규칙: TS_{프로그램코드}
+
+# ─── 파워FM TimeSlot (13개) ─────────────────────────────────────────────────
+
+raas:TS_F01 a raas:TimeSlot ;
+    raas:startTime "23:00" ; raas:endTime "01:00" ;
+    raas:hasDaypart raas:Night .
+raas:F01 raas:hasTimeSlot raas:TS_F01 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F02 a raas:TimeSlot ;
+    raas:startTime "01:00" ; raas:endTime "03:00" ;
+    raas:hasDaypart raas:LateNight .
+raas:F02 raas:hasTimeSlot raas:TS_F02 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F03 a raas:TimeSlot ;
+    raas:startTime "03:00" ; raas:endTime "05:00" ;
+    raas:hasDaypart raas:LateNight .
+raas:F03 raas:hasTimeSlot raas:TS_F03 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F04 a raas:TimeSlot ;
+    raas:startTime "05:00" ; raas:endTime "07:00" ;
+    raas:hasDaypart raas:LateNight .
+raas:F04 raas:hasTimeSlot raas:TS_F04 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F05 a raas:TimeSlot ;
+    raas:startTime "07:00" ; raas:endTime "09:00" ;
+    raas:hasDaypart raas:MorningDrive .
+raas:F05 raas:hasTimeSlot raas:TS_F05 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F06 a raas:TimeSlot ;
+    raas:startTime "09:00" ; raas:endTime "11:00" ;
+    raas:hasDaypart raas:Morning .
+raas:F06 raas:hasTimeSlot raas:TS_F06 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F07 a raas:TimeSlot ;
+    raas:startTime "11:00" ; raas:endTime "12:00" ;
+    raas:hasDaypart raas:Morning .
+raas:F07 raas:hasTimeSlot raas:TS_F07 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F08 a raas:TimeSlot ;
+    raas:startTime "12:00" ; raas:endTime "14:00" ;
+    raas:hasDaypart raas:Midday .
+raas:F08 raas:hasTimeSlot raas:TS_F08 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F09 a raas:TimeSlot ;
+    raas:startTime "14:00" ; raas:endTime "16:00" ;
+    raas:hasDaypart raas:AfternoonDrive .
+raas:F09 raas:hasTimeSlot raas:TS_F09 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F10 a raas:TimeSlot ;
+    raas:startTime "16:00" ; raas:endTime "18:00" ;
+    raas:hasDaypart raas:AfternoonDrive .
+raas:F10 raas:hasTimeSlot raas:TS_F10 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F11 a raas:TimeSlot ;
+    raas:startTime "18:00" ; raas:endTime "20:00" ;
+    raas:hasDaypart raas:Evening .
+raas:F11 raas:hasTimeSlot raas:TS_F11 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F12 a raas:TimeSlot ;
+    raas:startTime "20:00" ; raas:endTime "22:00" ;
+    raas:hasDaypart raas:Evening .
+raas:F12 raas:hasTimeSlot raas:TS_F12 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_F13 a raas:TimeSlot ;
+    raas:startTime "22:00" ; raas:endTime "23:00" ;
+    raas:hasDaypart raas:Night .
+raas:F13 raas:hasTimeSlot raas:TS_F13 ;
+         raas:hasScheduleType raas:Daily .
+
+
+# ─── 러브FM TimeSlot — 매일 편성 (14개) ────────────────────────────────────
+
+raas:TS_L01 a raas:TimeSlot ;
+    raas:startTime "00:00" ; raas:endTime "02:00" ;
+    raas:hasDaypart raas:LateNight .
+raas:L01 raas:hasTimeSlot raas:TS_L01 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L02 a raas:TimeSlot ;
+    raas:startTime "02:00" ; raas:endTime "04:00" ;
+    raas:hasDaypart raas:LateNight .
+raas:L02 raas:hasTimeSlot raas:TS_L02 ;
+         raas:hasScheduleType raas:Rerun .
+
+raas:TS_L03 a raas:TimeSlot ;
+    raas:startTime "04:00" ; raas:endTime "06:00" ;
+    raas:hasDaypart raas:LateNight .
+raas:L03 raas:hasTimeSlot raas:TS_L03 ;
+         raas:hasScheduleType raas:Rerun .
+
+raas:TS_L05 a raas:TimeSlot ;
+    raas:startTime "06:00" ; raas:endTime "07:00" ;
+    raas:hasDaypart raas:MorningDrive .
+raas:L05 raas:hasTimeSlot raas:TS_L05 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L06 a raas:TimeSlot ;
+    raas:startTime "07:00" ; raas:endTime "09:00" ;
+    raas:hasDaypart raas:MorningDrive .
+raas:L06 raas:hasTimeSlot raas:TS_L06 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L07 a raas:TimeSlot ;
+    raas:startTime "09:00" ; raas:endTime "11:00" ;
+    raas:hasDaypart raas:Morning .
+raas:L07 raas:hasTimeSlot raas:TS_L07 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L08 a raas:TimeSlot ;
+    raas:startTime "11:00" ; raas:endTime "12:00" ;
+    raas:hasDaypart raas:Morning .
+raas:L08 raas:hasTimeSlot raas:TS_L08 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L09 a raas:TimeSlot ;
+    raas:startTime "12:00" ; raas:endTime "14:00" ;
+    raas:hasDaypart raas:Midday .
+raas:L09 raas:hasTimeSlot raas:TS_L09 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L10 a raas:TimeSlot ;
+    raas:startTime "14:00" ; raas:endTime "16:00" ;
+    raas:hasDaypart raas:AfternoonDrive .
+raas:L10 raas:hasTimeSlot raas:TS_L10 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L11 a raas:TimeSlot ;
+    raas:startTime "16:00" ; raas:endTime "17:00" ;
+    raas:hasDaypart raas:AfternoonDrive .
+raas:L11 raas:hasTimeSlot raas:TS_L11 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L12 a raas:TimeSlot ;
+    raas:startTime "18:00" ; raas:endTime "20:00" ;
+    raas:hasDaypart raas:Evening .
+raas:L12 raas:hasTimeSlot raas:TS_L12 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L13 a raas:TimeSlot ;
+    raas:startTime "17:00" ; raas:endTime "18:00" ;
+    raas:hasDaypart raas:AfternoonDrive .
+raas:L13 raas:hasTimeSlot raas:TS_L13 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L14 a raas:TimeSlot ;
+    raas:startTime "20:00" ; raas:endTime "22:00" ;
+    raas:hasDaypart raas:Evening .
+raas:L14 raas:hasTimeSlot raas:TS_L14 ;
+         raas:hasScheduleType raas:Daily .
+
+raas:TS_L15 a raas:TimeSlot ;
+    raas:startTime "22:00" ; raas:endTime "00:00" ;
+    raas:hasDaypart raas:Night .
+raas:L15 raas:hasTimeSlot raas:TS_L15 ;
+         raas:hasScheduleType raas:Daily .
+
+
+# ─── 러브FM TimeSlot — 주말 전용 (4개) ─────────────────────────────────────
+
+raas:TS_M05 a raas:TimeSlot ;
+    raas:startTime "06:00" ; raas:endTime "08:00" ;
+    raas:hasDaypart raas:MorningDrive .
+raas:M05 raas:hasTimeSlot raas:TS_M05 ;
+         raas:hasScheduleType raas:WeekendOnly .
+
+raas:TS_M07 a raas:TimeSlot ;
+    raas:startTime "09:00" ; raas:endTime "11:00" ;
+    raas:hasDaypart raas:Morning .
+raas:M07 raas:hasTimeSlot raas:TS_M07 ;
+         raas:hasScheduleType raas:WeekendOnly .
+
+raas:TS_M10 a raas:TimeSlot ;
+    raas:startTime "07:00" ; raas:endTime "09:00" ;
+    raas:hasDaypart raas:MorningDrive .
+raas:M10 raas:hasTimeSlot raas:TS_M10 ;
+         raas:hasScheduleType raas:WeekendOnly .
+
+raas:TS_M11 a raas:TimeSlot ;
+    raas:startTime "16:00" ; raas:endTime "18:00" ;
+    raas:hasDaypart raas:AfternoonDrive .
+raas:M11 raas:hasTimeSlot raas:TS_M11 ;
+         raas:hasScheduleType raas:WeekendOnly .
+
+
+# ─── 추가 속성 ──────────────────────────────────────────────────────────────
+
+raas:hasScheduleType a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:ScheduleType ;
+    rdfs:label "편성 유형"@ko .
+
+
+# =============================================================================
+# 끝
+# =============================================================================

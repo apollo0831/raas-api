@@ -1,0 +1,333 @@
+# =============================================================================
+# RAAS Domain Entities — Phase 2-C-1
+# 
+# Platform / Channel / Program 인스턴스 정의
+#
+# 본 파일은 raas_kpi_ontology.ttl을 가져와서 사용함을 가정.
+# 단독 로드 시 prefix 정의가 있어야 하므로 동일 prefix를 다시 선언.
+# =============================================================================
+
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+
+# =============================================================================
+# 1. Platform 인스턴스 (1개)
+# =============================================================================
+
+raas:T00 a raas:Platform ;
+    raas:code "T00" ;
+    rdfs:label "고릴라 플랫폼 전체"@ko ;
+    raas:altLabel "고릴라"@ko, "고릴라 앱"@ko, "전체"@ko, "플랫폼"@ko, "Platform"@en .
+
+
+# =============================================================================
+# 2. Channel 인스턴스 (4개)
+# =============================================================================
+
+raas:F00 a raas:Channel ;
+    raas:code "F00" ;
+    rdfs:label "파워FM"@ko ;
+    raas:altLabel "PowerFM"@en, "Power FM"@en, "파워"@ko, "에프엠"@ko ;
+    raas:partOfPlatform raas:T00 .
+
+raas:L00 a raas:Channel ;
+    raas:code "L00" ;
+    rdfs:label "러브FM"@ko ;
+    raas:altLabel "LoveFM"@en, "Love FM"@en, "러브"@ko ;
+    raas:partOfPlatform raas:T00 .
+
+raas:G00 a raas:Channel ;
+    raas:code "G00" ;
+    rdfs:label "고릴라M"@ko ;
+    raas:altLabel "GorillaM"@en, "고릴라엠"@ko ;
+    raas:partOfPlatform raas:T00 ;
+    raas:channelNature "non-programmed"@en ;
+    rdfs:comment "프로그램 단위 편성 없이 채널 자체로 청취가 측정됨 (큐레이션/비편성 채널)"@ko .
+
+raas:P00 a raas:Channel ;
+    raas:code "P00" ;
+    rdfs:label "픽채널"@ko ;
+    raas:altLabel "Pick Channel"@en, "Pick"@en, "픽"@ko ;
+    raas:partOfPlatform raas:T00 ;
+    raas:channelNature "non-programmed"@en ;
+    rdfs:comment "프로그램 단위 편성 없이 채널 자체로 청취가 측정됨 (큐레이션/비편성 채널)"@ko .
+
+
+# =============================================================================
+# 3. Program 인스턴스 — 파워FM (13개, F01~F13)
+# =============================================================================
+
+raas:F01 a raas:Program ;
+    raas:code "F01" ;
+    rdfs:label "딘딘의 뮤직하이"@ko ;
+    raas:altLabel "뮤직하이"@ko, "딘딘"@ko ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "23:00" .
+
+raas:F02 a raas:Program ;
+    raas:code "F02" ;
+    rdfs:label "애프터 클럽"@ko ;
+    raas:altLabel "애프터클럽"@ko, "After Club"@en ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "01:00" .
+
+raas:F03 a raas:Program ;
+    raas:code "F03" ;
+    rdfs:label "파워 스테이션"@ko ;
+    raas:altLabel "파워스테이션"@ko, "팝스테이션"@ko, "Power Station"@en ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "03:00" .
+
+raas:F04 a raas:Program ;
+    raas:code "F04" ;
+    rdfs:label "이인권의 펀펀투데이"@ko ;
+    raas:altLabel "펀펀투데이"@ko, "이인권"@ko, "Fun Fun Today"@en ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "05:00" .
+
+raas:F05 a raas:Program ;
+    raas:code "F05" ;
+    rdfs:label "김영철의 파워FM"@ko ;
+    raas:altLabel "김영철의 파워FM"@ko, "김영철"@ko, "김철벙커"@ko ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "07:00" .
+
+raas:F06 a raas:Program ;
+    raas:code "F06" ;
+    rdfs:label "아름다운 이 아침 봉태규입니다"@ko ;
+    raas:altLabel "봉태규"@ko, "아이아"@ko, "아름다운 이 아침"@ko ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "09:00" .
+
+raas:F07 a raas:Program ;
+    raas:code "F07" ;
+    rdfs:label "박하선의 씨네타운"@ko ;
+    raas:altLabel "씨네타운"@ko, "박하선"@ko, "Cinetown"@en ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "11:00" .
+
+raas:F08 a raas:Program ;
+    raas:code "F08" ;
+    rdfs:label "12시엔 주현영"@ko ;
+    raas:altLabel "주현영"@ko, "12시엔"@ko ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "12:00" .
+
+raas:F09 a raas:Program ;
+    raas:code "F09" ;
+    rdfs:label "두시탈출 컬투쇼"@ko ;
+    raas:altLabel "컬투쇼"@ko, "컬투"@ko, "두시탈출"@ko, "두탈컬"@ko ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "14:00" .
+
+raas:F10 a raas:Program ;
+    raas:code "F10" ;
+    rdfs:label "황제파워"@ko ;
+    raas:altLabel "황제파워"@ko, "황제성"@ko, "황제성의 황제파워"@ko ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "16:00" .
+
+raas:F11 a raas:Program ;
+    raas:code "F11" ;
+    rdfs:label "박소현의 러브게임"@ko ;
+    raas:altLabel "러브게임"@ko, "박소현"@ko, "Love Game"@en ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "18:00" .
+
+raas:F12 a raas:Program ;
+    raas:code "F12" ;
+    rdfs:label "웬디의 영스트리트"@ko ;
+    raas:altLabel "영스트리트"@ko, "웬디"@ko, "Young Street"@en, "영스트"@ko ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "20:00" .
+
+raas:F13 a raas:Program ;
+    raas:code "F13" ;
+    rdfs:label "배성재의 텐"@ko ;
+    raas:altLabel "배텐"@ko, "배성재"@ko, "Ten"@en ;
+    raas:belongsToChannel raas:F00 ;
+    raas:airTimeStr "22:00" .
+
+
+# =============================================================================
+# 4. Program 인스턴스 — 러브FM 매일 편성 (14개, L01~L15 단 L04 결번)
+# =============================================================================
+
+raas:L01 a raas:Program ;
+    raas:code "L01" ;
+    rdfs:label "YESTERDAY 20"@ko ;
+    raas:altLabel "YESTERDAY"@en, "예스터데이"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "00:00" .
+
+raas:L02 a raas:Program ;
+    raas:code "L02" ;
+    rdfs:label "Love20(재)"@ko ;
+    raas:altLabel "LOVE20"@en, "러브20"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "02:00" ;
+    raas:broadcastNature "재방송"@ko .
+
+raas:L03 a raas:Program ;
+    raas:code "L03" ;
+    rdfs:label "OLDIES 20(재)"@ko ;
+    raas:altLabel "OLDIES"@en, "올디스"@ko, "올디스20"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "04:00" ;
+    raas:broadcastNature "재방송"@ko .
+
+# L04 결번 (현재 미편성)
+
+raas:L05 a raas:Program ;
+    raas:code "L05" ;
+    rdfs:label "고현준의 뉴스 브리핑"@ko ;
+    raas:altLabel "뉴스브리핑"@ko, "고현준"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "06:00" .
+
+raas:L06 a raas:Program ;
+    raas:code "L06" ;
+    rdfs:label "김태현의 정치쇼"@ko ;
+    raas:altLabel "정치쇼"@ko, "김태현"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "07:00" .
+
+raas:L07 a raas:Program ;
+    raas:code "L07" ;
+    rdfs:label "이숙영의 러브FM"@ko ;
+    raas:altLabel "이숙영"@ko, "이숙영러브"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "09:00" .
+
+raas:L08 a raas:Program ;
+    raas:code "L08" ;
+    rdfs:label "박연미의 목돈연구소"@ko ;
+    raas:altLabel "목돈연구소"@ko, "박연미"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "11:00" .
+
+raas:L09 a raas:Program ;
+    raas:code "L09" ;
+    rdfs:label "유민상의 배고픈 라디오"@ko ;
+    raas:altLabel "배고픈 라디오"@ko, "유민상"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "12:00" .
+
+raas:L10 a raas:Program ;
+    raas:code "L10" ;
+    rdfs:label "그대의 오후 정엽입니다"@ko ;
+    raas:altLabel "정엽"@ko, "그대의 오후"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "14:00" .
+
+raas:L11 a raas:Program ;
+    raas:code "L11" ;
+    rdfs:label "인생은 오디션"@ko ;
+    raas:altLabel "인생오디션"@ko, "어예진의 방과후 목돈연구소"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "16:00" .
+
+raas:L12 a raas:Program ;
+    raas:code "L12" ;
+    rdfs:label "6시 저녁바람 김창완입니다"@ko ;
+    raas:altLabel "저녁바람"@ko, "김창완"@ko, "6시 저녁바람"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "18:00" .
+
+raas:L13 a raas:Program ;
+    raas:code "L13" ;
+    rdfs:label "편상욱의 뉴스직격"@ko ;
+    raas:altLabel "뉴스직격"@ko, "편상욱"@ko, "주영진의 뉴스직격"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "17:00" .
+
+raas:L14 a raas:Program ;
+    raas:code "L14" ;
+    rdfs:label "김윤상의 뮤직투나잇"@ko ;
+    raas:altLabel "뮤직투나잇"@ko, "김윤상"@ko, "Music Tonight"@en ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "20:00" .
+
+raas:L15 a raas:Program ;
+    raas:code "L15" ;
+    rdfs:label "음악이 흐르는 밤 박은경입니다"@ko ;
+    raas:altLabel "음악이 흐르는 밤"@ko, "박은경"@ko, "최백호의 낭만시대"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "22:00" .
+
+
+# =============================================================================
+# 5. Program 인스턴스 — 러브FM 주말 편성 (4개, M05/M07/M10/M11)
+# =============================================================================
+# 도메인 지식: M05/M07/M10/M11은 러브FM의 주말 전용 프로그램 (토·일만 편성)
+# 평일 동시간대에는 매일 편성 프로그램이 방송됨.
+
+raas:M05 a raas:Program ;
+    raas:code "M05" ;
+    rdfs:label "김선재의 책하고놀자"@ko ;
+    raas:altLabel "책하고놀자"@ko, "김선재"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "06:00" ;
+    raas:scheduleNote "주말 전용 (토·일)"@ko .
+
+raas:M07 a raas:Program ;
+    raas:code "M07" ;
+    rdfs:label "최영주의 러브FM"@ko ;
+    raas:altLabel "최영주"@ko, "최영주의러브FM"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "09:00" ;
+    raas:scheduleNote "주말 전용 (토·일)"@ko .
+
+raas:M10 a raas:Program ;
+    raas:code "M10" ;
+    rdfs:label "DJ래피의 드라이브 뮤직"@ko ;
+    raas:altLabel "드라이브 뮤직"@ko, "드라이브뮤직"@ko, "DJ래피"@ko, "Drive Music"@en ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "07:00" ;
+    raas:scheduleNote "주말 전용 (토·일) — 오전 시간대"@ko .
+
+raas:M11 a raas:Program ;
+    raas:code "M11" ;
+    rdfs:label "DJ래피의 드라이브 뮤직"@ko ;
+    raas:altLabel "드라이브 뮤직 오후"@ko, "드라이브뮤직오후"@ko, "DJ래피"@ko ;
+    raas:belongsToChannel raas:L00 ;
+    raas:airTimeStr "16:00" ;
+    raas:scheduleNote "주말 전용 (토·일) — 오후 시간대"@ko .
+
+
+# =============================================================================
+# 6. 새로 사용한 속성 정의 (스키마 보완)
+# =============================================================================
+
+raas:partOfPlatform a owl:ObjectProperty ;
+    rdfs:domain raas:Channel ;
+    rdfs:range raas:Platform ;
+    rdfs:label "소속 플랫폼"@ko .
+
+raas:airTimeStr a owl:DatatypeProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:label "방송 시작 시각 (HH:MM)"@ko ;
+    rdfs:comment "임시 표현. 정식 TimeSlot 인스턴스는 Phase 2-C-2에서 도입."@ko .
+
+raas:broadcastNature a owl:DatatypeProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:label "방송 성격"@ko ;
+    rdfs:comment "재방송 등 표시"@ko .
+
+raas:scheduleNote a owl:DatatypeProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:label "편성 메모"@ko ;
+    rdfs:comment "임시 표현. 정식 ScheduleType은 Phase 2-C-2에서 도입."@ko .
+
+raas:channelNature a owl:DatatypeProperty ;
+    rdfs:domain raas:Channel ;
+    rdfs:label "채널 성격"@ko ;
+    rdfs:comment "예: 'programmed' (프로그램 편성 채널), 'non-programmed' (비편성 채널)"@ko .
+
+
+# =============================================================================
+# 끝
+# =============================================================================

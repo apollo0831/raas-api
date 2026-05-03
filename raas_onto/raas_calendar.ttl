@@ -1,0 +1,309 @@
+# =============================================================================
+# RAAS Calendar Ontology — Phase 4.5
+#
+# 평일/주말/공휴일 분류 모델링
+# - DayOfWeek: 7개 요일
+# - DayType: 평일/주말/공휴일/대체공휴일 (분석의 기본 단위)
+# - HolidayType: 법정/임시/대체공휴일 분류
+# - CalendarDay: 특정 일자 (2026년 한국 공휴일 + 분석에 필요한 날짜)
+#
+# 라디오 청취는 평일/주말/공휴일 패턴이 매우 다르므로 (예: F09 컬투쇼는 주말에
+# 평일 대비 -50.8% DAU), 비교 분석 시 같은 DayType끼리 비교해야 정확.
+#
+# 향후 확장:
+# - 공공데이터포털 "특일 정보" API 연동
+# - 또는 Python `holidays` 라이브러리 자동 동기화
+# =============================================================================
+
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+
+# =============================================================================
+# 1. 클래스 정의
+# =============================================================================
+
+raas:DayOfWeek a owl:Class ;
+    rdfs:label "요일"@ko ;
+    rdfs:comment "월·화·수·목·금·토·일"@ko .
+
+raas:DayType a owl:Class ;
+    rdfs:label "일자 유형"@ko ;
+    rdfs:comment "분석의 기본 단위 — 평일/주말/공휴일/대체공휴일"@ko .
+
+raas:HolidayType a owl:Class ;
+    rdfs:label "공휴일 분류"@ko ;
+    rdfs:comment "법정공휴일/임시공휴일/대체공휴일"@ko .
+
+raas:CalendarDay a owl:Class ;
+    rdfs:label "캘린더 일자"@ko ;
+    rdfs:comment "특정 날짜의 모든 메타정보 (요일, 일자유형, 공휴일여부 등)"@ko .
+
+
+# =============================================================================
+# 2. 추가 속성 정의
+# =============================================================================
+
+raas:dayOfWeek a owl:ObjectProperty ;
+    rdfs:domain raas:CalendarDay ;
+    rdfs:range raas:DayOfWeek .
+
+raas:dayType a owl:ObjectProperty ;
+    rdfs:domain raas:CalendarDay ;
+    rdfs:range raas:DayType ;
+    rdfs:label "일자 유형"@ko .
+
+raas:holidayType a owl:ObjectProperty ;
+    rdfs:domain raas:CalendarDay ;
+    rdfs:range raas:HolidayType ;
+    rdfs:label "공휴일 분류"@ko .
+
+raas:holidayName a owl:DatatypeProperty ;
+    rdfs:domain raas:CalendarDay ;
+    rdfs:label "공휴일 이름"@ko .
+
+raas:dateValue a owl:DatatypeProperty ;
+    rdfs:domain raas:CalendarDay ;
+    rdfs:label "날짜 (YYYY-MM-DD)"@ko .
+
+raas:weekdayNum a owl:DatatypeProperty ;
+    rdfs:domain raas:DayOfWeek ;
+    rdfs:label "요일 숫자 (0=월, 6=일)"@ko .
+
+raas:isWorkday a owl:DatatypeProperty ;
+    rdfs:domain raas:DayType ;
+    rdfs:label "근무일 여부"@ko ;
+    rdfs:comment "true=평일, false=쉬는 날"@ko .
+
+# Measurement과 연결
+raas:onCalendarDay a owl:ObjectProperty ;
+    rdfs:domain raas:Measurement ;
+    rdfs:range raas:CalendarDay ;
+    rdfs:label "측정일자"@ko .
+
+# 비즈니스 룰의 비교 기준 명시용
+raas:compareWith a owl:ObjectProperty ;
+    rdfs:label "비교 기준"@ko ;
+    rdfs:comment "어떤 차원에서 비교하는지 (sameDayType, sameDayOfWeek, sevenDaysAgo)"@ko .
+
+raas:requiresField a owl:DatatypeProperty ;
+    rdfs:label "필요 필드"@ko ;
+    rdfs:comment "이 룰을 평가하려면 데이터에 있어야 할 필드명"@ko .
+
+raas:limitation a owl:DatatypeProperty ;
+    rdfs:label "한계점"@ko ;
+    rdfs:comment "현재 룰의 알려진 한계"@ko .
+
+raas:status a owl:DatatypeProperty ;
+    rdfs:label "상태"@ko ;
+    rdfs:comment "active/future/deprecated"@ko .
+
+
+# =============================================================================
+# 3. DayOfWeek 인스턴스 (7개)
+# =============================================================================
+
+raas:Monday a raas:DayOfWeek ;
+    rdfs:label "월요일"@ko ; raas:weekdayNum 0 .
+
+raas:Tuesday a raas:DayOfWeek ;
+    rdfs:label "화요일"@ko ; raas:weekdayNum 1 .
+
+raas:Wednesday a raas:DayOfWeek ;
+    rdfs:label "수요일"@ko ; raas:weekdayNum 2 .
+
+raas:Thursday a raas:DayOfWeek ;
+    rdfs:label "목요일"@ko ; raas:weekdayNum 3 .
+
+raas:Friday a raas:DayOfWeek ;
+    rdfs:label "금요일"@ko ; raas:weekdayNum 4 .
+
+raas:Saturday a raas:DayOfWeek ;
+    rdfs:label "토요일"@ko ; raas:weekdayNum 5 .
+
+raas:Sunday a raas:DayOfWeek ;
+    rdfs:label "일요일"@ko ; raas:weekdayNum 6 .
+
+
+# =============================================================================
+# 4. DayType 인스턴스 (4개)
+# =============================================================================
+
+raas:Weekday a raas:DayType ;
+    rdfs:label "평일"@ko ;
+    raas:altLabel "Weekday"@en ;
+    raas:isWorkday true ;
+    rdfs:comment "월~금 (단, 공휴일은 별도 분류)"@ko .
+
+raas:Weekend a raas:DayType ;
+    rdfs:label "주말"@ko ;
+    raas:altLabel "Weekend"@en ;
+    raas:isWorkday false ;
+    rdfs:comment "토·일"@ko .
+
+raas:HolidayDay a raas:DayType ;
+    rdfs:label "공휴일"@ko ;
+    raas:altLabel "Holiday"@en ;
+    raas:isWorkday false ;
+    rdfs:comment "법정공휴일·임시공휴일 (평일에 끼어 있더라도 비근무)"@ko .
+
+raas:SubstituteDay a raas:DayType ;
+    rdfs:label "대체공휴일"@ko ;
+    raas:altLabel "Substitute Holiday"@en ;
+    raas:isWorkday false ;
+    rdfs:comment "공휴일이 주말에 겹쳐서 대체로 지정된 평일"@ko .
+
+
+# =============================================================================
+# 5. HolidayType 인스턴스 (3개)
+# =============================================================================
+
+raas:NationalHoliday a raas:HolidayType ;
+    rdfs:label "법정공휴일"@ko .
+
+raas:TemporaryHoliday a raas:HolidayType ;
+    rdfs:label "임시공휴일"@ko .
+
+raas:SubstituteHoliday a raas:HolidayType ;
+    rdfs:label "대체공휴일"@ko .
+
+
+# =============================================================================
+# 6. CalendarDay 인스턴스 — 2026년 한국 공휴일
+# =============================================================================
+# 명명 규칙: D_YYYY_MM_DD
+# 평일/주말은 별도 인스턴스 생성 안 함 (계산으로 도출 가능)
+# 공휴일·대체공휴일만 명시적 인스턴스화
+
+raas:D_2026_01_01 a raas:CalendarDay ;
+    raas:dateValue "2026-01-01" ; raas:dayOfWeek raas:Thursday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "신정"@ko .
+
+raas:D_2026_02_16 a raas:CalendarDay ;
+    raas:dateValue "2026-02-16" ; raas:dayOfWeek raas:Monday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "설날 전날"@ko .
+
+raas:D_2026_02_17 a raas:CalendarDay ;
+    raas:dateValue "2026-02-17" ; raas:dayOfWeek raas:Tuesday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "설날"@ko .
+
+raas:D_2026_02_18 a raas:CalendarDay ;
+    raas:dateValue "2026-02-18" ; raas:dayOfWeek raas:Wednesday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "설날 다음날"@ko .
+
+raas:D_2026_03_01 a raas:CalendarDay ;
+    raas:dateValue "2026-03-01" ; raas:dayOfWeek raas:Sunday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "삼일절"@ko .
+
+raas:D_2026_03_02 a raas:CalendarDay ;
+    raas:dateValue "2026-03-02" ; raas:dayOfWeek raas:Monday ;
+    raas:dayType raas:SubstituteDay ; raas:holidayType raas:SubstituteHoliday ;
+    raas:holidayName "대체공휴일 (삼일절)"@ko .
+
+raas:D_2026_05_01 a raas:CalendarDay ;
+    raas:dateValue "2026-05-01" ; raas:dayOfWeek raas:Friday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "근로자의 날"@ko .
+
+raas:D_2026_05_05 a raas:CalendarDay ;
+    raas:dateValue "2026-05-05" ; raas:dayOfWeek raas:Tuesday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "어린이날"@ko .
+
+raas:D_2026_05_24 a raas:CalendarDay ;
+    raas:dateValue "2026-05-24" ; raas:dayOfWeek raas:Sunday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "부처님오신날"@ko .
+
+raas:D_2026_05_25 a raas:CalendarDay ;
+    raas:dateValue "2026-05-25" ; raas:dayOfWeek raas:Monday ;
+    raas:dayType raas:SubstituteDay ; raas:holidayType raas:SubstituteHoliday ;
+    raas:holidayName "대체공휴일 (부처님오신날)"@ko .
+
+raas:D_2026_06_06 a raas:CalendarDay ;
+    raas:dateValue "2026-06-06" ; raas:dayOfWeek raas:Saturday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "현충일"@ko .
+
+raas:D_2026_08_15 a raas:CalendarDay ;
+    raas:dateValue "2026-08-15" ; raas:dayOfWeek raas:Saturday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "광복절"@ko .
+
+raas:D_2026_08_17 a raas:CalendarDay ;
+    raas:dateValue "2026-08-17" ; raas:dayOfWeek raas:Monday ;
+    raas:dayType raas:SubstituteDay ; raas:holidayType raas:SubstituteHoliday ;
+    raas:holidayName "대체공휴일 (광복절)"@ko .
+
+raas:D_2026_09_24 a raas:CalendarDay ;
+    raas:dateValue "2026-09-24" ; raas:dayOfWeek raas:Thursday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "추석 전날"@ko .
+
+raas:D_2026_09_25 a raas:CalendarDay ;
+    raas:dateValue "2026-09-25" ; raas:dayOfWeek raas:Friday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "추석"@ko .
+
+raas:D_2026_09_26 a raas:CalendarDay ;
+    raas:dateValue "2026-09-26" ; raas:dayOfWeek raas:Saturday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "추석 다음날"@ko .
+
+raas:D_2026_10_03 a raas:CalendarDay ;
+    raas:dateValue "2026-10-03" ; raas:dayOfWeek raas:Saturday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "개천절"@ko .
+
+raas:D_2026_10_05 a raas:CalendarDay ;
+    raas:dateValue "2026-10-05" ; raas:dayOfWeek raas:Monday ;
+    raas:dayType raas:SubstituteDay ; raas:holidayType raas:SubstituteHoliday ;
+    raas:holidayName "대체공휴일 (개천절)"@ko .
+
+raas:D_2026_10_09 a raas:CalendarDay ;
+    raas:dateValue "2026-10-09" ; raas:dayOfWeek raas:Friday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "한글날"@ko .
+
+raas:D_2026_12_25 a raas:CalendarDay ;
+    raas:dateValue "2026-12-25" ; raas:dayOfWeek raas:Friday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "성탄절"@ko .
+
+
+# =============================================================================
+# 7. 비즈니스 룰 보완 — DayType 인식 비교 (향후 확장용)
+# =============================================================================
+# 기존 AtRiskProgram 룰의 한계와 개선 방향을 명시.
+# 실제 데이터에 dau_vs_same_dayType 필드가 추가되면 v2 룰을 활성화.
+
+raas:AtRiskProgram_v1 a owl:Class ;
+    rdfs:subClassOf raas:ProgramConcept ;
+    rdfs:label "이탈 위험 프로그램 (단순 7일 비교)"@ko ;
+    raas:condition "dau >= 1000 AND churn_rate >= 30 AND dau_wow <= -5" ;
+    raas:limitation "WoW가 단순 7일 전 비교라서, 평일/주말/공휴일 패턴 차이를 무시. 토요일 데이터를 평일 화요일과 비교하는 부정확성 발생."@ko ;
+    raas:status "active" ;
+    raas:alertLevel "yellow" .
+
+raas:AtRiskProgram_v2 a owl:Class ;
+    rdfs:subClassOf raas:ProgramConcept ;
+    rdfs:label "이탈 위험 프로그램 (DayType 인식)"@ko ;
+    raas:condition "dau >= 1000 AND churn_rate >= 30 AND dau_vs_same_dayType <= -5" ;
+    raas:requiresField "dau_vs_same_dayType" ;
+    raas:status "future" ;
+    raas:alertLevel "yellow" ;
+    raas:compareWith raas:Weekday, raas:Weekend, raas:HolidayDay ;
+    rdfs:comment "같은 DayType의 가장 최근 데이터와 비교. 평일은 평일끼리, 주말은 주말끼리, 공휴일은 공휴일끼리. 이를 위해 SPL에서 dau_vs_same_dayType 필드 산출 로직 추가 필요."@ko ;
+    raas:recommendedAction "SPL 쿼리에 DayType 인식 비교 로직 추가 → 본 룰 활성화" .
+
+
+# =============================================================================
+# 끝
+# =============================================================================

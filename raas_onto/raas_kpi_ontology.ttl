@@ -1,0 +1,733 @@
+# =============================================================================
+# RAAS KPI Ontology v0.1
+# 
+# SBS 고릴라 라디오 앱의 분석 시스템(RAAS)을 위한 KPI 온톨로지.
+# raas_kpi_latest.csv (137개 컬럼)의 의미 구조를 기계가 이해 가능한
+# 형식으로 표현한 것.
+#
+# 작성: Phase 2-A (스키마) + Phase 2-B (인스턴스) 통합본
+# 출처 단일 진실 공급원 후보: 본 파일 + docs/raas_kpi_dictionary.yaml
+# =============================================================================
+
+@prefix raas:  <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+# =============================================================================
+# 0. 온톨로지 자체 메타데이터
+# =============================================================================
+
+<http://raas.sbs.co.kr/onto> a owl:Ontology ;
+    rdfs:label "RAAS KPI Ontology"@en, "RAAS KPI 온톨로지"@ko ;
+    rdfs:comment "SBS 고릴라 라디오 앱 분석 시스템 KPI의 의미 모델"@ko ;
+    owl:versionInfo "0.1.0-poc" .
+
+
+# =============================================================================
+# 1. 클래스 정의 (Schema)
+# =============================================================================
+
+# ─── 1.1 측정 대상 계층 ───────────────────────────────────────────────────────
+
+raas:Subject a owl:Class ;
+    rdfs:label "측정 대상 (추상)"@ko ;
+    rdfs:comment "KPI 측정의 대상이 되는 모든 것의 추상 클래스"@ko .
+
+raas:Platform a owl:Class ;
+    rdfs:subClassOf raas:Subject ;
+    rdfs:label "플랫폼"@ko ;
+    rdfs:comment "고릴라 앱 전체 등 최상위 측정 대상"@ko .
+
+raas:Channel a owl:Class ;
+    rdfs:subClassOf raas:Subject ;
+    rdfs:label "방송 채널"@ko ;
+    rdfs:comment "파워FM, 러브FM 등 방송 채널"@ko .
+
+raas:Program a owl:Class ;
+    rdfs:subClassOf raas:Subject ;
+    rdfs:label "프로그램"@ko ;
+    rdfs:comment "편성 단위 (예: 컬투쇼, 김영철의 파워FM)"@ko .
+
+raas:Episode a owl:Class ;
+    rdfs:subClassOf raas:Subject ;
+    rdfs:label "방송 회차"@ko ;
+    rdfs:comment "프로그램의 개별 방송 (특정 날짜의 1회 방송)"@ko .
+
+# ─── 1.2 메타데이터 클래스 ───────────────────────────────────────────────────
+
+raas:Person a owl:Class ;
+    rdfs:label "인물"@ko ;
+    rdfs:comment "진행자, 게스트, 출연자"@ko .
+
+raas:Corner a owl:Class ;
+    rdfs:label "코너"@ko ;
+    rdfs:comment "방송 내 코너(예: '사연과 신청곡')"@ko .
+
+raas:TimeSlot a owl:Class ;
+    rdfs:label "방송 시간대"@ko .
+
+raas:ScheduleType a owl:Class ;
+    rdfs:label "편성 유형"@ko ;
+    rdfs:comment "평일 전용/주말 전용/매일 등"@ko .
+
+# ─── 1.3 측정 체계 클래스 ────────────────────────────────────────────────────
+
+raas:Metric a owl:Class ;
+    rdfs:label "측정 지표 (베이스)"@ko ;
+    rdfs:comment "DAU, ChurnRate 등 11개 베이스 지표"@ko .
+
+raas:MetricVariant a owl:Class ;
+    rdfs:label "지표 변형"@ko ;
+    rdfs:comment "(Metric × Granularity × Cohort × Window)의 구체적 조합"@ko .
+
+raas:MeasureType a owl:Class ;
+    rdfs:label "측정 종류"@ko ;
+    rdfs:comment "Count(개수) vs Percentage(비율)"@ko .
+
+raas:Granularity a owl:Class ;
+    rdfs:label "시간 단위 (추상)"@ko .
+
+raas:CalendarGranularity a owl:Class ;
+    rdfs:subClassOf raas:Granularity ;
+    rdfs:label "캘린더 시간 단위"@ko ;
+    rdfs:comment "고정된 달력 윈도우 (일/주/월)"@ko .
+
+raas:RollingGranularity a owl:Class ;
+    rdfs:subClassOf raas:Granularity ;
+    rdfs:label "롤링 시간 단위"@ko ;
+    rdfs:comment "오늘 기준 소급 이동 윈도우"@ko .
+
+raas:Variant a owl:Class ;
+    rdfs:label "변형"@ko ;
+    rdfs:comment "현재값/직전값/변동률/차이/비중/어제값"@ko .
+
+raas:Cohort a owl:Class ;
+    rdfs:label "코호트"@ko ;
+    rdfs:comment "측정 대상 사용자 그룹 (전체/신규/...)"@ko .
+
+raas:RetentionWindow a owl:Class ;
+    rdfs:label "유지율 측정 시점"@ko ;
+    rdfs:comment "D+1, D+7, W+1, M+1 등"@ko .
+
+raas:Measurement a owl:Class ;
+    rdfs:label "측정값"@ko ;
+    rdfs:comment "(Subject, MetricVariant, 시점)의 실제 값"@ko .
+
+
+# =============================================================================
+# 2. 속성(Property) 정의
+# =============================================================================
+
+# ─── 2.1 객체 속성 (Object Properties) ───────────────────────────────────────
+
+# 측정 대상 간 관계
+raas:belongsToChannel a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:Channel ;
+    rdfs:label "소속 채널"@ko .
+
+raas:hasEpisode a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:Episode .
+
+# 프로그램/회차의 메타데이터
+raas:hasHost a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:Person ;
+    rdfs:label "고정 진행자"@ko .
+
+raas:hasGuest a owl:ObjectProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range raas:Person ;
+    rdfs:label "회차 게스트"@ko .
+
+raas:hasCorner a owl:ObjectProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range raas:Corner .
+
+raas:airsAt a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:TimeSlot .
+
+raas:scheduleType a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:ScheduleType .
+
+# Metric 관련 관계
+raas:hasMeasureType a owl:ObjectProperty ;
+    rdfs:domain raas:Metric ;
+    rdfs:range raas:MeasureType .
+
+raas:derivedFrom a owl:ObjectProperty ;
+    rdfs:domain raas:Metric ;
+    rdfs:range raas:Metric ;
+    rdfs:label "파생 원천"@ko ;
+    rdfs:comment "예: DeepListenRate는 DAU_10min과 DAU_1min에서 파생"@ko .
+
+raas:appliesTo a owl:ObjectProperty ;
+    rdfs:label "적용 대상"@ko ;
+    rdfs:comment "특정 Variant/Granularity가 어떤 Metric에만 적용되는지 제약 표현"@ko .
+
+raas:comparedTo a owl:ObjectProperty ;
+    rdfs:domain raas:Variant ;
+    rdfs:range raas:Variant ;
+    rdfs:comment "Change/Difference variant가 무엇과 비교되는지"@ko .
+
+# MetricVariant의 차원 연결
+raas:ofMetric a owl:ObjectProperty ;
+    rdfs:domain raas:MetricVariant ;
+    rdfs:range raas:Metric .
+
+raas:granularity a owl:ObjectProperty ;
+    rdfs:domain raas:MetricVariant ;
+    rdfs:range raas:Granularity .
+
+raas:hasWindow a owl:ObjectProperty ;
+    rdfs:range raas:RetentionWindow .
+
+raas:hasCohort a owl:ObjectProperty ;
+    rdfs:range raas:Cohort .
+
+# Measurement의 연결
+raas:subjectOf a owl:ObjectProperty ;
+    rdfs:domain raas:Measurement ;
+    rdfs:range raas:Subject .
+
+raas:usesMetricVariant a owl:ObjectProperty ;
+    rdfs:domain raas:Measurement ;
+    rdfs:range raas:MetricVariant .
+
+raas:hasVariant a owl:ObjectProperty ;
+    rdfs:domain raas:Measurement ;
+    rdfs:range raas:Variant .
+
+
+# ─── 2.2 데이터 속성 (Datatype Properties) ──────────────────────────────────
+
+raas:code a owl:DatatypeProperty ;
+    rdfs:label "코드"@ko ;
+    rdfs:comment "예: F09, F00 — RAAS 시스템 내부 식별자"@ko .
+
+raas:altLabel a owl:DatatypeProperty ;
+    rdfs:label "별칭"@ko ;
+    rdfs:comment "약어, 영문명, 통칭 등"@ko .
+
+# Metric의 정의 정보
+raas:formula a owl:DatatypeProperty ;
+    rdfs:domain raas:Metric ;
+    rdfs:label "계산식"@ko .
+
+raas:definition a owl:DatatypeProperty ;
+    rdfs:domain raas:Metric ;
+    rdfs:label "정의 텍스트"@ko .
+
+raas:unit a owl:DatatypeProperty ;
+    rdfs:domain raas:Metric ;
+    rdfs:label "단위"@ko .
+
+raas:dictionarySection a owl:DatatypeProperty ;
+    rdfs:domain raas:Metric ;
+    rdfs:comment "raas_kpi_dictionary.yaml의 분류 섹션"@ko .
+
+# 명명 규칙 표현용
+raas:fieldName a owl:DatatypeProperty ;
+    rdfs:domain raas:MetricVariant ;
+    rdfs:label "기본 필드명"@ko ;
+    rdfs:comment "Variant 적용 전 베이스 필드명 (예: dau, wau, deep_rate)"@ko .
+
+raas:variantSuffix a owl:DatatypeProperty ;
+    rdfs:domain raas:Variant ;
+    rdfs:comment "기본 필드명에 덧붙는 접미사 (예: _prev, _chg)"@ko .
+
+raas:typicalUnit a owl:DatatypeProperty ;
+    rdfs:domain raas:MeasureType .
+
+# 시간 차원 메타정보
+raas:dayOffset a owl:DatatypeProperty ;
+    rdfs:label "일 단위 오프셋"@ko ;
+    rdfs:comment "오늘로부터의 일수 (-1=어제, -7=전주 동일 요일)"@ko .
+
+raas:windowDays a owl:DatatypeProperty ;
+    rdfs:domain raas:Granularity .
+
+raas:windowType a owl:DatatypeProperty ;
+    rdfs:domain raas:Granularity ;
+    rdfs:comment "single_day | calendar_week | calendar_month | rolling"@ko .
+
+raas:windowStart a owl:DatatypeProperty .
+raas:windowEnd a owl:DatatypeProperty .
+raas:rollingFrom a owl:DatatypeProperty .
+
+raas:days a owl:DatatypeProperty ;
+    rdfs:domain raas:RetentionWindow .
+
+raas:order a owl:DatatypeProperty ;
+    rdfs:comment "표시 순서"@ko .
+
+raas:purpose a owl:DatatypeProperty ;
+    rdfs:label "용도"@ko .
+
+# Episode 관련
+raas:airDate a owl:DatatypeProperty ;
+    rdfs:domain raas:Episode .
+
+# Measurement 값
+raas:value a owl:DatatypeProperty ;
+    rdfs:domain raas:Measurement .
+
+
+# =============================================================================
+# 3. 차원 인스턴스 (Dimension Instances)
+# =============================================================================
+
+# ─── 3.1 MeasureType ─────────────────────────────────────────────────────────
+
+raas:Count a raas:MeasureType ;
+    rdfs:label "카운트 (개수)"@ko ;
+    raas:typicalUnit "명" .
+
+raas:Percentage a raas:MeasureType ;
+    rdfs:label "비율"@ko ;
+    raas:typicalUnit "%" .
+
+# ─── 3.2 Calendar Granularity ────────────────────────────────────────────────
+
+raas:Day a raas:CalendarGranularity ;
+    rdfs:label "일간"@ko ;
+    raas:windowDays 1 ;
+    raas:windowType "single_day" ;
+    raas:order 1 .
+
+raas:Week a raas:CalendarGranularity ;
+    rdfs:label "주간 (캘린더 월~일 누적)"@ko ;
+    raas:windowDays 7 ;
+    raas:windowType "calendar_week" ;
+    raas:windowStart "monday" ;
+    raas:windowEnd "sunday" ;
+    raas:order 2 .
+
+raas:Month a raas:CalendarGranularity ;
+    rdfs:label "월간 (캘린더 1~말일 누적)"@ko ;
+    raas:windowType "calendar_month" ;
+    raas:order 3 .
+
+# ─── 3.3 Rolling Granularity ─────────────────────────────────────────────────
+
+raas:Rolling7Day a raas:RollingGranularity ;
+    rdfs:label "롤링 7일 (오늘부터 과거 7일)"@ko ;
+    raas:windowDays 7 ;
+    raas:windowType "rolling" ;
+    raas:rollingFrom "today" ;
+    raas:appliesTo raas:DAU ;
+    raas:order 4 .
+
+raas:Rolling30Day a raas:RollingGranularity ;
+    rdfs:label "롤링 30일 (오늘부터 과거 30일)"@ko ;
+    raas:windowDays 30 ;
+    raas:windowType "rolling" ;
+    raas:rollingFrom "today" ;
+    raas:appliesTo raas:DAU ;
+    raas:order 5 .
+
+# ─── 3.4 Variant (변형) ──────────────────────────────────────────────────────
+
+raas:Current a raas:Variant ;
+    rdfs:label "현재값"@ko ;
+    raas:variantSuffix "" ;
+    raas:dayOffset 0 ;
+    raas:order 1 .
+
+raas:Previous a raas:Variant ;
+    rdfs:label "직전값 (D-7, 전주 동일 요일)"@ko ;
+    raas:variantSuffix "_prev" ;
+    raas:dayOffset -7 ;
+    raas:order 2 .
+
+raas:Yesterday a raas:Variant ;
+    rdfs:label "어제값 (D-1)"@ko ;
+    raas:variantSuffix "_d2" ;
+    raas:dayOffset -1 ;
+    raas:appliesTo raas:DAU ;
+    raas:purpose "사용자 흐름(funnel) 일간 비교"@ko ;
+    raas:order 3 .
+
+raas:Change a raas:Variant ;
+    rdfs:label "변동률 (%)"@ko ;
+    raas:variantSuffix "_chg" ;
+    raas:appliesTo raas:Count ;
+    raas:comparedTo raas:Previous ;
+    raas:formula "(current - previous) / previous * 100" ;
+    raas:order 4 .
+
+raas:Difference a raas:Variant ;
+    rdfs:label "차이 (%p)"@ko ;
+    raas:variantSuffix "_diff" ;
+    raas:appliesTo raas:Percentage ;
+    raas:comparedTo raas:Previous ;
+    raas:formula "current - previous" ;
+    raas:order 5 .
+
+raas:Share a raas:Variant ;
+    rdfs:label "비중 (전체 대비 %)"@ko ;
+    raas:variantSuffix "_share" ;
+    raas:order 6 .
+
+# ─── 3.5 Cohort ──────────────────────────────────────────────────────────────
+
+raas:Cohort_All a raas:Cohort ;
+    rdfs:label "전체 사용자"@ko .
+
+raas:Cohort_NewUser a raas:Cohort ;
+    rdfs:label "신규 사용자"@ko .
+
+# ─── 3.6 RetentionWindow ─────────────────────────────────────────────────────
+
+raas:Window_D1 a raas:RetentionWindow ;
+    rdfs:label "D+1 (1일 후)"@ko ;
+    raas:days 1 .
+
+raas:Window_D7 a raas:RetentionWindow ;
+    rdfs:label "D+7 (7일 후)"@ko ;
+    raas:days 7 .
+
+raas:Window_W1 a raas:RetentionWindow ;
+    rdfs:label "W+1 (1주 후)"@ko ;
+    raas:days 7 .
+
+raas:Window_M1 a raas:RetentionWindow ;
+    rdfs:label "M+1 (1개월 후)"@ko ;
+    raas:days 30 .
+
+
+# =============================================================================
+# 4. Metric 인스턴스 11개 + MetricVariant 매핑
+# =============================================================================
+
+# ─── 4.1 그룹 A: 사용자 규모 ─────────────────────────────────────────────────
+
+raas:DAU a raas:Metric ;
+    rdfs:label "활성 사용자 수"@ko ;
+    raas:altLabel "DAU"@en, "WAU"@en, "MAU"@en ;
+    raas:unit "명" ;
+    raas:hasMeasureType raas:Count ;
+    raas:definition "특정 기간 내 청취시간이 0보다 큰 고유 사용자 수"@ko ;
+    raas:formula "COUNT(DISTINCT user_id WHERE listen_duration > 0)" ;
+    raas:dictionarySection "B. user_size" .
+
+raas:DAU_Day a raas:MetricVariant ;
+    raas:ofMetric raas:DAU ;
+    raas:granularity raas:Day ;
+    raas:fieldName "dau" .
+
+raas:DAU_Week a raas:MetricVariant ;
+    raas:ofMetric raas:DAU ;
+    raas:granularity raas:Week ;
+    raas:fieldName "wau" .
+
+raas:DAU_Month a raas:MetricVariant ;
+    raas:ofMetric raas:DAU ;
+    raas:granularity raas:Month ;
+    raas:fieldName "mau" .
+
+raas:DAU_R7 a raas:MetricVariant ;
+    raas:ofMetric raas:DAU ;
+    raas:granularity raas:Rolling7Day ;
+    raas:fieldName "dau_r7" .
+
+raas:DAU_R30 a raas:MetricVariant ;
+    raas:ofMetric raas:DAU ;
+    raas:granularity raas:Rolling30Day ;
+    raas:fieldName "dau_r30" .
+
+
+raas:DAU_1min a raas:Metric ;
+    rdfs:label "1분 이상 청취자 수"@ko ;
+    raas:altLabel "1분이상 사용자"@ko ;
+    raas:unit "명" ;
+    raas:hasMeasureType raas:Count ;
+    raas:definition "1분 이상 청취한 고유 사용자 수"@ko ;
+    raas:formula "COUNT(DISTINCT user_id WHERE listen_duration >= 60)" ;
+    raas:dictionarySection "B. user_size" .
+
+raas:DAU_1min_Day a raas:MetricVariant ;
+    raas:ofMetric raas:DAU_1min ;
+    raas:granularity raas:Day ;
+    raas:fieldName "dau_1min" .
+
+raas:DAU_1min_Week a raas:MetricVariant ;
+    raas:ofMetric raas:DAU_1min ;
+    raas:granularity raas:Week ;
+    raas:fieldName "wau_1min" .
+
+raas:DAU_1min_Month a raas:MetricVariant ;
+    raas:ofMetric raas:DAU_1min ;
+    raas:granularity raas:Month ;
+    raas:fieldName "mau_1min" .
+
+
+raas:DAU_10min a raas:Metric ;
+    rdfs:label "10분 이상 청취자 수"@ko ;
+    raas:altLabel "깊은청취 사용자"@ko ;
+    raas:unit "명" ;
+    raas:hasMeasureType raas:Count ;
+    raas:definition "10분 이상 청취한 고유 사용자 수"@ko ;
+    raas:formula "COUNT(DISTINCT user_id WHERE listen_duration >= 600)" ;
+    raas:dictionarySection "B. user_size" .
+
+raas:DAU_10min_Day a raas:MetricVariant ;
+    raas:ofMetric raas:DAU_10min ;
+    raas:granularity raas:Day ;
+    raas:fieldName "dau_10min" .
+
+raas:DAU_10min_Week a raas:MetricVariant ;
+    raas:ofMetric raas:DAU_10min ;
+    raas:granularity raas:Week ;
+    raas:fieldName "wau_10min" .
+
+raas:DAU_10min_Month a raas:MetricVariant ;
+    raas:ofMetric raas:DAU_10min ;
+    raas:granularity raas:Month ;
+    raas:fieldName "mau_10min" .
+
+
+# ─── 4.2 그룹 B: 사용자 유입/이탈 ────────────────────────────────────────────
+
+raas:NewUser a raas:Metric ;
+    rdfs:label "신규 유입 사용자 수"@ko ;
+    raas:altLabel "신규유저"@ko, "신규"@ko ;
+    raas:unit "명" ;
+    raas:hasMeasureType raas:Count ;
+    raas:definition "처음 접속한 사용자 수"@ko ;
+    raas:dictionarySection "C. user_growth" .
+
+raas:NewUser_Day a raas:MetricVariant ;
+    raas:ofMetric raas:NewUser ;
+    raas:granularity raas:Day ;
+    raas:fieldName "new" .
+
+raas:NewUser_Week a raas:MetricVariant ;
+    raas:ofMetric raas:NewUser ;
+    raas:granularity raas:Week ;
+    raas:fieldName "new_week" .
+
+raas:NewUser_Month a raas:MetricVariant ;
+    raas:ofMetric raas:NewUser ;
+    raas:granularity raas:Month ;
+    raas:fieldName "new_mon" .
+
+
+raas:ReactivatedUser a raas:Metric ;
+    rdfs:label "복귀 사용자 수"@ko ;
+    raas:altLabel "복귀자"@ko, "재활성"@ko ;
+    raas:unit "명" ;
+    raas:hasMeasureType raas:Count ;
+    raas:definition "휴면 후 다시 접속한 사용자 수"@ko ;
+    raas:dictionarySection "C. user_growth" .
+
+raas:ReactivatedUser_Day a raas:MetricVariant ;
+    raas:ofMetric raas:ReactivatedUser ;
+    raas:granularity raas:Day ;
+    raas:fieldName "react" .
+
+raas:ReactivatedUser_Week a raas:MetricVariant ;
+    raas:ofMetric raas:ReactivatedUser ;
+    raas:granularity raas:Week ;
+    raas:fieldName "react_week" .
+
+raas:ReactivatedUser_Month a raas:MetricVariant ;
+    raas:ofMetric raas:ReactivatedUser ;
+    raas:granularity raas:Month ;
+    raas:fieldName "react_mon" .
+
+
+raas:ChurnRate a raas:Metric ;
+    rdfs:label "이탈률"@ko ;
+    raas:altLabel "Churn Rate"@en, "이탈"@ko ;
+    raas:unit "%" ;
+    raas:hasMeasureType raas:Percentage ;
+    raas:definition "일정 기간 미접속 사용자의 비율"@ko ;
+    raas:dictionarySection "D. user_quality" .
+
+raas:ChurnRate_Day a raas:MetricVariant ;
+    raas:ofMetric raas:ChurnRate ;
+    raas:granularity raas:Day ;
+    raas:fieldName "churn_rate" .
+
+raas:ChurnRate_Week a raas:MetricVariant ;
+    raas:ofMetric raas:ChurnRate ;
+    raas:granularity raas:Week ;
+    raas:fieldName "churn_rate_week" .
+
+raas:ChurnRate_Month a raas:MetricVariant ;
+    raas:ofMetric raas:ChurnRate ;
+    raas:granularity raas:Month ;
+    raas:fieldName "churn_rate_mon" .
+
+
+raas:ReactRate a raas:Metric ;
+    rdfs:label "복귀율"@ko ;
+    raas:altLabel "복귀 비율"@ko ;
+    raas:unit "%" ;
+    raas:hasMeasureType raas:Percentage ;
+    raas:definition "휴면 사용자 중 복귀한 비율"@ko ;
+    raas:dictionarySection "D. user_quality" .
+
+raas:ReactRate_Day a raas:MetricVariant ;
+    raas:ofMetric raas:ReactRate ;
+    raas:granularity raas:Day ;
+    raas:fieldName "react_rate" .
+
+raas:ReactRate_Week a raas:MetricVariant ;
+    raas:ofMetric raas:ReactRate ;
+    raas:granularity raas:Week ;
+    raas:fieldName "react_rate_week" .
+
+raas:ReactRate_Month a raas:MetricVariant ;
+    raas:ofMetric raas:ReactRate ;
+    raas:granularity raas:Month ;
+    raas:fieldName "react_rate_mon" .
+
+
+# ─── 4.3 그룹 C: 청취 품질 ──────────────────────────────────────────────────
+
+raas:DeepListenRate a raas:Metric ;
+    rdfs:label "깊은청취율"@ko ;
+    raas:altLabel "Deep Listen Rate"@en, "깊은청취"@ko ;
+    raas:unit "%" ;
+    raas:hasMeasureType raas:Percentage ;
+    raas:definition "10분 이상 청취자 / 1분 이상 청취자 × 100"@ko ;
+    raas:formula "DAU_10min / DAU_1min * 100" ;
+    raas:derivedFrom raas:DAU_10min, raas:DAU_1min ;
+    raas:dictionarySection "D. user_quality" .
+
+raas:DeepListenRate_Day a raas:MetricVariant ;
+    raas:ofMetric raas:DeepListenRate ;
+    raas:granularity raas:Day ;
+    raas:fieldName "deep_rate" .
+
+raas:DeepListenRate_Week a raas:MetricVariant ;
+    raas:ofMetric raas:DeepListenRate ;
+    raas:granularity raas:Week ;
+    raas:fieldName "deep_rate_week" .
+
+raas:DeepListenRate_Month a raas:MetricVariant ;
+    raas:ofMetric raas:DeepListenRate ;
+    raas:granularity raas:Month ;
+    raas:fieldName "deep_rate_mon" .
+
+
+raas:EngageRate a raas:Metric ;
+    rdfs:label "참여율"@ko ;
+    raas:altLabel "Engagement Rate"@en ;
+    raas:unit "%" ;
+    raas:hasMeasureType raas:Percentage ;
+    raas:definition "메뉴 클릭/공유 등 적극 행동 비율"@ko ;
+    raas:dictionarySection "D. user_quality" .
+
+raas:EngageRate_Day a raas:MetricVariant ;
+    raas:ofMetric raas:EngageRate ;
+    raas:granularity raas:Day ;
+    raas:fieldName "engage_rate" .
+
+raas:EngageRate_Week a raas:MetricVariant ;
+    raas:ofMetric raas:EngageRate ;
+    raas:granularity raas:Week ;
+    raas:fieldName "engage_rate_week" .
+
+raas:EngageRate_Month a raas:MetricVariant ;
+    raas:ofMetric raas:EngageRate ;
+    raas:granularity raas:Month ;
+    raas:fieldName "engage_rate_mon" .
+
+
+raas:HabitRate a raas:Metric ;
+    rdfs:label "습관형성률"@ko ;
+    raas:altLabel "Habit Formation Rate"@en, "습관형성"@ko ;
+    raas:unit "%" ;
+    raas:hasMeasureType raas:Percentage ;
+    raas:definition "일정 빈도 이상 청취 비율"@ko ;
+    raas:dictionarySection "E. user_habit" .
+
+raas:HabitRate_Day a raas:MetricVariant ;
+    raas:ofMetric raas:HabitRate ;
+    raas:granularity raas:Day ;
+    raas:fieldName "habit_rate" .
+
+raas:HabitRate_Week a raas:MetricVariant ;
+    raas:ofMetric raas:HabitRate ;
+    raas:granularity raas:Week ;
+    raas:fieldName "habit_rate_week" .
+
+raas:HabitRate_Month a raas:MetricVariant ;
+    raas:ofMetric raas:HabitRate ;
+    raas:granularity raas:Month ;
+    raas:fieldName "habit_rate_mon" .
+
+
+# ─── 4.4 그룹 D: 유지율 (단일 metric + 윈도우 × 코호트) ──────────────────────
+
+raas:RetentionRate a raas:Metric ;
+    rdfs:label "유지율"@ko ;
+    raas:altLabel "Retention Rate"@en, "리텐션"@ko ;
+    raas:unit "%" ;
+    raas:hasMeasureType raas:Percentage ;
+    raas:definition "기준 시점 사용자 중 일정 기간 후에도 접속한 비율"@ko ;
+    raas:formula "COUNT(returned_users) / COUNT(base_users) * 100" ;
+    raas:dictionarySection "F. user_retention" .
+
+# ── 전체 코호트 ──
+raas:RetentionRate_D1_All a raas:MetricVariant ;
+    raas:ofMetric raas:RetentionRate ;
+    raas:hasWindow raas:Window_D1 ;
+    raas:hasCohort raas:Cohort_All ;
+    raas:fieldName "d1_ret" .
+
+raas:RetentionRate_D7_All a raas:MetricVariant ;
+    raas:ofMetric raas:RetentionRate ;
+    raas:hasWindow raas:Window_D7 ;
+    raas:hasCohort raas:Cohort_All ;
+    raas:fieldName "d7_ret" .
+
+raas:RetentionRate_W1_All a raas:MetricVariant ;
+    raas:ofMetric raas:RetentionRate ;
+    raas:hasWindow raas:Window_W1 ;
+    raas:hasCohort raas:Cohort_All ;
+    raas:fieldName "w1_ret" .
+
+raas:RetentionRate_M1_All a raas:MetricVariant ;
+    raas:ofMetric raas:RetentionRate ;
+    raas:hasWindow raas:Window_M1 ;
+    raas:hasCohort raas:Cohort_All ;
+    raas:fieldName "m1_ret" .
+
+# ── 신규 사용자 코호트 ──
+raas:RetentionRate_D1_NewUser a raas:MetricVariant ;
+    raas:ofMetric raas:RetentionRate ;
+    raas:hasWindow raas:Window_D1 ;
+    raas:hasCohort raas:Cohort_NewUser ;
+    raas:fieldName "new_d1_ret" .
+
+raas:RetentionRate_D7_NewUser a raas:MetricVariant ;
+    raas:ofMetric raas:RetentionRate ;
+    raas:hasWindow raas:Window_D7 ;
+    raas:hasCohort raas:Cohort_NewUser ;
+    raas:fieldName "new_d7_ret" .
+
+raas:RetentionRate_W1_NewUser a raas:MetricVariant ;
+    raas:ofMetric raas:RetentionRate ;
+    raas:hasWindow raas:Window_W1 ;
+    raas:hasCohort raas:Cohort_NewUser ;
+    raas:fieldName "new_w1_ret" .
+
+raas:RetentionRate_M1_NewUser a raas:MetricVariant ;
+    raas:ofMetric raas:RetentionRate ;
+    raas:hasWindow raas:Window_M1 ;
+    raas:hasCohort raas:Cohort_NewUser ;
+    raas:fieldName "new_m1_ret" .
+
+
+# =============================================================================
+# 끝
+# =============================================================================
