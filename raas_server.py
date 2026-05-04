@@ -34,6 +34,8 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 import raas_briefing_engine as BE
 from raas_history_db import init_db, save_query, get_history, get_popular
+from raas_prompts import BRIEFING_SYSTEM_PROMPT, QUERY_SYSTEM_PROMPT
+from raas_briefing_context import build_briefing_context, build_query_context
 
 # ── 설정 ─────────────────────────────────────────────
 PORT            = 5000
@@ -189,20 +191,12 @@ class RAASHandler(BaseHTTPRequestHandler):
                 s7_alerts = data.get("s7_anomalies", {}).get("alerts", [])
                 alert_text = "\\n".join(a["msg"] for a in s7_alerts)
 
-                claude_prompt = f"""다음은 오늘 SBS 고릴라 라디오 앱의 핵심 지표입니다.
-
-{context}
-
-위 데이터를 바탕으로 아래 4가지를 간결하게 작성하세요 (전체 400자 이내):
-
-01 / 핵심지표 요약 (3줄: DAU·깊은청취율·채널 현황)
-02 / 주목할 점 (2줄: 오늘 특이사항, 전주 대비 변화)
-03 / 프로그램 하이라이트 (2줄: 1위 프로그램과 주목 프로그램)
-04 / 액션 추천 (1줄: 오늘 가장 중요한 조치 1가지)"""
+                target_date = data.get("date") or datetime.now().strftime("%Y-%m-%d")
+                enriched_context = build_briefing_context(context, data, target_date)
 
                 brief_text = call_claude(
-                    "SBS 고릴라 라디오 앱 데이터 분석 어시스턴트. 한국어로 간결하게. 수치는 천단위 쉼표.",
-                    claude_prompt
+                    BRIEFING_SYSTEM_PROMPT,
+                    enriched_context
                 )
 
                 result = {**data, "brief": brief_text}
