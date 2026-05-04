@@ -40,11 +40,34 @@ def build_briefing_context(claude_context: str, kpi_data: dict, target_date: str
 
     sections = []
 
-    # 1. DayType 정보
+    # 1. DayType 정보 + 패턴 지침
     try:
         daytype_info = adapter.get_daytype_comparison(target_date)
-        if daytype_info.get("comparison_text"):
-            sections.append(f"[DayType 정보]\n{daytype_info['comparison_text']}")
+        if daytype_info:
+            dt = daytype_info.get("day_type", "")
+            weekday = daytype_info.get("day_of_week", "")
+            holiday = daytype_info.get("holiday_name", "")
+            comparison_text = daytype_info.get("comparison_text", "")
+
+            lines = ["[DayType 정보]", comparison_text]
+
+            if dt == "주말":
+                lines.append(
+                    f"⚠️ 주말 패턴 적용: {weekday}은 평일 대비 DAU 30~50% 낮음이 정상."
+                )
+                lines.append("→ '급락·긴급 점검' 표현 금지. WoW는 전주 동일 요일(주말) 기준만 사용.")
+                lines.append("→ 05 액션 추천은 '주말 정상 패턴 — 다음 평일 추이 모니터링' 수준으로 처리.")
+            elif dt == "공휴일":
+                name = holiday if holiday else "공휴일"
+                lines.append(
+                    f"⚠️ 공휴일 패턴 적용({name}): 청취 감소는 자연 현상."
+                )
+                lines.append("→ '긴급 점검·이탈 우려' 표현 금지.")
+                lines.append("→ 05 액션 추천은 '공휴일 패턴 — 다음 평일 회복 모니터링' 수준으로 처리.")
+            else:
+                lines.append(f"→ 평일({weekday}) 기준 비교. 전주 동일 요일 대비 WoW 사용.")
+
+            sections.append("\n".join(lines))
     except Exception as e:
         logger.warning(f"DayType 조회 실패: {e}")
 
