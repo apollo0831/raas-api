@@ -10,7 +10,9 @@ __pycache__/
 .env
 *.env
 tokens.json
+token.json
 credentials*.json
+server.log
 
 # 백업 파일
 *.bak
