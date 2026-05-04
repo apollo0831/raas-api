@@ -2475,9 +2475,9 @@ function _buildUserFlowSVG(d) {
       line2: pctTxt ? `(${pctTxt})` : ''
     };
   };
-  const newInfo   = outerInfo('신규', d.new_u, d.pctNew,    newHR   < 14);
-  const reactInfo = outerInfo('복귀', d.react, d.pctReact,  reactHR < 14);
-  const churnInfo = outerInfo('이탈', d.churn, d.pctChurn,  churnHL < 14);
+  const newInfo   = outerInfo('신규', d.new_u, d.pctNew,    newHR   < 30);
+  const reactInfo = outerInfo('복귀', d.react, d.pctReact,  reactHR < 30);
+  const churnInfo = outerInfo('이탈', d.churn, d.pctChurn,  churnHL < 30);
   // 2줄 라벨 SVG 헬퍼 (text-anchor는 상위에서 지정)
   const outerText = (x, y, info) => info.line2
     ? `<tspan x="${x}" dy="0">${info.line1}</tspan><tspan x="${x}" dy="11">${info.line2}</tspan>`
