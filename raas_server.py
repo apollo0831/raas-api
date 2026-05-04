@@ -419,11 +419,12 @@ class RAASHandler(BaseHTTPRequestHandler):
                         try:
                             bd = BE.collect_all(splunk_search)
                             context = bd.get("claude_context", "")
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"[WARN] collect_all 실패: {e}")
+                    enriched_context = build_query_context(question, context)
                     answer = call_claude(
-                        "SBS 고릴라 라디오 앱 데이터 분석 어시스턴트. 한국어로 간결하게 답하세요. 수치는 천단위 쉼표.",
-                        f"데이터:\\n{context}\\n\\n질문: {question}"
+                        QUERY_SYSTEM_PROMPT,
+                        f"데이터:\n{enriched_context}\n\n질문: {question}"
                     )
                     chart_data = None
 
