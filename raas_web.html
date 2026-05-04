@@ -1607,7 +1607,9 @@ async function _drawUserSizeChart(period) {
       const [_y, _m, _d] = _lastDate.split('/').map(Number);
       const _dt = new Date(_y, _m - 1, _d);
       const _dow = _dt.getDay();              // 0=Sun … 6=Sat
-      _dt.setDate(_dt.getDate() - ((_dow === 0) ? 6 : (_dow - 1)));
+      // 일요일이면 그 주가 완료된 주 → 다음 날(월요일)부터가 진행 중인 주
+      // 월~토이면 그 주가 진행 중 → 해당 주 월요일로 되돌림
+      _dt.setDate(_dt.getDate() + (_dow === 0 ? 1 : -((_dow - 1))));
       const _mm = String(_dt.getMonth() + 1).padStart(2, '0');
       const _dd = String(_dt.getDate()).padStart(2, '0');
       curWeekMonday = `${_dt.getFullYear()}/${_mm}/${_dd}`;
