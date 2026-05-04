@@ -1106,14 +1106,6 @@ body{
 </div>
 
 <div class="page" id="page-ai">
-  <!-- AI 브리핑 전문 -->
-  <div class="section">
-    <div class="section-title">AI 브리핑 전문</div>
-    <div class="card" id="briefCardFull">
-      <div style="color:var(--sub)">브리핑 로딩 중…</div>
-    </div>
-  </div>
-
   <!-- AI 어시스턴트 -->
   <div class="section">
     <div class="ai-header">
@@ -1306,10 +1298,6 @@ function renderAll(d){
   renderPgm(s5, _pgmTab);
   renderBrief(d.brief||'');
 
-  // AI 브리핑 전문 동기화
-  const full = document.getElementById('briefCardFull');
-  if (full) full.innerHTML =
-    document.getElementById('briefCard')?.innerHTML || '';
 
   // 분석 페이지 KPI 복사
   renderAnalytics(d);
