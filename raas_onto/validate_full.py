@@ -62,10 +62,14 @@ def main():
         "raas:DayType":          (4,  "일자 유형"),
         "raas:HolidayType":      (3,  "공휴일 분류"),
         "raas:CalendarDay":      (20, "2026년 한국 공휴일"),
+        "raas:Role":             (7,  "출연 역할 (MainHost/CoHost/Sub/Guest/DJ/Rotating/Regular)"),
+        "raas:GuestnameInterpretationPolicy": (5, "guestname 해석 정책"),
+        "raas:Person":           (27, "Person 인스턴스 (MainHost 25 + RegularGuest 2)"),
+        "raas:ProgramType":      (2,  "프로그램 유형 (Hosted/Automated)"),
     }
     pass_count = 0
     for cls, (exp, desc) in expected.items():
-        actual = len(instances_by_class.get(cls, []))
+        actual = len(set(instances_by_class.get(cls, [])))
         mark = "PASS" if actual == exp else "WARN"
         if mark == "PASS":
             pass_count += 1

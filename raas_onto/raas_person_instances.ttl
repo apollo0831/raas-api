@@ -1,0 +1,289 @@
+# =============================================================================
+# RAAS Person Instances — Phase 2-C-3 (Step 2)
+#
+# 인스턴스화 범위:
+# Part A. 주 진행자 (MainHost) — 24명 + DJ래피 1명 (M10/M11 공유)
+# Part B. 고정 게스트 (RegularGuest) — F05 김영철의 파워FM
+# 
+# 안전한 데이터만 인스턴스화:
+# - PGM_NAME에서 명확히 추출 가능한 진행자
+# - 사용자가 확정해 준 도메인 정보 (예: F09 김태균)
+# - 정책 확정된 프로그램의 guestname 일부
+# 
+# 인스턴스화 안 한 것:
+# - F02, F03, F10, L01, L02, L03, L11의 진행자 — 향후 도메인 확인 후 추가
+# - 일회성 게스트(Guest 인스턴스) — Episode 인스턴스화(Phase 2-C-4) 시 추가
+# - F02 애프터 클럽 RotatingHost — Episode 시 함께 추가 예정
+# 
+# 명명 규칙: raas:Person_본명
+# 예: raas:Person_KimYoungChul (김영철), raas:Person_KimTaeKyun (김태균)
+# 한글 이름은 IRI로 직접 쓰지 않고 영문 음역으로 표기
+# =============================================================================
+
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+
+# =============================================================================
+# Part A. MainHost 인스턴스 (정규 주 진행자) — 24명
+# =============================================================================
+
+raas:Person_DinDin a raas:Person ;
+    rdfs:label "딘딘"@ko ;
+    raas:personName "딘딘"@ko ;
+    raas:stageName "딘딘"@ko ;
+    raas:personOccupation "방송인"@ko .
+raas:F01 raas:hasMainHost raas:Person_DinDin .
+
+raas:Person_LeeInGwon a raas:Person ;
+    rdfs:label "이인권"@ko ;
+    raas:personName "이인권"@ko .
+raas:F04 raas:hasMainHost raas:Person_LeeInGwon .
+
+raas:Person_KimYoungChul a raas:Person ;
+    rdfs:label "김영철"@ko ;
+    raas:personName "김영철"@ko ;
+    raas:personOccupation "방송인, 코미디언"@ko .
+raas:F05 raas:hasMainHost raas:Person_KimYoungChul .
+
+raas:Person_BongTaeGyu a raas:Person ;
+    rdfs:label "봉태규"@ko ;
+    raas:personName "봉태규"@ko ;
+    raas:personOccupation "배우"@ko .
+raas:F06 raas:hasMainHost raas:Person_BongTaeGyu .
+
+raas:Person_ParkHaSun a raas:Person ;
+    rdfs:label "박하선"@ko ;
+    raas:personName "박하선"@ko ;
+    raas:personOccupation "배우"@ko .
+raas:F07 raas:hasMainHost raas:Person_ParkHaSun .
+
+raas:Person_JuHyunYoung a raas:Person ;
+    rdfs:label "주현영"@ko ;
+    raas:personName "주현영"@ko ;
+    raas:personOccupation "배우, 방송인"@ko .
+raas:F08 raas:hasMainHost raas:Person_JuHyunYoung .
+
+raas:Person_KimTaeKyun a raas:Person ;
+    rdfs:label "김태균"@ko ;
+    raas:personName "김태균"@ko ;
+    raas:stageName "컬투의 김태균"@ko ;
+    raas:personOccupation "방송인, 코미디언"@ko ;
+    rdfs:comment "두시탈출 컬투쇼 단독 DJ. 컬투 듀오의 김태균."@ko .
+raas:F09 raas:hasMainHost raas:Person_KimTaeKyun .
+
+raas:Person_ParkSoHyun a raas:Person ;
+    rdfs:label "박소현"@ko ;
+    raas:personName "박소현"@ko ;
+    raas:personOccupation "방송인"@ko .
+raas:F11 raas:hasMainHost raas:Person_ParkSoHyun .
+
+raas:Person_Wendy a raas:Person ;
+    rdfs:label "웬디"@ko ;
+    raas:personName "손승완"@ko ;
+    raas:stageName "웬디"@ko ;
+    raas:personOccupation "가수 (Red Velvet)"@ko .
+raas:F12 raas:hasMainHost raas:Person_Wendy .
+
+raas:Person_BaeSungJae a raas:Person ;
+    rdfs:label "배성재"@ko ;
+    raas:personName "배성재"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:F13 raas:hasMainHost raas:Person_BaeSungJae .
+
+raas:Person_KoHyunJun a raas:Person ;
+    rdfs:label "고현준"@ko ;
+    raas:personName "고현준"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:L05 raas:hasMainHost raas:Person_KoHyunJun .
+
+raas:Person_KimTaeHyun a raas:Person ;
+    rdfs:label "김태현"@ko ;
+    raas:personName "김태현"@ko .
+raas:L06 raas:hasMainHost raas:Person_KimTaeHyun .
+
+raas:Person_LeeSukYoung a raas:Person ;
+    rdfs:label "이숙영"@ko ;
+    raas:personName "이숙영"@ko ;
+    raas:personOccupation "방송인"@ko .
+raas:L07 raas:hasMainHost raas:Person_LeeSukYoung .
+
+raas:Person_ParkYeonMi a raas:Person ;
+    rdfs:label "박연미"@ko ;
+    raas:personName "박연미"@ko .
+raas:L08 raas:hasMainHost raas:Person_ParkYeonMi .
+
+raas:Person_YooMinSang a raas:Person ;
+    rdfs:label "유민상"@ko ;
+    raas:personName "유민상"@ko ;
+    raas:personOccupation "코미디언"@ko .
+raas:L09 raas:hasMainHost raas:Person_YooMinSang .
+
+raas:Person_JungYeop a raas:Person ;
+    rdfs:label "정엽"@ko ;
+    raas:personName "정엽"@ko ;
+    raas:personOccupation "가수"@ko .
+raas:L10 raas:hasMainHost raas:Person_JungYeop .
+
+raas:Person_KimChangWan a raas:Person ;
+    rdfs:label "김창완"@ko ;
+    raas:personName "김창완"@ko ;
+    raas:personOccupation "가수, 배우"@ko .
+raas:L12 raas:hasMainHost raas:Person_KimChangWan .
+
+raas:Person_PyeonSangWook a raas:Person ;
+    rdfs:label "편상욱"@ko ;
+    raas:personName "편상욱"@ko ;
+    raas:personOccupation "기자"@ko .
+raas:L13 raas:hasMainHost raas:Person_PyeonSangWook .
+
+raas:Person_KimYunSang a raas:Person ;
+    rdfs:label "김윤상"@ko ;
+    raas:personName "김윤상"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:L14 raas:hasMainHost raas:Person_KimYunSang .
+
+raas:Person_ParkEunKyung a raas:Person ;
+    rdfs:label "박은경"@ko ;
+    raas:personName "박은경"@ko .
+raas:L15 raas:hasMainHost raas:Person_ParkEunKyung .
+
+raas:Person_KimSunJae a raas:Person ;
+    rdfs:label "김선재"@ko ;
+    raas:personName "김선재"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:M05 raas:hasMainHost raas:Person_KimSunJae .
+
+raas:Person_ChoiYoungJoo a raas:Person ;
+    rdfs:label "최영주"@ko ;
+    raas:personName "최영주"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:M07 raas:hasMainHost raas:Person_ChoiYoungJoo .
+
+raas:Person_DJRapi a raas:Person ;
+    rdfs:label "DJ래피"@ko ;
+    raas:stageName "DJ래피"@ko ;
+    raas:personOccupation "DJ"@ko ;
+    rdfs:comment "M10·M11 (주말 오전·오후 드라이브 뮤직) 공유 진행자."@ko .
+raas:M10 raas:hasMainHost raas:Person_DJRapi .
+raas:M11 raas:hasMainHost raas:Person_DJRapi .
+
+
+# =============================================================================
+# Part B. RegularGuest 인스턴스 (고정 게스트)
+# =============================================================================
+# 정책: F05는 Policy_RegularPlusGuest. '/' 앞이 고정 게스트.
+# CSV에서 추출된 5/2까지 등장한 RegularGuest 후보들:
+#   - 김젬마, 정상근, 미친감성, 김헌, 피터, 이석무
+# 정상근은 여러 번 반복되어 분명한 RegularGuest.
+# 다른 인물들은 1회만 등장 — 이들도 RegularGuest인지 일회성인지는 도메인 확인 필요.
+#
+# L07 이숙영의 러브FM의 이재익은 사용자 도메인 정보 추가:
+#   - 4/29, 4/30, 5/01 3일 연속 출연 (CSV 검증)
+#   - 사용자 확정: "게스트 분석에서 제외" → 사실상 RegularGuest
+# 
+# 안전 원칙: 여러 회차에 등장한 것만 확실한 RegularGuest로 인스턴스화.
+# 그 외는 향후 추가.
+
+raas:Person_JungSangGeun a raas:Person ;
+    rdfs:label "정상근"@ko ;
+    raas:personName "정상근"@ko ;
+    rdfs:comment "F05 김영철의 파워FM 고정 게스트. CSV에서 3회 이상 등장."@ko .
+
+raas:F05 raas:hasRegularGuest raas:Person_JungSangGeun .
+
+raas:Person_LeeJaeIk a raas:Person ;
+    rdfs:label "이재익"@ko ;
+    raas:personName "이재익"@ko ;
+    rdfs:comment "L07 이숙영의 러브FM 고정 출연자. 4/29, 4/30, 5/01 연속 출연 확인. 사용자 도메인 정보로 RegularGuest 분류."@ko .
+
+raas:L07 raas:hasRegularGuest raas:Person_LeeJaeIk .
+
+
+# =============================================================================
+# Part C. 추가 속성 (Phase 2-C-4 선행)
+# =============================================================================
+
+raas:hasRegularGuest a <http://www.w3.org/2002/07/owl#ObjectProperty> ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:Person ;
+    rdfs:label "고정 게스트"@ko ;
+    rdfs:comment "프로그램의 고정 출연 게스트. 일회성 게스트가 아닌 정기 출연자."@ko .
+
+
+# =============================================================================
+# 미인스턴스화 항목 (향후 도메인 검증 후 추가 예정)
+# =============================================================================
+# 사용자 도메인 정보 추가분 (Phase 2-C-3 Step 2 보강):
+#   F03 파워 스테이션: DJ 없음 (AutomatedProgram)
+#   F10 황제파워: 황제성
+#   L01 YESTERDAY 20: DJ 없음 (AutomatedProgram)
+#   L11 인생은 오디션: 이상미
+# 
+# 향후 추가 예정:
+# - F02 애프터 클럽: 요일별 RotatingHost 4명 — Episode 인스턴스화 시 함께
+#   현재 알려진 후보: DJ 푸디토리움, DJ 윤덕원, DJ 임헌일, DJ 구름
+# - L02 Love20(재), L03 OLDIES 20(재): 재방송 (원 프로그램의 진행자 — 별도 표현 필요)
+
+
+# =============================================================================
+# Part D. 추가 MainHost (사용자 도메인 정보 보강)
+# =============================================================================
+
+raas:Person_HwangJaeSung a raas:Person ;
+    rdfs:label "황제성"@ko ;
+    raas:personName "황제성"@ko ;
+    rdfs:comment "F10 황제파워의 진행자. 프로그램명 '황제파워'는 진행자명 황제성에서 유래."@ko .
+raas:F10 raas:hasMainHost raas:Person_HwangJaeSung .
+
+raas:Person_LeeSangMi a raas:Person ;
+    rdfs:label "이상미"@ko ;
+    raas:personName "이상미"@ko ;
+    raas:stageName "DJ 이상미"@ko ;
+    rdfs:comment "L11 인생은 오디션 진행자."@ko .
+raas:L11 raas:hasMainHost raas:Person_LeeSangMi .
+
+
+# =============================================================================
+# Part E. ProgramType 분류 — 모든 Program에 적용
+# =============================================================================
+# AutomatedProgram (진행자 없는 자동 음악 프로그램)
+raas:F03 raas:hasProgramType raas:AutomatedProgram .  # 파워 스테이션
+raas:L01 raas:hasProgramType raas:AutomatedProgram .  # YESTERDAY 20
+
+# 나머지는 모두 HostedProgram (재방송 포함 — 재방송도 원본은 HostedProgram)
+raas:F01 raas:hasProgramType raas:HostedProgram .
+raas:F02 raas:hasProgramType raas:HostedProgram .
+raas:F04 raas:hasProgramType raas:HostedProgram .
+raas:F05 raas:hasProgramType raas:HostedProgram .
+raas:F06 raas:hasProgramType raas:HostedProgram .
+raas:F07 raas:hasProgramType raas:HostedProgram .
+raas:F08 raas:hasProgramType raas:HostedProgram .
+raas:F09 raas:hasProgramType raas:HostedProgram .
+raas:F10 raas:hasProgramType raas:HostedProgram .
+raas:F11 raas:hasProgramType raas:HostedProgram .
+raas:F12 raas:hasProgramType raas:HostedProgram .
+raas:F13 raas:hasProgramType raas:HostedProgram .
+raas:L02 raas:hasProgramType raas:HostedProgram .  # 재방송 (원본은 Hosted)
+raas:L03 raas:hasProgramType raas:HostedProgram .  # 재방송 (원본은 Hosted)
+raas:L05 raas:hasProgramType raas:HostedProgram .
+raas:L06 raas:hasProgramType raas:HostedProgram .
+raas:L07 raas:hasProgramType raas:HostedProgram .
+raas:L08 raas:hasProgramType raas:HostedProgram .
+raas:L09 raas:hasProgramType raas:HostedProgram .
+raas:L10 raas:hasProgramType raas:HostedProgram .
+raas:L11 raas:hasProgramType raas:HostedProgram .
+raas:L12 raas:hasProgramType raas:HostedProgram .
+raas:L13 raas:hasProgramType raas:HostedProgram .
+raas:L14 raas:hasProgramType raas:HostedProgram .
+raas:L15 raas:hasProgramType raas:HostedProgram .
+raas:M05 raas:hasProgramType raas:HostedProgram .
+raas:M07 raas:hasProgramType raas:HostedProgram .
+raas:M10 raas:hasProgramType raas:HostedProgram .
+raas:M11 raas:hasProgramType raas:HostedProgram .
+
+
+# =============================================================================
+# 끝
+# =============================================================================

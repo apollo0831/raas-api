@@ -16,6 +16,7 @@ Claude Code(Phase 5-B)에서 이 코드를 시작점으로 RAAS 시스템에 통
 3. 필요시 rdflib으로 파서 교체 (성능 개선)
 4. 점진적 통합 (챕터 6 마이그레이션 전략 참조)
 """
+from __future__ import annotations
 import re
 import os
 import logging
@@ -64,117 +65,9 @@ ONTOLOGY_FILES = [
     "raas_time_schema.ttl",
     "raas_business_rules.ttl",
     "raas_calendar.ttl",
+    "raas_person_schema.ttl",
+    "raas_person_instances.ttl",
 ]
-
-
-# ─── 레거시 KPI 필드 alias 매핑 (Phase 5 Step 3) ──────────────────────────────
-# 새 이름(SPL 출력, 2026-04 KPI 명명 규칙) → 옛 이름(엔진/화면이 사용 중인 이름)
-# 단일 신뢰 출처: docs/raas_kpi_dictionary.yaml의 'note: 이전 이름: <old>'
-# 향후 .ttl의 raas:legacyName 속성으로 마이그레이션 예정.
-LEGACY_FIELD_ALIASES = {
-    # B. user_size — DAU
-    'dau':                  'dau_today',
-    'dau_prev':             'dau_pw',
-    'dau_chg':              'dau_wow',
-    'dau_d2':               'dau_yday',
-    # B. user_size — WAU (의미적 변경: 옛 이름은 dau_week)
-    'wau':                  'dau_week',
-    'wau_prev':             'dau_week_pw',
-    'wau_chg':              'dau_week_wow',
-    # B. user_size — MAU (의미적 변경: 옛 이름은 dau_mon)
-    'mau':                  'dau_mon',
-    'mau_prev':             'dau_mon_pw',
-    'mau_chg':              'dau_mon_wow',
-    # B. user_size — 롤링 7일 (옛: wau_today)
-    'dau_r7':               'wau_today',
-    'dau_r7_prev':          'wau_pw',
-    # B. user_size — 롤링 30일 (옛: mau_today)
-    'dau_r30':              'mau_today',
-    'dau_r30_prev':         'mau_pw',
-    # B. user_size — 1분/10분 *_prev (이름은 _pw였음)
-    'dau_1min_prev':        'dau_1min_pw',
-    'dau_10min_prev':       'dau_10min_pw',
-    'wau_1min_prev':        'wau_1min_pw',
-    'wau_10min_prev':       'wau_10min_pw',
-    'mau_1min_prev':        'mau_1min_pw',
-    'mau_10min_prev':       'mau_10min_pw',
-    # C. user_growth — new
-    'new':                  'new_today',
-    'new_prev':             'new_pw',
-    'new_chg':              'new_wow',
-    'new_share':            'new_pct',
-    'new_week_prev':        'new_week_pw',
-    'new_week_chg':         'new_week_wow',
-    'new_week_share':       'new_week_pct',
-    'new_mon_prev':         'new_mon_pw',
-    'new_mon_chg':          'new_mon_wow',
-    'new_mon_share':        'new_mon_pct',
-    # C. user_growth — react
-    'react':                'react_today',
-    'react_prev':           'react_pw',
-    'react_chg':            'react_wow',
-    'react_share':          'react_pct',
-    'react_week_prev':      'react_week_pw',
-    'react_week_chg':       'react_week_wow',
-    'react_week_share':     'react_week_pct',
-    'react_mon_prev':       'react_mon_pw',
-    'react_mon_chg':        'react_mon_wow',
-    'react_mon_share':      'react_mon_pct',
-    # D. user_quality — react_rate (값/이름 변경 없음, _pw → _prev만)
-    'react_rate_prev':      'react_rate_pw',
-    'react_rate_week_prev': 'react_rate_week_pw',
-    'react_rate_mon_prev':  'react_rate_mon_pw',
-    # D. user_quality — churn (_rate 접미사 추가)
-    'churn_rate_prev':      'churn_rate_pw',
-    'churn_rate_diff':      'churn_diff',
-    'churn_rate_week':      'churn_week',
-    'churn_rate_week_prev': 'churn_week_pw',
-    'churn_rate_week_diff': 'churn_week_diff',
-    'churn_rate_mon':       'churn_mon',
-    'churn_rate_mon_prev':  'churn_mon_pw',
-    'churn_rate_mon_diff':  'churn_mon_diff',
-    # D. user_quality — deep_rate (_pw → _prev)
-    'deep_rate_prev':       'deep_rate_pw',
-    'deep_rate_week_prev':  'deep_rate_week_pw',
-    'deep_rate_mon_prev':   'deep_rate_mon_pw',
-    # D. user_quality — engage (_rate 접미사 추가)
-    'engage_rate_prev':     'engage_rate_pw',
-    'engage_rate_diff':     'engage_diff',
-    'engage_rate_week':     'engage_week',
-    'engage_rate_week_prev':'engage_week_pw',
-    'engage_rate_week_diff':'engage_week_diff',
-    'engage_rate_mon':      'engage_mon',
-    'engage_rate_mon_prev': 'engage_mon_pw',
-    'engage_rate_mon_diff': 'engage_mon_diff',
-    # E. user_habit — habit (_rate 접미사 추가)
-    'habit_rate_prev':      'habit_rate_pw',
-    'habit_rate_diff':      'habit_diff',
-    'habit_rate_week':      'habit_week',
-    'habit_rate_week_prev': 'habit_week_pw',
-    'habit_rate_week_diff': 'habit_week_diff',
-    'habit_rate_mon':       'habit_mon',
-    'habit_rate_mon_prev':  'habit_mon_pw',
-    'habit_rate_mon_diff':  'habit_mon_diff',
-    # F. user_retention — d1/d7/w1/m1 (_pw → _prev, _diff prefix 통일)
-    'd1_ret_prev':          'd1_ret_pw',
-    'd1_ret_diff':          'd1_diff',
-    'd7_ret_prev':          'd7_ret_pw',
-    'd7_ret_diff':          'd7_diff',
-    'w1_ret_prev':          'w1_ret_pw',
-    'w1_ret_diff':          'w1_diff',
-    'm1_ret_prev':          'm1_ret_pw',
-    'm1_ret_diff':          'm1_diff',
-    'new_d1_ret_prev':      'new_d1_ret_pw',
-    'new_d1_ret_diff':      'new_d1_diff',
-    'new_d7_ret_prev':      'new_d7_ret_pw',
-    'new_d7_ret_diff':      'new_d7_diff',
-    'new_w1_ret_prev':      'new_w1_ret_pw',
-    'new_w1_ret_diff':      'new_w1_diff',
-    'new_m1_ret_prev':      'new_m1_ret_pw',
-    'new_m1_ret_diff':      'new_m1_diff',
-    # A. meta — 편성정보
-    'program_title':        'schedule_title',
-}
 
 
 # =============================================================================
@@ -447,11 +340,11 @@ class OntologyAdapter:
 
     def get_legacy_field_aliases(self) -> dict[str, str]:
         """레거시 alias 매핑 (briefing_engine FIELD_ALIASES 호환).
-
-        Phase 5 Step 3 통합: briefing_engine의 87개 alias를 SSoT(어댑터)로 이전.
-        TODO (장기): .ttl에 raas:legacyName 속성 추가 후 그래프에서 추출.
+        
+        주의: PoC 단계에서는 비어있음. 운영 통합 시 .ttl에 legacy_alias 속성 추가.
         """
-        return dict(LEGACY_FIELD_ALIASES)
+        # TODO: 온톨로지에 raas:legacyName 속성 추가 후 여기서 추출
+        return {}
 
     # ─── 3.2 프로그램/채널 조회 ─────────────────────────────────────────────
 
@@ -552,7 +445,456 @@ class OntologyAdapter:
                 "label": self._onto.label_ko(sch),
             }
 
+        # Phase 2-C-3: ProgramType (Hosted/Automated)
+        ptype = self._onto.get_one(subj, "raas:hasProgramType")
+        if ptype:
+            result["program_type"] = {
+                "id": ptype,
+                "label": self._onto.label_ko(ptype),
+            }
+
+        # Phase 2-C-3: MainHost
+        host = self._onto.get_one(subj, "raas:hasMainHost")
+        if host:
+            result["main_host"] = self._person_dict(host)
+
+        # Phase 2-C-3: RegularGuests
+        regulars = []
+        for s, p, o in self._onto.triples:
+            if s == subj and p == "raas:hasRegularGuest":
+                regulars.append(self._person_dict(o))
+        if regulars:
+            result["regular_guests"] = regulars
+
         return result
+
+    def _person_dict(self, person_iri: str) -> dict:
+        """Person IRI → 정보 dict."""
+        return {
+            "id": person_iri,
+            "label": self._onto.label_ko(person_iri),
+            "name": self._onto.value_str(self._onto.get_one(person_iri, "raas:personName")),
+            "stage_name": self._onto.value_str(self._onto.get_one(person_iri, "raas:stageName")),
+            "occupation": self._onto.value_str(self._onto.get_one(person_iri, "raas:personOccupation")),
+        }
+
+    # ─── Phase 2-C-3 신규 메서드 ────────────────────────────────────────────
+
+    def find_person_by_name(self, name_keyword: str) -> list[dict]:
+        """사람 이름 키워드로 Person 검색 + 어떤 프로그램에 어떤 역할로 출연하는지.
+
+        예: find_person_by_name("정상근") → [
+          {"person": {...}, "as_main_host": [], "as_regular_guest": ["F05"]}
+        ]
+        """
+        results = []
+        for person in self._onto.instances_of("raas:Person"):
+            labels = [self._onto.label_ko(person)]
+            for pred in ("raas:personName", "raas:stageName"):
+                v = self._onto.get_one(person, pred)
+                if v:
+                    labels.append(self._onto.value_str(v))
+
+            matched = False
+            matched_label = None
+            for lbl in labels:
+                if lbl and name_keyword in lbl:
+                    matched = True
+                    matched_label = lbl
+                    break
+
+            if not matched:
+                continue
+
+            as_host = self._onto.find_subjects("raas:hasMainHost", person)
+            as_regular = self._onto.find_subjects("raas:hasRegularGuest", person)
+
+            results.append({
+                "person": self._person_dict(person),
+                "matched_label": matched_label,
+                "as_main_host": [self._onto.value_str(self._onto.get_one(p, "raas:code"))
+                                 for p in as_host],
+                "as_regular_guest": [self._onto.value_str(self._onto.get_one(p, "raas:code"))
+                                     for p in as_regular],
+            })
+
+        return results
+
+    def get_program_type(self, code: str) -> Optional[dict]:
+        """프로그램의 ProgramType 조회 (Hosted/Automated)."""
+        subj = f"raas:{code}"
+        ptype = self._onto.get_one(subj, "raas:hasProgramType")
+        if not ptype:
+            return None
+        return {
+            "id": ptype,
+            "label": self._onto.label_ko(ptype),
+            "is_automated": ptype == "raas:AutomatedProgram",
+        }
+
+    def get_guestname_policy(self, code: str) -> Optional[dict]:
+        """프로그램의 guestname 해석 정책 조회."""
+        subj = f"raas:{code}"
+        policy = self._onto.get_one(subj, "raas:guestnameInterpretation")
+        if not policy:
+            return None
+        return {
+            "id": policy,
+            "label": self._onto.label_ko(policy),
+            "comment": self._onto.value_str(self._onto.get_one(policy, "rdfs:comment")),
+            "example": self._onto.value_str(self._onto.get_one(policy, "raas:exampleText")),
+        }
+
+    # ─── Phase 6 (브리핑 강화) 신규 메서드 ──────────────────────────────────
+    
+    # 게스트 분석 캐시 (옵션 B — 메모리 캐시)
+    _guest_cache: Optional[dict] = None
+    
+    def _get_regular_guest_names(self) -> set[str]:
+        """온톨로지에 등록된 모든 RegularGuest 이름 (분석 제외용)."""
+        names = set()
+        for s, p, o in self._onto.triples:
+            if p == "raas:hasRegularGuest":
+                # o는 Person IRI
+                label = self._onto.label_ko(o)
+                if label:
+                    names.add(label)
+                # personName도 추가
+                pname = self._onto.value_str(self._onto.get_one(o, "raas:personName"))
+                if pname:
+                    names.add(pname)
+        return names
+    
+    def _parse_guestname_for_analysis(self, raw_text: str, regular_names: set[str]) -> list[str]:
+        """guestname 텍스트에서 비고정 게스트 이름 추출.
+        
+        예:
+            '김헌, 정상근, 피터 / 배혜지' + regular={'정상근'}
+            → ['김헌', '피터', '배혜지']  (정상근 제외)
+        """
+        if not raw_text:
+            return []
+        # 정규화: '/'와 ',' 모두 구분자로 처리
+        parts = raw_text.replace("/", ",").split(",")
+        result = []
+        for p in parts:
+            name = p.strip()
+            # 'DJ XXX', '직업 + 이름' 같은 케이스에서 이름만 추출 시도
+            # 단순화: 공백 기준 마지막 단어를 이름으로 (한국어 케이스)
+            # 'DJ 푸디토리움' → '푸디토리움', '김성훈 감독' → '김성훈' (직업 제거 향후 개선)
+            if not name:
+                continue
+            if name.startswith("DJ "):
+                name = name[3:].strip()
+            # 직업 접미어 제거 (간단 버전)
+            for suffix in [" 감독", " 변호사", " 배우", " 가수", " 성우", " 작가", " 의사", " 교수"]:
+                if name.endswith(suffix):
+                    name = name[:-len(suffix)].strip()
+                    break
+            
+            if name and name not in regular_names:
+                result.append(name)
+        return result
+    
+    def _build_guest_cache_from_csv(self, csv_path: Path, days: int = 30) -> dict:
+        """CSV에서 게스트 효과 데이터를 캐시로 구축.
+        
+        반환 구조:
+        {
+            "F05": {
+                "without_guest": {"weekday": [(date, dau), ...], "weekend": [...]},
+                "with_guest": {"weekday": [(date, dau, [guest_names]), ...], "weekend": [...]},
+                "guest_appearances": {
+                    "이름": [(date, dau, daytype), ...]
+                }
+            },
+            ...
+        }
+        """
+        import csv
+        from datetime import datetime, timedelta
+        from collections import defaultdict
+        
+        if not csv_path.exists():
+            logger.warning(f"CSV 파일 없음: {csv_path}")
+            return {}
+        
+        regular_names = self._get_regular_guest_names()
+        
+        result = defaultdict(lambda: {
+            "without_guest": {"weekday": [], "weekend": [], "holiday": []},
+            "with_guest": {"weekday": [], "weekend": [], "holiday": []},
+            "guest_appearances": defaultdict(list),
+        })
+        
+        with open(csv_path, encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            try:
+                pgm_idx = header.index("PGM_CODE")
+                gn_idx = header.index("guestname")
+                dau_idx = header.index("dau")
+                date_idx = header.index("DATE")
+            except ValueError as e:
+                logger.warning(f"CSV 컬럼 누락: {e}")
+                return {}
+            
+            cutoff = None
+            if days:
+                cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            
+            for row in reader:
+                code = row[pgm_idx]
+                if not code:
+                    continue
+                
+                date_raw = row[date_idx].replace("/", "-") if row[date_idx] else ""
+                if cutoff and date_raw < cutoff:
+                    continue
+                
+                if not row[dau_idx]:
+                    continue
+                try:
+                    dau = int(float(row[dau_idx]))
+                except (ValueError, IndexError):
+                    continue
+                
+                # DayType 판정
+                daytype_info = self.get_day_type(date_raw)
+                dt_key = "holiday" if daytype_info.get("day_type") == "공휴일" else (
+                    "weekend" if daytype_info.get("day_type") == "주말" else "weekday"
+                )
+                
+                gn = row[gn_idx].strip() if gn_idx < len(row) else ""
+                has_guest = bool(gn) and gn not in ("None", "null", "-")
+                
+                if has_guest:
+                    guest_names = self._parse_guestname_for_analysis(gn, regular_names)
+                    if not guest_names:
+                        # RegularGuest만 있는 경우 → 게스트 없는 날로 분류
+                        result[code]["without_guest"][dt_key].append((date_raw, dau))
+                    else:
+                        result[code]["with_guest"][dt_key].append((date_raw, dau, guest_names))
+                        for name in guest_names:
+                            result[code]["guest_appearances"][name].append((date_raw, dau, dt_key))
+                else:
+                    result[code]["without_guest"][dt_key].append((date_raw, dau))
+        
+        return dict(result)
+    
+    def find_top_guests(self, code: str, days: int = 30, 
+                        csv_path: Optional[Path] = None,
+                        top_n: int = 5) -> list[dict]:
+        """프로그램의 효과 큰 비고정 게스트 Top N (RegularGuest 자동 제외).
+        
+        예: find_top_guests("L07", days=30) →
+        [
+            {"name": "송유택", "appearances": 1, "avg_dau": 26072, 
+             "baseline_dau": 18140, "effect_pct": 43.7},
+            ...
+        ]
+        """
+        if csv_path is None:
+            # raas_paths가 있으면 활용
+            try:
+                from raas_paths import get_csv_path
+                csv_path = get_csv_path()
+            except ImportError:
+                pass
+            
+            if csv_path is None:
+                # 자동 탐색 (폴백)
+                base = Path(__file__).parent
+                for candidate in [base / "raas_kpi_latest.csv",
+                                  base.parent / "raas_kpi_latest.csv",
+                                  base.parent / "data" / "raas_kpi_latest.csv",
+                                  Path("/mnt/user-data/uploads/raas_kpi_latest.csv")]:
+                    if candidate.exists():
+                        csv_path = candidate
+                        break
+            
+            if csv_path is None:
+                logger.warning("CSV 파일을 찾을 수 없음")
+                return []
+        
+        # 캐시 확인
+        if self._guest_cache is None:
+            self._guest_cache = self._build_guest_cache_from_csv(csv_path, days=days)
+        
+        prog_data = self._guest_cache.get(code)
+        if not prog_data:
+            return []
+        
+        # 게스트 없는 날의 DayType별 평균 (baseline)
+        baselines = {}
+        for dt_key in ["weekday", "weekend", "holiday"]:
+            samples = prog_data["without_guest"][dt_key]
+            if samples:
+                baselines[dt_key] = sum(d for _, d in samples) / len(samples)
+        
+        # 게스트별 효과 계산
+        guest_stats = []
+        for name, appearances in prog_data["guest_appearances"].items():
+            # DayType별 그룹화
+            by_dt = {"weekday": [], "weekend": [], "holiday": []}
+            for date, dau, dt_key in appearances:
+                by_dt[dt_key].append(dau)
+            
+            # 가장 표본 많은 DayType으로 비교
+            best_dt = max(by_dt.keys(), key=lambda k: len(by_dt[k]))
+            if not by_dt[best_dt] or best_dt not in baselines:
+                continue
+            
+            avg = sum(by_dt[best_dt]) / len(by_dt[best_dt])
+            baseline = baselines[best_dt]
+            if baseline <= 0:
+                continue
+            effect_pct = (avg - baseline) / baseline * 100
+            
+            guest_stats.append({
+                "name": name,
+                "appearances": len(appearances),
+                "appearances_in_best_dt": len(by_dt[best_dt]),
+                "avg_dau": int(avg),
+                "baseline_dau": int(baseline),
+                "baseline_daytype": best_dt,
+                "effect_pct": round(effect_pct, 1),
+            })
+        
+        # 효과 순위 (양의 효과 우선, 표본 2회 이상)
+        guest_stats.sort(key=lambda x: (-x["appearances"], -x["effect_pct"]))
+        return guest_stats[:top_n]
+    
+    def detect_consecutive_trend(self, values: list, threshold_pct: float = 1.0) -> dict:
+        """N일치 값에서 연속 같은 방향 변화 감지.
+        
+        예: detect_consecutive_trend([100, 95, 90, 88, 85])
+            → {"direction": "down", "consecutive_days": 4, "first_value": 100, "last_value": 85, ...}
+        """
+        if len(values) < 2:
+            return {"direction": "unknown", "consecutive_days": 0}
+        
+        # 끝에서부터 거꾸로 같은 방향이 몇 일째인지
+        consecutive = 0
+        direction = None
+        
+        for i in range(len(values) - 1, 0, -1):
+            curr = values[i]
+            prev = values[i - 1]
+            if prev is None or curr is None or prev == 0:
+                break
+            change_pct = (curr - prev) / prev * 100
+            
+            if abs(change_pct) < threshold_pct:
+                # 변화 너무 작음 → 추세 아님
+                break
+            
+            curr_dir = "up" if change_pct > 0 else "down"
+            if direction is None:
+                direction = curr_dir
+                consecutive = 1
+            elif direction == curr_dir:
+                consecutive += 1
+            else:
+                break
+        
+        if consecutive == 0:
+            return {"direction": "stable", "consecutive_days": 0}
+        
+        first_v = values[-(consecutive + 1)]
+        last_v = values[-1]
+        total_change_pct = ((last_v - first_v) / first_v * 100) if first_v else 0
+        
+        return {
+            "direction": direction,
+            "consecutive_days": consecutive,
+            "first_value": first_v,
+            "last_value": last_v,
+            "total_change_pct": round(total_change_pct, 1),
+        }
+    
+    def select_notable_programs(self, all_kpi: dict[str, dict], 
+                                max_count: int = 2) -> list[dict]:
+        """오늘 주목할 프로그램 1~2개 자동 선정.
+        
+        선정 기준 (우선순위 순):
+        1. WoW 급증 (+10% 이상) — 양의 시그널
+        2. WoW 급락 (-10% 이상) — 위험 시그널
+        3. WoW +/-5~10% (중간 변화)
+        """
+        candidates = []
+        
+        for code, kpi in all_kpi.items():
+            # DAU 1,000 이상만 (저트래픽 제외)
+            try:
+                dau = float(kpi.get("dau", 0) or 0)
+                wow = float(kpi.get("dau_chg") or kpi.get("dau_wow") or 0)
+            except (TypeError, ValueError):
+                continue
+            
+            if dau < 1000:
+                continue
+            
+            # 우선순위 점수
+            if abs(wow) >= 10:
+                priority = 1  # 급변
+            elif abs(wow) >= 5:
+                priority = 2  # 중변
+            else:
+                continue  # 보통은 제외
+            
+            meta = self.get_program_meta(code)
+            candidates.append({
+                "code": code,
+                "label": meta.get("label", code) if meta else code,
+                "dau": int(dau),
+                "wow_pct": round(wow, 1),
+                "direction": "up" if wow > 0 else "down",
+                "priority": priority,
+                "host": meta.get("main_host", {}).get("label") if meta else None,
+            })
+        
+        # 우선순위 + 변화량 절대값 큰 순
+        candidates.sort(key=lambda x: (x["priority"], -abs(x["wow_pct"])))
+        return candidates[:max_count]
+    
+    def get_daytype_comparison(self, target_date: str) -> dict:
+        """target_date와 같은 DayType 정보 반환 (브리핑 컨텍스트용).
+        
+        예: get_daytype_comparison("2026-05-02") → 
+        {
+            "date": "2026-05-02",
+            "day_type": "주말",
+            "comparison_text": "오늘은 토요일(주말). 평일 대비 DAU 감소는 정상 범위."
+        }
+        """
+        info = self.get_day_type(target_date)
+        if not info:
+            return {}
+        
+        dt = info.get("day_type", "")
+        weekday = info.get("day_of_week", "")
+        holiday = info.get("holiday_name", "")
+        
+        # 텍스트 생성
+        if dt == "공휴일" and holiday:
+            text = f"오늘은 {weekday}이고 공휴일({holiday})입니다. 평일 대비 청취 패턴 차이가 큽니다."
+        elif dt == "주말":
+            text = f"오늘은 {weekday}({dt})입니다. 평일 대비 DAU 감소는 정상 범위입니다."
+        else:
+            text = f"오늘은 {weekday}({dt})입니다."
+        
+        return {
+            "date": target_date,
+            "day_type": dt,
+            "day_of_week": weekday,
+            "holiday_name": holiday,
+            "comparison_text": text,
+        }
+    
+    def reset_guest_cache(self) -> None:
+        """게스트 캐시 무효화 (CSV 갱신 시 호출)."""
+        self._guest_cache = None
 
     def get_all_programs(self) -> list[dict]:
         """모든 프로그램 목록."""

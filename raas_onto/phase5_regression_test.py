@@ -251,6 +251,65 @@ def test_performance(adapter: OntologyAdapter):
 
 
 # =============================================================================
+# P3 — Phase 2-C-3 Person 검증 (신규)
+# =============================================================================
+
+def test_phase2c3_person(adapter: OntologyAdapter):
+    """P3-01 ~ P3-08: Person/ProgramType 신규 능력."""
+    print("\n[P3-01~08] Phase 2-C-3 Person 검증")
+
+    # P3-01: get_program_meta가 main_host 포함하는지
+    meta = adapter.get_program_meta("F05")
+    assert_in("P3-01", "main_host", meta or {})
+    assert_eq("P3-01-name", "김영철", meta.get("main_host", {}).get("label") if meta else None)
+
+    # P3-02: F09 김태균 (사용자 도메인 정보 반영 확인)
+    meta = adapter.get_program_meta("F09")
+    assert_eq("P3-02", "김태균", meta.get("main_host", {}).get("label") if meta else None)
+
+    # P3-03: M10 / M11 공유 진행자 (DJ래피)
+    m10 = adapter.get_program_meta("M10")
+    m11 = adapter.get_program_meta("M11")
+    m10_host = m10.get("main_host", {}).get("label") if m10 else None
+    m11_host = m11.get("main_host", {}).get("label") if m11 else None
+    assert_eq("P3-03", m10_host, m11_host, "M10/M11 같은 진행자")
+
+    # P3-04: F03 자동 음악 프로그램 (진행자 없음)
+    meta = adapter.get_program_meta("F03")
+    assert_eq("P3-04-no-host", None, meta.get("main_host") if meta else "?")
+
+    # P3-05: F03 ProgramType
+    ptype = adapter.get_program_type("F03")
+    assert_eq("P3-05", True, ptype.get("is_automated") if ptype else None,
+              "F03은 AutomatedProgram")
+
+    # P3-06: F05 ProgramType은 Hosted
+    ptype = adapter.get_program_type("F05")
+    assert_eq("P3-06", False, ptype.get("is_automated") if ptype else None)
+
+    # P3-07: 사람 이름으로 검색 — 정상근 (RegularGuest)
+    matches = adapter.find_person_by_name("정상근")
+    assert_eq("P3-07-found", 1, len(matches))
+    if matches:
+        assert_in("P3-07-regular", "F05", matches[0].get("as_regular_guest", []))
+
+    # P3-08: 김영철 (MainHost)
+    matches = adapter.find_person_by_name("김영철")
+    if matches:
+        assert_in("P3-08", "F05", matches[0].get("as_main_host", []))
+
+    # P3-09: F05 RegularGuest 포함 확인
+    meta = adapter.get_program_meta("F05")
+    regulars = meta.get("regular_guests", []) if meta else []
+    regular_names = [r.get("label") for r in regulars]
+    assert_in("P3-09", "정상근", regular_names)
+
+    # P3-10: guestname 정책 조회
+    policy = adapter.get_guestname_policy("F05")
+    assert_in("P3-10", "고정 게스트", policy.get("label") if policy else "")
+
+
+# =============================================================================
 # 메인
 # =============================================================================
 
@@ -272,6 +331,7 @@ def main():
     test_business_rules(adapter)
     test_new_capabilities(adapter)
     test_performance(adapter)
+    test_phase2c3_person(adapter)
 
     # 최종 요약
     print("\n" + "=" * 70)

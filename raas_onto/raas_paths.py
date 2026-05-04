@@ -17,6 +17,7 @@ CSV 파일을 우선순위에 따라 자동 탐색.
     if csv_path is None:
         print("CSV 파일을 찾을 수 없습니다.")
 """
+from __future__ import annotations
 import os
 from pathlib import Path
 
@@ -68,6 +69,8 @@ def get_ontology_paths():
         base_dir / "raas_time_schema.ttl",
         base_dir / "raas_business_rules.ttl",
         base_dir / "raas_calendar.ttl",
+        base_dir / "raas_person_schema.ttl",
+        base_dir / "raas_person_instances.ttl",
     ]
 
 
