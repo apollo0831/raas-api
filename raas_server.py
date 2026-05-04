@@ -113,7 +113,7 @@ def splunk_search(spl: str) -> list:
 
 def call_claude(system: str, user: str) -> str:
     payload = json.dumps({
-        "model": CLAUDE_MODEL, "max_tokens": 800,
+        "model": CLAUDE_MODEL, "max_tokens": 1500,
         "system": system,
         "messages": [{"role": "user", "content": user}]
     }).encode()

@@ -3058,13 +3058,18 @@ function renderBrief(text){
       '<div style="color:var(--sub);font-size:20px">브리핑 없음</div>';
     return;
   }
-  const sections = text.split(/(?=\d{2}\s*\/)/);
+  // === 제목 줄 및 ** 마크다운 볼드 제거
+  const cleaned = text
+    .replace(/={2,}[^\n]*={2,}\n?/g, '')
+    .replace(/\*\*/g, '')
+    .trim();
+  const sections = cleaned.split(/(?=\d{2}\s*\/)/);
   document.getElementById('briefCard').innerHTML = sections
     .map(s=>s.trim()).filter(Boolean)
     .map(s=>`<div class="brief-section">
       <span class="brief-text">${s.replace(/\n/g,'<br>')}</span>
     </div>`).join('') ||
-    `<div class="brief-text">${text.replace(/\n/g,'<br>')}</div>`;
+    `<div class="brief-text">${cleaned.replace(/\n/g,'<br>')}</div>`;
 }
 
 // ── AI 어시스턴트 ─────────────────────────────────────────
