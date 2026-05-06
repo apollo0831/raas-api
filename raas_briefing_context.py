@@ -40,32 +40,77 @@ def build_briefing_context(claude_context: str, kpi_data: dict, target_date: str
 
     sections = []
 
-    # 1. DayType 정보 + 패턴 지침
+    # 1. DayType 정보 + 패턴 지침 (오늘 + 전일 + 주중 공휴일)
     try:
+        from datetime import datetime as _dt, timedelta as _td
+
         daytype_info = adapter.get_daytype_comparison(target_date)
+
+        # 전일 DayType (일간 전일 대비 급변 해석용)
+        try:
+            prev_date = (_dt.strptime(target_date, "%Y-%m-%d") - _td(days=1)).strftime("%Y-%m-%d")
+            prev_info = adapter.get_daytype_comparison(prev_date)
+        except Exception:
+            prev_info = {}
+
+        # 최근 7일 공휴일 목록 (주간 WAU 해석용)
+        week_holidays = []
+        try:
+            base = _dt.strptime(target_date, "%Y-%m-%d")
+            for i in range(1, 8):
+                d = (base - _td(days=i)).strftime("%Y-%m-%d")
+                di = adapter.get_daytype_comparison(d)
+                if di and di.get("day_type") == "공휴일" and di.get("holiday_name"):
+                    week_holidays.append(f"{d[5:]} {di['holiday_name']}")  # MM-DD 이름
+        except Exception:
+            pass
+
         if daytype_info:
-            dt = daytype_info.get("day_type", "")
+            dt      = daytype_info.get("day_type", "")
             weekday = daytype_info.get("day_of_week", "")
             holiday = daytype_info.get("holiday_name", "")
-            comparison_text = daytype_info.get("comparison_text", "")
 
-            lines = ["[DayType 정보]", comparison_text]
+            lines = ["[DayType 정보]", daytype_info.get("comparison_text", "")]
 
             if dt == "주말":
-                lines.append(
-                    f"⚠️ 주말 패턴 적용: {weekday}은 평일 대비 DAU 30~50% 낮음이 정상."
-                )
-                lines.append("→ '급락·긴급 점검' 표현 금지. WoW는 전주 동일 요일(주말) 기준만 사용.")
-                lines.append("→ 05 액션 추천은 '주말 정상 패턴 — 다음 평일 추이 모니터링' 수준으로 처리.")
+                lines.append(f"⚠️ 오늘({weekday}) 주말 패턴: 평일 대비 DAU 30~50% 낮음이 정상.")
+                lines.append(f"→ 급락 언급 시 '오늘({weekday}, 주말) 패턴으로 정상 감소' 문구로 명시할 것.")
+                lines.append("→ WoW는 전주 동일 요일(주말) 기준만 사용.")
+                lines.append("→ 05 액션: '주말 정상 패턴 — 다음 평일 추이 모니터링'")
+
             elif dt == "공휴일":
-                name = holiday if holiday else "공휴일"
-                lines.append(
-                    f"⚠️ 공휴일 패턴 적용({name}): 청취 감소는 자연 현상."
-                )
-                lines.append("→ '긴급 점검·이탈 우려' 표현 금지.")
-                lines.append("→ 05 액션 추천은 '공휴일 패턴 — 다음 평일 회복 모니터링' 수준으로 처리.")
+                name = holiday or "공휴일"
+                lines.append(f"⚠️ 오늘({weekday}) 공휴일({name}) 패턴: 청취 감소는 자연 현상.")
+                lines.append(f"→ 급락 언급 시 반드시 '공휴일({name}) 영향'으로 공휴일명까지 명시할 것.")
+                lines.append(f"→ 05 액션: '공휴일({name}) 패턴 — 다음 평일 회복 모니터링'")
+
             else:
-                lines.append(f"→ 평일({weekday}) 기준 비교. 전주 동일 요일 대비 WoW 사용.")
+                lines.append(f"→ 오늘은 {weekday}(평일). 전주 동일 요일 대비 WoW 사용.")
+
+            # 전일 DayType — 오늘 일간 급증 원인 판단용
+            if prev_info:
+                prev_dt      = prev_info.get("day_type", "")
+                prev_weekday = prev_info.get("day_of_week", "")
+                prev_holiday = prev_info.get("holiday_name", "")
+                if prev_dt == "주말":
+                    lines.append(
+                        f"→ 전일({prev_date[5:]}, {prev_weekday})은 주말 —"
+                        f" 일간 DAU 급증이 있다면 주말→평일 반등 정상 패턴으로 명시할 것."
+                    )
+                elif prev_dt == "공휴일":
+                    pname = prev_holiday or "공휴일"
+                    lines.append(
+                        f"→ 전일({prev_date[5:]}, {prev_weekday})은 공휴일({pname}) —"
+                        f" 일간 DAU 급증이 있다면 '공휴일({pname}) 다음 날 반등 패턴'으로 명시할 것."
+                    )
+
+            # 주중 공휴일 — 주간(WAU) 감소 원인 판단용
+            if week_holidays:
+                joined = ", ".join(week_holidays)
+                lines.append(
+                    f"→ 최근 7일 내 법정 공휴일: {joined} —"
+                    f" 주간(WAU) 급락 언급 시 해당 공휴일명까지 명시할 것."
+                )
 
             sections.append("\n".join(lines))
     except Exception as e:
