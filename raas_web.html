@@ -1190,6 +1190,7 @@ const diffClass= (v,inv=false) => {
 let _data = null;
 let _scope = 'T00';
 let _period = 'day';
+let _briefs = {};  // 기간별 브리핑 캐시 {day, week, mon}
 let _pgmTab = 'dau';
 let _pgmChannel = 'ALL';
 let _pgmView = 'list';
@@ -1228,7 +1229,31 @@ function setPeriod(p){
     const s5 = _data.s5_rankings || {};
     renderPgm(s5, _pgmTab || 'dau', _period, _pgmChannel);
   }
-  // 종합 지표 그래프 갱신은 renderHealth가 자동 처리 (renderAll/renderAnalyticsPage 경로에서 호출됨)
+  // 홈 페이지에서 기간 전환 시 해당 기간 브리핑 로드
+  const homePage = document.getElementById('page-home');
+  if (homePage?.classList.contains('active')) {
+    loadBrief(p);
+  }
+}
+
+async function loadBrief(period){
+  // 이미 캐시된 브리핑이면 바로 렌더
+  if(_briefs[period]){
+    renderBrief(_briefs[period]);
+    return;
+  }
+  document.getElementById('briefCard').innerHTML =
+    '<div style="color:var(--sub);font-size:20px">브리핑 생성 중…</div>';
+  try {
+    const res = await fetch('/api/briefing?period='+period);
+    const json = await res.json();
+    if(json.ok && json.data?.brief){
+      _briefs[period] = json.data.brief;
+      renderBrief(_briefs[period]);
+    }
+  } catch(e){
+    console.error('[loadBrief]', e);
+  }
 }
 
 // ── 데이터 로드 ──────────────────────────────────────────
@@ -1258,11 +1283,13 @@ async function loadAll(){
   document.getElementById('loading').style.display='flex';
   document.getElementById('content').style.display='none';
   try {
-    // 스키마는 브리핑과 병렬 로드 (5분 캐시)
-    const [_, res] = await Promise.all([loadSchema(), fetch('/api/briefing')]);
+    // 스키마는 브리핑(일간)과 병렬 로드 (5분 캐시)
+    const [_, res] = await Promise.all([loadSchema(), fetch('/api/briefing?period=day')]);
     const json = await res.json();
     if(!json.ok) throw new Error(json.error);
     _data = json.data;
+    _briefs = {};  // 기간별 캐시 초기화
+    if(_data.brief) _briefs['day'] = _data.brief;
     renderAll(_data);
     updatePgmTabLabel();
     document.getElementById('loading').style.display='none';
@@ -1296,7 +1323,7 @@ function renderAll(d){
   renderChannels(s6);
   renderAlerts(s7);
   renderPgm(s5, _pgmTab);
-  renderBrief(d.brief||'');
+  renderBrief(_briefs[_period] || d.brief || '');
 
 
   // 분석 페이지 KPI 복사

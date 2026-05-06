@@ -24,21 +24,78 @@ def _get_adapter():
         return None
 
 
-def build_briefing_context(claude_context: str, kpi_data: dict, target_date: str) -> str:
+def _build_period_focus(period: str, kpi_data: dict) -> str:
+    """기간(일/주/월)별 핵심 지표 포커스 텍스트 생성."""
+    s1 = kpi_data.get("s1_executive", {}) or {}
+    s2 = kpi_data.get("s2_funnel",    {}) or {}
+    s3 = kpi_data.get("s3_engagement",{}) or {}
+
+    def _f(v, d="—"):
+        return v if v is not None else d
+
+    if period == "week":
+        lines = [
+            "[기간 포커스: 주간(WAU)]",
+            f"분석 기준: 7일 롤링 활성 사용자(WAU) 중심으로 작성",
+            f"WAU {_f(s1.get('dau_week'),0):,}명 (WoW {_f(s1.get('dau_week_wow'),0):+.1f}%)"
+            if isinstance(s1.get('dau_week'), (int, float)) else
+            f"WAU {_f(s1.get('dau_week'))} (WoW {_f(s1.get('dau_week_wow'))}%)",
+            f"주간 신규 {_f(s2.get('new_user_week'),'—')} | 이탈률 {_f(s2.get('churn_week'),'—')}% | 복귀율 {_f(s2.get('react_week'),'—')}%",
+            f"W1 유지율 {_f(s2.get('w1_ret'),'—')}% (전주 대비 {_f(s2.get('new_w1_diff'),'—')}pp)",
+            f"주간 깊은청취율 {_f(s3.get('deep_rate_week'),'—')}% | 참여율 {_f(s3.get('engage_week'),'—')}%",
+            "→ 01 핵심지표는 WAU 기준으로 작성. 일간 DAU 수치 사용 금지.",
+        ]
+    elif period == "mon":
+        lines = [
+            "[기간 포커스: 월간(MAU)]",
+            f"분석 기준: 30일 롤링 활성 사용자(MAU) 중심으로 작성",
+            f"MAU {_f(s1.get('dau_mon'),0):,}명 (MoM {_f(s1.get('dau_mon_wow'),0):+.1f}%)"
+            if isinstance(s1.get('dau_mon'), (int, float)) else
+            f"MAU {_f(s1.get('dau_mon'))} (MoM {_f(s1.get('dau_mon_wow'))}%)",
+            f"월간 신규 {_f(s2.get('new_user_mon'),'—')} | 이탈률 {_f(s2.get('churn_mon'),'—')}% | 복귀율 {_f(s2.get('react_mon'),'—')}%",
+            f"M1 유지율 {_f(s2.get('m1_ret'),'—')}% (전월 대비 {_f(s2.get('new_m1_diff'),'—')}pp)",
+            f"월간 깊은청취율 {_f(s3.get('deep_rate_mon'),'—')}% | 참여율 {_f(s3.get('engage_mon'),'—')}%",
+            "→ 01 핵심지표는 MAU 기준으로 작성. 일간/주간 수치 사용 금지.",
+        ]
+    else:  # day
+        lines = [
+            "[기간 포커스: 일간(DAU)]",
+            f"분석 기준: 일간 활성 사용자(DAU) 중심으로 작성",
+            f"DAU {_f(s1.get('dau'),0):,}명 (WoW {_f(s1.get('dau_wow'),0):+.1f}%)"
+            if isinstance(s1.get('dau'), (int, float)) else
+            f"DAU {_f(s1.get('dau'))} (WoW {_f(s1.get('dau_wow'))}%)",
+            f"D1 유지율 {_f(s2.get('d1_ret'),'—')}% | D7 유지율 {_f(s2.get('d7_ret'),'—')}%",
+            f"일간 이탈률 {_f(s2.get('churn_rate'),'—')}% | 복귀율 {_f(s2.get('react_rate'),'—')}%",
+            f"깊은청취율 {_f(s3.get('deep_rate'),'—')}%",
+            "→ 01 핵심지표는 DAU 기준으로 작성.",
+        ]
+
+    return "\n".join(lines)
+
+
+def build_briefing_context(claude_context: str, kpi_data: dict, target_date: str,
+                           period: str = "day") -> str:
     """기존 claude_context에 온톨로지 정보 추가.
 
     Args:
         claude_context: briefing_engine.collect_all()["claude_context"]
         kpi_data:       briefing_engine.collect_all() 전체 반환값
         target_date:    "YYYY-MM-DD" 형식 날짜
+        period:         "day" | "week" | "mon"
     Returns:
-        enriched_context: claude_context + DayType 정보 + 주목 프로그램 + 추세
+        enriched_context: claude_context + 기간 포커스 + DayType 정보 + 주목 프로그램 + 추세
     """
     adapter = _get_adapter()
     if adapter is None:
         return claude_context
 
     sections = []
+
+    # 0. 기간 포커스 (일/주/월)
+    try:
+        sections.append(_build_period_focus(period, kpi_data))
+    except Exception as e:
+        logger.warning(f"기간 포커스 생성 실패: {e}")
 
     # 1. DayType 정보 + 패턴 지침 (오늘 + 전일 + 주중 공휴일)
     try:

@@ -176,31 +176,33 @@ class RAASHandler(BaseHTTPRequestHandler):
             else:
                 self.send_html("<h2>raas_web.html 파일을 같은 폴더에 두세요</h2>")
 
-        elif self.path == "/api/briefing":
+        elif self.path.startswith("/api/briefing"):
             try:
-                cached = cache_get("briefing")
+                qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+                period = dict(urllib.parse.parse_qsl(qs)).get("period", "day")
+                if period not in ("day", "week", "mon"):
+                    period = "day"
+
+                cache_key = f"briefing_{period}"
+                cached = cache_get(cache_key)
                 if cached:
                     self.send_json({"ok": True, "data": cached, "_cached": True})
                     return
 
-                # 전체 데이터 수집
-                data = BE.collect_all(splunk_search)
+                # 전체 데이터 수집 (day 기준 캐시 재활용)
+                base_data = cache_get("briefing_base")
+                if base_data is None:
+                    base_data = BE.collect_all(splunk_search)
+                    cache_set("briefing_base", base_data)
 
-                # Claude 인사이트 생성
-                context = data.get("claude_context", "")
-                s7_alerts = data.get("s7_anomalies", {}).get("alerts", [])
-                alert_text = "\\n".join(a["msg"] for a in s7_alerts)
+                context = base_data.get("claude_context", "")
+                target_date = base_data.get("date") or datetime.now().strftime("%Y-%m-%d")
+                enriched_context = build_briefing_context(context, base_data, target_date, period=period)
 
-                target_date = data.get("date") or datetime.now().strftime("%Y-%m-%d")
-                enriched_context = build_briefing_context(context, data, target_date)
+                brief_text = call_claude(BRIEFING_SYSTEM_PROMPT, enriched_context)
 
-                brief_text = call_claude(
-                    BRIEFING_SYSTEM_PROMPT,
-                    enriched_context
-                )
-
-                result = {**data, "brief": brief_text}
-                cache_set("briefing", result)
+                result = {**base_data, "brief": brief_text}
+                cache_set(cache_key, result)
                 self.send_json({"ok": True, "data": result})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
