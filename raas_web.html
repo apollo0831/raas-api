@@ -2223,13 +2223,13 @@ function renderKPI(s1,s2){
     {label:'이탈율', val:fmtP(s2.churn_rate), wow:s2.churn_diff, unit:'pp', extra:`전주 ${fmtP(s2.churn_rate_pw)}`, color:'c-orange', invWow:true},
   ] : p==='week' ? [
     {label:'WAU (주간)', val:fmtK(s2.dau_week), wow:s2.dau_week_wow, unit:'%', extra:'', color:'c-blue',
-     sub:[{label:'DAU 일평균 (전주 월~일)', val:fmtK(s2.dau_week_avg)},{label:'30D 롤링', val:fmtK(s1.dau_r30)}]},
+     sub:[{label:'30D 롤링', val:fmtK(s1.dau_r30)}]},
     {label:'신규 (주간)', val:fmtK(s2.new_week), wow:s2.new_week_wow, unit:'%', extra:`WAU의 ${fmtP(s2.new_week_pct)}`, color:'c-green'},
     {label:'복귀 (주간)', val:fmtK(s2.react_week), wow:s2.react_week_wow, unit:'%', extra:`WAU의 ${fmtP(s2.react_week_pct)}`, color:'c-purple'},
     {label:'이탈율 (주간)', val:fmtP(s2.churn_week), wow:s2.churn_week_diff, unit:'pp', extra:`전주 ${fmtP(s2.churn_week_pw)}`, color:'c-orange', invWow:true},
   ] : [
     {label:'MAU (월간)', val:fmtK(s2.dau_mon), wow:s2.dau_mon_wow, unit:'%', extra:'', color:'c-blue',
-     sub:[{label:'DAU 일평균 (전월)', val:fmtK(s2.dau_mon_avg)},{label:'WAU 평균 (전월)', val:fmtK(s2.wau_mon_avg)}]},
+     sub:[]},
     {label:'신규 (월간)', val:fmtK(s2.new_mon), wow:s2.new_mon_wow, unit:'%', extra:`MAU의 ${fmtP(s2.new_mon_pct)}`, color:'c-green'},
     {label:'복귀 (월간)', val:fmtK(s2.react_mon), wow:s2.react_mon_wow, unit:'%', extra:`MAU의 ${fmtP(s2.react_mon_pct)}`, color:'c-purple'},
     {label:'이탈율 (월간)', val:fmtP(s2.churn_mon), wow:s2.churn_mon_diff, unit:'pp', extra:`전월 ${fmtP(s2.churn_mon_pw)}`, color:'c-orange', invWow:true},
@@ -2577,10 +2577,10 @@ function renderCohort(s2){
     document.getElementById('cohortGrid').innerHTML = items.map(cardHtml).join('');
   } else {
     const items = [
-      {type:'D1 (신규)', val:s2.new_d1_ret, pw:s2.new_d1_ret_pw, diff:s2.new_d1_diff, color:'var(--accent)'},
-      {type:'D7 (신규)', val:s2.new_d7_ret, pw:s2.new_d7_ret_pw, diff:s2.new_d7_diff, color:'var(--purple)'},
-      {type:'W1 (신규)', val:s2.new_w1_ret, pw:s2.new_w1_ret_pw, diff:s2.new_w1_diff, color:'var(--green)'},
-      {type:'M1 (신규)', val:s2.new_m1_ret, pw:s2.new_m1_ret_pw, diff:s2.new_m1_diff, color:'var(--yellow)'},
+      {type:'D1 (신규)', val:s2.new_d1_ret, pw:s2.new_d1_ret_prev, diff:s2.new_d1_ret_diff, color:'var(--accent)'},
+      {type:'D7 (신규)', val:s2.new_d7_ret, pw:s2.new_d7_ret_prev, diff:s2.new_d7_ret_diff, color:'var(--purple)'},
+      {type:'W1 (신규)', val:s2.new_w1_ret, pw:s2.new_w1_ret_prev, diff:s2.new_w1_ret_diff, color:'var(--green)'},
+      {type:'M1 (신규)', val:s2.new_m1_ret, pw:s2.new_m1_ret_prev, diff:s2.new_m1_ret_diff, color:'var(--yellow)'},
     ];
     const gap = Math.abs((s2.d1_ret||0) - (s2.new_d1_ret||0));
     const insightOk = gap < 10;
@@ -3402,10 +3402,10 @@ function getScopeData(data, scope) {
         react_mon_pct: ch.dau_mon > 0 && ch.react_mon != null
           ? Math.round(ch.react_mon / ch.dau_mon * 1000) / 10 : null,
         d1_ret: ch.d1_ret, d7_ret: ch.d7_ret, w1_ret: ch.w1_ret, m1_ret: ch.m1_ret,
-        new_d1_ret: ch.new_d1_ret, new_d1_diff: ch.new_d1_diff,
-        new_d7_ret: ch.new_d7_ret, new_d7_diff: ch.new_d7_diff,
-        new_w1_ret: ch.new_w1_ret, new_w1_diff: ch.new_w1_diff,
-        new_m1_ret: ch.new_m1_ret, new_m1_diff: ch.new_m1_diff,
+        new_d1_ret: ch.new_d1_ret, new_d1_ret_prev: ch.new_d1_ret_prev, new_d1_ret_diff: ch.new_d1_ret_diff,
+        new_d7_ret: ch.new_d7_ret, new_d7_ret_prev: ch.new_d7_ret_prev, new_d7_ret_diff: ch.new_d7_ret_diff,
+        new_w1_ret: ch.new_w1_ret, new_w1_ret_prev: ch.new_w1_ret_prev, new_w1_ret_diff: ch.new_w1_ret_diff,
+        new_m1_ret: ch.new_m1_ret, new_m1_ret_prev: ch.new_m1_ret_prev, new_m1_ret_diff: ch.new_m1_ret_diff,
         new_wow: ch.new_wow, new_week_wow: ch.new_week_wow, new_mon_wow: ch.new_mon_wow,
         react_wow: ch.react_wow, react_week_wow: ch.react_week_wow,
         churn_diff: ch.churn_diff, churn_week_diff: ch.churn_week_diff, churn_mon_diff: ch.churn_mon_diff,
@@ -3455,10 +3455,10 @@ function getScopeData(data, scope) {
         react_mon_pct: pgm.dau_mon > 0 && pgm.react_mon != null
           ? Math.round(pgm.react_mon / pgm.dau_mon * 1000) / 10 : null,
         d1_ret: pgm.d1_ret, d7_ret: pgm.d7_ret, w1_ret: pgm.w1_ret,
-        new_d1_ret: pgm.new_d1_ret, new_d1_diff: pgm.new_d1_diff,
-        new_d7_ret: pgm.new_d7_ret, new_d7_diff: pgm.new_d7_diff,
-        new_w1_ret: pgm.new_w1_ret, new_w1_diff: pgm.new_w1_diff,
-        new_m1_ret: pgm.new_m1_ret, new_m1_diff: pgm.new_m1_diff,
+        new_d1_ret: pgm.new_d1_ret, new_d1_ret_prev: pgm.new_d1_ret_prev, new_d1_ret_diff: pgm.new_d1_ret_diff,
+        new_d7_ret: pgm.new_d7_ret, new_d7_ret_prev: pgm.new_d7_ret_prev, new_d7_ret_diff: pgm.new_d7_ret_diff,
+        new_w1_ret: pgm.new_w1_ret, new_w1_ret_prev: pgm.new_w1_ret_prev, new_w1_ret_diff: pgm.new_w1_ret_diff,
+        new_m1_ret: pgm.new_m1_ret, new_m1_ret_prev: pgm.new_m1_ret_prev, new_m1_ret_diff: pgm.new_m1_ret_diff,
         new_wow: pgm.new_wow, new_week_wow: pgm.new_week_wow, new_mon_wow: pgm.new_mon_wow,
         react_wow: pgm.react_wow, react_week_wow: pgm.react_week_wow,
         churn_diff: pgm.churn_diff, churn_week_diff: pgm.churn_week_diff, churn_mon_diff: pgm.churn_mon_diff,

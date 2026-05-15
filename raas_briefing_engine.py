@@ -63,134 +63,10 @@ def _pgm_name(code, row=None, default=None):
             return nm
     return default if default is not None else code
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 룩업 필드명 마이그레이션을 위한 alias 매핑.
-# 새 이름(SPL 출력, 2026-04 KPI 명명 규칙) → 옛 이름(엔진/화면이 사용 중인 이름)
-# 화면 점진 전환 후 제거 예정. 단일 신뢰 출처: docs/raas_kpi_dictionary.yaml
-# 의 'note: 이전 이름: <old>' 항목 (총 87개).
-# ─────────────────────────────────────────────────────────────────────────────
-FIELD_ALIASES = {
-    # B. user_size — DAU
-    'dau':                  'dau_today',
-    'dau_prev':             'dau_pw',
-    'dau_chg':              'dau_wow',
-    'dau_d2':               'dau_yday',
-    # B. user_size — WAU (의미적 변경: 옛 이름은 dau_week)
-    'wau':                  'dau_week',
-    'wau_prev':             'dau_week_pw',
-    'wau_chg':              'dau_week_wow',
-    # B. user_size — MAU (의미적 변경: 옛 이름은 dau_mon)
-    'mau':                  'dau_mon',
-    'mau_prev':             'dau_mon_pw',
-    'mau_chg':              'dau_mon_wow',
-    # B. user_size — 롤링 7일 (옛: wau_today)
-    'dau_r7':               'wau_today',
-    'dau_r7_prev':          'wau_pw',
-    # B. user_size — 롤링 30일 (옛: mau_today)
-    'dau_r30':              'mau_today',
-    'dau_r30_prev':         'mau_pw',
-    # B. user_size — 1분/10분 *_prev (이름은 _pw였음)
-    'dau_1min_prev':        'dau_1min_pw',
-    'dau_10min_prev':       'dau_10min_pw',
-    'wau_1min_prev':        'wau_1min_pw',
-    'wau_10min_prev':       'wau_10min_pw',
-    'mau_1min_prev':        'mau_1min_pw',
-    'mau_10min_prev':       'mau_10min_pw',
-    # C. user_growth — new
-    'new':                  'new_today',
-    'new_prev':             'new_pw',
-    'new_chg':              'new_wow',
-    'new_share':            'new_pct',
-    'new_week_prev':        'new_week_pw',
-    'new_week_chg':         'new_week_wow',
-    'new_week_share':       'new_week_pct',
-    'new_mon_prev':         'new_mon_pw',
-    'new_mon_chg':          'new_mon_wow',
-    'new_mon_share':        'new_mon_pct',
-    # C. user_growth — react
-    'react':                'react_today',
-    'react_prev':           'react_pw',
-    'react_chg':            'react_wow',
-    'react_share':          'react_pct',
-    'react_week_prev':      'react_week_pw',
-    'react_week_chg':       'react_week_wow',
-    'react_week_share':     'react_week_pct',
-    'react_mon_prev':       'react_mon_pw',
-    'react_mon_chg':        'react_mon_wow',
-    'react_mon_share':      'react_mon_pct',
-    # D. user_quality — react_rate (값/이름 변경 없음, _pw → _prev만)
-    'react_rate_prev':      'react_rate_pw',
-    'react_rate_week_prev': 'react_rate_week_pw',
-    'react_rate_mon_prev':  'react_rate_mon_pw',
-    # D. user_quality — churn (_rate 접미사 추가)
-    'churn_rate_prev':      'churn_rate_pw',
-    'churn_rate_diff':      'churn_diff',
-    'churn_rate_week':      'churn_week',
-    'churn_rate_week_prev': 'churn_week_pw',
-    'churn_rate_week_diff': 'churn_week_diff',
-    'churn_rate_mon':       'churn_mon',
-    'churn_rate_mon_prev':  'churn_mon_pw',
-    'churn_rate_mon_diff':  'churn_mon_diff',
-    # D. user_quality — deep_rate (_pw → _prev)
-    'deep_rate_prev':       'deep_rate_pw',
-    'deep_rate_week_prev':  'deep_rate_week_pw',
-    'deep_rate_mon_prev':   'deep_rate_mon_pw',
-    # D. user_quality — engage (_rate 접미사 추가)
-    'engage_rate_prev':     'engage_rate_pw',
-    'engage_rate_diff':     'engage_diff',
-    'engage_rate_week':     'engage_week',
-    'engage_rate_week_prev':'engage_week_pw',
-    'engage_rate_week_diff':'engage_week_diff',
-    'engage_rate_mon':      'engage_mon',
-    'engage_rate_mon_prev': 'engage_mon_pw',
-    'engage_rate_mon_diff': 'engage_mon_diff',
-    # E. user_habit — habit (_rate 접미사 추가)
-    'habit_rate_prev':      'habit_rate_pw',
-    'habit_rate_diff':      'habit_diff',
-    'habit_rate_week':      'habit_week',
-    'habit_rate_week_prev': 'habit_week_pw',
-    'habit_rate_week_diff': 'habit_week_diff',
-    'habit_rate_mon':       'habit_mon',
-    'habit_rate_mon_prev':  'habit_mon_pw',
-    'habit_rate_mon_diff':  'habit_mon_diff',
-    # F. user_retention — d1/d7/w1/m1 (_pw → _prev, _diff prefix 통일)
-    'd1_ret_prev':          'd1_ret_pw',
-    'd1_ret_diff':          'd1_diff',
-    'd7_ret_prev':          'd7_ret_pw',
-    'd7_ret_diff':          'd7_diff',
-    'w1_ret_prev':          'w1_ret_pw',
-    'w1_ret_diff':          'w1_diff',
-    'm1_ret_prev':          'm1_ret_pw',
-    'm1_ret_diff':          'm1_diff',
-    'new_d1_ret_prev':      'new_d1_ret_pw',
-    'new_d1_ret_diff':      'new_d1_diff',
-    'new_d7_ret_prev':      'new_d7_ret_pw',
-    'new_d7_ret_diff':      'new_d7_diff',
-    'new_w1_ret_prev':      'new_w1_ret_pw',
-    'new_w1_ret_diff':      'new_w1_diff',
-    'new_m1_ret_prev':      'new_m1_ret_pw',
-    'new_m1_ret_diff':      'new_m1_diff',
-    # A. meta — 편성정보
-    'program_title':        'schedule_title',
-}
+# FIELD_ALIASES removed — engine reads new CSV field names directly
 
 def _alias_row(row):
-    """row dict에 옛 이름 alias 추가. 새 이름 키가 있으면 옛 이름 키에도 같은 값 복사.
-    옛 이름이 이미 존재하면 덮어쓰지 않음 (방어적).
-
-    Phase 5 Step 3: 어댑터의 SSoT를 우선 사용. 어댑터 실패 시 로컬 FIELD_ALIASES fallback.
-    """
-    aliases = None
-    try:
-        from raas_onto import get_adapter
-        aliases = get_adapter().get_legacy_field_aliases()
-        if not aliases:
-            aliases = FIELD_ALIASES
-    except Exception:
-        aliases = FIELD_ALIASES
-    for new_name, old_name in aliases.items():
-        if new_name in row and old_name not in row:
-            row[old_name] = row[new_name]
+    """No-op stub — alias layer removed. Engine reads new CSV field names directly."""
     return row
 
 
@@ -199,7 +75,7 @@ def _load_timeline(search):
     반환: (timeline_dict, source) 튜플.
       timeline_dict: {PGM_CODE: {DATE: row, ...}, ...}
       source: 'splunk' | 'csv_fallback'
-    각 row에는 _alias_row()로 옛 이름 alias가 추가됨 (점진 마이그레이션 호환성).
+    각 row는 CSV 필드명 그대로 사용 (alias 레이어 제거됨).
     """
     source = 'splunk'
     try:
@@ -270,53 +146,53 @@ def build_s1(kpi):
         'date_mon':    t.get('DATE_MON') or '',    # 전월 1일
 
         # ── 일간 (DAU) ────────────────────────────────────────────
-        'dau':         _i(t.get('dau_today')),
-        'dau_prev':    _i(t.get('dau_pw')) or None,         # 신: D-8
-        'dau_chg':     _fn(t.get('dau_wow')),                # 신: 변동률
-        'dau_d2':      _i(t.get('dau_yday')) or None,        # 신: D-2
+        'dau':         _i(t.get('dau')),
+        'dau_prev':    _i(t.get('dau_prev')) or None,        # 신: D-8
+        'dau_chg':     _fn(t.get('dau_chg')),                # 신: 변동률
+        'dau_d2':      _i(t.get('dau_d2')) or None,          # 신: D-2
         # 옛 alias (동일 값)
-        'dau_wow':     _fn(t.get('dau_wow')),
-        'dau_yday':    _i(t.get('dau_yday')) or None,
+        'dau_wow':     _fn(t.get('dau_chg')),
+        'dau_yday':    _i(t.get('dau_d2')) or None,
 
         # ── 주간 누적 (전주 월~일) — 신 wau ────────────────────────
-        'wau':         _i(t.get('dau_week')) or None,
-        'wau_prev':    _i(t.get('dau_week_pw')) or None,
-        'wau_chg':     _fn(t.get('dau_week_wow')),
+        'wau':         _i(t.get('wau')) or None,
+        'wau_prev':    _i(t.get('wau_prev')) or None,
+        'wau_chg':     _fn(t.get('wau_chg')),
         # 옛 alias (동일 의미였음)
-        'dau_week':     _i(t.get('dau_week')) or None,
-        'dau_week_wow': _fn(t.get('dau_week_wow')),
+        'dau_week':     _i(t.get('wau')) or None,
+        'dau_week_wow': _fn(t.get('wau_chg')),
 
         # ── 월간 누적 (전월 1~말일) — 신 mau ───────────────────────
-        'mau':         _i(t.get('dau_mon')) or None,
-        'mau_prev':    _i(t.get('dau_mon_pw')) or None,
-        'mau_chg':     _fn(t.get('dau_mon_wow')),
+        'mau':         _i(t.get('mau')) or None,
+        'mau_prev':    _i(t.get('mau_prev')) or None,
+        'mau_chg':     _fn(t.get('mau_chg')),
         # 옛 alias
-        'dau_mon':      _i(t.get('dau_mon')) or None,
-        'dau_mon_wow':  _fn(t.get('dau_mon_wow')),
+        'dau_mon':      _i(t.get('mau')) or None,
+        'dau_mon_wow':  _fn(t.get('mau_chg')),
 
         # ── 롤링 7일 — 옛 s1.wau의 의미를 흡수 ─────────────────────
         # (예전 코드의 s1.wau "7D 롤링" 의도는 이제 s1.dau_r7로 이동)
-        'dau_r7':      _i(t.get('wau_today')) or None,
-        'dau_r7_prev': _i(t.get('wau_pw')) or None,
+        'dau_r7':      _i(t.get('dau_r7')) or None,
+        'dau_r7_prev': _i(t.get('dau_r7_prev')) or None,
         'dau_r7_chg':  _fn(t.get('dau_r7_chg')),
 
         # ── 롤링 30일 ─────────────────────────────────────────────
-        'dau_r30':      _i(t.get('mau_today')) or None,
-        'dau_r30_prev': _i(t.get('mau_pw')) or None,
+        'dau_r30':      _i(t.get('dau_r30')) or None,
+        'dau_r30_prev': _i(t.get('dau_r30_prev')) or None,
         'dau_r30_chg':  _fn(t.get('dau_r30_chg')),
 
         # ── 신규/복귀 ─────────────────────────────────────────────
-        'new_user':   _i(t.get('new_today')),
-        'new_chg':    _fn(t.get('new_wow')),       # 신
-        'new_share':  _fn(t.get('new_pct')),       # 신
-        'react_user': _i(t.get('react_today')),
-        'react_chg':  _fn(t.get('react_wow')),     # 신
-        'react_share':_fn(t.get('react_pct')),     # 신
+        'new_user':   _i(t.get('new')),
+        'new_chg':    _fn(t.get('new_chg')),       # 신
+        'new_share':  _fn(t.get('new_share')),     # 신
+        'react_user': _i(t.get('react')),
+        'react_chg':  _fn(t.get('react_chg')),     # 신
+        'react_share':_fn(t.get('react_share')),   # 신
         # 옛 alias
-        'new_wow':    _fn(t.get('new_wow')),
-        'new_pct':    _fn(t.get('new_pct')),
-        'react_wow':  _fn(t.get('react_wow')),
-        'react_pct':  _fn(t.get('react_pct')),
+        'new_wow':    _fn(t.get('new_chg')),
+        'new_pct':    _fn(t.get('new_share')),
+        'react_wow':  _fn(t.get('react_chg')),
+        'react_pct':  _fn(t.get('react_share')),
     }
 
 def _funnel_row_metrics(row, period):
@@ -324,33 +200,33 @@ def _funnel_row_metrics(row, period):
     주어진 timeline T00 row에서 period 별로 계산. JS renderFunnel과 동일 산식."""
     if not row: return {}
     if period == 'day':
-        dau      = _f(row.get('dau_today'), 0)
-        dau_prev = _f(row.get('dau_yday'),  0)        # D-1 (어제 DAU)
+        dau      = _f(row.get('dau'), 0)
+        dau_prev = _f(row.get('dau_d2'),  0)          # D-1 (어제 DAU)
         d1_ret   = _fn(row.get('d1_ret'))
-        new_p    = _fn(row.get('new_share'))   if row.get('new_share')   is not None else _fn(row.get('new_pct'))
-        react_p  = _fn(row.get('react_share')) if row.get('react_share') is not None else _fn(row.get('react_pct'))
+        new_p    = _fn(row.get('new_share'))   if row.get('new_share')   is not None else _fn(row.get('new_share'))
+        react_p  = _fn(row.get('react_share')) if row.get('react_share') is not None else _fn(row.get('react_share'))
         churn_p2 = _fn(row.get('churn_rate'))
         if dau and dau_prev and d1_ret is not None:
             maint = dau_prev * d1_ret / 100
         else:
             maint = None
     elif period == 'week':
-        dau      = _f(row.get('dau_week'),    0)
-        dau_prev = _f(row.get('dau_week_pw'), 0)
+        dau      = _f(row.get('wau'),      0)
+        dau_prev = _f(row.get('wau_prev'), 0)
         new_u    = _f(row.get('new_week'),    0)
         react    = _f(row.get('react_week'),  0)
-        new_p    = _fn(row.get('new_week_share'))   if row.get('new_week_share')   is not None else _fn(row.get('new_week_pct'))
-        react_p  = _fn(row.get('react_week_share')) if row.get('react_week_share') is not None else _fn(row.get('react_week_pct'))
-        churn_p2 = _fn(row.get('churn_week'))
+        new_p    = _fn(row.get('new_week_share'))   if row.get('new_week_share')   is not None else _fn(row.get('new_week_share'))
+        react_p  = _fn(row.get('react_week_share')) if row.get('react_week_share') is not None else _fn(row.get('react_week_share'))
+        churn_p2 = _fn(row.get('churn_rate_week'))
         maint    = (dau - new_u - react) if dau else None
     else:  # mon
-        dau      = _f(row.get('dau_mon'),    0)
-        dau_prev = _f(row.get('dau_mon_pw'), 0)
+        dau      = _f(row.get('mau'),      0)
+        dau_prev = _f(row.get('mau_prev'), 0)
         new_u    = _f(row.get('new_mon'),    0)
         react    = _f(row.get('react_mon'),  0)
-        new_p    = _fn(row.get('new_mon_share'))   if row.get('new_mon_share')   is not None else _fn(row.get('new_mon_pct'))
-        react_p  = _fn(row.get('react_mon_share')) if row.get('react_mon_share') is not None else _fn(row.get('react_mon_pct'))
-        churn_p2 = _fn(row.get('churn_mon'))
+        new_p    = _fn(row.get('new_mon_share'))   if row.get('new_mon_share')   is not None else _fn(row.get('new_mon_share'))
+        react_p  = _fn(row.get('react_mon_share')) if row.get('react_mon_share') is not None else _fn(row.get('react_mon_share'))
+        churn_p2 = _fn(row.get('churn_rate_mon'))
         maint    = (dau - new_u - react) if dau else None
     maint_p  = (maint / dau * 100)      if (maint is not None and dau)      else None
     maint_p2 = (maint / dau_prev * 100) if (maint is not None and dau_prev) else None
@@ -388,123 +264,115 @@ def build_s2(kpi, timeline=None, today_date=None):
     s1과 동일하게 신 명명 키 + 옛 키 alias 동시 탑재. 의미 변경:
       - s2.wau / s2.mau (신, 누적) — 신규로 노출 (= 이전 s2.dau_week / s2.dau_mon)
       - 롤링 지표(dau_r7 / dau_r30) 신규 노출 — 듀얼 카드 그래프용
-      - 평균지표(dau_week_avg 등)는 SPL에서 제거됨, 빈 값으로 유지(레거시 화면 호환).
+      - 평균지표(dau_week_avg 등)는 SPL에서 제거됨.
       - timeline이 주어지면 사용자 흐름 셀별 직전기간(D-1/D-7/D-30) pp diff 5×3=15개 노출.
     """
     t = kpi.get('T00', {})
     if not t: return {}
     result = {
         # ── 일간 ──────────────────────────────────────────────────
-        'dau':             _i(t.get('dau_today')),
-        'dau_d2':          _i(t.get('dau_yday')),       # 신
-        'dau_yday':        _i(t.get('dau_yday')),       # 옛 alias
-        'new_user':        _i(t.get('new_today')),
-        'new_chg':         _fn(t.get('new_wow')),       # 신
-        'new_wow':         _fn(t.get('new_wow')),       # 옛 alias
-        'react_user':      _i(t.get('react_today')),
-        'react_chg':       _fn(t.get('react_wow')),     # 신
-        'react_wow':       _fn(t.get('react_wow')),     # 옛 alias
+        'dau':             _i(t.get('dau')),
+        'dau_d2':          _i(t.get('dau_d2')),         # 신
+        'dau_yday':        _i(t.get('dau_d2')),         # 옛 alias
+        'new_user':        _i(t.get('new')),
+        'new_chg':         _fn(t.get('new_chg')),       # 신
+        'new_wow':         _fn(t.get('new_chg')),       # 옛 alias
+        'react_user':      _i(t.get('react')),
+        'react_chg':       _fn(t.get('react_chg')),     # 신
+        'react_wow':       _fn(t.get('react_chg')),     # 옛 alias
         'churn_rate':      _fn(t.get('churn_rate')),
-        'churn_rate_diff': _fn(t.get('churn_diff')),    # 신
-        'churn_diff':      _fn(t.get('churn_diff')),    # 옛 alias
+        'churn_rate_diff': _fn(t.get('churn_rate_diff')),  # 신
+        'churn_diff':      _fn(t.get('churn_rate_diff')),  # 옛 alias
         'react_rate':      _fn(t.get('react_rate')),
         'react_rate_diff': _fn(t.get('react_rate_diff')),
 
         # 유지율 (전체 코호트)
         'd1_ret':          _fn(t.get('d1_ret')),
-        'd1_ret_diff':     _fn(t.get('d1_diff')),       # 신
-        'd1_diff':         _fn(t.get('d1_diff')),       # 옛 alias
+        'd1_ret_diff':     _fn(t.get('d1_ret_diff')),   # 신
+        'd1_diff':         _fn(t.get('d1_ret_diff')),   # 옛 alias
         'd7_ret':          _fn(t.get('d7_ret')),
-        'd7_ret_diff':     _fn(t.get('d7_diff')),       # 신
-        'd7_diff':         _fn(t.get('d7_diff')),       # 옛 alias
+        'd7_ret_diff':     _fn(t.get('d7_ret_diff')),   # 신
+        'd7_diff':         _fn(t.get('d7_ret_diff')),   # 옛 alias
 
-        # 유지율 (신규 코호트) — _diff 신 명칭 추가
+        # 유지율 (신규 코호트)
         'new_d1_ret':      _fn(t.get('new_d1_ret')),
-        'new_d1_ret_pw':   _fn(t.get('new_d1_ret_pw')),
-        'new_d1_ret_diff': _fn(t.get('new_d1_diff')),   # 신
-        'new_d1_diff':     _fn(t.get('new_d1_diff')),   # 옛 alias
+        'new_d1_ret_prev': _fn(t.get('new_d1_ret_prev')),
+        'new_d1_ret_diff': _fn(t.get('new_d1_ret_diff')),
         'new_d7_ret':      _fn(t.get('new_d7_ret')),
-        'new_d7_ret_pw':   _fn(t.get('new_d7_ret_pw')),
-        'new_d7_ret_diff': _fn(t.get('new_d7_diff')),
-        'new_d7_diff':     _fn(t.get('new_d7_diff')),
+        'new_d7_ret_prev': _fn(t.get('new_d7_ret_prev')),
+        'new_d7_ret_diff': _fn(t.get('new_d7_ret_diff')),
         'new_w1_ret':      _fn(t.get('new_w1_ret')),
-        'new_w1_ret_pw':   _fn(t.get('new_w1_ret_pw')),
-        'new_w1_ret_diff': _fn(t.get('new_w1_diff')),
-        'new_w1_diff':     _fn(t.get('new_w1_diff')),
+        'new_w1_ret_prev': _fn(t.get('new_w1_ret_prev')),
+        'new_w1_ret_diff': _fn(t.get('new_w1_ret_diff')),
         'new_m1_ret':      _fn(t.get('new_m1_ret')),
-        'new_m1_ret_pw':   _fn(t.get('new_m1_ret_pw')),
-        'new_m1_ret_diff': _fn(t.get('new_m1_diff')),
-        'new_m1_diff':     _fn(t.get('new_m1_diff')),
+        'new_m1_ret_prev': _fn(t.get('new_m1_ret_prev')),
+        'new_m1_ret_diff': _fn(t.get('new_m1_ret_diff')),
 
-        'new_share':       _fn(t.get('new_pct')),       # 신
-        'new_pct':         _fn(t.get('new_pct')),       # 옛 alias
-        'react_share':     _fn(t.get('react_pct')),     # 신
-        'react_pct':       _fn(t.get('react_pct')),     # 옛 alias
+        'new_share':       _fn(t.get('new_share')),     # 신
+        'new_pct':         _fn(t.get('new_share')),     # 옛 alias
+        'react_share':     _fn(t.get('react_share')),   # 신
+        'react_pct':       _fn(t.get('react_share')),   # 옛 alias
 
         # ── 주간 누적 ────────────────────────────────────────────
-        'wau':                _i(t.get('dau_week')) or None,    # 신
-        'wau_prev':           _i(t.get('dau_week_pw')) or None, # 신 — renderFunnel '직전 활성(전주)'용
-        'wau_chg':            _fn(t.get('dau_week_wow')),       # 신
-        'dau_week':           _i(t.get('dau_week')) or None,    # 옛 alias
-        'dau_week_pw':        _i(t.get('dau_week_pw')) or None, # 옛 alias
-        'dau_week_wow':       _fn(t.get('dau_week_wow')),       # 옛 alias
+        'wau':                _i(t.get('wau')) or None,          # 신
+        'wau_prev':           _i(t.get('wau_prev')) or None,     # 신 — renderFunnel '직전 활성(전주)'용
+        'wau_chg':            _fn(t.get('wau_chg')),             # 신
+        'dau_week':           _i(t.get('wau')) or None,          # 옛 alias
+        'dau_week_pw':        _i(t.get('wau_prev')) or None,     # 옛 alias
+        'dau_week_wow':       _fn(t.get('wau_chg')),             # 옛 alias
         'new_week':           _i(t.get('new_week')) or None,
-        'new_week_chg':       _fn(t.get('new_week_wow')),       # 신
-        'new_week_wow':       _fn(t.get('new_week_wow')),       # 옛 alias
-        'new_week_share':     _fn(t.get('new_week_pct')),       # 신
-        'new_week_pct':       _fn(t.get('new_week_pct')),       # 옛 alias
+        'new_week_chg':       _fn(t.get('new_week_chg')),        # 신
+        'new_week_wow':       _fn(t.get('new_week_chg')),        # 옛 alias
+        'new_week_share':     _fn(t.get('new_week_share')),      # 신
+        'new_week_pct':       _fn(t.get('new_week_share')),      # 옛 alias
         'react_week':         _i(t.get('react_week')) or None,
-        'react_week_chg':     _fn(t.get('react_week_wow')),     # 신
-        'react_week_wow':     _fn(t.get('react_week_wow')),     # 옛 alias
-        'react_week_share':   _fn(t.get('react_week_pct')),     # 신
-        'react_week_pct':     _fn(t.get('react_week_pct')),     # 옛 alias
-        'churn_rate_week':    _fn(t.get('churn_week')),         # 신
-        'churn_rate_week_diff': _fn(t.get('churn_week_diff')),  # 신
-        'churn_week':         _fn(t.get('churn_week')),         # 옛 alias
-        'churn_week_diff':    _fn(t.get('churn_week_diff')),    # 옛 alias
+        'react_week_chg':     _fn(t.get('react_week_chg')),      # 신
+        'react_week_wow':     _fn(t.get('react_week_chg')),      # 옛 alias
+        'react_week_share':   _fn(t.get('react_week_share')),    # 신
+        'react_week_pct':     _fn(t.get('react_week_share')),    # 옛 alias
+        'churn_rate_week':    _fn(t.get('churn_rate_week')),     # 신
+        'churn_rate_week_diff': _fn(t.get('churn_rate_week_diff')),  # 신
+        'churn_week':         _fn(t.get('churn_rate_week')),     # 옛 alias
+        'churn_week_diff':    _fn(t.get('churn_rate_week_diff')), # 옛 alias
         'react_rate_week':    _fn(t.get('react_rate_week')),
         'w1_ret':             _fn(t.get('w1_ret')),
-        'w1_ret_diff':        _fn(t.get('w1_diff')),            # 신
-        'w1_diff':            _fn(t.get('w1_diff')),            # 옛 alias
+        'w1_ret_diff':        _fn(t.get('w1_ret_diff')),         # 신
+        'w1_diff':            _fn(t.get('w1_ret_diff')),         # 옛 alias
 
         # ── 월간 누적 ────────────────────────────────────────────
-        'mau':                _i(t.get('dau_mon')) or None,     # 신
-        'mau_prev':           _i(t.get('dau_mon_pw')) or None,  # 신 — renderFunnel '직전 활성(전월)'용
-        'mau_chg':            _fn(t.get('dau_mon_wow')),        # 신
-        'dau_mon':            _i(t.get('dau_mon')) or None,     # 옛 alias
-        'dau_mon_pw':         _i(t.get('dau_mon_pw')) or None,  # 옛 alias
-        'dau_mon_wow':        _fn(t.get('dau_mon_wow')),        # 옛 alias
+        'mau':                _i(t.get('mau')) or None,          # 신
+        'mau_prev':           _i(t.get('mau_prev')) or None,     # 신 — renderFunnel '직전 활성(전월)'용
+        'mau_chg':            _fn(t.get('mau_chg')),             # 신
+        'dau_mon':            _i(t.get('mau')) or None,          # 옛 alias
+        'dau_mon_pw':         _i(t.get('mau_prev')) or None,     # 옛 alias
+        'dau_mon_wow':        _fn(t.get('mau_chg')),             # 옛 alias
         'new_mon':            _i(t.get('new_mon')) or None,
-        'new_mon_chg':        _fn(t.get('new_mon_wow')),        # 신
-        'new_mon_wow':        _fn(t.get('new_mon_wow')),        # 옛 alias
-        'new_mon_share':      _fn(t.get('new_mon_pct')),        # 신
-        'new_mon_pct':        _fn(t.get('new_mon_pct')),        # 옛 alias
+        'new_mon_chg':        _fn(t.get('new_mon_chg')),         # 신
+        'new_mon_wow':        _fn(t.get('new_mon_chg')),         # 옛 alias
+        'new_mon_share':      _fn(t.get('new_mon_share')),       # 신
+        'new_mon_pct':        _fn(t.get('new_mon_share')),       # 옛 alias
         'react_mon':          _i(t.get('react_mon')) or None,
-        'react_mon_chg':      _fn(t.get('react_mon_wow')),      # 신
-        'react_mon_wow':      _fn(t.get('react_mon_wow')),      # 옛 alias
-        'react_mon_share':    _fn(t.get('react_mon_pct')),      # 신
-        'react_mon_pct':      _fn(t.get('react_mon_pct')),      # 옛 alias
-        'churn_rate_mon':     _fn(t.get('churn_mon')),          # 신
-        'churn_rate_mon_diff':_fn(t.get('churn_mon_diff')),     # 신
-        'churn_mon':          _fn(t.get('churn_mon')),          # 옛 alias
-        'churn_mon_diff':     _fn(t.get('churn_mon_diff')),     # 옛 alias
+        'react_mon_chg':      _fn(t.get('react_mon_chg')),       # 신
+        'react_mon_wow':      _fn(t.get('react_mon_chg')),       # 옛 alias
+        'react_mon_share':    _fn(t.get('react_mon_share')),     # 신
+        'react_mon_pct':      _fn(t.get('react_mon_share')),     # 옛 alias
+        'churn_rate_mon':     _fn(t.get('churn_rate_mon')),      # 신
+        'churn_rate_mon_diff':_fn(t.get('churn_rate_mon_diff')), # 신
+        'churn_mon':          _fn(t.get('churn_rate_mon')),      # 옛 alias
+        'churn_mon_diff':     _fn(t.get('churn_rate_mon_diff')), # 옛 alias
         'react_rate_mon':     _fn(t.get('react_rate_mon')),
         'm1_ret':             _fn(t.get('m1_ret')),
-        'm1_ret_diff':        _fn(t.get('m1_diff')),            # 신
-        'm1_diff':            _fn(t.get('m1_diff')),            # 옛 alias
+        'm1_ret_diff':        _fn(t.get('m1_ret_diff')),         # 신
+        'm1_diff':            _fn(t.get('m1_ret_diff')),         # 옛 alias
 
         # ── 롤링 지표 (신규 노출) ─────────────────────────────────
-        'dau_r7':             _i(t.get('wau_today')) or None,
-        'dau_r7_prev':        _i(t.get('wau_pw')) or None,
+        'dau_r7':             _i(t.get('dau_r7')) or None,
+        'dau_r7_prev':        _i(t.get('dau_r7_prev')) or None,
         'dau_r7_chg':         _fn(t.get('dau_r7_chg')),
-        'dau_r30':            _i(t.get('mau_today')) or None,
-        'dau_r30_prev':       _i(t.get('mau_pw')) or None,
+        'dau_r30':            _i(t.get('dau_r30')) or None,
+        'dau_r30_prev':       _i(t.get('dau_r30_prev')) or None,
         'dau_r30_chg':        _fn(t.get('dau_r30_chg')),
 
-        # ── 평균지표 (SPL에서 제거됨; 레거시 화면 호환을 위해 빈 값 키 유지) ─
-        'dau_week_avg':       _fn(t.get('dau_week_avg')),
-        'dau_mon_avg':        _fn(t.get('dau_mon_avg')),
-        'wau_mon_avg':        _fn(t.get('wau_mon_avg')),
     }
     # 사용자 흐름 셀별 직전기간(D-1/D-7/D-30) pp diff — 5셀 × 3기간 = 15필드
     if timeline and today_date:
@@ -529,28 +397,28 @@ def build_s3(kpi):
             'rate_mon':  round(v10m/v1m*100,2) if v1m and v10m and v1m>0 else None,
         }
     return {
-        'dau':              _i(t.get('dau_today')),
+        'dau':              _i(t.get('dau')),
         'dau_1min':         _i(t.get('dau_1min')),
         'dau_10min':        _i(t.get('dau_10min')),
         'deep_rate':        _fn(t.get('deep_rate')),
         'deep_rate_diff':   _fn(t.get('deep_rate_diff')),
         'engage_rate':      _fn(t.get('engage_rate')),
-        'engage_diff':      _fn(t.get('engage_diff')),
+        'engage_diff':      _fn(t.get('engage_rate_diff')),
         'channel_deep':     ch_deep,
         # 주간
         'wau_1min':             _fn(t.get('wau_1min')),
         'wau_10min':            _fn(t.get('wau_10min')),
         'deep_rate_week':       _fn(t.get('deep_rate_week')),
         'deep_rate_week_diff':  _fn(t.get('deep_rate_week_diff')),
-        'engage_week':          _fn(t.get('engage_week')),
-        'engage_week_diff':     _fn(t.get('engage_week_diff')),
+        'engage_week':          _fn(t.get('engage_rate_week')),
+        'engage_week_diff':     _fn(t.get('engage_rate_week_diff')),
         # 월간
         'mau_1min':             _fn(t.get('mau_1min')),
         'mau_10min':            _fn(t.get('mau_10min')),
         'deep_rate_mon':        _fn(t.get('deep_rate_mon')),
         'deep_rate_mon_diff':   _fn(t.get('deep_rate_mon_diff')),
-        'engage_mon':           _fn(t.get('engage_mon')),
-        'engage_mon_diff':      _fn(t.get('engage_mon_diff')),
+        'engage_mon':           _fn(t.get('engage_rate_mon')),
+        'engage_mon_diff':      _fn(t.get('engage_rate_mon_diff')),
     }
 
 def build_s4(kpi):
@@ -559,23 +427,23 @@ def build_s4(kpi):
     # 프로그램별 습관형성률 TOP3 (신규 500명 이상)
     hl=[]
     for c in ALL:
-        row=kpi.get(c,{}); h=_fn(row.get('habit_rate')); n=_f(row.get('new_today'),0)
+        row=kpi.get(c,{}); h=_fn(row.get('habit_rate')); n=_f(row.get('new'),0)
         if h is not None and n>=500: hl.append({'code':c,'name':_pgm_name(c),'rate':h,'count':int(n)})
     top3=sorted(hl,key=lambda x:x['rate'],reverse=True)[:3]
     return {
-        'new_today':   _i(t.get('new_today')),
-        'new_pct':     _fn(t.get('new_pct')),
+        'new_today':   _i(t.get('new')),
+        'new_pct':     _fn(t.get('new_share')),
         'habit_rate':  _fn(t.get('habit_rate')),
-        'habit_diff':  _fn(t.get('habit_diff')),
+        'habit_diff':  _fn(t.get('habit_rate_diff')),
         'd1_ret':      _fn(t.get('d1_ret')),
         'd7_ret':      _fn(t.get('d7_ret')),
         'top3_habit':  top3,
         # 주간
-        'habit_week':      _fn(t.get('habit_week')),
-        'habit_week_diff': _fn(t.get('habit_week_diff')),
+        'habit_week':      _fn(t.get('habit_rate_week')),
+        'habit_week_diff': _fn(t.get('habit_rate_week_diff')),
         # 월간
-        'habit_mon':       _fn(t.get('habit_mon')),
-        'habit_mon_diff':  _fn(t.get('habit_mon_diff')),
+        'habit_mon':       _fn(t.get('habit_rate_mon')),
+        'habit_mon_diff':  _fn(t.get('habit_rate_mon_diff')),
         # 복귀율
         'react_rate':          _fn(t.get('react_rate')),
         'react_rate_week':     _fn(t.get('react_rate_week')),
@@ -592,10 +460,10 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
         'code':    code,
         'name':    name or _pgm_name(code, row=row),
         'channel': ch_name,
-        'dau':     dau if dau is not None else _i(row.get('dau_today')),
+        'dau':     dau if dau is not None else _i(row.get('dau')),
         # 기간별 규모
-        'dau_week':       _i(row.get('dau_week')),
-        'dau_mon':        _i(row.get('dau_mon')),
+        'dau_week':       _i(row.get('wau')),
+        'dau_mon':        _i(row.get('mau')),
         'dau_1min':       _i(row.get('dau_1min')),
         'dau_10min':      _i(row.get('dau_10min')),
         'wau_1min':       _i(row.get('wau_1min')),
@@ -607,27 +475,39 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
         'deep_rate_week': _fn(row.get('deep_rate_week')),
         'deep_rate_mon':  _fn(row.get('deep_rate_mon')),
         'engage_rate':    _fn(row.get('engage_rate')),
-        'engage_week':    _fn(row.get('engage_week')),
-        'engage_mon':     _fn(row.get('engage_mon')),
+        'engage_week':    _fn(row.get('engage_rate_week')),
+        'engage_mon':     _fn(row.get('engage_rate_mon')),
         'habit_rate':     _fn(row.get('habit_rate')),
-        'habit_week':     _fn(row.get('habit_week')),
-        'habit_mon':      _fn(row.get('habit_mon')),
+        'habit_week':     _fn(row.get('habit_rate_week')),
+        'habit_mon':      _fn(row.get('habit_rate_mon')),
         # 유지율
         'd1_ret':         _fn(row.get('d1_ret')),
         'd7_ret':         _fn(row.get('d7_ret')),
         'w1_ret':         _fn(row.get('w1_ret')),
         'm1_ret':         _fn(row.get('m1_ret')),
+        'new_d1_ret':      _fn(row.get('new_d1_ret')),
+        'new_d1_ret_prev': _fn(row.get('new_d1_ret_prev')),
+        'new_d1_ret_diff': _fn(row.get('new_d1_ret_diff')),
+        'new_d7_ret':      _fn(row.get('new_d7_ret')),
+        'new_d7_ret_prev': _fn(row.get('new_d7_ret_prev')),
+        'new_d7_ret_diff': _fn(row.get('new_d7_ret_diff')),
+        'new_w1_ret':      _fn(row.get('new_w1_ret')),
+        'new_w1_ret_prev': _fn(row.get('new_w1_ret_prev')),
+        'new_w1_ret_diff': _fn(row.get('new_w1_ret_diff')),
+        'new_m1_ret':      _fn(row.get('new_m1_ret')),
+        'new_m1_ret_prev': _fn(row.get('new_m1_ret_prev')),
+        'new_m1_ret_diff': _fn(row.get('new_m1_ret_diff')),
         # 신규/이탈/복귀
-        'new_user':       _i(row.get('new_today')),
-        'new_pct':        _fn(row.get('new_pct')),
+        'new_user':       _i(row.get('new')),
+        'new_pct':        _fn(row.get('new_share')),
         'new_week':       _i(row.get('new_week')),
         'new_mon':        _i(row.get('new_mon')),
-        'new_week_pct':   _fn(row.get('new_week_pct')),
-        'new_mon_pct':    _fn(row.get('new_mon_pct')),
+        'new_week_pct':   _fn(row.get('new_week_share')),
+        'new_mon_pct':    _fn(row.get('new_mon_share')),
         'churn_rate':     _fn(row.get('churn_rate')),
-        'churn_week':     _fn(row.get('churn_week')),
-        'churn_mon':      _fn(row.get('churn_mon')),
-        'react_user':     _i(row.get('react_today')),
+        'churn_week':     _fn(row.get('churn_rate_week')),
+        'churn_mon':      _fn(row.get('churn_rate_mon')),
+        'react_user':     _i(row.get('react')),
         'react_week':     _i(row.get('react_week')),
         'react_mon':      _i(row.get('react_mon')),
         'react_rate':          _fn(row.get('react_rate')),
@@ -638,38 +518,38 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
         'react_rate_mon_diff': _fn(row.get('react_rate_mon_diff')),
         'pgm_name':       row.get('pgm_name',''),
         # 전주 대비 변동
-        'dau_pw':              _fn(row.get('dau_pw')),
-        'dau_wow':             _fn(row.get('dau_wow')),
-        'dau_week_pw':         _fn(row.get('dau_week_pw')),
-        'dau_week_wow':        _fn(row.get('dau_week_wow')),
-        'dau_mon_pw':          _fn(row.get('dau_mon_pw')),
-        'dau_mon_wow':         _fn(row.get('dau_mon_wow')),
-        'new_pw':              _fn(row.get('new_pw')),
-        'new_wow':             _fn(row.get('new_wow')),
-        'new_week_pw':         _fn(row.get('new_week_pw')),
-        'new_week_wow':        _fn(row.get('new_week_wow')),
-        'new_mon_pw':          _fn(row.get('new_mon_pw')),
-        'new_mon_wow':         _fn(row.get('new_mon_wow')),
-        'react_pw':            _fn(row.get('react_pw')),
-        'react_wow':           _fn(row.get('react_wow')),
-        'react_week_pw':       _fn(row.get('react_week_pw')),
-        'react_week_wow':      _fn(row.get('react_week_wow')),
-        'churn_diff':          _fn(row.get('churn_diff')),
-        'churn_week_diff':     _fn(row.get('churn_week_diff')),
-        'churn_mon_diff':      _fn(row.get('churn_mon_diff')),
+        'dau_pw':              _fn(row.get('dau_prev')),
+        'dau_wow':             _fn(row.get('dau_chg')),
+        'dau_week_pw':         _fn(row.get('wau_prev')),
+        'dau_week_wow':        _fn(row.get('wau_chg')),
+        'dau_mon_pw':          _fn(row.get('mau_prev')),
+        'dau_mon_wow':         _fn(row.get('mau_chg')),
+        'new_pw':              _fn(row.get('new_prev')),
+        'new_wow':             _fn(row.get('new_chg')),
+        'new_week_pw':         _fn(row.get('new_week_prev')),
+        'new_week_wow':        _fn(row.get('new_week_chg')),
+        'new_mon_pw':          _fn(row.get('new_mon_prev')),
+        'new_mon_wow':         _fn(row.get('new_mon_chg')),
+        'react_pw':            _fn(row.get('react_prev')),
+        'react_wow':           _fn(row.get('react_chg')),
+        'react_week_pw':       _fn(row.get('react_week_prev')),
+        'react_week_wow':      _fn(row.get('react_week_chg')),
+        'churn_diff':          _fn(row.get('churn_rate_diff')),
+        'churn_week_diff':     _fn(row.get('churn_rate_week_diff')),
+        'churn_mon_diff':      _fn(row.get('churn_rate_mon_diff')),
         'deep_rate_diff':      _fn(row.get('deep_rate_diff')),
         'deep_rate_week_diff': _fn(row.get('deep_rate_week_diff')),
         'deep_rate_mon_diff':  _fn(row.get('deep_rate_mon_diff')),
-        'engage_diff':         _fn(row.get('engage_diff')),
-        'engage_week_diff':    _fn(row.get('engage_week_diff')),
-        'engage_mon_diff':     _fn(row.get('engage_mon_diff')),
-        'habit_diff':          _fn(row.get('habit_diff')),
-        'habit_week_diff':     _fn(row.get('habit_week_diff')),
-        'habit_mon_diff':      _fn(row.get('habit_mon_diff')),
-        'd1_diff':             _fn(row.get('d1_diff')),
-        'd7_diff':             _fn(row.get('d7_diff')),
-        'w1_diff':             _fn(row.get('w1_diff')),
-        'm1_diff':             _fn(row.get('m1_diff')),
+        'engage_diff':         _fn(row.get('engage_rate_diff')),
+        'engage_week_diff':    _fn(row.get('engage_rate_week_diff')),
+        'engage_mon_diff':     _fn(row.get('engage_rate_mon_diff')),
+        'habit_diff':          _fn(row.get('habit_rate_diff')),
+        'habit_week_diff':     _fn(row.get('habit_rate_week_diff')),
+        'habit_mon_diff':      _fn(row.get('habit_rate_mon_diff')),
+        'd1_diff':             _fn(row.get('d1_ret_diff')),
+        'd7_diff':             _fn(row.get('d7_ret_diff')),
+        'w1_diff':             _fn(row.get('w1_ret_diff')),
+        'm1_diff':             _fn(row.get('m1_ret_diff')),
         'guestname':           (row.get('guestname') or '').strip(),
     }
 
@@ -679,7 +559,7 @@ def build_s5(kpi):
          if (k.startswith('F') or k.startswith('L') or k.startswith('M'))
          and k not in ('F00','L00') and len(k)==3
          and k != 'L04'],
-        key=lambda c: _f(kpi[c].get('dau_today'),0), reverse=True
+        key=lambda c: _f(kpi[c].get('dau'),0), reverse=True
     )
     dau_top10    = [_pgm_dict(c, kpi[c], rank=i+1) for i,c in enumerate(all_pgm_codes[:10])]
     all_programs = [_pgm_dict(c, kpi[c]) for c in all_pgm_codes]
@@ -687,13 +567,13 @@ def build_s5(kpi):
     for c in ALL:
         row=kpi.get(c,{}); nm=_pgm_name(c, row=row)
         dr=_fn(row.get('deep_rate')); u1=_f(row.get('dau_1min'),0)
-        n=_f(row.get('new_today'),0); rc=_f(row.get('react_today'),0)
+        n=_f(row.get('new'),0); rc=_f(row.get('react'),0)
         if dr is not None and u1>=500: dl.append({'code':c,'name':nm,'rate':dr,'u1min':int(u1)})
         if n>0: nl.append({'code':c,'name':nm,'count':int(n)})
         if rc>0: rl.append({'code':c,'name':nm,'count':int(rc)})
     risk=[]
     for c in ALL:
-        row=kpi.get(c,{}); ch=_fn(row.get('churn_rate')); w=_fn(row.get('dau_wow')); d=_f(row.get('dau_today'),0)
+        row=kpi.get(c,{}); ch=_fn(row.get('churn_rate')); w=_fn(row.get('dau_chg')); d=_f(row.get('dau'),0)
         if ch and w and d>=1000 and ch>=30 and w<=-5:
             risk.append({'code':c,'name':_pgm_name(c, row=row),'dau':int(d),'churn_rate':ch,'dau_wow':w})
     return {
@@ -710,7 +590,7 @@ def build_s6(kpi):
     t00_share=_f(kpi.get('T00',{}).get('dau_1min'),1) or 1
     chs=[]
     for c in ['T00'] + CH:
-        row=kpi.get(c,{}); d=_f(row.get('dau_today'),0)
+        row=kpi.get(c,{}); d=_f(row.get('dau'),0)
         d_share=_f(row.get('dau_1min'),0)
         # deep_rate 폴백 계산 (1min/10min 직접 비율 우선, 없으면 CSV 값)
         dau_1min  = _i(row.get('dau_1min'))
@@ -730,75 +610,79 @@ def build_s6(kpi):
             'deep_rate':   deep_rate,
             'churn_rate':  _fn(row.get('churn_rate')),
             'react_rate':  _fn(row.get('react_rate')),
-            'new_user':    _i(row.get('new_today')),
-            'new_pct':     _fn(row.get('new_pct')),
+            'new_user':    _i(row.get('new')),
+            'new_pct':     _fn(row.get('new_share')),
             # 주간
-            'dau_week':        _i(row.get('dau_week')),
+            'dau_week':        _i(row.get('wau')),
             'deep_rate_week':  deep_rate_week,
-            'churn_week':      _fn(row.get('churn_week')),
+            'churn_week':      _fn(row.get('churn_rate_week')),
             'react_rate_week': _fn(row.get('react_rate_week')),
             'new_week':        _i(row.get('new_week')),
-            'new_week_pct':    _fn(row.get('new_week_pct')),
+            'new_week_pct':    _fn(row.get('new_week_share')),
             'wau_1min':        wau_1min,
             'wau_10min':       wau_10min,
             # 월간
-            'dau_mon':        _i(row.get('dau_mon')),
+            'dau_mon':        _i(row.get('mau')),
             'deep_rate_mon':  deep_rate_mon,
-            'churn_mon':      _fn(row.get('churn_mon')),
+            'churn_mon':      _fn(row.get('churn_rate_mon')),
             'react_rate_mon': _fn(row.get('react_rate_mon')),
             'new_mon':        _i(row.get('new_mon')),
-            'new_mon_pct':    _fn(row.get('new_mon_pct')),
+            'new_mon_pct':    _fn(row.get('new_mon_share')),
             'mau_1min':       mau_1min,
             'mau_10min':      mau_10min,
             # 추가 지표
             'dau_1min':    _i(row.get('dau_1min')),
             'dau_10min':   _i(row.get('dau_10min')),
             'engage_rate': _fn(row.get('engage_rate')),
-            'engage_week': _fn(row.get('engage_week')),
-            'engage_mon':  _fn(row.get('engage_mon')),
+            'engage_week': _fn(row.get('engage_rate_week')),
+            'engage_mon':  _fn(row.get('engage_rate_mon')),
             'habit_rate':  _fn(row.get('habit_rate')),
-            'habit_week':  _fn(row.get('habit_week')),
-            'habit_mon':   _fn(row.get('habit_mon')),
+            'habit_week':  _fn(row.get('habit_rate_week')),
+            'habit_mon':   _fn(row.get('habit_rate_mon')),
             'd1_ret':      _fn(row.get('d1_ret')),
             'd7_ret':      _fn(row.get('d7_ret')),
             'w1_ret':      _fn(row.get('w1_ret')),
             'm1_ret':      _fn(row.get('m1_ret')),
-            'new_d1_ret':  _fn(row.get('new_d1_ret')),
-            'new_d1_diff': _fn(row.get('new_d1_diff')),
-            'new_d7_ret':  _fn(row.get('new_d7_ret')),
-            'new_d7_diff': _fn(row.get('new_d7_diff')),
-            'new_w1_ret':  _fn(row.get('new_w1_ret')),
-            'new_w1_diff': _fn(row.get('new_w1_diff')),
-            'new_m1_ret':  _fn(row.get('new_m1_ret')),
-            'new_m1_diff': _fn(row.get('new_m1_diff')),
-            'react_user':  _i(row.get('react_today')),
+            'new_d1_ret':       _fn(row.get('new_d1_ret')),
+            'new_d1_ret_prev':  _fn(row.get('new_d1_ret_prev')),
+            'new_d1_ret_diff':  _fn(row.get('new_d1_ret_diff')),
+            'new_d7_ret':       _fn(row.get('new_d7_ret')),
+            'new_d7_ret_prev':  _fn(row.get('new_d7_ret_prev')),
+            'new_d7_ret_diff':  _fn(row.get('new_d7_ret_diff')),
+            'new_w1_ret':       _fn(row.get('new_w1_ret')),
+            'new_w1_ret_prev':  _fn(row.get('new_w1_ret_prev')),
+            'new_w1_ret_diff':  _fn(row.get('new_w1_ret_diff')),
+            'new_m1_ret':       _fn(row.get('new_m1_ret')),
+            'new_m1_ret_prev':  _fn(row.get('new_m1_ret_prev')),
+            'new_m1_ret_diff':  _fn(row.get('new_m1_ret_diff')),
+            'react_user':  _i(row.get('react')),
             'react_week':  _i(row.get('react_week')),
             'react_mon':   _i(row.get('react_mon')),
             # 전주 대비 변동
-            'dau_wow':             _fn(row.get('dau_wow')),
-            'dau_week_wow':        _fn(row.get('dau_week_wow')),
-            'dau_mon_wow':         _fn(row.get('dau_mon_wow')),
-            'new_wow':             _fn(row.get('new_wow')),
-            'new_week_wow':        _fn(row.get('new_week_wow')),
-            'new_mon_wow':         _fn(row.get('new_mon_wow')),
-            'react_wow':           _fn(row.get('react_wow')),
-            'react_week_wow':      _fn(row.get('react_week_wow')),
-            'churn_diff':          _fn(row.get('churn_diff')),
-            'churn_week_diff':     _fn(row.get('churn_week_diff')),
-            'churn_mon_diff':      _fn(row.get('churn_mon_diff')),
+            'dau_wow':             _fn(row.get('dau_chg')),
+            'dau_week_wow':        _fn(row.get('wau_chg')),
+            'dau_mon_wow':         _fn(row.get('mau_chg')),
+            'new_wow':             _fn(row.get('new_chg')),
+            'new_week_wow':        _fn(row.get('new_week_chg')),
+            'new_mon_wow':         _fn(row.get('new_mon_chg')),
+            'react_wow':           _fn(row.get('react_chg')),
+            'react_week_wow':      _fn(row.get('react_week_chg')),
+            'churn_diff':          _fn(row.get('churn_rate_diff')),
+            'churn_week_diff':     _fn(row.get('churn_rate_week_diff')),
+            'churn_mon_diff':      _fn(row.get('churn_rate_mon_diff')),
             'deep_rate_diff':      _fn(row.get('deep_rate_diff')),
             'deep_rate_week_diff': _fn(row.get('deep_rate_week_diff')),
             'deep_rate_mon_diff':  _fn(row.get('deep_rate_mon_diff')),
-            'engage_diff':         _fn(row.get('engage_diff')),
-            'engage_week_diff':    _fn(row.get('engage_week_diff')),
-            'engage_mon_diff':     _fn(row.get('engage_mon_diff')),
-            'habit_diff':          _fn(row.get('habit_diff')),
-            'habit_week_diff':     _fn(row.get('habit_week_diff')),
-            'habit_mon_diff':      _fn(row.get('habit_mon_diff')),
-            'd1_diff':             _fn(row.get('d1_diff')),
-            'd7_diff':             _fn(row.get('d7_diff')),
-            'w1_diff':             _fn(row.get('w1_diff')),
-            'm1_diff':             _fn(row.get('m1_diff')),
+            'engage_diff':         _fn(row.get('engage_rate_diff')),
+            'engage_week_diff':    _fn(row.get('engage_rate_week_diff')),
+            'engage_mon_diff':     _fn(row.get('engage_rate_mon_diff')),
+            'habit_diff':          _fn(row.get('habit_rate_diff')),
+            'habit_week_diff':     _fn(row.get('habit_rate_week_diff')),
+            'habit_mon_diff':      _fn(row.get('habit_rate_mon_diff')),
+            'd1_diff':             _fn(row.get('d1_ret_diff')),
+            'd7_diff':             _fn(row.get('d7_ret_diff')),
+            'w1_diff':             _fn(row.get('w1_ret_diff')),
+            'm1_diff':             _fn(row.get('m1_ret_diff')),
         })
     return {'channels':chs}
 
@@ -960,7 +844,7 @@ def _build_timeseries_insights(timeline, days=7):
     lines = ['', f'[최근 {actual_days}일 시계열 추세]']
 
     # 1. 전체(T00) DAU 추세
-    t00_trend = get_metric_trend(timeline, 'T00', 'dau_today', days=actual_days)
+    t00_trend = get_metric_trend(timeline, 'T00', 'dau', days=actual_days)
     valid = [(d, v) for d, v in t00_trend if v is not None]
     if len(valid) >= 2:
         avg = sum(v for _, v in valid) / len(valid)
@@ -974,7 +858,7 @@ def _build_timeseries_insights(timeline, days=7):
     # 2. 채널별 변화
     lines.append(f'  [채널별 {actual_days}일 변화]')
     for ch in ('F00', 'L00', 'G00', 'P00'):
-        ch_trend = get_metric_trend(timeline, ch, 'dau_today', days=actual_days)
+        ch_trend = get_metric_trend(timeline, ch, 'dau', days=actual_days)
         vl = [(d, v) for d, v in ch_trend if v is not None]
         if len(vl) >= 2:
             fv, lv = vl[0][1], vl[-1][1]
@@ -1002,8 +886,8 @@ def _build_timeseries_insights(timeline, days=7):
             pr = date_rows.get(prev_d)
             if not lr or not pr:
                 continue
-            lv = _f(lr.get('dau_today'), 0)
-            pv = _f(pr.get('dau_today'), 0)
+            lv = _f(lr.get('dau'), 0)
+            pv = _f(pr.get('dau'), 0)
             if pv < 1000:
                 continue
             chg = (lv - pv) / pv * 100
@@ -1023,10 +907,10 @@ def _build_timeseries_insights(timeline, days=7):
     if len(available_dates) >= 4:
         hist_dates = available_dates[-actual_days:-1]
         latest_d = available_dates[-1]
-        hist_dau = [_f(timeline.get('T00', {}).get(d, {}).get('dau_today'), 0)
+        hist_dau = [_f(timeline.get('T00', {}).get(d, {}).get('dau'), 0)
                     for d in hist_dates]
         hist_dau = [v for v in hist_dau if v]
-        latest_dau = _f(timeline.get('T00', {}).get(latest_d, {}).get('dau_today'), 0)
+        latest_dau = _f(timeline.get('T00', {}).get(latest_d, {}).get('dau'), 0)
         if hist_dau and latest_dau:
             avg = sum(hist_dau) / len(hist_dau)
             diff_pct = (latest_dau - avg) / avg * 100 if avg else 0

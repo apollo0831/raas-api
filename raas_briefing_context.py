@@ -41,7 +41,7 @@ def _build_period_focus(period: str, kpi_data: dict) -> str:
             if isinstance(s1.get('dau_week'), (int, float)) else
             f"WAU {_f(s1.get('dau_week'))} (WoW {_f(s1.get('dau_week_wow'))}%)",
             f"주간 신규 {_f(s2.get('new_user_week'),'—')} | 이탈률 {_f(s2.get('churn_week'),'—')}% | 복귀율 {_f(s2.get('react_week'),'—')}%",
-            f"W1 유지율 {_f(s2.get('w1_ret'),'—')}% (전주 대비 {_f(s2.get('new_w1_diff'),'—')}pp)",
+            f"W1 유지율 {_f(s2.get('w1_ret'),'—')}% (전주 대비 {_f(s2.get('new_w1_ret_diff'),'—')}pp)",
             f"주간 깊은청취율 {_f(s3.get('deep_rate_week'),'—')}% | 참여율 {_f(s3.get('engage_week'),'—')}%",
             "→ 01 핵심지표는 WAU 기준으로 작성. 일간 DAU 수치 사용 금지.",
         ]
@@ -53,7 +53,7 @@ def _build_period_focus(period: str, kpi_data: dict) -> str:
             if isinstance(s1.get('dau_mon'), (int, float)) else
             f"MAU {_f(s1.get('dau_mon'))} (MoM {_f(s1.get('dau_mon_wow'))}%)",
             f"월간 신규 {_f(s2.get('new_user_mon'),'—')} | 이탈률 {_f(s2.get('churn_mon'),'—')}% | 복귀율 {_f(s2.get('react_mon'),'—')}%",
-            f"M1 유지율 {_f(s2.get('m1_ret'),'—')}% (전월 대비 {_f(s2.get('new_m1_diff'),'—')}pp)",
+            f"M1 유지율 {_f(s2.get('m1_ret'),'—')}% (전월 대비 {_f(s2.get('new_m1_ret_diff'),'—')}pp)",
             f"월간 깊은청취율 {_f(s3.get('deep_rate_mon'),'—')}% | 참여율 {_f(s3.get('engage_mon'),'—')}%",
             "→ 01 핵심지표는 MAU 기준으로 작성. 일간/주간 수치 사용 금지.",
         ]
