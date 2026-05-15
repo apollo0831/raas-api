@@ -800,6 +800,95 @@ body{
 .period-tabs-wrap { display: none; }
 .period-tabs-wrap.visible { display: flex; width: 100%; }
 
+/* ── 데이터 원장 테이블 ── */
+.raw-scroll-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 230px);
+  border-radius: 8px;
+  border: 1px solid var(--line2);
+  -webkit-overflow-scrolling: touch;
+}
+.raw-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: max-content;
+  font-size: 12px;
+}
+.raw-th {
+  position: sticky;
+  top: 0;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sub);
+  text-align: right;
+  white-space: nowrap;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--line2);
+  z-index: 2;
+}
+.raw-th-grp {
+  position: sticky;
+  top: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,.75);
+  text-align: center;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+  border-right: 1px solid rgba(255,255,255,.12);
+  z-index: 2;
+}
+.raw-th-date {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  text-align: left;
+  color: var(--text);
+  font-size: 12px;
+  background: var(--bg3);
+  border-right: 1px solid var(--line2);
+  min-width: 90px;
+}
+.raw-th-grp-date {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  background: var(--bg3);
+  border-right: 1px solid var(--line2);
+  min-width: 90px;
+}
+.raw-td {
+  padding: 5px 8px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line2);
+  color: var(--text);
+}
+.raw-td-date {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sub);
+  background: var(--bg2);
+  border-right: 1px solid var(--line2);
+  padding: 5px 10px 5px 8px;
+}
+.raw-tr:nth-child(odd) .raw-td { background: var(--bg1); }
+.raw-tr:nth-child(odd) .raw-td-date { background: var(--bg1); }
+.raw-tr:nth-child(even) .raw-td { background: var(--bg2); }
+.raw-tr:nth-child(even) .raw-td-date { background: var(--bg2); }
+.raw-tr:hover .raw-td { background: var(--bg4) !important; }
+.raw-tr:hover .raw-td-date { background: var(--bg4) !important; }
+.raw-status { font-size: 12px; color: var(--sub); padding: 6px 0 4px; }
+
 /* ── 분석 페이지 범위 탭 ── */
 .scope-bar {
   display: flex;
@@ -1097,6 +1186,7 @@ body{
       <button class="pgm-tab" data-tab="habit" onclick="showPgmTab('habit')">습관형성</button>
       <button class="pgm-tab" data-tab="ret" onclick="showPgmTab('ret')">유지</button>
       <button class="pgm-tab" data-tab="engage" onclick="showPgmTab('engage')">참여</button>
+      <button class="pgm-tab" data-tab="real" onclick="showPgmTab('real')">실청취율</button>
       <button class="pgm-tab" data-tab="deep" onclick="showPgmTab('deep')">깊은청취</button>
       <button class="pgm-tab" data-tab="react" onclick="showPgmTab('react')">복귀유도</button>
       <button class="pgm-tab" data-tab="risk" onclick="showPgmTab('risk')">⚠ 이탈주의</button>
@@ -1137,8 +1227,21 @@ body{
 </div>
 
 <div class="page" id="page-settings">
-  <div style="padding:20px;color:#7a8899;text-align:center;margin-top:40px">
-    더보기 페이지 — Phase 4에서 구현
+  <!-- 채널 선택 -->
+  <div class="scope-bar" id="rawScopeBar">
+    <button class="scope-tab active" onclick="setRawScope('T00')" id="raw-scope-T00">전체</button>
+    <button class="scope-tab" onclick="setRawScope('F00')" id="raw-scope-F00">파워FM</button>
+    <button class="scope-tab" onclick="setRawScope('L00')" id="raw-scope-L00">러브FM</button>
+    <button class="scope-tab" onclick="setRawScope('G00')" id="raw-scope-G00">고릴라M</button>
+    <button class="scope-tab" onclick="setRawScope('P00')" id="raw-scope-P00">픽채널</button>
+  </div>
+  <!-- 프로그램 선택 -->
+  <div class="program-bar" id="rawProgramBar"></div>
+  <!-- 상태 표시 -->
+  <div class="raw-status" id="rawStatus">선택 후 로드됩니다</div>
+  <!-- 테이블 -->
+  <div id="rawTableContainer">
+    <div style="padding:30px;color:var(--sub);text-align:center">채널 또는 프로그램을 선택하세요</div>
   </div>
 </div>
 
@@ -1190,6 +1293,9 @@ const diffClass= (v,inv=false) => {
 let _data = null;
 let _scope = 'T00';
 let _period = 'day';
+let _rawScope = 'T00';
+let _rawRows  = [];
+let _rawFetching = false;
 let _briefs = {};  // 기간별 브리핑 캐시 {day, week, mon}
 let _pgmTab = 'dau';
 let _pgmChannel = 'ALL';
@@ -1223,6 +1329,10 @@ function setPeriod(p){
   const analyticsPage = document.getElementById('page-analytics');
   if (analyticsPage?.classList.contains('active') && _data) {
     renderAnalyticsPage(_data);
+  }
+  const settingsPage = document.getElementById('page-settings');
+  if (settingsPage?.classList.contains('active') && _rawRows.length) {
+    renderRawTable();
   }
   const programsPage = document.getElementById('page-programs');
   if (programsPage?.classList.contains('active') && _data) {
@@ -1763,6 +1873,7 @@ async function showHealthChart(metricKey, label) {
   const PERIOD_FIELD = {
     '__active_users__': {day:'dau_today',  week:'wau_today',     mon:'mau_today'},
     'react_rate':       {day:'react_rate', week:'react_rate_week',mon:'react_rate_mon'},
+    'real_rate':        {day:'real_rate',  week:'real_rate_week', mon:'real_rate_mon'},
     'deep_rate':        {day:'deep_rate',  week:'deep_rate_week', mon:'deep_rate_mon'},
     'engage_rate':      {day:'engage_rate',week:'engage_week',    mon:'engage_mon'},
     'churn_rate':       {day:'churn_rate', week:'churn_week',     mon:'churn_mon'},
@@ -2128,6 +2239,12 @@ function renderHealth(s1,s2,s3,s4){
   if(er!=null){
     const sc = er>=5?10:er>=3?8:5;
     scores.push(sc); dots.push({label:'참여율 '+fmtP(er),chartLabel:'참여율',cls:er>=5?'g':er>=3?'y':'r',metric:'engage_rate',score:sc});
+  }
+  // 실청취율 (Tier 2, max 10)
+  const rlr = p==='day'?s3.real_rate : p==='week'?s3.real_rate_week : s3.real_rate_mon;
+  if(rlr!=null){
+    const sc = rlr>=70?10:rlr>=50?8:5;
+    scores.push(sc); dots.push({label:'실청취 '+fmtP(rlr),chartLabel:'실청취율',cls:rlr>=70?'g':rlr>=50?'y':'r',metric:'real_rate',score:sc});
   }
   // 깊은청취율 (Tier 1, max 15)
   const dr = p==='day'?s3.deep_rate : p==='week'?s3.deep_rate_week : s3.deep_rate_mon;
@@ -2703,6 +2820,7 @@ function renderChannels(s6){
     if (v == null) return 'y';
     if (m==='dauW')   return v>0   ? 'g' : v>-5 ? 'y' : 'r';
     if (m==='deep')   return v>=85 ? 'g' : v>=75 ? 'y' : 'r';
+    if (m==='real')   return v>=70 ? 'g' : v>=50 ? 'y' : 'r';
     if (m==='engage') return v>=5  ? 'g' : v>=3  ? 'y' : 'r';
     if (m==='react') {
       const thG = p==='day' ? 5  : p==='week' ? 15 : 25;
@@ -2723,6 +2841,7 @@ function renderChannels(s6){
     const dau   = p==='day' ? ch.dau         : p==='week' ? ch.dau_week         : ch.dau_mon;
     const dauW  = p==='day' ? ch.dau_wow     : p==='week' ? ch.dau_week_wow     : ch.dau_mon_wow;
     const dr    = p==='day' ? ch.deep_rate   : p==='week' ? ch.deep_rate_week   : ch.deep_rate_mon;
+    const rler  = p==='day' ? ch.real_rate   : p==='week' ? ch.real_rate_week   : ch.real_rate_mon;
     const er    = p==='day' ? ch.engage_rate : p==='week' ? ch.engage_week      : ch.engage_mon;
     const cr    = p==='day' ? ch.churn_rate  : p==='week' ? ch.churn_week       : ch.churn_mon;
     const rr    = p==='day' ? ch.react_rate  : p==='week' ? ch.react_rate_week  : ch.react_rate_mon;
@@ -2747,6 +2866,7 @@ function renderChannels(s6){
         <span class="ch-tag ${cls('habit', hr)}">습관형성 ${fmtP(hr)}</span>
         <span class="ch-tag ${cls('ret', ret)}">${retLbl} ${fmtP(ret)}</span>
         <span class="ch-tag ${cls('engage', er)}">참여 ${fmtP(er)}</span>
+        <span class="ch-tag ${cls('real', rler)}">실청취 ${fmtP(rler)}</span>
         <span class="ch-tag ${cls('deep', dr)}">깊은청취 ${fmtP(dr)}</span>
         <span class="ch-tag ${cls('react', rr)}">복귀 ${fmtP(rr)}</span>
         <span class="ch-tag ${cls('churn', cr)}">이탈 ${fmtP(cr)}</span>
@@ -2819,12 +2939,13 @@ function getMetricField(tab, period){
     engage: {day:'engage_rate', week:'engage_week',      mon:'engage_mon'},
     deep:   {day:'deep_rate',   week:'deep_rate_week',   mon:'deep_rate_mon'},
     react:  {day:'react_rate',  week:'react_rate_week',  mon:'react_rate_mon'},
+    real:   {day:'real_rate',   week:'real_rate_week',   mon:'real_rate_mon'},
     risk:   {day:'churn_rate',  week:'churn_week',       mon:'churn_mon'},
   };
   return map[tab]?.[period] || 'dau';
 }
 
-const PCT_TABS = new Set(['deep','risk','habit','ret','engage','react']);
+const PCT_TABS = new Set(['deep','risk','habit','ret','engage','react','real']);
 function fmtChartVal(val, tab){
   if(val==null) return '—';
   if(PCT_TABS.has(tab)) return val.toFixed(1)+'%';
@@ -3416,8 +3537,10 @@ function getScopeData(data, scope) {
         wau_1min: ch.wau_1min, wau_10min: ch.wau_10min,
         mau_1min: ch.mau_1min, mau_10min: ch.mau_10min,
         engage_rate: ch.engage_rate, engage_week: ch.engage_week, engage_mon: ch.engage_mon,
+        real_rate: ch.real_rate, real_rate_week: ch.real_rate_week, real_rate_mon: ch.real_rate_mon,
         deep_rate_diff: ch.deep_rate_diff, deep_rate_week_diff: ch.deep_rate_week_diff, deep_rate_mon_diff: ch.deep_rate_mon_diff,
         engage_diff: ch.engage_diff, engage_week_diff: ch.engage_week_diff, engage_mon_diff: ch.engage_mon_diff,
+        real_rate_diff: ch.real_rate_diff, real_rate_week_diff: ch.real_rate_week_diff, real_rate_mon_diff: ch.real_rate_mon_diff,
       },
       s4_growth: { ...data.s4_growth,
         habit_rate: ch.habit_rate, habit_week: ch.habit_week, habit_mon: ch.habit_mon,
@@ -3471,8 +3594,10 @@ function getScopeData(data, scope) {
         wau_1min: pgm.wau_1min, wau_10min: pgm.wau_10min,
         mau_1min: pgm.mau_1min, mau_10min: pgm.mau_10min,
         engage_rate: pgm.engage_rate, engage_week: pgm.engage_week, engage_mon: pgm.engage_mon,
+        real_rate: pgm.real_rate, real_rate_week: pgm.real_rate_week, real_rate_mon: pgm.real_rate_mon,
         deep_rate_diff: pgm.deep_rate_diff, deep_rate_week_diff: pgm.deep_rate_week_diff, deep_rate_mon_diff: pgm.deep_rate_mon_diff,
         engage_diff: pgm.engage_diff, engage_week_diff: pgm.engage_week_diff, engage_mon_diff: pgm.engage_mon_diff,
+        real_rate_diff: pgm.real_rate_diff, real_rate_week_diff: pgm.real_rate_week_diff, real_rate_mon_diff: pgm.real_rate_mon_diff,
       },
       s4_growth: { ...data.s4_growth,
         habit_rate: pgm.habit_rate, habit_week: pgm.habit_week, habit_mon: pgm.habit_mon,
@@ -3558,7 +3683,7 @@ function renderAnalytics(d) {
 }
 
 // ── 페이지 네비게이션 ──
-const PERIOD_TAB_PAGES = ['home', 'analytics', 'programs'];
+const PERIOD_TAB_PAGES = ['home', 'analytics', 'programs', 'settings'];
 
 function goPage(pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -3574,6 +3699,11 @@ function goPage(pageId) {
   if (pageId === 'analytics' && _data) {
     renderAnalyticsPage(_data);
   }
+  if (pageId === 'settings') {
+    renderRawProgramBar(_rawScope);
+    if (!_rawRows.length) fetchRawData(_rawScope);
+    else renderRawTable();
+  }
   if (pageId === 'ai') loadPopularChips();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -3581,6 +3711,301 @@ function goPage(pageId) {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('periodTabsWrap').classList.add('visible');
 });
+
+// ── 더보기: 데이터 원장 뷰어 ────────────────────────────────────
+
+// 필드 그룹 정의 (period → [{label, color, fields:[{key,label,fmt,inv}]}])
+const RAW_FIELD_GROUPS = {
+  day: [
+    { label:'규모', bg:'#1a3a52', fields:[
+      {key:'dau',         label:'DAU',       fmt:'n'},
+      {key:'dau_prev',    label:'전주DAU',   fmt:'n'},
+      {key:'dau_chg',     label:'WoW(%)',    fmt:'chg'},
+      {key:'dau_d2',      label:'D-2 DAU',   fmt:'n'},
+      {key:'dau_r7',      label:'7일롤링',   fmt:'n'},
+      {key:'dau_r7_chg',  label:'7일WoW',    fmt:'chg'},
+      {key:'dau_r30',     label:'30일롤링',  fmt:'n'},
+    ]},
+    { label:'신규/복귀/이탈', bg:'#1a3a42', fields:[
+      {key:'new',                label:'신규',        fmt:'n'},
+      {key:'new_prev',           label:'신규(전주)',  fmt:'n'},
+      {key:'new_chg',            label:'신규WoW',    fmt:'chg'},
+      {key:'new_share',          label:'신규비율',   fmt:'pct'},
+      {key:'react',              label:'복귀',        fmt:'n'},
+      {key:'react_prev',         label:'복귀(전주)',  fmt:'n'},
+      {key:'react_rate',         label:'복귀율(%)',   fmt:'pct'},
+      {key:'react_rate_prev',    label:'복귀율(전주)',fmt:'pct'},
+      {key:'react_rate_diff',    label:'복귀율Δ',    fmt:'diff'},
+      {key:'churn_rate',         label:'이탈율(%)',   fmt:'pct'},
+      {key:'churn_rate_prev',    label:'이탈율(전주)',fmt:'pct'},
+      {key:'churn_rate_diff',    label:'이탈율Δ',    fmt:'diff', inv:true},
+    ]},
+    { label:'청취 품질', bg:'#1a3d2e', fields:[
+      {key:'dau_1min',           label:'1분이상',     fmt:'n'},
+      {key:'dau_1min_chg',       label:'1분WoW',      fmt:'chg'},
+      {key:'dau_10min',          label:'10분이상',    fmt:'n'},
+      {key:'dau_10min_chg',      label:'10분WoW',     fmt:'chg'},
+      {key:'real_rate',          label:'실청취(%)',   fmt:'pct'},
+      {key:'real_rate_prev',     label:'실청취(전주)',fmt:'pct'},
+      {key:'real_rate_diff',     label:'실청취Δ',    fmt:'diff'},
+      {key:'deep_rate',          label:'깊은청취(%)', fmt:'pct'},
+      {key:'deep_rate_prev',     label:'깊은청취(전주)',fmt:'pct'},
+      {key:'deep_rate_diff',     label:'깊은청취Δ',  fmt:'diff'},
+      {key:'engage_rate',        label:'참여율(%)',   fmt:'pct'},
+      {key:'engage_rate_prev',   label:'참여율(전주)',fmt:'pct'},
+      {key:'engage_rate_diff',   label:'참여율Δ',    fmt:'diff'},
+      {key:'habit_rate',         label:'습관(%)',     fmt:'pct'},
+      {key:'habit_rate_prev',    label:'습관(전주)',  fmt:'pct'},
+      {key:'habit_rate_diff',    label:'습관Δ',      fmt:'diff'},
+    ]},
+    { label:'유지율', bg:'#1a2e45', fields:[
+      {key:'d1_ret',             label:'D1(%)',       fmt:'pct'},
+      {key:'d1_ret_prev',        label:'D1(전주)',    fmt:'pct'},
+      {key:'d1_ret_diff',        label:'D1Δ',        fmt:'diff'},
+      {key:'d7_ret',             label:'D7(%)',       fmt:'pct'},
+      {key:'d7_ret_prev',        label:'D7(전주)',    fmt:'pct'},
+      {key:'d7_ret_diff',        label:'D7Δ',        fmt:'diff'},
+      {key:'new_d1_ret',         label:'신규D1(%)',   fmt:'pct'},
+      {key:'new_d1_ret_prev',    label:'신규D1(전주)',fmt:'pct'},
+      {key:'new_d1_ret_diff',    label:'신규D1Δ',    fmt:'diff'},
+      {key:'new_d7_ret',         label:'신규D7(%)',   fmt:'pct'},
+      {key:'new_d7_ret_prev',    label:'신규D7(전주)',fmt:'pct'},
+      {key:'new_d7_ret_diff',    label:'신규D7Δ',    fmt:'diff'},
+    ]},
+    { label:'메타', bg:'#25253a', fields:[
+      {key:'STIME',          label:'방송시간',  fmt:'s'},
+      {key:'program_title',  label:'코너명',    fmt:'s'},
+      {key:'guestname',      label:'게스트',    fmt:'s'},
+      {key:'daily_corner',   label:'일간코너',  fmt:'s'},
+      {key:'weekly_corner',  label:'주간코너',  fmt:'s'},
+    ]},
+  ],
+  week: [
+    { label:'규모', bg:'#1a3a52', fields:[
+      {key:'wau',               label:'WAU',       fmt:'n'},
+      {key:'wau_prev',          label:'전주WAU',   fmt:'n'},
+      {key:'wau_chg',           label:'WoW(%)',    fmt:'chg'},
+    ]},
+    { label:'신규/복귀/이탈', bg:'#1a3a42', fields:[
+      {key:'new_week',                label:'신규',         fmt:'n'},
+      {key:'new_week_prev',           label:'신규(전주)',   fmt:'n'},
+      {key:'new_week_chg',            label:'신규WoW',     fmt:'chg'},
+      {key:'new_week_share',          label:'신규비율',    fmt:'pct'},
+      {key:'react_week',              label:'복귀',         fmt:'n'},
+      {key:'react_week_prev',         label:'복귀(전주)',   fmt:'n'},
+      {key:'react_rate_week',         label:'복귀율(%)',    fmt:'pct'},
+      {key:'react_rate_week_prev',    label:'복귀율(전주)', fmt:'pct'},
+      {key:'react_rate_week_diff',    label:'복귀율Δ',     fmt:'diff'},
+      {key:'churn_rate_week',         label:'이탈율(%)',    fmt:'pct'},
+      {key:'churn_rate_week_prev',    label:'이탈율(전주)', fmt:'pct'},
+      {key:'churn_rate_week_diff',    label:'이탈율Δ',     fmt:'diff', inv:true},
+    ]},
+    { label:'청취 품질', bg:'#1a3d2e', fields:[
+      {key:'wau_1min',               label:'1분이상',      fmt:'n'},
+      {key:'wau_1min_chg',           label:'1분WoW',       fmt:'chg'},
+      {key:'wau_10min',              label:'10분이상',     fmt:'n'},
+      {key:'wau_10min_chg',          label:'10분WoW',      fmt:'chg'},
+      {key:'real_rate_week',         label:'실청취(%)',    fmt:'pct'},
+      {key:'real_rate_week_prev',    label:'실청취(전주)', fmt:'pct'},
+      {key:'real_rate_week_diff',    label:'실청취Δ',     fmt:'diff'},
+      {key:'deep_rate_week',         label:'깊은청취(%)',  fmt:'pct'},
+      {key:'deep_rate_week_prev',    label:'깊은청취(전주)',fmt:'pct'},
+      {key:'deep_rate_week_diff',    label:'깊은청취Δ',   fmt:'diff'},
+      {key:'engage_rate_week',       label:'참여율(%)',    fmt:'pct'},
+      {key:'engage_rate_week_prev',  label:'참여율(전주)', fmt:'pct'},
+      {key:'engage_rate_week_diff',  label:'참여율Δ',     fmt:'diff'},
+      {key:'habit_rate_week',        label:'습관(%)',      fmt:'pct'},
+      {key:'habit_rate_week_prev',   label:'습관(전주)',   fmt:'pct'},
+      {key:'habit_rate_week_diff',   label:'습관Δ',       fmt:'diff'},
+    ]},
+    { label:'유지율', bg:'#1a2e45', fields:[
+      {key:'w1_ret',              label:'W1(%)',        fmt:'pct'},
+      {key:'w1_ret_prev',         label:'W1(전주)',     fmt:'pct'},
+      {key:'w1_ret_diff',         label:'W1Δ',         fmt:'diff'},
+      {key:'new_w1_ret',          label:'신규W1(%)',    fmt:'pct'},
+      {key:'new_w1_ret_prev',     label:'신규W1(전주)', fmt:'pct'},
+      {key:'new_w1_ret_diff',     label:'신규W1Δ',     fmt:'diff'},
+    ]},
+  ],
+  mon: [
+    { label:'규모', bg:'#1a3a52', fields:[
+      {key:'mau',               label:'MAU',       fmt:'n'},
+      {key:'mau_prev',          label:'전월MAU',   fmt:'n'},
+      {key:'mau_chg',           label:'MoM(%)',    fmt:'chg'},
+    ]},
+    { label:'신규/복귀/이탈', bg:'#1a3a42', fields:[
+      {key:'new_mon',                label:'신규',         fmt:'n'},
+      {key:'new_mon_prev',           label:'신규(전월)',   fmt:'n'},
+      {key:'new_mon_chg',            label:'신규MoM',     fmt:'chg'},
+      {key:'new_mon_share',          label:'신규비율',    fmt:'pct'},
+      {key:'react_mon',              label:'복귀',         fmt:'n'},
+      {key:'react_mon_prev',         label:'복귀(전월)',   fmt:'n'},
+      {key:'react_rate_mon',         label:'복귀율(%)',    fmt:'pct'},
+      {key:'react_rate_mon_prev',    label:'복귀율(전월)', fmt:'pct'},
+      {key:'react_rate_mon_diff',    label:'복귀율Δ',     fmt:'diff'},
+      {key:'churn_rate_mon',         label:'이탈율(%)',    fmt:'pct'},
+      {key:'churn_rate_mon_prev',    label:'이탈율(전월)', fmt:'pct'},
+      {key:'churn_rate_mon_diff',    label:'이탈율Δ',     fmt:'diff', inv:true},
+    ]},
+    { label:'청취 품질', bg:'#1a3d2e', fields:[
+      {key:'mau_1min',               label:'1분이상',      fmt:'n'},
+      {key:'mau_1min_chg',           label:'1분MoM',       fmt:'chg'},
+      {key:'mau_10min',              label:'10분이상',     fmt:'n'},
+      {key:'mau_10min_chg',          label:'10분MoM',      fmt:'chg'},
+      {key:'real_rate_mon',          label:'실청취(%)',    fmt:'pct'},
+      {key:'real_rate_mon_prev',     label:'실청취(전월)', fmt:'pct'},
+      {key:'real_rate_mon_diff',     label:'실청취Δ',     fmt:'diff'},
+      {key:'deep_rate_mon',          label:'깊은청취(%)',  fmt:'pct'},
+      {key:'deep_rate_mon_prev',     label:'깊은청취(전월)',fmt:'pct'},
+      {key:'deep_rate_mon_diff',     label:'깊은청취Δ',   fmt:'diff'},
+      {key:'engage_rate_mon',        label:'참여율(%)',    fmt:'pct'},
+      {key:'engage_rate_mon_prev',   label:'참여율(전월)', fmt:'pct'},
+      {key:'engage_rate_mon_diff',   label:'참여율Δ',     fmt:'diff'},
+      {key:'habit_rate_mon',         label:'습관(%)',      fmt:'pct'},
+      {key:'habit_rate_mon_prev',    label:'습관(전월)',   fmt:'pct'},
+      {key:'habit_rate_mon_diff',    label:'습관Δ',       fmt:'diff'},
+    ]},
+    { label:'유지율', bg:'#1a2e45', fields:[
+      {key:'m1_ret',              label:'M1(%)',        fmt:'pct'},
+      {key:'m1_ret_prev',         label:'M1(전월)',     fmt:'pct'},
+      {key:'m1_ret_diff',         label:'M1Δ',         fmt:'diff'},
+      {key:'new_m1_ret',          label:'신규M1(%)',    fmt:'pct'},
+      {key:'new_m1_ret_prev',     label:'신규M1(전월)', fmt:'pct'},
+      {key:'new_m1_ret_diff',     label:'신규M1Δ',     fmt:'diff'},
+    ]},
+  ],
+};
+
+function setRawScope(code) {
+  _rawScope = code;
+  document.querySelectorAll('#rawScopeBar .scope-tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'raw-scope-' + code));
+  renderRawProgramBar(code);
+  fetchRawData(code);
+}
+
+function renderRawProgramBar(channelCode) {
+  const bar = document.getElementById('rawProgramBar');
+  if (!bar) return;
+  if (channelCode !== 'F00' && channelCode !== 'L00') {
+    bar.innerHTML = '';
+    bar.classList.remove('visible');
+    return;
+  }
+  const allPgms = (_data?.s5_rankings?.all_programs || _data?.s5_rankings?.dau_top10 || []);
+  const prefix  = channelCode === 'F00' ? 'F' : 'L';
+  const programs = allPgms.filter(p => p.code?.startsWith(prefix) && !EXCLUDED_CODES.includes(p.code));
+  if (!programs.length) { bar.classList.remove('visible'); return; }
+  bar.innerHTML = programs.map(p =>
+    `<button class="program-tab" id="raw-prog-${p.code}" onclick="selectRawProgram('${p.code}')">${p.name}</button>`
+  ).join('');
+  bar.classList.add('visible');
+}
+
+function selectRawProgram(code) {
+  _rawScope = code;
+  document.querySelectorAll('#rawProgramBar .program-tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'raw-prog-' + code));
+  fetchRawData(code);
+}
+
+async function fetchRawData(code) {
+  if (_rawFetching) return;
+  _rawFetching = true;
+  const statusEl = document.getElementById('rawStatus');
+  const contEl   = document.getElementById('rawTableContainer');
+  if (statusEl) statusEl.textContent = '불러오는 중...';
+  if (contEl) contEl.innerHTML =
+    '<div style="padding:30px;color:var(--sub);text-align:center">로딩 중...</div>';
+  try {
+    const resp = await fetch(`/api/rawdata?code=${encodeURIComponent(code)}`);
+    const json = await resp.json();
+    if (!json.ok) throw new Error(json.error || '오류');
+    _rawRows = json.rows || [];
+    if (statusEl)
+      statusEl.textContent = `${json.name || code} (${code}) · 총 ${_rawRows.length}행`;
+    renderRawTable();
+  } catch(e) {
+    if (statusEl) statusEl.textContent = '로드 실패: ' + e.message;
+    if (contEl) contEl.innerHTML =
+      `<div style="padding:20px;color:var(--red)">데이터 로드 실패: ${e.message}</div>`;
+  } finally {
+    _rawFetching = false;
+  }
+}
+
+function renderRawTable() {
+  const contEl = document.getElementById('rawTableContainer');
+  if (!contEl) return;
+  if (!_rawRows.length) {
+    contEl.innerHTML = '<div style="padding:30px;color:var(--sub);text-align:center">데이터 없음</div>';
+    return;
+  }
+  const p       = _period;
+  const dateKey = p === 'week' ? 'DATE_WEEK' : p === 'mon' ? 'DATE_MON' : 'DATE';
+  const groups  = RAW_FIELD_GROUPS[p] || [];
+
+  // 주간/월간: dateKey 기준 중복 제거 (DATE 내림차순 정렬 유지 → 가장 최근 DATE 행 우선)
+  let rows = _rawRows;
+  if (p !== 'day') {
+    const seen = new Set();
+    rows = _rawRows.filter(r => {
+      const dk = r[dateKey] || '';
+      if (!dk || seen.has(dk)) return false;
+      seen.add(dk);
+      return true;
+    });
+  }
+
+  // 값 포매팅
+  function fmtCell(val, fmt, inv) {
+    if (val == null || val === '') return '<span style="color:var(--sub)">—</span>';
+    if (fmt === 's') return `<span style="color:var(--text)">${val}</span>`;
+    const n = parseFloat(val);
+    if (isNaN(n)) return '<span style="color:var(--sub)">—</span>';
+    if (fmt === 'n') {
+      if (n >= 10000) return (n/1000).toFixed(1) + 'k';
+      if (n >= 1000)  return n.toLocaleString();
+      return String(Math.round(n));
+    }
+    if (fmt === 'pct') return n.toFixed(1) + '%';
+    if (fmt === 'chg' || fmt === 'diff') {
+      const isGood = inv ? n < 0 : n > 0;
+      const isBad  = inv ? n > 0 : n < 0;
+      const clr = isGood ? 'var(--green)' : isBad ? 'var(--red)' : 'var(--sub)';
+      const sign = n > 0 ? '+' : '';
+      const unit = fmt === 'diff' ? 'pp' : '%';
+      return `<span style="color:${clr}">${sign}${n.toFixed(1)}${unit}</span>`;
+    }
+    return `<span>${val}</span>`;
+  }
+
+  // 헤더 1행: 그룹 span
+  let grpCells = `<th class="raw-th-grp raw-th-grp-date">${p==='week'?'주간일자':p==='mon'?'월간일자':'날짜'}</th>`;
+  // 헤더 2행: 필드명
+  let fldCells = `<th class="raw-th raw-th-date">${p==='week'?'주간일자':p==='mon'?'월간일자':'날짜'}</th>`;
+  for (const g of groups) {
+    grpCells += `<th class="raw-th-grp" colspan="${g.fields.length}" style="background:${g.bg}">${g.label}</th>`;
+    for (const f of g.fields)
+      fldCells += `<th class="raw-th">${f.label}</th>`;
+  }
+
+  // 데이터 행
+  let bodyHTML = '';
+  for (const row of rows) {
+    const dateVal = row[dateKey] || '—';
+    let cells = `<td class="raw-td raw-td-date">${dateVal}</td>`;
+    for (const g of groups)
+      for (const f of g.fields)
+        cells += `<td class="raw-td">${fmtCell(row[f.key], f.fmt, f.inv)}</td>`;
+    bodyHTML += `<tr class="raw-tr">${cells}</tr>`;
+  }
+
+  contEl.innerHTML =
+    `<div class="raw-scroll-wrap"><table class="raw-table">` +
+    `<thead><tr>${grpCells}</tr><tr>${fldCells}</tr></thead>` +
+    `<tbody>${bodyHTML}</tbody></table></div>`;
+}
 
 // 초기 로드
 loadAll();

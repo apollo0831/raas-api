@@ -388,6 +388,25 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path.startswith("/api/rawdata"):
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                code = params.get("code", "T00").upper()
+                timeline = get_cached_timeline()
+                date_rows = timeline.get(code)
+                if date_rows is None:
+                    self.send_json({"ok": False, "error": f"코드 '{code}' 없음"}, 404)
+                    return
+                sorted_rows = sorted(date_rows.values(),
+                                     key=lambda r: r.get("DATE", ""), reverse=True)
+                name = BE.PGM_NAMES.get(code, code)
+                self.send_json({"ok": True, "code": code, "name": name,
+                                "count": len(sorted_rows), "rows": sorted_rows})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/status":
             self.send_json({"ok": True, "server": "RAAS",
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})

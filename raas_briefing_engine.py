@@ -395,6 +395,9 @@ def build_s3(kpi):
             'rate':      _fn(row.get('deep_rate')),
             'rate_week': round(v10w/v1w*100,2) if v1w and v10w and v1w>0 else None,
             'rate_mon':  round(v10m/v1m*100,2) if v1m and v10m and v1m>0 else None,
+            'real_rate':      _fn(row.get('real_rate')),
+            'real_rate_week': _fn(row.get('real_rate_week')),
+            'real_rate_mon':  _fn(row.get('real_rate_mon')),
         }
     return {
         'dau':              _i(t.get('dau')),
@@ -419,6 +422,16 @@ def build_s3(kpi):
         'deep_rate_mon_diff':   _fn(t.get('deep_rate_mon_diff')),
         'engage_mon':           _fn(t.get('engage_rate_mon')),
         'engage_mon_diff':      _fn(t.get('engage_rate_mon_diff')),
+        # 실청취율
+        'real_rate':           _fn(t.get('real_rate')),
+        'real_rate_prev':      _fn(t.get('real_rate_prev')),
+        'real_rate_diff':      _fn(t.get('real_rate_diff')),
+        'real_rate_week':      _fn(t.get('real_rate_week')),
+        'real_rate_week_prev': _fn(t.get('real_rate_week_prev')),
+        'real_rate_week_diff': _fn(t.get('real_rate_week_diff')),
+        'real_rate_mon':       _fn(t.get('real_rate_mon')),
+        'real_rate_mon_prev':  _fn(t.get('real_rate_mon_prev')),
+        'real_rate_mon_diff':  _fn(t.get('real_rate_mon_diff')),
     }
 
 def build_s4(kpi):
@@ -480,6 +493,9 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
         'habit_rate':     _fn(row.get('habit_rate')),
         'habit_week':     _fn(row.get('habit_rate_week')),
         'habit_mon':      _fn(row.get('habit_rate_mon')),
+        'real_rate':      _fn(row.get('real_rate')),
+        'real_rate_week': _fn(row.get('real_rate_week')),
+        'real_rate_mon':  _fn(row.get('real_rate_mon')),
         # 유지율
         'd1_ret':         _fn(row.get('d1_ret')),
         'd7_ret':         _fn(row.get('d7_ret')),
@@ -546,6 +562,9 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
         'habit_diff':          _fn(row.get('habit_rate_diff')),
         'habit_week_diff':     _fn(row.get('habit_rate_week_diff')),
         'habit_mon_diff':      _fn(row.get('habit_rate_mon_diff')),
+        'real_rate_diff':          _fn(row.get('real_rate_diff')),
+        'real_rate_week_diff':     _fn(row.get('real_rate_week_diff')),
+        'real_rate_mon_diff':      _fn(row.get('real_rate_mon_diff')),
         'd1_diff':             _fn(row.get('d1_ret_diff')),
         'd7_diff':             _fn(row.get('d7_ret_diff')),
         'w1_diff':             _fn(row.get('w1_ret_diff')),
@@ -636,6 +655,9 @@ def build_s6(kpi):
             'engage_rate': _fn(row.get('engage_rate')),
             'engage_week': _fn(row.get('engage_rate_week')),
             'engage_mon':  _fn(row.get('engage_rate_mon')),
+            'real_rate':       _fn(row.get('real_rate')),
+            'real_rate_week':  _fn(row.get('real_rate_week')),
+            'real_rate_mon':   _fn(row.get('real_rate_mon')),
             'habit_rate':  _fn(row.get('habit_rate')),
             'habit_week':  _fn(row.get('habit_rate_week')),
             'habit_mon':   _fn(row.get('habit_rate_mon')),
@@ -679,6 +701,9 @@ def build_s6(kpi):
             'habit_diff':          _fn(row.get('habit_rate_diff')),
             'habit_week_diff':     _fn(row.get('habit_rate_week_diff')),
             'habit_mon_diff':      _fn(row.get('habit_rate_mon_diff')),
+            'real_rate_diff':          _fn(row.get('real_rate_diff')),
+            'real_rate_week_diff':     _fn(row.get('real_rate_week_diff')),
+            'real_rate_mon_diff':      _fn(row.get('real_rate_mon_diff')),
             'd1_diff':             _fn(row.get('d1_ret_diff')),
             'd7_diff':             _fn(row.get('d7_ret_diff')),
             'w1_diff':             _fn(row.get('w1_ret_diff')),
