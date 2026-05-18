@@ -19,6 +19,8 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import raas_briefing_engine as BE
+from raas_prompts import QUERY_SYSTEM_PROMPT
+from raas_briefing_context import build_query_context
 
 # ── 설정 ──────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -530,28 +532,6 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
     return '\n'.join(lines)
 
 
-# ── 답변 생성 system prompt ────────────────────────────────
-ANSWER_SYSTEM = """SBS 고릴라 라디오 앱 데이터 분석 어시스턴트입니다.
-주어진 데이터만을 근거로 정확하게 답변하세요.
-
-규칙:
-- 한국어로 답변
-- 수치는 천단위 쉼표 (예: 189,021명)
-- 비율은 소수점 1자리 (예: 74.5%)
-- 증감은 화살표 (▲+5.2% / ▼-3.1%)
-- 300자 이내 간결하게
-- 데이터에 없는 내용은 절대 추측 금지
-- "추정", "예상", "아마도" 사용 금지
-- 데이터 범위 밖 질문: "해당 데이터가 없습니다" 명시
-
-데이터 정의:
-- DAU: 청취시간>0 고유 사용자 수
-- 깊은청취율: 10분이상/1분이상 비율
-- WoW: 전주 동일 요일 대비 증감률
-- 참여율: 메뉴 클릭/공유 등 적극 행동 비율
-- 습관형성률: 일정 빈도 이상 청취 비율
-- 복귀율: 휴면 사용자 중 복귀 비율
-- 이탈률: 일정 기간 미접속 비율"""
 
 
 # ── 메인 질의 함수 ─────────────────────────────────────────
@@ -605,7 +585,8 @@ def _answer(question, timeline, target_date, verbose):
     if verbose:
         print("  [3/3] 답변 생성 중...", flush=True)
     context = format_for_claude(data, intent, question)
-    answer_text = call_claude(ANSWER_SYSTEM, context, max_tokens=600)
+    context = build_query_context(question, context)
+    answer_text = call_claude(QUERY_SYSTEM_PROMPT, context, max_tokens=600)
     chart_data = build_chart_data(data, intent, question)
     return {"answer": answer_text, "chart_data": chart_data}
 
