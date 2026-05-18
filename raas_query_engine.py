@@ -57,10 +57,11 @@ KEYWORD_TO_CODE = _build_keyword_index()
 
 # ── 차트 빌더 ──────────────────────────────────────────────
 _METRIC_LABELS = {
-    'dau_today':   ('DAU',       '명'),
-    'new_today':   ('신규 유입',  '명'),
-    'react_today': ('복귀 사용자','명'),
+    'dau':         ('DAU',        '명'),
+    'new':         ('신규 유입',  '명'),
+    'react':       ('복귀 사용자','명'),
     'deep_rate':   ('깊은청취율', '%'),
+    'real_rate':   ('실청취율',   '%'),
     'engage_rate': ('참여율',     '%'),
     'habit_rate':  ('습관형성률', '%'),
     'churn_rate':  ('이탈률',     '%'),
@@ -177,6 +178,46 @@ def build_chart_data(data: dict, intent: dict, question: str):
                     source=f"snapshot:{date_max}"
                 )
 
+        # funnel → 신규/복귀/이탈 비율 comparison
+        if intent_type == 'funnel' and data.get('funnel'):
+            f = data['funnel']
+            items = []
+            if f.get('new_share') is not None:
+                items.append({'label': '신규', 'value': round(f['new_share'], 1)})
+            if f.get('react_share') is not None:
+                items.append({'label': '복귀', 'value': round(f['react_share'], 1)})
+            if f.get('churn_rate') is not None:
+                items.append({'label': '이탈', 'value': round(f['churn_rate'], 1)})
+            if len(items) >= 2:
+                return build_chart_comparison(
+                    title="사용자 흐름 비율",
+                    metric="비율", unit="%",
+                    date=date_max, items=items,
+                    source=f"funnel:{date_max}"
+                )
+
+        # engagement → 깊은청취율 timeseries
+        if intent_type == 'engagement' and data.get('engagement_trend'):
+            pts = [{"date": d.replace('/', '-'), "value": v}
+                   for d, v in data['engagement_trend'] if v is not None]
+            return build_chart_timeseries(
+                title=f"{scope_name} 깊은청취율 추이",
+                metric="깊은청취율", unit="%", points=pts,
+                source=f"timeline:{scope}/deep_rate"
+            )
+
+        # growth → 습관형성률 TOP3 comparison
+        if intent_type == 'growth' and data.get('growth', {}).get('top3_habit'):
+            top3 = data['growth']['top3_habit']
+            items = [{'label': p.get('name', '?'), 'value': p['rate']} for p in top3 if p.get('rate') is not None]
+            if len(items) >= 2:
+                return build_chart_comparison(
+                    title="습관형성률 TOP3",
+                    metric="습관형성률", unit="%",
+                    date=date_max, items=items,
+                    source=f"growth:{date_max}"
+                )
+
         # general / snapshot: 질문 키워드 기반 fallback
         q = question.lower()
         trend_kw   = ["추세", "추이", "변화", "최근", "지난주", "이번 주", "트렌드", "흐름"]
@@ -233,10 +274,10 @@ INTENT_SYSTEM = """RAAS 데이터 분석 시스템의 질의 분류기입니다.
 
 응답 형식:
 {
-  "intent": "snapshot|trend|compare|ranking|health|general",
+  "intent": "snapshot|trend|compare|ranking|health|funnel|engagement|growth|anomaly|report|general",
   "scope": "T00|F00|L00|G00|P00 또는 PGM_CODE 또는 null",
   "scope_keyword": "사용자가 언급한 채널/프로그램 키워드 또는 null",
-  "metric": "dau|deep|new|react|churn|engage|habit|all",
+  "metric": "dau|deep|new|react|churn|engage|habit|real|all",
   "date_type": "yesterday|today|specific|range",
   "specific_date": "YYYY/MM/DD 또는 null",
   "days": 7,
@@ -244,19 +285,24 @@ INTENT_SYSTEM = """RAAS 데이터 분석 시스템의 질의 분류기입니다.
 }
 
 intent 정의:
-- snapshot: 특정 날짜 단일 시점 (어제 DAU, 어제 가장 많이 들은 프로그램)
-- trend: 추세 (최근 N일 흐름, 오르고 있는 프로그램)
-- compare: 비교 (파워FM vs 러브FM, 어제 vs 그저께)
-- ranking: 순위 (TOP N)
-- health: 전체 건강도/상태 (잘 되고 있어?, 위험한 프로그램?)
-- general: 기타
+- snapshot: 특정 날짜 단일 시점 (어제 DAU, 오늘 현황)
+- trend: 추세/흐름 (최근 N일 변화, 오르고 있나)
+- compare: 채널/기간 비교 (파워FM vs 러브FM)
+- ranking: 순위 TOP N (가장 많이 들은 프로그램)
+- health: 건강도/위험 프로그램 (잘 되고 있어? 위험한 거 있어?)
+- funnel: 사용자 흐름 (신규·유지·이탈·복귀 비율, D1/D7/W1/M1 유지율, 리텐션, 코호트)
+- engagement: 청취 품질 (깊은청취율, 실청취율, 참여율, 몰입도)
+- growth: 성장 지표 (습관형성률, 복귀율, 신규코호트 유지)
+- anomaly: 이상 감지 (경보, 알림, 이상 있어?, 급락/급등)
+- report: 종합 리포트 (전체 현황 요약, 브리핑, 모두 보여줘)
+- general: 기타 (위 분류에 해당 없음)
 
 scope 결정:
-- 채널 언급 시: F00/L00/G00/P00
+- 채널 언급 시: F00(파워FM) / L00(러브FM) / G00(고릴라M) / P00(픽채널)
 - "전체" 또는 미언급 시: T00
 - 프로그램 언급 시: scope_keyword에 키워드 입력
 
-metric: dau/deep/new/react/churn/engage/habit/all (명시 없으면 all)
+metric: dau/deep/new/react/churn/engage/habit/real/all (명시 없으면 all)
 days: 기간 명시 없으면 7"""
 
 
@@ -318,7 +364,7 @@ def _fmt_arrow(v):
     return f"(+){v:.1f}%" if v > 0 else (f"(-){v:.1f}%" if v < 0 else "보합")
 
 
-def extract_data(timeline, intent: dict) -> dict:
+def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
     if not timeline:
         return {'error': 'timeline 없음'}
     available_dates = BE.get_available_dates(timeline)
@@ -348,25 +394,27 @@ def extract_data(timeline, intent: dict) -> dict:
         row = timeline.get(scope, {}).get(latest_date, {})
         data['snapshot'] = {
             'date': latest_date,
-            'dau':         BE._i(row.get('dau_today')),
-            'dau_wow':     BE._fn(row.get('dau_wow')),
+            'dau':         BE._i(row.get('dau')),
+            'dau_wow':     BE._fn(row.get('dau_chg')),
             'deep_rate':   BE._fn(row.get('deep_rate')),
+            'real_rate':   BE._fn(row.get('real_rate')),
             'engage_rate': BE._fn(row.get('engage_rate')),
             'habit_rate':  BE._fn(row.get('habit_rate')),
             'churn_rate':  BE._fn(row.get('churn_rate')),
-            'new_user':    BE._i(row.get('new_today')),
-            'react_user':  BE._i(row.get('react_today')),
+            'new_user':    BE._i(row.get('new')),
+            'react_user':  BE._i(row.get('react')),
             'react_rate':  BE._fn(row.get('react_rate')),
         }
 
     # trend
-    if intent_type in ('trend', 'general', 'health'):
+    if intent_type in ('trend', 'general', 'health', 'engagement'):
         field_map = {
-            'dau': 'dau_today', 'deep': 'deep_rate', 'new': 'new_today',
-            'react': 'react_today', 'churn': 'churn_rate',
-            'engage': 'engage_rate', 'habit': 'habit_rate', 'all': 'dau_today'
+            'dau': 'dau', 'deep': 'deep_rate', 'new': 'new',
+            'react': 'react', 'churn': 'churn_rate',
+            'engage': 'engage_rate', 'habit': 'habit_rate',
+            'real': 'real_rate', 'all': 'dau'
         }
-        mf = field_map.get(metric, 'dau_today')
+        mf = field_map.get(metric, 'dau')
         trend_data = BE.get_metric_trend(timeline, scope, mf, days=days)
         data['trend'] = {'metric_field': mf, 'days': len(trend_data), 'data': trend_data}
 
@@ -381,14 +429,14 @@ def extract_data(timeline, intent: dict) -> dict:
             row = date_rows.get(latest_date)
             if not row:
                 continue
-            dau = BE._i(row.get('dau_today'))
+            dau = BE._i(row.get('dau'))
             if not dau or dau <= 0:
                 continue
             rows.append({
                 'code': code, 'name': BE._pgm_name(code, row=row), 'dau': dau,
                 'deep_rate': BE._fn(row.get('deep_rate')),
                 'churn_rate': BE._fn(row.get('churn_rate')),
-                'dau_wow': BE._fn(row.get('dau_wow')),
+                'dau_wow': BE._fn(row.get('dau_chg')),
             })
         rows.sort(key=lambda x: x['dau'], reverse=True)
         data['ranking'] = rows[:10]
@@ -428,9 +476,9 @@ def extract_data(timeline, intent: dict) -> dict:
                     continue
                 # 어댑터 룰은 dau/churn_rate/dau_chg 사용 (alias된 row가 들어와야 함)
                 snapshot[code] = {
-                    'dau':         BE._i(row.get('dau_today')),
+                    'dau':         BE._i(row.get('dau')),
                     'churn_rate':  BE._fn(row.get('churn_rate')),
-                    'dau_chg':     BE._fn(row.get('dau_wow')),
+                    'dau_chg':     BE._fn(row.get('dau_chg')),
                 }
             adapter_risks = get_adapter().find_at_risk_programs(snapshot)
             # 어댑터 결과를 quey_engine 포맷으로 변환 (name/dau_wow 키 호환)
@@ -442,9 +490,9 @@ def extract_data(timeline, intent: dict) -> dict:
                     risks.append({
                         'code': code,
                         'name': BE._pgm_name(code, row=row),
-                        'dau':        BE._i(row.get('dau_today')),
+                        'dau':        BE._i(row.get('dau')),
                         'churn_rate': BE._fn(row.get('churn_rate')),
-                        'dau_wow':    BE._fn(row.get('dau_wow')),
+                        'dau_wow':    BE._fn(row.get('dau_chg')),
                     })
         except Exception:
             risks = None
@@ -456,8 +504,8 @@ def extract_data(timeline, intent: dict) -> dict:
                     continue
                 row = date_rows.get(latest_date, {})
                 churn = BE._fn(row.get('churn_rate'))
-                wow   = BE._fn(row.get('dau_wow'))
-                dau   = BE._i(row.get('dau_today'))
+                wow   = BE._fn(row.get('dau_chg'))
+                dau   = BE._i(row.get('dau'))
                 if churn and wow and dau and dau >= 1000 and churn >= 30 and wow <= -5:
                     risks.append({
                         'code': code, 'name': BE._pgm_name(code, row=row),
@@ -465,6 +513,150 @@ def extract_data(timeline, intent: dict) -> dict:
                     })
         risks.sort(key=lambda x: x.get('dau_wow') or 0)
         data['risks'] = risks[:5]
+
+    # ── 신규 intent: briefing_data 우선, timeline fallback ──────────
+    bd = briefing_data or {}
+
+    # funnel — s2_funnel 우선
+    if intent_type == 'funnel':
+        if bd.get('s2_funnel'):
+            data['funnel'] = bd['s2_funnel']
+        else:
+            latest_date = available_dates[-1]
+            row = timeline.get('T00', {}).get(latest_date, {})
+            data['funnel'] = {
+                'dau':              BE._i(row.get('dau')),
+                'new_user':         BE._i(row.get('new')),
+                'new_share':        BE._fn(row.get('new_share')),
+                'new_wow':          BE._fn(row.get('new_chg')),
+                'react_user':       BE._i(row.get('react')),
+                'react_share':      BE._fn(row.get('react_share')),
+                'react_rate':       BE._fn(row.get('react_rate')),
+                'churn_rate':       BE._fn(row.get('churn_rate')),
+                'churn_diff':       BE._fn(row.get('churn_rate_diff')),
+                'd1_ret':           BE._fn(row.get('d1_ret')),
+                'd1_ret_diff':      BE._fn(row.get('d1_ret_diff')),
+                'd7_ret':           BE._fn(row.get('d7_ret')),
+                'new_d1_ret':       BE._fn(row.get('new_d1_ret')),
+                'new_d7_ret':       BE._fn(row.get('new_d7_ret')),
+                'new_w1_ret':       BE._fn(row.get('new_w1_ret')),
+                'new_m1_ret':       BE._fn(row.get('new_m1_ret')),
+                'new_week':         BE._i(row.get('new_week')),
+                'new_week_share':   BE._fn(row.get('new_week_share')),
+                'churn_rate_week':  BE._fn(row.get('churn_rate_week')),
+                'w1_ret':           BE._fn(row.get('w1_ret')),
+                'react_week':       BE._i(row.get('react_week')),
+                'react_rate_week':  BE._fn(row.get('react_rate_week')),
+                'new_mon':          BE._i(row.get('new_mon')),
+                'new_mon_share':    BE._fn(row.get('new_mon_share')),
+                'churn_rate_mon':   BE._fn(row.get('churn_rate_mon')),
+                'm1_ret':           BE._fn(row.get('m1_ret')),
+                'react_mon':        BE._i(row.get('react_mon')),
+                'react_rate_mon':   BE._fn(row.get('react_rate_mon')),
+            }
+
+    # engagement — s3_engagement 우선; 추세 차트용 trend도 함께 수집
+    if intent_type == 'engagement':
+        if bd.get('s3_engagement'):
+            data['engagement'] = bd['s3_engagement']
+        else:
+            latest_date = available_dates[-1]
+            row = timeline.get('T00', {}).get(latest_date, {})
+            data['engagement'] = {
+                'dau_1min':          BE._i(row.get('dau_1min')),
+                'dau_10min':         BE._i(row.get('dau_10min')),
+                'deep_rate':         BE._fn(row.get('deep_rate')),
+                'deep_rate_diff':    BE._fn(row.get('deep_rate_diff')),
+                'deep_rate_week':    BE._fn(row.get('deep_rate_week')),
+                'deep_rate_mon':     BE._fn(row.get('deep_rate_mon')),
+                'real_rate':         BE._fn(row.get('real_rate')),
+                'real_rate_diff':    BE._fn(row.get('real_rate_diff')),
+                'real_rate_week':    BE._fn(row.get('real_rate_week')),
+                'real_rate_mon':     BE._fn(row.get('real_rate_mon')),
+                'engage_rate':       BE._fn(row.get('engage_rate')),
+                'engage_week':       BE._fn(row.get('engage_rate_week')),
+                'engage_mon':        BE._fn(row.get('engage_rate_mon')),
+            }
+        # 깊은청취율 trend (차트용)
+        dr_trend = BE.get_metric_trend(timeline, scope, 'deep_rate', days=days)
+        data['engagement_trend'] = dr_trend
+
+    # growth — s4_growth 우선
+    if intent_type == 'growth':
+        if bd.get('s4_growth'):
+            data['growth'] = bd['s4_growth']
+        else:
+            latest_date = available_dates[-1]
+            row = timeline.get('T00', {}).get(latest_date, {})
+            data['growth'] = {
+                'habit_rate':       BE._fn(row.get('habit_rate')),
+                'habit_diff':       BE._fn(row.get('habit_rate_diff')),
+                'habit_week':       BE._fn(row.get('habit_rate_week')),
+                'habit_mon':        BE._fn(row.get('habit_rate_mon')),
+                'react_rate':       BE._fn(row.get('react_rate')),
+                'react_rate_week':  BE._fn(row.get('react_rate_week')),
+                'react_rate_mon':   BE._fn(row.get('react_rate_mon')),
+                'top3_habit':       [],
+            }
+
+    # anomaly — s7_anomalies 우선
+    if intent_type == 'anomaly':
+        if bd.get('s7_anomalies'):
+            data['anomalies'] = bd['s7_anomalies']
+        else:
+            data['anomalies'] = {'alerts': [{'level': 'green', 'msg': '브리핑 데이터 없음 — timeline 기준 이상 감지 불가'}]}
+
+    # report — 전 섹션 묶음 (briefing_data 우선, 없으면 timeline snapshot 보강)
+    if intent_type == 'report':
+        data['report'] = {
+            's1': bd.get('s1_executive', {}),
+            's2': bd.get('s2_funnel', {}),
+            's3': bd.get('s3_engagement', {}),
+            's4': bd.get('s4_growth', {}),
+            's5': bd.get('s5_rankings', {}),
+            's6': bd.get('s6_channels', {}),
+            's7': bd.get('s7_anomalies', {}),
+        }
+        # briefing_data 없으면 timeline 기반 snapshot·ranking도 함께 추출
+        if not bd:
+            latest_date = available_dates[-1]
+            row = timeline.get('T00', {}).get(latest_date, {})
+            if not data.get('snapshot'):
+                data['snapshot'] = {
+                    'date': latest_date,
+                    'dau':         BE._i(row.get('dau')),
+                    'dau_wow':     BE._fn(row.get('dau_chg')),
+                    'deep_rate':   BE._fn(row.get('deep_rate')),
+                    'real_rate':   BE._fn(row.get('real_rate')),
+                    'engage_rate': BE._fn(row.get('engage_rate')),
+                    'habit_rate':  BE._fn(row.get('habit_rate')),
+                    'churn_rate':  BE._fn(row.get('churn_rate')),
+                    'new_user':    BE._i(row.get('new')),
+                    'react_user':  BE._i(row.get('react')),
+                    'react_rate':  BE._fn(row.get('react_rate')),
+                }
+            # ranking도 추출
+            if not data.get('ranking'):
+                exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
+                rows = []
+                for code, date_rows in timeline.items():
+                    if code in exclude: continue
+                    r_row = date_rows.get(latest_date)
+                    if not r_row: continue
+                    dau = BE._i(r_row.get('dau'))
+                    if not dau or dau <= 0: continue
+                    rows.append({
+                        'code': code, 'name': BE._pgm_name(code, row=r_row), 'dau': dau,
+                        'deep_rate': BE._fn(r_row.get('deep_rate')),
+                        'churn_rate': BE._fn(r_row.get('churn_rate')),
+                        'dau_wow': BE._fn(r_row.get('dau_chg')),
+                    })
+                rows.sort(key=lambda x: x['dau'], reverse=True)
+                data['ranking'] = rows[:5]
+
+    # 모든 intent에 s7 이상 알림 첨부 (존재 시)
+    if bd.get('s7_anomalies') and 'anomalies' not in data:
+        data['anomalies'] = bd['s7_anomalies']
 
     return data
 
@@ -484,6 +676,7 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
         lines.append(f"[{s['date']} 기준 핵심 지표]")
         lines.append(f"  DAU: {_fmt_dau(s['dau'])} ({_fmt_arrow(s['dau_wow'])} WoW)")
         if s['deep_rate']   is not None: lines.append(f"  깊은청취율: {_fmt_pct(s['deep_rate'])}")
+        if s.get('real_rate') is not None: lines.append(f"  실청취율: {_fmt_pct(s['real_rate'])}")
         if s['engage_rate'] is not None: lines.append(f"  참여율: {_fmt_pct(s['engage_rate'])}")
         if s['habit_rate']  is not None: lines.append(f"  습관형성률: {_fmt_pct(s['habit_rate'])}")
         if s['churn_rate']  is not None: lines.append(f"  이탈률: {_fmt_pct(s['churn_rate'])}")
@@ -529,6 +722,97 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
             )
         lines.append('')
 
+    # ── 신규 intent 섹션 ─────────────────────────────────────
+    if data.get('funnel'):
+        f = data['funnel']
+        lines.append(f"[사용자 흐름 (Funnel) — {data['date_max']}]")
+        lines.append(f"  [일간] 신규: {_fmt_dau(f.get('new_user'))} ({_fmt_pct(f.get('new_share'))}) WoW {_fmt_arrow(f.get('new_wow'))}")
+        lines.append(f"         복귀: {_fmt_dau(f.get('react_user'))} ({_fmt_pct(f.get('react_share'))}) | 복귀율 {_fmt_pct(f.get('react_rate'))}")
+        lines.append(f"         이탈률: {_fmt_pct(f.get('churn_rate'))} ({_fmt_arrow(f.get('churn_diff'))} pp)")
+        if f.get('d1_ret') is not None:
+            lines.append(f"         D1유지율: {_fmt_pct(f.get('d1_ret'))} ({_fmt_arrow(f.get('d1_ret_diff'))} pp) | D7유지율: {_fmt_pct(f.get('d7_ret'))}")
+        if f.get('new_week') is not None:
+            lines.append(f"  [주간] 신규: {_fmt_dau(f.get('new_week'))} ({_fmt_pct(f.get('new_week_share'))}) | 이탈률: {_fmt_pct(f.get('churn_rate_week'))} | W1유지율: {_fmt_pct(f.get('w1_ret'))}")
+            lines.append(f"         복귀율: {_fmt_pct(f.get('react_rate_week'))}")
+        if f.get('new_mon') is not None:
+            lines.append(f"  [월간] 신규: {_fmt_dau(f.get('new_mon'))} ({_fmt_pct(f.get('new_mon_share'))}) | 이탈률: {_fmt_pct(f.get('churn_rate_mon'))} | M1유지율: {_fmt_pct(f.get('m1_ret'))}")
+        if f.get('new_d1_ret') is not None:
+            lines.append(f"  [신규코호트] D1 {_fmt_pct(f.get('new_d1_ret'))} | D7 {_fmt_pct(f.get('new_d7_ret'))} | W1 {_fmt_pct(f.get('new_w1_ret'))} | M1 {_fmt_pct(f.get('new_m1_ret'))}")
+        lines.append('')
+
+    if data.get('engagement'):
+        e = data['engagement']
+        lines.append(f"[청취 품질 (Engagement) — {data['date_max']}]")
+        if e.get('deep_rate') is not None:
+            lines.append(f"  깊은청취율 (10분/1분): 일 {_fmt_pct(e.get('deep_rate'))} ({_fmt_arrow(e.get('deep_rate_diff'))} pp) | 주 {_fmt_pct(e.get('deep_rate_week'))} | 월 {_fmt_pct(e.get('deep_rate_mon'))}")
+        if e.get('real_rate') is not None:
+            lines.append(f"  실청취율  (1분/DAU):   일 {_fmt_pct(e.get('real_rate'))} ({_fmt_arrow(e.get('real_rate_diff'))} pp) | 주 {_fmt_pct(e.get('real_rate_week'))} | 월 {_fmt_pct(e.get('real_rate_mon'))}")
+        if e.get('engage_rate') is not None:
+            lines.append(f"  참여율:                일 {_fmt_pct(e.get('engage_rate'))} | 주 {_fmt_pct(e.get('engage_week'))} | 월 {_fmt_pct(e.get('engage_mon'))}")
+        if e.get('dau_1min') is not None:
+            lines.append(f"  청취자 수 (1분 이상): {_fmt_dau(e.get('dau_1min'))} | 10분 이상: {_fmt_dau(e.get('dau_10min'))}")
+        ch_deep = e.get('channel_deep', {})
+        if ch_deep:
+            parts = [f"{v.get('name','?')} {_fmt_pct(v.get('rate'))}" for v in ch_deep.values() if v.get('rate') is not None]
+            if parts: lines.append(f"  채널별 깊은청취율: {' | '.join(parts)}")
+        lines.append('')
+
+    if data.get('growth'):
+        g = data['growth']
+        lines.append(f"[성장 품질 (Growth) — {data['date_max']}]")
+        if g.get('habit_rate') is not None:
+            lines.append(f"  습관형성률: 일 {_fmt_pct(g.get('habit_rate'))} ({_fmt_arrow(g.get('habit_diff'))} pp) | 주 {_fmt_pct(g.get('habit_week'))} | 월 {_fmt_pct(g.get('habit_mon'))}")
+        if g.get('react_rate') is not None:
+            lines.append(f"  복귀율:     일 {_fmt_pct(g.get('react_rate'))} | 주 {_fmt_pct(g.get('react_rate_week'))} | 월 {_fmt_pct(g.get('react_rate_mon'))}")
+        for i, p in enumerate(g.get('top3_habit', [])[:3], 1):
+            lines.append(f"  습관형성 {i}위: {p.get('name','?')} {_fmt_pct(p.get('rate'))} ({_fmt_dau(p.get('count'))} 신규)")
+        lines.append('')
+
+    if data.get('anomalies'):
+        alts = data['anomalies'].get('alerts', [])
+        intent_type = intent.get('intent', 'general')
+        if intent_type == 'anomaly':
+            lines.append("[이상 감지 알림 — 전체]")
+            for a in alts:
+                lines.append(f"  [{a.get('level','').upper()}] {a.get('msg','')}")
+            lines.append('')
+        else:
+            # 다른 intent는 RED/YELLOW만 간략 첨부
+            urgent = [a for a in alts if a.get('level') in ('red', 'yellow')]
+            if urgent:
+                lines.append("[현재 이상 알림]")
+                for a in urgent[:3]:
+                    lines.append(f"  [{a.get('level','').upper()}] {a.get('msg','')}")
+                lines.append('')
+
+    if data.get('report'):
+        r = data['report']
+        s1 = r.get('s1', {}); s2 = r.get('s2', {}); s3 = r.get('s3', {})
+        s4 = r.get('s4', {}); s5 = r.get('s5', {}); s6 = r.get('s6', {}); s7 = r.get('s7', {})
+        lines.append(f"[종합 리포트 — {data['date_max']}]")
+        if s1:
+            lines.append(f"  규모:   DAU {s1.get('dau',0):,}명 (WoW {s1.get('dau_wow') or 0:+.1f}%) | WAU {s1.get('wau') or 0:,} | MAU {s1.get('mau') or 0:,}")
+            lines.append(f"          신규 {s1.get('new_user',0):,}명 ({s1.get('new_pct') or 0:.1f}%) | 복귀 {s1.get('react_user',0):,}명")
+        if s2:
+            lines.append(f"  퍼널:   D1유지율 {_fmt_pct(s2.get('d1_ret'))} | D7 {_fmt_pct(s2.get('d7_ret'))} | 이탈률 {_fmt_pct(s2.get('churn_rate'))} ({_fmt_arrow(s2.get('churn_diff'))} pp)")
+        if s3:
+            lines.append(f"  품질:   깊은청취 {_fmt_pct(s3.get('deep_rate'))} | 실청취율 {_fmt_pct(s3.get('real_rate'))} | 참여율 {_fmt_pct(s3.get('engage_rate'))}")
+        if s4:
+            lines.append(f"  성장:   습관형성률 {_fmt_pct(s4.get('habit_rate'))} | 복귀율 {_fmt_pct(s4.get('react_rate'))}")
+        if s6 and s6.get('channels'):
+            ch_str = ' | '.join(f"{c['name']} {c.get('dau',0):,}" for c in s6['channels'] if c.get('code') in ('F00','L00','G00','P00'))
+            if ch_str: lines.append(f"  채널:   {ch_str}")
+        if s5 and s5.get('dau_top10'):
+            top5 = ' / '.join(f"{p['name']} {p.get('dau',0):,}" for p in s5['dau_top10'][:5])
+            lines.append(f"  TOP5:   {top5}")
+        if s7 and s7.get('alerts'):
+            alert_str = ' | '.join(a.get('msg','') for a in s7['alerts'][:3])
+            lines.append(f"  알림:   {alert_str}")
+        if s5 and s5.get('risk_list'):
+            risk_str = ' | '.join(f"{r.get('name','?')} WoW{r.get('dau_wow',0):+.1f}%" for r in s5['risk_list'][:3])
+            lines.append(f"  위험:   {risk_str}")
+        lines.append('')
+
     return '\n'.join(lines)
 
 
@@ -560,14 +844,25 @@ def query(question: str, target_date: str = None, verbose: bool = False) -> dict
     return _answer(question, timeline, target_date, verbose)
 
 
-def query_with_timeline(question: str, timeline: dict, target_date: str = None) -> dict:
-    """서버 캐시 timeline을 받아 처리. {"answer": str, "chart_data": dict|None} 리턴."""
+def query_with_timeline(question: str, timeline: dict,
+                        target_date: str = None,
+                        briefing_data: dict = None) -> dict:
+    """서버 캐시 timeline + briefing_data를 받아 처리."""
     if not timeline:
         return {"answer": "데이터를 사용할 수 없습니다.", "chart_data": None}
-    return _answer(question, timeline, target_date, verbose=False)
+    return _answer(question, timeline, target_date, verbose=False, briefing_data=briefing_data)
 
 
-def _answer(question, timeline, target_date, verbose):
+# intent별 max_tokens 상한
+_INTENT_TOKENS = {
+    'snapshot': 500, 'trend': 600, 'compare': 600,
+    'ranking': 500, 'health': 600,
+    'funnel': 800, 'engagement': 700, 'growth': 700,
+    'anomaly': 500, 'report': 1400, 'general': 600,
+}
+
+
+def _answer(question, timeline, target_date, verbose, briefing_data=None):
     if verbose:
         print("  [2/3] 의도 분류 중...", flush=True)
     intent = classify_intent(question)
@@ -578,7 +873,7 @@ def _answer(question, timeline, target_date, verbose):
         print(f"  -> {intent.get('summary')}: intent={intent.get('intent')}, "
               f"scope={intent.get('scope')}, days={intent.get('days')}", flush=True)
 
-    data = extract_data(timeline, intent)
+    data = extract_data(timeline, intent, briefing_data=briefing_data)
     if 'error' in data:
         return {"answer": f"데이터 추출 실패: {data['error']}", "chart_data": None}
 
@@ -586,7 +881,8 @@ def _answer(question, timeline, target_date, verbose):
         print("  [3/3] 답변 생성 중...", flush=True)
     context = format_for_claude(data, intent, question)
     context = build_query_context(question, context, intent=intent, data=data)
-    answer_text = call_claude(QUERY_SYSTEM_PROMPT, context, max_tokens=600)
+    max_tokens = _INTENT_TOKENS.get(intent.get('intent', 'general'), 600)
+    answer_text = call_claude(QUERY_SYSTEM_PROMPT, context, max_tokens=max_tokens)
     chart_data = build_chart_data(data, intent, question)
     return {"answer": answer_text, "chart_data": chart_data}
 

@@ -432,7 +432,12 @@ class RAASHandler(BaseHTTPRequestHandler):
 
                 if QUERY_ENGINE_AVAILABLE:
                     timeline = get_cached_timeline()
-                    result = QE.query_with_timeline(question, timeline, target_date=target_date)
+                    briefing_base = cache_get("briefing_base")
+                    result = QE.query_with_timeline(
+                        question, timeline,
+                        target_date=target_date,
+                        briefing_data=briefing_base
+                    )
                     answer = result["answer"]
                     chart_data = result.get("chart_data")
                 else:
