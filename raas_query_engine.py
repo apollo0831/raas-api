@@ -585,7 +585,7 @@ def _answer(question, timeline, target_date, verbose):
     if verbose:
         print("  [3/3] 답변 생성 중...", flush=True)
     context = format_for_claude(data, intent, question)
-    context = build_query_context(question, context)
+    context = build_query_context(question, context, intent=intent, data=data)
     answer_text = call_claude(QUERY_SYSTEM_PROMPT, context, max_tokens=600)
     chart_data = build_chart_data(data, intent, question)
     return {"answer": answer_text, "chart_data": chart_data}
