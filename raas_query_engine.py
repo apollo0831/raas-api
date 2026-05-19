@@ -401,35 +401,31 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
         'engage_diff':    fn(row.get('engage_rate_diff')),
         'habit_rate':     fn(row.get('habit_rate')),
         'habit_diff':     fn(row.get('habit_rate_diff')),
-        # 유지율 — 전체 코호트
+        # 유지율 — 전체 코호트 (CSV 필드: d1_ret, d1_ret_diff 등)
         'd1_ret':         fn(row.get('d1_ret')),
-        'd1_ret_pw':      fn(row.get('d1_ret_pw')),
         'd1_ret_diff':    fn(row.get('d1_ret_diff')),
         'd7_ret':         fn(row.get('d7_ret')),
-        'd7_ret_pw':      fn(row.get('d7_ret_pw')),
         'd7_ret_diff':    fn(row.get('d7_ret_diff')),
         'w1_ret':         fn(row.get('w1_ret')),
-        'w1_ret_pw':      fn(row.get('w1_ret_pw')),
         'w1_ret_diff':    fn(row.get('w1_ret_diff')),
         'm1_ret':         fn(row.get('m1_ret')),
-        'm1_ret_pw':      fn(row.get('m1_ret_pw')),
         'm1_ret_diff':    fn(row.get('m1_ret_diff')),
-        # 유지율 — 신규 코호트
-        'new_d1_ret':     fn(row.get('new_d1_ret')),
-        'new_d1_ret_pw':  fn(row.get('new_d1_ret_pw')),
-        'new_d1_diff':    fn(row.get('new_d1_diff')),
-        'new_d7_ret':     fn(row.get('new_d7_ret')),
-        'new_d7_ret_pw':  fn(row.get('new_d7_ret_pw')),
-        'new_d7_diff':    fn(row.get('new_d7_diff')),
-        'new_w1_ret':     fn(row.get('new_w1_ret')),
-        'new_w1_ret_pw':  fn(row.get('new_w1_ret_pw')),
-        'new_w1_diff':    fn(row.get('new_w1_diff')),
-        'new_m1_ret':     fn(row.get('new_m1_ret')),
-        'new_m1_ret_pw':  fn(row.get('new_m1_ret_pw')),
-        'new_m1_diff':    fn(row.get('new_m1_diff')),
-        # 주간 (WAU)
-        'dau_week':       i(row.get('dau_week')),
-        'dau_week_wow':   fn(row.get('dau_week_wow')),
+        # 유지율 — 신규 코호트 (CSV 필드: new_d1_ret_prev, new_d1_ret_diff 등)
+        'new_d1_ret':      fn(row.get('new_d1_ret')),
+        'new_d1_ret_prev': fn(row.get('new_d1_ret_prev')),
+        'new_d1_ret_diff': fn(row.get('new_d1_ret_diff')),
+        'new_d7_ret':      fn(row.get('new_d7_ret')),
+        'new_d7_ret_prev': fn(row.get('new_d7_ret_prev')),
+        'new_d7_ret_diff': fn(row.get('new_d7_ret_diff')),
+        'new_w1_ret':      fn(row.get('new_w1_ret')),
+        'new_w1_ret_prev': fn(row.get('new_w1_ret_prev')),
+        'new_w1_ret_diff': fn(row.get('new_w1_ret_diff')),
+        'new_m1_ret':      fn(row.get('new_m1_ret')),
+        'new_m1_ret_prev': fn(row.get('new_m1_ret_prev')),
+        'new_m1_ret_diff': fn(row.get('new_m1_ret_diff')),
+        # 주간 (WAU) — CSV 필드명: wau, wau_chg
+        'dau_week':       i(row.get('wau')),
+        'dau_week_wow':   fn(row.get('wau_chg')),
         'dau_week_avg':   fn(row.get('dau_week_avg')),
         'deep_week':      fn(row.get('deep_rate_week')),
         'real_week':      fn(row.get('real_rate_week')),
@@ -440,9 +436,9 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
         'new_week_share': fn(row.get('new_week_share')),
         'react_week':     i(row.get('react_week')),
         'react_rate_week':fn(row.get('react_rate_week')),
-        # 월간 (MAU)
-        'dau_mon':        i(row.get('dau_mon')),
-        'dau_mon_wow':    fn(row.get('dau_mon_wow')),
+        # 월간 (MAU) — CSV 필드명: mau, mau_chg
+        'dau_mon':        i(row.get('mau')),
+        'dau_mon_wow':    fn(row.get('mau_chg')),
         'dau_mon_avg':    fn(row.get('dau_mon_avg')),
         'wau_mon_avg':    fn(row.get('wau_mon_avg')),
         'deep_mon':       fn(row.get('deep_rate_mon')),
@@ -796,23 +792,23 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
         if any(s.get(k) is not None for k in ('d1_ret', 'd7_ret', 'w1_ret', 'm1_ret')):
             lines.append(f"  [유지율 — 전체 코호트]")
             if s.get('d1_ret') is not None:
-                lines.append(f"    D1: {_fmt_pct(s.get('d1_ret'))} (전주 {_fmt_pct(s.get('d1_ret_pw'))}, {_fmt_arrow(s.get('d1_ret_diff'))} pp)")
+                lines.append(f"    D1: {_fmt_pct(s.get('d1_ret'))} ({_fmt_arrow(s.get('d1_ret_diff'))} pp)")
             if s.get('d7_ret') is not None:
-                lines.append(f"    D7: {_fmt_pct(s.get('d7_ret'))} (전주 {_fmt_pct(s.get('d7_ret_pw'))}, {_fmt_arrow(s.get('d7_ret_diff'))} pp)")
+                lines.append(f"    D7: {_fmt_pct(s.get('d7_ret'))} ({_fmt_arrow(s.get('d7_ret_diff'))} pp)")
             if s.get('w1_ret') is not None:
-                lines.append(f"    W1: {_fmt_pct(s.get('w1_ret'))} (전주 {_fmt_pct(s.get('w1_ret_pw'))}, {_fmt_arrow(s.get('w1_ret_diff'))} pp)")
+                lines.append(f"    W1: {_fmt_pct(s.get('w1_ret'))} ({_fmt_arrow(s.get('w1_ret_diff'))} pp)")
             if s.get('m1_ret') is not None:
-                lines.append(f"    M1: {_fmt_pct(s.get('m1_ret'))} (전월 {_fmt_pct(s.get('m1_ret_pw'))}, {_fmt_arrow(s.get('m1_ret_diff'))} pp)")
+                lines.append(f"    M1: {_fmt_pct(s.get('m1_ret'))} ({_fmt_arrow(s.get('m1_ret_diff'))} pp)")
         if any(s.get(k) is not None for k in ('new_d1_ret', 'new_d7_ret', 'new_w1_ret', 'new_m1_ret')):
             lines.append(f"  [유지율 — 신규 코호트]")
             if s.get('new_d1_ret') is not None:
-                lines.append(f"    D1: {_fmt_pct(s.get('new_d1_ret'))} (전주 {_fmt_pct(s.get('new_d1_ret_pw'))}, {_fmt_arrow(s.get('new_d1_diff'))} pp)")
+                lines.append(f"    D1: {_fmt_pct(s.get('new_d1_ret'))} (전주 {_fmt_pct(s.get('new_d1_ret_prev'))}, {_fmt_arrow(s.get('new_d1_ret_diff'))} pp)")
             if s.get('new_d7_ret') is not None:
-                lines.append(f"    D7: {_fmt_pct(s.get('new_d7_ret'))} (전주 {_fmt_pct(s.get('new_d7_ret_pw'))}, {_fmt_arrow(s.get('new_d7_diff'))} pp)")
+                lines.append(f"    D7: {_fmt_pct(s.get('new_d7_ret'))} (전주 {_fmt_pct(s.get('new_d7_ret_prev'))}, {_fmt_arrow(s.get('new_d7_ret_diff'))} pp)")
             if s.get('new_w1_ret') is not None:
-                lines.append(f"    W1: {_fmt_pct(s.get('new_w1_ret'))} (전주 {_fmt_pct(s.get('new_w1_ret_pw'))}, {_fmt_arrow(s.get('new_w1_diff'))} pp)")
+                lines.append(f"    W1: {_fmt_pct(s.get('new_w1_ret'))} (전주 {_fmt_pct(s.get('new_w1_ret_prev'))}, {_fmt_arrow(s.get('new_w1_ret_diff'))} pp)")
             if s.get('new_m1_ret') is not None:
-                lines.append(f"    M1: {_fmt_pct(s.get('new_m1_ret'))} (전월 {_fmt_pct(s.get('new_m1_ret_pw'))}, {_fmt_arrow(s.get('new_m1_diff'))} pp)")
+                lines.append(f"    M1: {_fmt_pct(s.get('new_m1_ret'))} (전월 {_fmt_pct(s.get('new_m1_ret_prev'))}, {_fmt_arrow(s.get('new_m1_ret_diff'))} pp)")
         if s.get('dau_week') or s.get('dau_week_avg') is not None:
             lines.append(f"  [주간 (WAU)]")
             lines.append(f"    WAU: {_fmt_dau(s.get('dau_week'))} (WoW {_fmt_arrow(s.get('dau_week_wow'))} | 전주일평균 {_fmt_dau(s.get('dau_week_avg'))})")
