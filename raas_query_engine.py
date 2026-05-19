@@ -497,8 +497,12 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
         'react_mon_wow':    fn(row.get('react_mon_chg')),
         'react_rate_mon':   fn(row.get('react_rate_mon')),
         'react_rate_mon_diff':fn(row.get('react_rate_mon_diff')),
-        # ── 편성 메타 ─────────────────────────────────────────
-        'guestname':        (row.get('guestname') or '').strip(),
+        # ── 편성 메타 (Splunk CSV: STIME, guestname, daily_corner, weekly_corner) ──
+        'airtime':       (row.get('STIME') or row.get('stime') or '').strip(),
+        'guestname':     (row.get('guestname') or '').strip(),
+        'daily_corner':  (row.get('daily_corner') or '').strip(),
+        'weekly_corner': (row.get('weekly_corner') or '').strip(),
+        'program_title': (row.get('program_title') or row.get('PGM_NAME') or '').strip(),
     }
 
 
@@ -891,9 +895,18 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
                 lines.append(f"    신규: {_fmt_dau(s.get('new_mon'))} ({_fmt_pct(s.get('new_mon_share'))}) WoW {_fmt_arrow(s.get('new_mon_wow'))} | 전월 {_fmt_dau(s.get('new_mon_prev'))}")
                 lines.append(f"    복귀: {_fmt_dau(s.get('react_mon'))} WoW {_fmt_arrow(s.get('react_mon_wow'))}")
 
-        if s.get('guestname'):
+        if any(s.get(k) for k in ('airtime', 'guestname', 'daily_corner', 'weekly_corner', 'program_title')):
             lines.append(f"  [편성 메타]")
-            lines.append(f"    오늘 게스트: {s['guestname']}")
+            if s.get('airtime'):
+                lines.append(f"    방송시간: {s['airtime']}")
+            if s.get('guestname'):
+                lines.append(f"    오늘 게스트: {s['guestname']}")
+            if s.get('daily_corner'):
+                lines.append(f"    일간 코너: {s['daily_corner']}")
+            if s.get('weekly_corner'):
+                lines.append(f"    주간 코너: {s['weekly_corner']}")
+            if s.get('program_title'):
+                lines.append(f"    프로그램명: {s['program_title']}")
 
         lines.append('')
 
