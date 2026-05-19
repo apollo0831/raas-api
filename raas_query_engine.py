@@ -27,6 +27,15 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 # ──────────────────────────────────────────────────────────
 
+_WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
+
+def _weekday_ko(date_str: str) -> str:
+    """'YYYY/MM/DD' 또는 'YYYY-MM-DD' → 한국 요일 약칭. Python datetime 기준으로 계산."""
+    try:
+        return _WEEKDAY_KO[datetime.strptime(date_str.replace("/", "-"), "%Y-%m-%d").weekday()]
+    except Exception:
+        return ""
+
 # ── PGM_CODE 매핑 ──────────────────────────────────────────
 SCOPE_MAP = {
     'platform': 'T00', 'all': 'T00', 'T00': 'T00',
@@ -688,11 +697,13 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
         t = data['trend']
         lines.append(f"[최근 {t['days']}일 시계열 — {t['metric_field']}]")
         for date, value in t['data']:
+            dow = _weekday_ko(date)
+            prefix = f"  {date}({dow})" if dow else f"  {date}"
             if value is not None:
                 val_str = _fmt_pct(value) if 'rate' in t['metric_field'] else _fmt_dau(value)
-                lines.append(f"  {date}: {val_str}")
+                lines.append(f"{prefix}: {val_str}")
             else:
-                lines.append(f"  {date}: 데이터 없음")
+                lines.append(f"{prefix}: 데이터 없음")
         lines.append('')
 
     if data.get('ranking'):
