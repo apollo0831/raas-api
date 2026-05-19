@@ -374,34 +374,68 @@ def _fmt_arrow(v):
 
 
 def _extract_full_snapshot(row: dict, date: str) -> dict:
-    """CSV row에서 전체 필드 추출 — 유지율·주간·월간 포함."""
+    """CSV row에서 전체 필드 추출 — 유지율·전주비교·롤링·주간·월간 포함.
+    전주 절대값이 CSV에 없는 경우 current - diff 로 계산.
+    """
     i = BE._i; fn = BE._fn
+
+    def _prev(cur, diff):
+        if cur is not None and diff is not None:
+            return round(cur - diff, 1)
+        return None
+
+    # 계산에 재사용할 핵심 일간 값
+    _deep   = fn(row.get('deep_rate'));   _deep_d  = fn(row.get('deep_rate_diff'))
+    _real   = fn(row.get('real_rate'));   _real_d  = fn(row.get('real_rate_diff'))
+    _eng    = fn(row.get('engage_rate')); _eng_d   = fn(row.get('engage_rate_diff'))
+    _hab    = fn(row.get('habit_rate'));  _hab_d   = fn(row.get('habit_rate_diff'))
+    _churn  = fn(row.get('churn_rate'));  _churn_d = fn(row.get('churn_rate_diff'))
+    _rr     = fn(row.get('react_rate'));  _rr_d    = fn(row.get('react_rate_diff'))
+
     return {
         'date': date,
-        # 일간 규모
+        # ── 일간 규모 ─────────────────────────────────────────
         'dau':            i(row.get('dau')),
         'dau_wow':        fn(row.get('dau_chg')),
+        'dau_prev':       i(row.get('dau_prev')),       # 전주 동일 요일 DAU
+        'dau_d2':         i(row.get('dau_d2')),         # D-2(어제) DAU
         'dau_1min':       i(row.get('dau_1min')),
         'dau_10min':      i(row.get('dau_10min')),
-        # 신규·복귀·이탈
+        'dau_r7':         i(row.get('dau_r7')),         # 7일 롤링 DAU
+        'dau_r7_chg':     fn(row.get('dau_r7_chg')),   # 7일 롤링 WoW
+        'dau_r7_prev':    i(row.get('dau_r7_prev')),
+        'dau_r30':        i(row.get('dau_r30')),        # 30일 롤링 DAU
+        'dau_r30_chg':    fn(row.get('dau_r30_chg')),  # 30일 롤링 MoM
+        'dau_r30_prev':   i(row.get('dau_r30_prev')),
+        # ── 신규·복귀·이탈 ────────────────────────────────────
         'new_user':       i(row.get('new')),
         'new_share':      fn(row.get('new_share')),
         'new_wow':        fn(row.get('new_chg')),
+        'new_prev':       i(row.get('new_prev')),       # 전주 신규 절대값
         'react_user':     i(row.get('react')),
         'react_share':    fn(row.get('react_share')),
-        'react_rate':     fn(row.get('react_rate')),
-        'churn_rate':     fn(row.get('churn_rate')),
-        'churn_diff':     fn(row.get('churn_rate_diff')),
-        # 청취 품질 (일)
-        'deep_rate':      fn(row.get('deep_rate')),
-        'deep_diff':      fn(row.get('deep_rate_diff')),
-        'real_rate':      fn(row.get('real_rate')),
-        'real_diff':      fn(row.get('real_rate_diff')),
-        'engage_rate':    fn(row.get('engage_rate')),
-        'engage_diff':    fn(row.get('engage_rate_diff')),
-        'habit_rate':     fn(row.get('habit_rate')),
-        'habit_diff':     fn(row.get('habit_rate_diff')),
-        # 유지율 — 전체 코호트 (CSV 필드: d1_ret, d1_ret_diff 등)
+        'react_wow':      fn(row.get('react_chg')),     # 복귀수 WoW
+        'react_prev':     i(row.get('react_prev')),     # 전주 복귀 절대값
+        'react_rate':     _rr,
+        'react_rate_diff':_rr_d,
+        'react_rate_prev':_prev(_rr, _rr_d),
+        'churn_rate':     _churn,
+        'churn_diff':     _churn_d,
+        'churn_rate_prev':_prev(_churn, _churn_d),      # 전주 이탈율 (계산)
+        # ── 청취 품질 (일) ────────────────────────────────────
+        'deep_rate':      _deep,
+        'deep_diff':      _deep_d,
+        'deep_rate_prev': _prev(_deep, _deep_d),        # 전주 깊은청취율 (계산)
+        'real_rate':      _real,
+        'real_diff':      _real_d,
+        'real_rate_prev': fn(row.get('real_rate_prev')) if fn(row.get('real_rate_prev')) is not None else _prev(_real, _real_d),
+        'engage_rate':    _eng,
+        'engage_diff':    _eng_d,
+        'engage_rate_prev':_prev(_eng, _eng_d),
+        'habit_rate':     _hab,
+        'habit_diff':     _hab_d,
+        'habit_rate_prev':_prev(_hab, _hab_d),
+        # ── 유지율 — 전체 코호트 ──────────────────────────────
         'd1_ret':         fn(row.get('d1_ret')),
         'd1_ret_diff':    fn(row.get('d1_ret_diff')),
         'd7_ret':         fn(row.get('d7_ret')),
@@ -410,7 +444,7 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
         'w1_ret_diff':    fn(row.get('w1_ret_diff')),
         'm1_ret':         fn(row.get('m1_ret')),
         'm1_ret_diff':    fn(row.get('m1_ret_diff')),
-        # 유지율 — 신규 코호트 (CSV 필드: new_d1_ret_prev, new_d1_ret_diff 등)
+        # ── 유지율 — 신규 코호트 ──────────────────────────────
         'new_d1_ret':      fn(row.get('new_d1_ret')),
         'new_d1_ret_prev': fn(row.get('new_d1_ret_prev')),
         'new_d1_ret_diff': fn(row.get('new_d1_ret_diff')),
@@ -423,33 +457,48 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
         'new_m1_ret':      fn(row.get('new_m1_ret')),
         'new_m1_ret_prev': fn(row.get('new_m1_ret_prev')),
         'new_m1_ret_diff': fn(row.get('new_m1_ret_diff')),
-        # 주간 (WAU) — CSV 필드명: wau, wau_chg
-        'dau_week':       i(row.get('wau')),
-        'dau_week_wow':   fn(row.get('wau_chg')),
-        'dau_week_avg':   fn(row.get('dau_week_avg')),
-        'deep_week':      fn(row.get('deep_rate_week')),
-        'real_week':      fn(row.get('real_rate_week')),
-        'engage_week':    fn(row.get('engage_rate_week')),
-        'habit_week':     fn(row.get('habit_rate_week')),
-        'churn_week':     fn(row.get('churn_rate_week')),
-        'new_week':       i(row.get('new_week')),
-        'new_week_share': fn(row.get('new_week_share')),
-        'react_week':     i(row.get('react_week')),
-        'react_rate_week':fn(row.get('react_rate_week')),
-        # 월간 (MAU) — CSV 필드명: mau, mau_chg
-        'dau_mon':        i(row.get('mau')),
-        'dau_mon_wow':    fn(row.get('mau_chg')),
-        'dau_mon_avg':    fn(row.get('dau_mon_avg')),
-        'wau_mon_avg':    fn(row.get('wau_mon_avg')),
-        'deep_mon':       fn(row.get('deep_rate_mon')),
-        'real_mon':       fn(row.get('real_rate_mon')),
-        'engage_mon':     fn(row.get('engage_rate_mon')),
-        'habit_mon':      fn(row.get('habit_rate_mon')),
-        'churn_mon':      fn(row.get('churn_rate_mon')),
-        'new_mon':        i(row.get('new_mon')),
-        'new_mon_share':  fn(row.get('new_mon_share')),
-        'react_mon':      i(row.get('react_mon')),
-        'react_rate_mon': fn(row.get('react_rate_mon')),
+        # ── 주간 (WAU) — CSV 필드명: wau, wau_chg ─────────────
+        'dau_week':         i(row.get('wau')),
+        'dau_week_wow':     fn(row.get('wau_chg')),
+        'dau_week_prev':    i(row.get('wau_prev')),     # 전전주 WAU
+        'dau_week_avg':     fn(row.get('dau_week_avg')),
+        'deep_week':        fn(row.get('deep_rate_week')),
+        'real_week':        fn(row.get('real_rate_week')),
+        'real_week_prev':   fn(row.get('real_rate_week_prev')),
+        'engage_week':      fn(row.get('engage_rate_week')),
+        'habit_week':       fn(row.get('habit_rate_week')),
+        'churn_week':       fn(row.get('churn_rate_week')),
+        'new_week':         i(row.get('new_week')),
+        'new_week_share':   fn(row.get('new_week_share')),
+        'new_week_prev':    i(row.get('new_week_prev')),    # 전주 신규
+        'new_week_wow':     fn(row.get('new_week_chg')),
+        'react_week':       i(row.get('react_week')),
+        'react_week_prev':  i(row.get('react_week_prev')),  # 전주 복귀
+        'react_week_wow':   fn(row.get('react_week_chg')),
+        'react_rate_week':  fn(row.get('react_rate_week')),
+        'react_rate_week_diff':fn(row.get('react_rate_week_diff')),
+        # ── 월간 (MAU) — CSV 필드명: mau, mau_chg ─────────────
+        'dau_mon':          i(row.get('mau')),
+        'dau_mon_wow':      fn(row.get('mau_chg')),
+        'dau_mon_prev':     i(row.get('mau_prev')),     # 전전월 MAU
+        'dau_mon_avg':      fn(row.get('dau_mon_avg')),
+        'wau_mon_avg':      fn(row.get('wau_mon_avg')),
+        'deep_mon':         fn(row.get('deep_rate_mon')),
+        'real_mon':         fn(row.get('real_rate_mon')),
+        'real_mon_prev':    fn(row.get('real_rate_mon_prev')),
+        'engage_mon':       fn(row.get('engage_rate_mon')),
+        'habit_mon':        fn(row.get('habit_rate_mon')),
+        'churn_mon':        fn(row.get('churn_rate_mon')),
+        'new_mon':          i(row.get('new_mon')),
+        'new_mon_share':    fn(row.get('new_mon_share')),
+        'new_mon_prev':     i(row.get('new_mon_prev')),     # 전월 신규
+        'new_mon_wow':      fn(row.get('new_mon_chg')),
+        'react_mon':        i(row.get('react_mon')),
+        'react_mon_wow':    fn(row.get('react_mon_chg')),
+        'react_rate_mon':   fn(row.get('react_rate_mon')),
+        'react_rate_mon_diff':fn(row.get('react_rate_mon_diff')),
+        # ── 편성 메타 ─────────────────────────────────────────
+        'guestname':        (row.get('guestname') or '').strip(),
     }
 
 
@@ -769,64 +818,83 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
     if 'snapshot' in data:
         s = data['snapshot']
         lines.append(f"[{s['date']} 기준 핵심 지표]")
+
         lines.append(f"  [일간 규모]")
-        lines.append(f"    DAU: {_fmt_dau(s.get('dau'))} (WoW {_fmt_arrow(s.get('dau_wow'))})")
+        lines.append(f"    DAU: {_fmt_dau(s.get('dau'))} (WoW {_fmt_arrow(s.get('dau_wow'))} | 전주동일요일 {_fmt_dau(s.get('dau_prev'))})")
+        if s.get('dau_d2'):
+            lines.append(f"    D-2(어제) DAU: {_fmt_dau(s.get('dau_d2'))}")
+        if s.get('dau_r7'):
+            lines.append(f"    7일롤링: {_fmt_dau(s.get('dau_r7'))} (WoW {_fmt_arrow(s.get('dau_r7_chg'))})")
+        if s.get('dau_r30'):
+            lines.append(f"    30일롤링: {_fmt_dau(s.get('dau_r30'))} (MoM {_fmt_arrow(s.get('dau_r30_chg'))})")
         if s.get('dau_1min') or s.get('dau_10min'):
             lines.append(f"    1분↑청취자: {_fmt_dau(s.get('dau_1min'))} | 10분↑청취자: {_fmt_dau(s.get('dau_10min'))}")
+
         lines.append(f"  [신규·복귀·이탈]")
-        if s.get('new_user') or s.get('new_share') is not None:
-            lines.append(f"    신규: {_fmt_dau(s.get('new_user'))} ({_fmt_pct(s.get('new_share'))}) WoW {_fmt_arrow(s.get('new_wow'))}")
-        if s.get('react_user') or s.get('react_share') is not None:
-            lines.append(f"    복귀: {_fmt_dau(s.get('react_user'))} ({_fmt_pct(s.get('react_share'))}) | 복귀율 {_fmt_pct(s.get('react_rate'))}")
+        lines.append(f"    신규: {_fmt_dau(s.get('new_user'))} ({_fmt_pct(s.get('new_share'))}) WoW {_fmt_arrow(s.get('new_wow'))} | 전주 {_fmt_dau(s.get('new_prev'))}")
+        lines.append(f"    복귀: {_fmt_dau(s.get('react_user'))} ({_fmt_pct(s.get('react_share'))}) WoW {_fmt_arrow(s.get('react_wow'))} | 전주 {_fmt_dau(s.get('react_prev'))}")
+        lines.append(f"    복귀율: {_fmt_pct(s.get('react_rate'))} (Δ {_fmt_arrow(s.get('react_rate_diff'))} pp | 전주 {_fmt_pct(s.get('react_rate_prev'))})")
         if s.get('churn_rate') is not None:
-            lines.append(f"    이탈률: {_fmt_pct(s.get('churn_rate'))} ({_fmt_arrow(s.get('churn_diff'))} pp)")
+            lines.append(f"    이탈율: {_fmt_pct(s.get('churn_rate'))} (Δ {_fmt_arrow(s.get('churn_diff'))} pp | 전주 {_fmt_pct(s.get('churn_rate_prev'))})")
+
         lines.append(f"  [청취 품질]")
         if s.get('deep_rate') is not None:
-            lines.append(f"    깊은청취율: {_fmt_pct(s.get('deep_rate'))} ({_fmt_arrow(s.get('deep_diff'))} pp)")
+            lines.append(f"    깊은청취율: {_fmt_pct(s.get('deep_rate'))} (Δ {_fmt_arrow(s.get('deep_diff'))} pp | 전주 {_fmt_pct(s.get('deep_rate_prev'))})")
         if s.get('real_rate') is not None:
-            lines.append(f"    실청취율: {_fmt_pct(s.get('real_rate'))} ({_fmt_arrow(s.get('real_diff'))} pp)")
+            lines.append(f"    실청취율: {_fmt_pct(s.get('real_rate'))} (Δ {_fmt_arrow(s.get('real_diff'))} pp | 전주 {_fmt_pct(s.get('real_rate_prev'))})")
         if s.get('engage_rate') is not None:
-            lines.append(f"    참여율: {_fmt_pct(s.get('engage_rate'))} ({_fmt_arrow(s.get('engage_diff'))} pp)")
+            lines.append(f"    참여율: {_fmt_pct(s.get('engage_rate'))} (Δ {_fmt_arrow(s.get('engage_diff'))} pp | 전주 {_fmt_pct(s.get('engage_rate_prev'))})")
         if s.get('habit_rate') is not None:
-            lines.append(f"    습관형성률: {_fmt_pct(s.get('habit_rate'))} ({_fmt_arrow(s.get('habit_diff'))} pp)")
+            lines.append(f"    습관형성률: {_fmt_pct(s.get('habit_rate'))} (Δ {_fmt_arrow(s.get('habit_diff'))} pp | 전주 {_fmt_pct(s.get('habit_rate_prev'))})")
+
         if any(s.get(k) is not None for k in ('d1_ret', 'd7_ret', 'w1_ret', 'm1_ret')):
             lines.append(f"  [유지율 — 전체 코호트]")
             if s.get('d1_ret') is not None:
-                lines.append(f"    D1: {_fmt_pct(s.get('d1_ret'))} ({_fmt_arrow(s.get('d1_ret_diff'))} pp)")
+                lines.append(f"    D1: {_fmt_pct(s.get('d1_ret'))} (Δ {_fmt_arrow(s.get('d1_ret_diff'))} pp)")
             if s.get('d7_ret') is not None:
-                lines.append(f"    D7: {_fmt_pct(s.get('d7_ret'))} ({_fmt_arrow(s.get('d7_ret_diff'))} pp)")
+                lines.append(f"    D7: {_fmt_pct(s.get('d7_ret'))} (Δ {_fmt_arrow(s.get('d7_ret_diff'))} pp)")
             if s.get('w1_ret') is not None:
-                lines.append(f"    W1: {_fmt_pct(s.get('w1_ret'))} ({_fmt_arrow(s.get('w1_ret_diff'))} pp)")
+                lines.append(f"    W1: {_fmt_pct(s.get('w1_ret'))} (Δ {_fmt_arrow(s.get('w1_ret_diff'))} pp)")
             if s.get('m1_ret') is not None:
-                lines.append(f"    M1: {_fmt_pct(s.get('m1_ret'))} ({_fmt_arrow(s.get('m1_ret_diff'))} pp)")
+                lines.append(f"    M1: {_fmt_pct(s.get('m1_ret'))} (Δ {_fmt_arrow(s.get('m1_ret_diff'))} pp)")
+
         if any(s.get(k) is not None for k in ('new_d1_ret', 'new_d7_ret', 'new_w1_ret', 'new_m1_ret')):
             lines.append(f"  [유지율 — 신규 코호트]")
             if s.get('new_d1_ret') is not None:
-                lines.append(f"    D1: {_fmt_pct(s.get('new_d1_ret'))} (전주 {_fmt_pct(s.get('new_d1_ret_prev'))}, {_fmt_arrow(s.get('new_d1_ret_diff'))} pp)")
+                lines.append(f"    D1: {_fmt_pct(s.get('new_d1_ret'))} (전주 {_fmt_pct(s.get('new_d1_ret_prev'))}, Δ {_fmt_arrow(s.get('new_d1_ret_diff'))} pp)")
             if s.get('new_d7_ret') is not None:
-                lines.append(f"    D7: {_fmt_pct(s.get('new_d7_ret'))} (전주 {_fmt_pct(s.get('new_d7_ret_prev'))}, {_fmt_arrow(s.get('new_d7_ret_diff'))} pp)")
+                lines.append(f"    D7: {_fmt_pct(s.get('new_d7_ret'))} (전주 {_fmt_pct(s.get('new_d7_ret_prev'))}, Δ {_fmt_arrow(s.get('new_d7_ret_diff'))} pp)")
             if s.get('new_w1_ret') is not None:
-                lines.append(f"    W1: {_fmt_pct(s.get('new_w1_ret'))} (전주 {_fmt_pct(s.get('new_w1_ret_prev'))}, {_fmt_arrow(s.get('new_w1_ret_diff'))} pp)")
+                lines.append(f"    W1: {_fmt_pct(s.get('new_w1_ret'))} (전주 {_fmt_pct(s.get('new_w1_ret_prev'))}, Δ {_fmt_arrow(s.get('new_w1_ret_diff'))} pp)")
             if s.get('new_m1_ret') is not None:
-                lines.append(f"    M1: {_fmt_pct(s.get('new_m1_ret'))} (전월 {_fmt_pct(s.get('new_m1_ret_prev'))}, {_fmt_arrow(s.get('new_m1_ret_diff'))} pp)")
-        if s.get('dau_week') or s.get('dau_week_avg') is not None:
+                lines.append(f"    M1: {_fmt_pct(s.get('new_m1_ret'))} (전월 {_fmt_pct(s.get('new_m1_ret_prev'))}, Δ {_fmt_arrow(s.get('new_m1_ret_diff'))} pp)")
+
+        if s.get('dau_week'):
             lines.append(f"  [주간 (WAU)]")
-            lines.append(f"    WAU: {_fmt_dau(s.get('dau_week'))} (WoW {_fmt_arrow(s.get('dau_week_wow'))} | 전주일평균 {_fmt_dau(s.get('dau_week_avg'))})")
+            lines.append(f"    WAU: {_fmt_dau(s.get('dau_week'))} (WoW {_fmt_arrow(s.get('dau_week_wow'))} | 전전주 {_fmt_dau(s.get('dau_week_prev'))})")
             if s.get('deep_week') is not None:
-                lines.append(f"    깊은청취율: {_fmt_pct(s.get('deep_week'))} | 실청취율: {_fmt_pct(s.get('real_week'))} | 참여율: {_fmt_pct(s.get('engage_week'))}")
+                lines.append(f"    깊은청취율: {_fmt_pct(s.get('deep_week'))} | 실청취율: {_fmt_pct(s.get('real_week'))} (전주 {_fmt_pct(s.get('real_week_prev'))}) | 참여율: {_fmt_pct(s.get('engage_week'))}")
             if s.get('churn_week') is not None:
-                lines.append(f"    이탈률: {_fmt_pct(s.get('churn_week'))} | 습관형성률: {_fmt_pct(s.get('habit_week'))}")
-            if s.get('new_week') or s.get('new_week_share') is not None:
-                lines.append(f"    신규: {_fmt_dau(s.get('new_week'))} ({_fmt_pct(s.get('new_week_share'))}) | 복귀: {_fmt_dau(s.get('react_week'))} (복귀율 {_fmt_pct(s.get('react_rate_week'))})")
-        if s.get('dau_mon') or s.get('dau_mon_avg') is not None:
+                lines.append(f"    이탈율: {_fmt_pct(s.get('churn_week'))} | 복귀율: {_fmt_pct(s.get('react_rate_week'))} (Δ {_fmt_arrow(s.get('react_rate_week_diff'))} pp) | 습관: {_fmt_pct(s.get('habit_week'))}")
+            if s.get('new_week') or s.get('react_week'):
+                lines.append(f"    신규: {_fmt_dau(s.get('new_week'))} ({_fmt_pct(s.get('new_week_share'))}) WoW {_fmt_arrow(s.get('new_week_wow'))} | 전주 {_fmt_dau(s.get('new_week_prev'))}")
+                lines.append(f"    복귀: {_fmt_dau(s.get('react_week'))} WoW {_fmt_arrow(s.get('react_week_wow'))} | 전주 {_fmt_dau(s.get('react_week_prev'))}")
+
+        if s.get('dau_mon'):
             lines.append(f"  [월간 (MAU)]")
-            lines.append(f"    MAU: {_fmt_dau(s.get('dau_mon'))} (MoM {_fmt_arrow(s.get('dau_mon_wow'))} | 전월일평균 {_fmt_dau(s.get('dau_mon_avg'))} | WAU전월평균 {_fmt_dau(s.get('wau_mon_avg'))})")
+            lines.append(f"    MAU: {_fmt_dau(s.get('dau_mon'))} (MoM {_fmt_arrow(s.get('dau_mon_wow'))} | 전전월 {_fmt_dau(s.get('dau_mon_prev'))})")
             if s.get('deep_mon') is not None:
-                lines.append(f"    깊은청취율: {_fmt_pct(s.get('deep_mon'))} | 실청취율: {_fmt_pct(s.get('real_mon'))} | 참여율: {_fmt_pct(s.get('engage_mon'))}")
+                lines.append(f"    깊은청취율: {_fmt_pct(s.get('deep_mon'))} | 실청취율: {_fmt_pct(s.get('real_mon'))} (전월 {_fmt_pct(s.get('real_mon_prev'))}) | 참여율: {_fmt_pct(s.get('engage_mon'))}")
             if s.get('churn_mon') is not None:
-                lines.append(f"    이탈률: {_fmt_pct(s.get('churn_mon'))} | 습관형성률: {_fmt_pct(s.get('habit_mon'))}")
-            if s.get('new_mon') or s.get('new_mon_share') is not None:
-                lines.append(f"    신규: {_fmt_dau(s.get('new_mon'))} ({_fmt_pct(s.get('new_mon_share'))}) | 복귀: {_fmt_dau(s.get('react_mon'))} (복귀율 {_fmt_pct(s.get('react_rate_mon'))})")
+                lines.append(f"    이탈율: {_fmt_pct(s.get('churn_mon'))} | 복귀율: {_fmt_pct(s.get('react_rate_mon'))} (Δ {_fmt_arrow(s.get('react_rate_mon_diff'))} pp) | 습관: {_fmt_pct(s.get('habit_mon'))}")
+            if s.get('new_mon') or s.get('react_mon'):
+                lines.append(f"    신규: {_fmt_dau(s.get('new_mon'))} ({_fmt_pct(s.get('new_mon_share'))}) WoW {_fmt_arrow(s.get('new_mon_wow'))} | 전월 {_fmt_dau(s.get('new_mon_prev'))}")
+                lines.append(f"    복귀: {_fmt_dau(s.get('react_mon'))} WoW {_fmt_arrow(s.get('react_mon_wow'))}")
+
+        if s.get('guestname'):
+            lines.append(f"  [편성 메타]")
+            lines.append(f"    오늘 게스트: {s['guestname']}")
+
         lines.append('')
 
     if 'trend' in data:
