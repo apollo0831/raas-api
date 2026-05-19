@@ -452,20 +452,49 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
 
     # compare
     if intent_type == 'compare':
-        latest_date = available_dates[-1]
-        ch_rows = []
-        for ch in ('F00', 'L00', 'G00', 'P00'):
-            row = timeline.get(ch, {}).get(latest_date, {})
-            if not row:
-                continue
-            ch_rows.append({
-                'code': ch, 'name': BE._pgm_name(ch, row=row),
-                'dau': BE._i(row.get('dau_today')),
-                'dau_wow': BE._fn(row.get('dau_wow')),
-                'deep_rate': BE._fn(row.get('deep_rate')),
-                'churn_rate': BE._fn(row.get('churn_rate')),
-            })
-        data['compare'] = ch_rows
+        _channel_scopes = {'T00', 'F00', 'L00', 'G00', 'P00'}
+        if scope in _channel_scopes:
+            # 채널 간 비교
+            latest_date = available_dates[-1]
+            ch_rows = []
+            for ch in ('F00', 'L00', 'G00', 'P00'):
+                row = timeline.get(ch, {}).get(latest_date, {})
+                if not row:
+                    continue
+                ch_rows.append({
+                    'code': ch, 'name': BE._pgm_name(ch, row=row),
+                    'dau': BE._i(row.get('dau')),
+                    'dau_wow': BE._fn(row.get('dau_chg')),
+                    'deep_rate': BE._fn(row.get('deep_rate')),
+                    'churn_rate': BE._fn(row.get('churn_rate')),
+                })
+            data['compare'] = ch_rows
+        else:
+            # 프로그램 스코프: 주간 비교 (지난주 vs 지지난주)
+            compare_days = max(days * 2, 14)
+            raw_trend = BE.get_metric_trend(timeline, scope, 'dau', days=compare_days)
+            valid_pts = [(d, v) for d, v in raw_trend if v is not None]
+            if valid_pts:
+                mid = len(valid_pts) // 2
+                w2_pts = valid_pts[:mid]   # 지지난주 (더 오래된 절반)
+                w1_pts = valid_pts[mid:]   # 지난주  (최근 절반)
+                def _wk(pts):
+                    vals = [v for _, v in pts]
+                    return {
+                        'date_range': f"{pts[0][0]}~{pts[-1][0]}",
+                        'avg': round(sum(vals) / len(vals)) if vals else None,
+                        'max': max(vals) if vals else None,
+                        'min': min(vals) if vals else None,
+                        'days': pts,
+                    }
+                data['weekly_compare'] = {
+                    'scope': scope,
+                    'scope_name': BE._pgm_name(scope),
+                    'week1': _wk(w1_pts),
+                    'week2': _wk(w2_pts),
+                }
+                # trend도 채워서 차트 렌더링 활용
+                data['trend'] = {'metric_field': 'dau', 'days': len(valid_pts), 'data': valid_pts}
 
     # health — 위험 프로그램
     # Phase 5 Step 4: 어댑터의 find_at_risk_programs 우선 + 인라인 룰 fallback
@@ -722,6 +751,24 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
                 f"  {c['name']}: DAU {_fmt_dau(c['dau'])} ({_fmt_arrow(c['dau_wow'])}) | "
                 f"깊은청취 {_fmt_pct(c['deep_rate'])}"
             )
+        lines.append('')
+
+    if data.get('weekly_compare'):
+        wc = data['weekly_compare']
+        w1, w2 = wc['week1'], wc['week2']
+        lines.append(f"[{wc['scope_name']} 주간 비교]")
+        if w1['avg'] and w2['avg']:
+            chg = (w1['avg'] - w2['avg']) / w2['avg'] * 100
+            lines.append(f"  지난주 평균:   {_fmt_dau(w1['avg'])} ({chg:+.1f}%)")
+        else:
+            lines.append(f"  지난주 평균:   {_fmt_dau(w1['avg'])}")
+        lines.append(f"  지난주 ({w1['date_range']}): 최고 {_fmt_dau(w1['max'])} | 최저 {_fmt_dau(w1['min'])}")
+        for d, v in w1['days']:
+            lines.append(f"    {d}({_weekday_ko(d)}): {_fmt_dau(v)}")
+        lines.append(f"  지지난주 평균: {_fmt_dau(w2['avg'])}")
+        lines.append(f"  지지난주 ({w2['date_range']}): 최고 {_fmt_dau(w2['max'])} | 최저 {_fmt_dau(w2['min'])}")
+        for d, v in w2['days']:
+            lines.append(f"    {d}({_weekday_ko(d)}): {_fmt_dau(v)}")
         lines.append('')
 
     if data.get('risks'):
