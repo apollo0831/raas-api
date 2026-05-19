@@ -1,0 +1,50 @@
+{"id": "Q001", "question": "어제 DAU 1위 프로그램은?", "category": "ranking", "source": "real", "real_db_id": 1, "difficulty": "easy", "expected_data": ["raas_kpi_latest:DAU"], "notes": "TOP1 단순 추출"}
+{"id": "Q002", "question": "파워FM 최근 트렌드는?", "category": "trend", "source": "real", "real_db_id": 3, "difficulty": "medium", "expected_data": ["s6_channels:F00", "raas_llm_context_day"], "notes": "기간 명시 없음 — 기본 7일 가정?"}
+{"id": "Q003", "question": "두시탈출 컬투쇼 최근 7일 DAU 추세", "category": "trend", "source": "real", "real_db_id": 4, "difficulty": "easy", "expected_data": ["프로그램별 일일 DAU 시계열"], "notes": "차트 출력 기대"}
+{"id": "Q004", "question": "파워FM vs 러브FM 어제 DAU 비교", "category": "comparison", "source": "real", "real_db_id": 5, "difficulty": "easy", "expected_data": ["s6_channels:F00,L00"], "notes": "비교 차트 기대"}
+{"id": "Q005", "question": "RAAS가 뭐야?", "category": "system_meta", "source": "real", "real_db_id": 7, "difficulty": "easy", "expected_data": ["시스템 설명 (CLAUDE.md/README)"], "notes": "메타 질문 — 데이터 없이 답변"}
+{"id": "Q006", "question": "최근 7일 TOP3 프로그램 DAU 추이", "category": "trend", "source": "real", "real_db_id": 8, "difficulty": "medium", "expected_data": ["raas_top_programs_latest", "프로그램별 일별 DAU"], "notes": "랭킹+추세 결합"}
+{"id": "Q007", "question": "3월말에 12시엔 주현영 프로그램 개편이 있었는데 개편 전후 비교해줘", "category": "reorganization_effect", "source": "real", "real_db_id": 14, "difficulty": "hard", "expected_data": ["편성이력(없음)", "프로그램 일별 KPI"], "notes": "편성 메타데이터 부재 — Phase 1 핵심 갭"}
+{"id": "Q008", "question": "12시엔 주현영 3/1부터 dau보여줘", "category": "timeseries_lookup", "source": "real", "real_db_id": 15, "difficulty": "easy", "expected_data": ["프로그램 일별 DAU 시계열"], "notes": "시작일 명시"}
+{"id": "Q009", "question": "같은 프로그램 일간 신규사용자 추이는?", "category": "anaphora", "source": "real", "real_db_id": 16, "difficulty": "medium", "expected_data": ["이전 컨텍스트(12시엔 주현영)", "new_user 시계열"], "notes": "대명사 해석 능력 평가"}
+{"id": "Q010", "question": "12시엔 주현영 신규사용자 추이", "category": "trend", "source": "real", "real_db_id": 17, "difficulty": "easy", "expected_data": ["프로그램 일별 new_user"], "notes": ""}
+{"id": "Q011", "question": "어제 컬투쇼 청취자 어땠어?", "category": "simple_lookup", "source": "real", "real_db_id": 20, "difficulty": "easy", "expected_data": ["프로그램 어제 KPI 종합"], "notes": "자연어 모호 표현 — 어떤 지표?"}
+{"id": "Q012", "question": "이탈 위험 프로그램 알려줘", "category": "risk", "source": "real", "real_db_id": 21, "difficulty": "medium", "expected_data": ["s5_rankings:리스크", "churn_rate"], "notes": "기준 모호 — 정의 필요"}
+{"id": "Q013", "question": "F03 파워 스테이션 진행자 누구야?", "category": "ontology_meta", "source": "real", "real_db_id": 22, "difficulty": "easy", "expected_data": ["raas_onto: 진행자"], "notes": "온톨로지 룩업"}
+{"id": "Q014", "question": "5/1 근로자의 날 청취량 어땠어?", "category": "holiday_event", "source": "real", "real_db_id": 23, "difficulty": "medium", "expected_data": ["일자별 KPI", "공휴일 메타"], "notes": "DayType 비교 기대"}
+{"id": "Q015", "question": "정상근이 출연하는 프로그램?", "category": "ontology_meta", "source": "real", "real_db_id": 24, "difficulty": "easy", "expected_data": ["raas_onto: 게스트/출연자"], "notes": "역방향 온톨로지 검색"}
+{"id": "Q016", "question": "DAU 급락 원인이 뭐야?", "category": "causal", "source": "real", "real_db_id": 25, "difficulty": "hard", "expected_data": ["전체 KPI 추세", "이상 이벤트", "외부 요인(없음)"], "notes": "원인 분석 — 외부 데이터 부재 갭"}
+{"id": "Q017", "question": "4/1 12시엔주현영 개편이 있었는데 개편전후 주요변화 비교분석해줘", "category": "reorganization_effect", "source": "real", "real_db_id": 26, "difficulty": "hard", "expected_data": ["편성이력(없음)", "프로그램 일별 KPI"], "notes": "Q007과 유사 — 일관성 체크"}
+{"id": "Q018", "question": "어제 전체 DAU 몇 명이야?", "category": "simple_lookup", "source": "synthetic", "difficulty": "easy", "expected_data": ["s1_executive:dau"], "notes": "기본 KPI 단일 조회"}
+{"id": "Q019", "question": "이번 주 WAU 알려줘", "category": "simple_lookup", "source": "synthetic", "difficulty": "easy", "expected_data": ["s1_executive:wau / dau_week"], "notes": "WAU=dau_week 별칭 처리 확인"}
+{"id": "Q020", "question": "러브FM 어제 깊은청취율 어땠어?", "category": "simple_lookup", "source": "synthetic", "difficulty": "easy", "expected_data": ["s6_channels:L00:deep_rate"], "notes": "채널별 단일 지표"}
+{"id": "Q021", "question": "지난달 MAU 얼마였어?", "category": "simple_lookup", "source": "synthetic", "difficulty": "easy", "expected_data": ["s1_executive:mau / dau_mon"], "notes": ""}
+{"id": "Q022", "question": "깊은청취율 TOP5 프로그램", "category": "ranking", "source": "synthetic", "difficulty": "easy", "expected_data": ["s5_rankings:deep_top5"], "notes": ""}
+{"id": "Q023", "question": "신규사용자 가장 많은 프로그램은?", "category": "ranking", "source": "synthetic", "difficulty": "easy", "expected_data": ["프로그램별 new_user 정렬"], "notes": ""}
+{"id": "Q024", "question": "파워FM에서 어제 DAU 하위 3개 프로그램", "category": "ranking", "source": "synthetic", "difficulty": "medium", "expected_data": ["F00 채널 필터 + DAU 오름차순"], "notes": "BOTTOM N + 채널 필터"}
+{"id": "Q025", "question": "최근 한 달 DAU 추세 어때?", "category": "trend", "source": "synthetic", "difficulty": "easy", "expected_data": ["raas_llm_context_day 30일"], "notes": ""}
+{"id": "Q026", "question": "평일과 주말 DAU 차이는?", "category": "comparison", "source": "synthetic", "difficulty": "medium", "expected_data": ["일별 KPI + DayType 메타"], "notes": "DayType 활용 확인"}
+{"id": "Q027", "question": "김영철의 파워FM과 컬투쇼 청취자 비교", "category": "comparison", "source": "synthetic", "difficulty": "medium", "expected_data": ["프로그램별 KPI 2건"], "notes": ""}
+{"id": "Q028", "question": "이번 주 vs 지난 주 채널별 DAU 비교", "category": "comparison", "source": "synthetic", "difficulty": "medium", "expected_data": ["s6_channels:dau_week_wow"], "notes": "기간 비교"}
+{"id": "Q029", "question": "4월과 3월 깊은청취율 비교", "category": "comparison", "source": "synthetic", "difficulty": "medium", "expected_data": ["월별 deep_rate"], "notes": "월간 집계 가능 여부"}
+{"id": "Q030", "question": "신규 사용자 유입이 줄고 있는 프로그램은?", "category": "risk", "source": "synthetic", "difficulty": "medium", "expected_data": ["프로그램별 new_user 추세 비교"], "notes": "감소 추세 탐지"}
+{"id": "Q031", "question": "최근 일주일간 DAU가 가장 많이 떨어진 프로그램", "category": "risk", "source": "synthetic", "difficulty": "medium", "expected_data": ["프로그램별 dau_week_wow"], "notes": ""}
+{"id": "Q032", "question": "4월 개편으로 신규 진행자가 들어온 프로그램 효과는?", "category": "reorganization_effect", "source": "synthetic", "difficulty": "hard", "expected_data": ["편성이력 + 진행자 변경 메타(부재)"], "notes": "Phase 1 핵심 갭 — 편성 메타데이터 필요"}
+{"id": "Q033", "question": "진행자 교체 이후 청취자 변화가 가장 큰 프로그램은?", "category": "reorganization_effect", "source": "synthetic", "difficulty": "hard", "expected_data": ["진행자 변경 이력(부재)"], "notes": "온톨로지에 변경 이력 있는지"}
+{"id": "Q034", "question": "어린이날(5/5) 청취 패턴은 평소와 어떻게 달라?", "category": "holiday_event", "source": "synthetic", "difficulty": "medium", "expected_data": ["5/5 일별 KPI", "DayType 평일 평균"], "notes": "DayType 비교"}
+{"id": "Q035", "question": "공휴일에 청취율이 오르는 프로그램과 떨어지는 프로그램 알려줘", "category": "holiday_event", "source": "synthetic", "difficulty": "hard", "expected_data": ["공휴일 일자 + 프로그램별 KPI"], "notes": "패턴 분석"}
+{"id": "Q036", "question": "어버이날 주말에 효도 콘텐츠 프로그램 청취 어땠어?", "category": "holiday_event", "source": "synthetic", "difficulty": "hard", "expected_data": ["일자 KPI + 프로그램 카테고리(부재)"], "notes": "프로그램 콘텐츠 카테고리 메타 필요"}
+{"id": "Q037", "question": "두시탈출 컬투쇼 DAU가 지난주 떨어진 이유?", "category": "causal", "source": "synthetic", "difficulty": "hard", "expected_data": ["프로그램 일별 KPI", "편성/게스트 변경(부재)", "외부 요인(부재)"], "notes": "원인 추론 — 데이터 갭 노출"}
+{"id": "Q038", "question": "신규 사용자 유입이 늘어난 원인 분석해줘", "category": "causal", "source": "synthetic", "difficulty": "hard", "expected_data": ["new_user 추세 + 마케팅/프로모션 메타(부재)"], "notes": ""}
+{"id": "Q039", "question": "지난주 깊은청취율이 오른 이유는?", "category": "causal", "source": "synthetic", "difficulty": "hard", "expected_data": ["deep_rate 추세 + 콘텐츠 변화(부재)"], "notes": ""}
+{"id": "Q040", "question": "러브FM 이탈률이 갑자기 높아진 원인", "category": "causal", "source": "synthetic", "difficulty": "hard", "expected_data": ["L00 churn_rate 추세 + 편성/외부(부재)"], "notes": ""}
+{"id": "Q041", "question": "두시탈출 컬투쇼 진행자는?", "category": "ontology_meta", "source": "synthetic", "difficulty": "easy", "expected_data": ["raas_onto: 진행자"], "notes": ""}
+{"id": "Q042", "question": "정찬우, 김태균이 진행하는 프로그램", "category": "ontology_meta", "source": "synthetic", "difficulty": "easy", "expected_data": ["raas_onto: 진행자→프로그램"], "notes": "복수 인물 입력"}
+{"id": "Q043", "question": "파워FM 12시 시간대 프로그램", "category": "ontology_meta", "source": "synthetic", "difficulty": "medium", "expected_data": ["편성표 시간대 메타(부재?)"], "notes": "시간대 메타 존재 확인"}
+{"id": "Q044", "question": "깊은청취율은 어떻게 계산해?", "category": "system_meta", "source": "synthetic", "difficulty": "easy", "expected_data": ["KPI 정의(CLAUDE.md/README)"], "notes": "지표 정의 설명"}
+{"id": "Q045", "question": "4월 1일부터 4월 30일까지 전체 DAU 일별로 보여줘", "category": "timeseries_lookup", "source": "synthetic", "difficulty": "easy", "expected_data": ["raas_llm_context_day 4월"], "notes": "기간 명시 시계열"}
+{"id": "Q046", "question": "이번 달 컬투쇼 신규사용자 일별 데이터", "category": "timeseries_lookup", "source": "synthetic", "difficulty": "easy", "expected_data": ["프로그램별 new_user 일별"], "notes": ""}
+{"id": "Q047", "question": "그럼 같은 기간 깊은청취율은?", "category": "anaphora", "source": "synthetic", "difficulty": "medium", "expected_data": ["이전 컨텍스트(기간) + deep_rate"], "notes": "대명사 해석"}
+{"id": "Q048", "question": "이번 주 데이터에서 인사이트 있는 발견 있어?", "category": "freeform", "source": "synthetic", "difficulty": "hard", "expected_data": ["전 KPI 종합 + 이상 탐지"], "notes": "자유탐색형 — 분석가 역량 핵심 평가"}
+{"id": "Q049", "question": "최근 한 달 데이터에서 특이한 패턴 찾아줘", "category": "freeform", "source": "synthetic", "difficulty": "hard", "expected_data": ["전 KPI + 패턴 탐지"], "notes": ""}
+{"id": "Q050", "question": "신규 사용자 D7 유지율 어때?", "category": "cohort_retention", "source": "synthetic", "difficulty": "easy", "expected_data": ["s2_funnel:new_d7_ret"], "notes": "코호트 카테고리 신설"}

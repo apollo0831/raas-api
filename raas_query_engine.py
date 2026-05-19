@@ -766,7 +766,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
         else:
             data['anomalies'] = {'alerts': [{'level': 'green', 'msg': '브리핑 데이터 없음 — timeline 기준 이상 감지 불가'}]}
 
-    # report — 전 섹션 묶음 (briefing_data 우선, 없으면 timeline snapshot 보강)
+    # report — 전 섹션 묶음 (briefing_data 우선) + 항상 timeline snapshot 보강
     if intent_type == 'report':
         data['report'] = {
             's1': bd.get('s1_executive', {}),
@@ -777,30 +777,29 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             's6': bd.get('s6_channels', {}),
             's7': bd.get('s7_anomalies', {}),
         }
-        # briefing_data 없으면 timeline 기반 snapshot·ranking도 함께 추출
-        if not bd:
-            latest_date = available_dates[-1]
-            row = timeline.get('T00', {}).get(latest_date, {})
-            if not data.get('snapshot'):
-                data['snapshot'] = _extract_full_snapshot(row, latest_date)
-            # ranking도 추출
-            if not data.get('ranking'):
-                exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
-                rows = []
-                for code, date_rows in timeline.items():
-                    if code in exclude: continue
-                    r_row = date_rows.get(latest_date)
-                    if not r_row: continue
-                    dau = BE._i(r_row.get('dau'))
-                    if not dau or dau <= 0: continue
-                    rows.append({
-                        'code': code, 'name': BE._pgm_name(code, row=r_row), 'dau': dau,
-                        'deep_rate': BE._fn(r_row.get('deep_rate')),
-                        'churn_rate': BE._fn(r_row.get('churn_rate')),
-                        'dau_wow': BE._fn(r_row.get('dau_chg')),
-                    })
-                rows.sort(key=lambda x: x['dau'], reverse=True)
-                data['ranking'] = rows[:5]
+        # briefing_data 유무와 무관하게 항상 full snapshot 추출 (상세 필드 보장)
+        latest_date = available_dates[-1]
+        row = timeline.get(scope, timeline.get('T00', {})).get(latest_date, {})
+        if not data.get('snapshot'):
+            data['snapshot'] = _extract_full_snapshot(row, latest_date)
+        # ranking도 추출
+        if not data.get('ranking'):
+            exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
+            rows = []
+            for code, date_rows in timeline.items():
+                if code in exclude: continue
+                r_row = date_rows.get(latest_date)
+                if not r_row: continue
+                dau = BE._i(r_row.get('dau'))
+                if not dau or dau <= 0: continue
+                rows.append({
+                    'code': code, 'name': BE._pgm_name(code, row=r_row), 'dau': dau,
+                    'deep_rate': BE._fn(r_row.get('deep_rate')),
+                    'churn_rate': BE._fn(r_row.get('churn_rate')),
+                    'dau_wow': BE._fn(r_row.get('dau_chg')),
+                })
+            rows.sort(key=lambda x: x['dau'], reverse=True)
+            data['ranking'] = rows[:5]
 
     # 모든 intent에 s7 이상 알림 첨부 (존재 시)
     if bd.get('s7_anomalies') and 'anomalies' not in data:
