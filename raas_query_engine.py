@@ -921,8 +921,7 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
                 lines.append(f"    깊은청취율: {_fmt_pct(s.get('deep_mon'))} (Δ {_fmt_arrow(s.get('deep_mon_diff'))} pp | 전월 {_fmt_pct(s.get('deep_mon_prev'))})")
             if s.get('real_mon') is not None:
                 lines.append(f"    실청취율: {_fmt_pct(s.get('real_mon'))} (Δ {_fmt_arrow(s.get('real_mon_diff'))} pp | 전월 {_fmt_pct(s.get('real_mon_prev'))})")
-            if s.get('engage_mon') is not None:
-                lines.append(f"    참여율: {_fmt_pct(s.get('engage_mon'))}")
+            lines.append(f"    참여율: {_fmt_pct(s.get('engage_mon'))}")
             if s.get('habit_mon') is not None:
                 lines.append(f"    습관형성률: {_fmt_pct(s.get('habit_mon'))} (Δ {_fmt_arrow(s.get('habit_mon_diff'))} pp | 전월 {_fmt_pct(s.get('habit_mon_prev'))})")
             if s.get('churn_mon') is not None:
