@@ -659,6 +659,21 @@ body{
 .ai-chart-meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--dim);}
 .ai-source{font-size:11px;color:var(--dim);margin:8px 0 0;}
 .ai-loading-msg{font-size:13px;color:var(--sub);padding:12px 0;text-align:center;}
+.ai-rank-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px;}
+.ai-rank-table thead tr{background:var(--bg2);}
+.ai-rank-table th{padding:6px 10px;text-align:left;font-weight:600;color:var(--dim);font-size:11px;border-bottom:1px solid var(--line);}
+.ai-rank-table th:not(:nth-child(2)){text-align:right;}
+.ai-rank-table td{padding:7px 10px;border-bottom:1px solid var(--line);}
+.ai-rank-table .rk-n{text-align:center;width:36px;color:var(--dim);font-size:12px;}
+.ai-rank-table .rk-name{font-weight:500;}
+.ai-rank-table .rk-v{text-align:right;}
+.ai-rank-table .rk-pos{color:#1d9e75;font-weight:600;}
+.ai-rank-table .rk-neg{color:#e24b4a;font-weight:600;}
+.ai-rank-table tr:nth-child(-n+3) .rk-n{color:var(--accent);font-weight:700;}
+.ai-rank-table tr:last-child td{border-bottom:none;}
+.rk-hidden{display:none;}
+.rk-toggle-btn{display:block;width:100%;margin-top:6px;padding:7px 0;background:none;border:1px solid var(--line);border-radius:6px;color:var(--sub);font-size:12px;cursor:pointer;text-align:center;}
+.rk-toggle-btn:hover{background:var(--bg2);color:var(--fg);}
 
 /* ── 청취 전환 퍼널 ── */
 .qlty-funnel{background:var(--bg2);border-radius:12px;padding:12px 14px;border:1px solid var(--line);}
@@ -1420,9 +1435,7 @@ function renderAll(d){
   const s6=d.s6_channels||{};
   const s7=d.s7_anomalies||{};
 
-  // 기준일
-  document.getElementById('headerDate').textContent =
-    s1.date || d.collected_at?.split(' ')[0] || '';
+  const _dataDateRaw = s1.date || d.collected_at?.split(' ')[0] || '';
 
   renderHealth(s1,s2,s3,s4);
   renderUserSize();
@@ -1548,6 +1561,10 @@ async function renderUserSize() {
   };
 
   const dateD1     = normISO(s1.date);                   // D-1 (룩업 기준일)
+  // 헤더 날짜 = 오늘(데이터 기준일 + 1일)
+  const _todayISO  = addDays(dateD1, 1);
+  document.getElementById('headerDate').textContent =
+    _todayISO ? _todayISO.replace(/-/g, '/') : _dataDateRaw;
   const dateWeekS  = normISO(s1.date_week);              // 전주 월요일
   const dateWeekE  = dateWeekS ? addDays(dateWeekS, 6) : null;
   const dateMonS   = normISO(s1.date_mon);               // 전월 1일
@@ -3282,6 +3299,8 @@ function renderAiAnswer(cardId, question, data) {
     chartHTML = renderSparkline(chart);
   } else if (chart && chart.type === 'comparison' && chart.items && chart.items.length >= 2) {
     chartHTML = renderBarChart(chart);
+  } else if (chart && chart.type === 'table' && chart.rows && chart.rows.length) {
+    chartHTML = renderRankingTable(chart);
   }
   const pts = chart && chart.points, its = chart && chart.items;
   const sourceHTML = (chart && chart.source)
@@ -3352,6 +3371,123 @@ function renderBarChart(chart) {
     </div>
     <div style="display:flex;align-items:flex-end;gap:8px;min-height:88px;">${bars}</div>
   </div>`;
+}
+
+function renderRankingTable(chart) {
+  const rows = chart.rows || [];
+  if (!rows.length) return '';
+  const sm = chart.sort_metric || 'dau';
+
+  // 컬럼 정의: [field, header, format]
+  // format: 'num'=정수, 'pct'=WoW%(색상), 'rate'=XX.X%, 'diff'=+X.Xpp(색상), 'share'=XX.X%
+  const _D = '<span style="color:var(--dim)">—</span>';
+  function fmtNum(v)  { return v != null ? v.toLocaleString() : _D; }
+  function fmtRate(v) { return v != null ? `${v.toFixed(1)}%` : _D; }
+  function fmtPct(v)  {
+    if (v == null) return _D;
+    return `<span class="${v >= 0 ? 'rk-pos' : 'rk-neg'}">${v >= 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
+  }
+  function fmtDiff(v) {
+    if (v == null) return _D;
+    return `<span class="${v >= 0 ? 'rk-pos' : 'rk-neg'}">${v >= 0 ? '+' : ''}${v.toFixed(1)}pp</span>`;
+  }
+  const FMTS = { num: fmtNum, pct: fmtPct, rate: fmtRate, diff: fmtDiff, share: fmtRate };
+
+  // 컬럼 스펙: { col1: [field, header, fmt], col2: [field, header, fmt], col3?: [field, header, fmt] }
+  const SPECS = {
+    // 볼륨 계열 — 지표값 | WoW | 실청취율
+    dau:     { c: [['dau','DAU','num'],['dau_wow','WoW(7일전)','pct'],['real_rate','실청취율','rate']] },
+    wau:     { c: [['wau','WAU','num'],['dau_week_wow','WoW(전주)','pct'],['real_rate_week','실청취율','rate']] },
+    mau:     { c: [['mau','MAU','num'],['dau_mon_wow','WoW(전월)','pct'],['real_rate_mon','실청취율','rate']] },
+    dau_r7:  { c: [['dau_r7','7일롤링','num'],['dau_wow','전일대비','pct'],['real_rate','실청취율','rate']] },
+    dau_r30: { c: [['dau_r30','30일롤링','num'],['dau_wow','전일대비','pct'],['real_rate','실청취율','rate']] },
+    // 신규/복귀 — 지표값 | 전기대비WoW% | 활성사용자 대비 구성비율
+    new:          { c: [['new','신규(일)','num'],['new_wow','전일대비','pct'],['new_pct','DAU비중','share']] },
+    new_week:     { c: [['new_week','신규(주)','num'],['new_week_wow','전주대비','pct'],['new_week_pct','WAU비중','share']] },
+    new_mon:      { c: [['new_mon','신규(월)','num'],['new_mon_wow','전월대비','pct'],['new_pct','MAU비중','share']] },
+    react:        { c: [['react','복귀(일)','num'],['react_wow','전일대비','pct'],['react_pct','DAU비중','share']] },
+    react_week:   { c: [['react_week','복귀(주)','num'],['react_week_wow','전주대비','pct'],['react_week_pct','WAU비중','share']] },
+    react_mon:    { c: [['react_mon','복귀(월)','num'],['react_wow','전월대비','pct'],['react_pct','MAU비중','share']] },
+    // 복귀율 — 지표값 | 전기대비 pp
+    react_rate:      { c: [['react_rate','복귀율(일)','rate'],['react_rate_diff','전일대비','diff']] },
+    react_rate_week: { c: [['react_rate_week','복귀율(주)','rate'],['react_rate_week_diff','전주대비','diff']] },
+    react_rate_mon:  { c: [['react_rate_mon','복귀율(월)','rate'],['react_rate_mon_diff','전월대비','diff']] },
+    // 비율 지표 — 지표값 | 전기대비 pp (3열 없음)
+    churn_rate:      { c: [['churn_rate','이탈율(일)','rate'],['churn_rate_diff','전일대비','diff']] },
+    churn_rate_week: { c: [['churn_rate_week','이탈율(주)','rate'],['churn_rate_week_diff','전주대비','diff']] },
+    churn_rate_mon:  { c: [['churn_rate_mon','이탈율(월)','rate'],['churn_rate_mon_diff','전월대비','diff']] },
+    real_rate:       { c: [['real_rate','실청취율(일)','rate'],['real_rate_diff','전일대비','diff']] },
+    real_rate_week:  { c: [['real_rate_week','실청취율(주)','rate'],['real_rate_week_diff','전주대비','diff']] },
+    real_rate_mon:   { c: [['real_rate_mon','실청취율(월)','rate'],['real_rate_mon_diff','전월대비','diff']] },
+    deep_rate:       { c: [['deep_rate','깊은청취율(일)','rate'],['deep_rate_diff','전일대비','diff']] },
+    deep_rate_week:  { c: [['deep_rate_week','깊은청취율(주)','rate'],['deep_rate_week_diff','전주대비','diff']] },
+    deep_rate_mon:   { c: [['deep_rate_mon','깊은청취율(월)','rate'],['deep_rate_mon_diff','전월대비','diff']] },
+    engage_rate:     { c: [['engage_rate','참여율(일)','rate'],['engage_rate_diff','전일대비','diff']] },
+    engage_rate_week:{ c: [['engage_rate_week','참여율(주)','rate'],['engage_rate_week_diff','전주대비','diff']] },
+    engage_rate_mon: { c: [['engage_rate_mon','참여율(월)','rate'],['engage_rate_mon_diff','전월대비','diff']] },
+    habit_rate:      { c: [['habit_rate','습관형성율(일)','rate'],['habit_rate_diff','전일대비','diff']] },
+    habit_rate_week: { c: [['habit_rate_week','습관형성율(주)','rate'],['habit_rate_week_diff','전주대비','diff']] },
+    habit_rate_mon:  { c: [['habit_rate_mon','습관형성율(월)','rate'],['habit_rate_mon_diff','전월대비','diff']] },
+    // 유지율 — 지표값 | 전기대비 pp
+    d1_ret:     { c: [['d1_ret','D1유지(전체)','rate'],['d1_ret_diff','전기대비','diff']] },
+    d7_ret:     { c: [['d7_ret','D7유지(전체)','rate'],['d7_ret_diff','전기대비','diff']] },
+    w1_ret:     { c: [['w1_ret','W1유지(전체)','rate'],['w1_ret_diff','전기대비','diff']] },
+    m1_ret:     { c: [['m1_ret','M1유지(전체)','rate'],['m1_ret_diff','전기대비','diff']] },
+    new_d1_ret: { c: [['new_d1_ret','D1유지(신규)','rate'],['new_d1_ret_diff','전기대비','diff']] },
+    new_d7_ret: { c: [['new_d7_ret','D7유지(신규)','rate'],['new_d7_ret_diff','전기대비','diff']] },
+    new_w1_ret: { c: [['new_w1_ret','W1유지(신규)','rate'],['new_w1_ret_diff','전기대비','diff']] },
+    new_m1_ret: { c: [['new_m1_ret','M1유지(신규)','rate'],['new_m1_ret_diff','전기대비','diff']] },
+  };
+  const spec = SPECS[sm] || SPECS.dau;
+  const cols = spec.c;
+
+  const DEFAULT_N = 10;
+  const startExpanded = chart.show_all || rows.length <= DEFAULT_N;
+  const hasMore = rows.length > DEFAULT_N;
+
+  const thead = cols.map(([,h]) => `<th style="${h==='프로그램'?'':'text-align:right'}">${h}</th>`).join('');
+  const _WEEKEND_CODES = new Set(['M05','M07','M10','M11']);
+  const tbody = rows.map((r, i) => {
+    const hidden = !startExpanded && i >= DEFAULT_N;
+    const tds = cols.map(([f,,fmt]) => `<td class="rk-v">${FMTS[fmt](r[f])}</td>`).join('');
+    const wkndBadge = _WEEKEND_CODES.has(r.code) ? '<span class="pr-badge weekend">주말</span>' : '';
+    return `<tr${hidden ? ' class="rk-hidden"' : ''}><td class="rk-n">${r.rank}</td><td class="rk-name">${escapeHtml(r.name)}${wkndBadge}</td>${tds}</tr>`;
+  }).join('');
+
+  const toggleLabel = startExpanded && hasMore
+    ? `▲ 접기`
+    : hasMore ? `▼ 전체 보기 (${rows.length}개)` : '';
+  const toggleBtn = hasMore
+    ? `<button class="rk-toggle-btn" onclick="toggleRankingRows(this, ${DEFAULT_N})">${toggleLabel}</button>`
+    : '';
+
+  return `<div class="ai-chart-box">
+    <div class="ai-chart-meta">
+      <span>${escapeHtml(chart.title || '')}</span>
+      <span>자동 시각화</span>
+    </div>
+    <table class="ai-rank-table">
+      <thead><tr><th>순위</th><th>프로그램</th>${thead}</tr></thead>
+      <tbody>${tbody}</tbody>
+    </table>
+    ${toggleBtn}
+  </div>`;
+}
+
+function toggleRankingRows(btn, defaultN) {
+  const tbody = btn.closest('.ai-chart-box').querySelector('tbody');
+  const rows = tbody.querySelectorAll('tr');
+  const isExpanded = [...rows].some(r => r.classList.contains('rk-hidden')) === false
+    && rows.length > defaultN;
+  if (isExpanded) {
+    // 접기
+    rows.forEach((r, i) => { if (i >= defaultN) r.classList.add('rk-hidden'); });
+    btn.textContent = `▼ 전체 보기 (${rows.length}개)`;
+  } else {
+    // 펼치기
+    rows.forEach(r => r.classList.remove('rk-hidden'));
+    btn.textContent = '▲ 접기';
+  }
 }
 
 async function loadHistory() {
