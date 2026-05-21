@@ -1653,6 +1653,15 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
             " 답변 텍스트에 테이블·목록·수치를 절대 포함하지 마세요."
             " 표를 안내하는 자연스러운 한 문장(예: '편성시간 순으로 전체 지표를 정리했습니다.')만 작성하세요."
         )
+    if intent.get('intent') == 'trend':
+        _explain_kw = ('설명', '분석', '해석', '왜', '이유', '원인', '어떻게', '어때', '평가')
+        _wants_text = any(kw in question for kw in _explain_kw)
+        if not _wants_text:
+            intent_note = (
+                "\n\n[추이 응답 규칙] 시계열 차트는 UI에서 자동 시각화됩니다."
+                " 수치 나열·기간별 요약을 답변 텍스트에 포함하지 마세요."
+                " 차트가 표시됨을 알리는 한 문장만 작성하세요. 예: '최근 30일 DAU 추이를 차트로 표시했습니다.'"
+            )
     answer_text = call_claude(QUERY_SYSTEM_PROMPT + date_system + intent_note, context, max_tokens=max_tokens)
     chart_data = build_chart_data(data, intent, question)
     return {"answer": answer_text, "chart_data": chart_data}
