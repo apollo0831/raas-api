@@ -66,15 +66,47 @@ KEYWORD_TO_CODE = _build_keyword_index()
 
 # ── 차트 빌더 ──────────────────────────────────────────────
 _METRIC_LABELS = {
-    'dau':         ('DAU',        '명'),
-    'new':         ('신규 유입',  '명'),
-    'react':       ('복귀 사용자','명'),
-    'deep_rate':   ('깊은청취율', '%'),
-    'real_rate':   ('실청취율',   '%'),
-    'engage_rate': ('참여율',     '%'),
-    'habit_rate':  ('습관형성률', '%'),
-    'churn_rate':  ('이탈률',     '%'),
-    'react_rate':  ('복귀율',     '%'),
+    # 볼륨
+    'dau':              ('DAU',          '명'),
+    'wau':              ('WAU',          '명'),
+    'mau':              ('MAU',          '명'),
+    'dau_r7':           ('7일롤링DAU',   '명'),
+    'dau_r30':          ('30일롤링DAU',  '명'),
+    # 신규/복귀 사용자 수
+    'new':              ('신규(일)',      '명'),
+    'new_week':         ('신규(주)',      '명'),
+    'new_mon':          ('신규(월)',      '명'),
+    'react':            ('복귀(일)',      '명'),
+    'react_week':       ('복귀(주)',      '명'),
+    'react_mon':        ('복귀(월)',      '명'),
+    # 비율 지표
+    'react_rate':       ('복귀율',        '%'),
+    'react_rate_week':  ('복귀율(주)',    '%'),
+    'react_rate_mon':   ('복귀율(월)',    '%'),
+    'churn_rate':       ('이탈률',        '%'),
+    'churn_rate_week':  ('이탈률(주)',    '%'),
+    'churn_rate_mon':   ('이탈률(월)',    '%'),
+    'real_rate':        ('실청취율',      '%'),
+    'real_rate_week':   ('실청취율(주)', '%'),
+    'real_rate_mon':    ('실청취율(월)', '%'),
+    'deep_rate':        ('깊은청취율',   '%'),
+    'deep_rate_week':   ('깊은청취율(주)','%'),
+    'deep_rate_mon':    ('깊은청취율(월)','%'),
+    'engage_rate':      ('참여율',        '%'),
+    'engage_rate_week': ('참여율(주)',    '%'),
+    'engage_rate_mon':  ('참여율(월)',    '%'),
+    'habit_rate':       ('습관형성률',   '%'),
+    'habit_rate_week':  ('습관형성률(주)','%'),
+    'habit_rate_mon':   ('습관형성률(월)','%'),
+    # 유지율
+    'd1_ret':           ('D1유지율(전체)','%'),
+    'd7_ret':           ('D7유지율(전체)','%'),
+    'w1_ret':           ('W1유지율(전체)','%'),
+    'm1_ret':           ('M1유지율(전체)','%'),
+    'new_d1_ret':       ('D1유지율(신규)','%'),
+    'new_d7_ret':       ('D7유지율(신규)','%'),
+    'new_w1_ret':       ('W1유지율(신규)','%'),
+    'new_m1_ret':       ('M1유지율(신규)','%'),
 }
 
 def _metric_meta(metric_field: str):
@@ -392,7 +424,7 @@ scope 결정:
 
 metric: dau|wau|mau|dau_r7|dau_r30|new|new_week|new_mon|react|react_week|react_mon|react_rate|react_rate_week|react_rate_mon|churn|churn_week|churn_mon|real|real_week|real_mon|deep|deep_week|deep_mon|engage|engage_week|engage_mon|habit|habit_week|habit_mon|d1|d7|w1|m1|new_d1|new_d7|new_w1|new_m1|all
 (react=복귀사용자수, react_rate=복귀율%; 명시 없으면 all, 기간이 명시되면 _week/_mon suffix 사용)
-days: 기간 명시 없으면 7"""
+days: trend intent는 기간 명시 없으면 30, 나머지는 7"""
 
 
 def classify_intent(question: str, today: str = None) -> dict:
@@ -626,7 +658,9 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
     intent_type = intent.get('intent', 'general')
     scope = intent.get('scope', 'T00')
     metric = intent.get('metric', 'all')
-    days = min(intent.get('days', 7), len(available_dates))
+    # trend는 30일 기본, 나머지는 7일 기본
+    _default_days = 30 if intent_type == 'trend' else 7
+    days = min(intent.get('days', _default_days), len(available_dates))
 
     if scope not in timeline:
         scope = 'T00' if 'T00' in timeline else list(timeline.keys())[0]
@@ -648,11 +682,23 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
     # trend
     if intent_type in ('trend', 'general', 'health', 'engagement'):
         field_map = {
-            'dau': 'dau', 'deep': 'deep_rate', 'new': 'new',
-            'react': 'react', 'churn': 'churn_rate',
-            'engage': 'engage_rate', 'habit': 'habit_rate',
-            'real': 'real_rate', 'all': 'dau',
+            # 볼륨
+            'dau': 'dau', 'wau': 'wau', 'mau': 'mau',
+            'dau_r7': 'dau_r7', 'dau_r30': 'dau_r30',
+            # 신규/복귀
+            'new': 'new', 'new_week': 'new_week', 'new_mon': 'new_mon',
+            'react': 'react', 'react_week': 'react_week', 'react_mon': 'react_mon',
+            'react_rate': 'react_rate', 'react_rate_week': 'react_rate_week', 'react_rate_mon': 'react_rate_mon',
+            # 이탈/품질
+            'churn': 'churn_rate', 'churn_week': 'churn_rate_week', 'churn_mon': 'churn_rate_mon',
+            'real': 'real_rate', 'real_week': 'real_rate_week', 'real_mon': 'real_rate_mon',
+            'deep': 'deep_rate', 'deep_week': 'deep_rate_week', 'deep_mon': 'deep_rate_mon',
+            'engage': 'engage_rate', 'engage_week': 'engage_rate_week', 'engage_mon': 'engage_rate_mon',
+            'habit': 'habit_rate', 'habit_week': 'habit_rate_week', 'habit_mon': 'habit_rate_mon',
+            # 유지율
             'd1': 'd1_ret', 'd7': 'd7_ret', 'w1': 'w1_ret', 'm1': 'm1_ret',
+            'new_d1': 'new_d1_ret', 'new_d7': 'new_d7_ret', 'new_w1': 'new_w1_ret', 'new_m1': 'new_m1_ret',
+            'all': 'dau',
         }
         mf = field_map.get(metric, 'dau')
         trend_data = BE.get_metric_trend(timeline, scope, mf, days=days)
@@ -841,7 +887,6 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             # 러브FM 주말
             'M05','M10','M07','M11',
         ]
-        _order_map = {code: i for i, code in enumerate(_SCHEDULE_ORDER)}
         _CH_PROGRAMS = {'F00': set(BE.PGM_F), 'L00': set(BE.PGM_L)}
         _ov_channel = scope if scope in ('F00', 'L00') else None
         _allowed_ov = _CH_PROGRAMS.get(_ov_channel) if _ov_channel else None

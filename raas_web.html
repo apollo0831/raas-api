@@ -3338,38 +3338,88 @@ function renderAiAnswer(cardId, question, data) {
 
 function renderSparkline(chart) {
   const pts = chart.points;
-  const W = 600, H = 72, pad = 8;
+  const W = 600, H = 80, padX = 10, padY = 12;
+  const isRate = chart.unit === '%';
   const values = pts.map(p => p.value);
   const minV = Math.min(...values), maxV = Math.max(...values);
   const rangeV = maxV - minV || 1;
-  const xStep = (W - pad * 2) / Math.max(pts.length - 1, 1);
+  const xStep = (W - padX * 2) / Math.max(pts.length - 1, 1);
+
   const coords = pts.map((p, i) => ({
-    x: pad + i * xStep,
-    y: pad + ((maxV - p.value) / rangeV) * (H - pad * 2),
+    x: padX + i * xStep,
+    y: padY + ((maxV - p.value) / rangeV) * (H - padY * 2),
     date: p.date, value: p.value,
   }));
+
+  // min/max 인덱스
+  const maxIdx = values.indexOf(maxV);
+  const minIdx = values.indexOf(minV);
+
   const polyline = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
   const area = polyline + ` ${coords[coords.length-1].x.toFixed(1)},${H} ${coords[0].x.toFixed(1)},${H}`;
-  const dots = coords.map(c =>
-    `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3" fill="#185fa5"><title>${c.date}: ${c.value.toLocaleString()}</title></circle>`
-  ).join('');
+
+  // 포인트: 30일 이상이면 점 생략, 최신점만 항상 표시
+  const showDots = pts.length <= 20;
+  const fmtVal = v => isRate ? `${v.toFixed(1)}%` : v.toLocaleString();
+  const dots = coords.map((c, i) => {
+    const isMax = i === maxIdx, isMin = i === minIdx, isLast = i === coords.length - 1;
+    const r = (isMax || isMin || isLast) ? 4 : (showDots ? 2.5 : 0);
+    const fill = isMax ? '#1d9e75' : isMin ? '#e24b4a' : '#185fa5';
+    if (r === 0) return '';
+    return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${r}" fill="${fill}"><title>${c.date}: ${fmtVal(c.value)}</title></circle>`;
+  }).join('');
+
+  // 최고/최저 레이블
+  const labelStyle = 'font-size:9px;font-family:var(--mono)';
+  const maxC = coords[maxIdx], minC = coords[minIdx];
+  const maxLabelX = Math.min(Math.max(maxC.x, 18), W - 18);
+  const minLabelX = Math.min(Math.max(minC.x, 18), W - 18);
+  const maxLabel = `<text x="${maxLabelX.toFixed(1)}" y="${(maxC.y - 6).toFixed(1)}" text-anchor="middle" fill="#1d9e75" style="${labelStyle}">${fmtVal(maxV)}</text>`;
+  const minLabel = `<text x="${minLabelX.toFixed(1)}" y="${(minC.y + 13).toFixed(1)}" text-anchor="middle" fill="#e24b4a" style="${labelStyle}">${fmtVal(minV)}</text>`;
+
+  // 평균선
+  const avgV = values.reduce((a, b) => a + b, 0) / values.length;
+  const avgY = padY + ((maxV - avgV) / rangeV) * (H - padY * 2);
+  const avgLine = `<line x1="${padX}" y1="${avgY.toFixed(1)}" x2="${W - padX}" y2="${avgY.toFixed(1)}" stroke="var(--dim)" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>`;
+
+  // X축 날짜 레이블 — 7일: 전체, 14일: 격일, 30일+: 주 경계(월요일)만
+  const _DAYS_KO = ['일','월','화','수','목','금','토'];
+  let xLabels = '';
+  if (pts.length <= 10) {
+    xLabels = coords.map(c => {
+      const d = new Date(c.date); const dow = _DAYS_KO[d.getDay()];
+      return `<text x="${c.x.toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${c.date.slice(5)}(${dow})</text>`;
+    }).join('');
+  } else if (pts.length <= 20) {
+    xLabels = coords.filter((_, i) => i % 2 === 0).map(c =>
+      `<text x="${c.x.toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${c.date.slice(5)}</text>`
+    ).join('');
+  } else {
+    // 월요일(getDay()==1)만 표시
+    xLabels = coords.filter(c => new Date(c.date).getDay() === 1).map(c =>
+      `<text x="${c.x.toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${c.date.slice(5)}</text>`
+    ).join('');
+  }
+
   const summary = chart.summary || {};
   const changeTxt = summary.change_pct != null
     ? `<span style="color:${summary.change_pct >= 0 ? '#1d9e75' : '#e24b4a'};font-weight:600;">${summary.change_pct >= 0 ? '+' : ''}${summary.change_pct}%</span>`
     : '';
+  const avgTxt = `<span style="color:var(--sub);font-size:11px;">평균 ${fmtVal(Math.round(avgV * 10) / 10)}</span>`;
+
   return `<div class="ai-chart-box">
     <div class="ai-chart-meta">
       <span>${escapeHtml(chart.title || chart.metric || '')} · ${pts[0].date} ~ ${pts[pts.length-1].date}</span>
-      <span>자동 시각화 ${changeTxt}</span>
+      <span>${avgTxt} ${changeTxt}</span>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:52px;overflow:visible;display:block;">
-      <polygon points="${area}" fill="#185fa5" opacity="0.1"/>
+    <svg viewBox="0 0 ${W} ${H + 14}" style="width:100%;height:${H + 14}px;overflow:visible;display:block;">
+      <polygon points="${area}" fill="#185fa5" opacity="0.08"/>
       <polyline points="${polyline}" fill="none" stroke="#185fa5" stroke-width="2"/>
+      ${avgLine}
+      ${maxLabel}${minLabel}
       ${dots}
+      ${xLabels}
     </svg>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-top:3px;">
-      <span>${pts[0].date.slice(5)}</span><span>${pts[pts.length-1].date.slice(5)}</span>
-    </div>
   </div>`;
 }
 
