@@ -656,7 +656,11 @@ body{
 }
 .ai-answer-text{font-size:14px;line-height:1.75;margin:0 0 10px;color:var(--text);white-space:pre-wrap;}
 .ai-chart-box{background:var(--bg3);border-radius:8px;padding:12px;border:0.5px solid var(--line);}
-.ai-chart-meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--dim);}
+.ai-chart-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px;color:var(--dim);}
+.sp-period-btns{display:flex;gap:4px;margin-bottom:8px;}
+.sp-btn{font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--sub);cursor:pointer;line-height:1.6;transition:background .15s,color .15s;}
+.sp-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.sp-btn:disabled{opacity:0.3;cursor:default;}
 .ai-source{font-size:11px;color:var(--dim);margin:8px 0 0;}
 .ai-loading-msg{font-size:13px;color:var(--sub);padding:12px 0;text-align:center;}
 .ai-rank-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px;}
@@ -3046,6 +3050,53 @@ function escapeHtml(s){
     .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
+// 기간 선택 UI: 차트 데이터 전역 저장소
+const _chartStore = {};
+
+function _sliceChart(chart, days) {
+  const pts = chart.points.slice(-days);
+  const prev = chart.points_prev ? chart.points_prev.slice(-days) : null;
+  const vals = pts.map(p => p.value);
+  const first = vals[0], last = vals[vals.length - 1];
+  const chg = first ? Math.round((last - first) / first * 1000) / 10 : null;
+  return {
+    ...chart,
+    points: pts,
+    points_prev: prev,
+    summary: {
+      min: Math.min(...vals), max: Math.max(...vals),
+      avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10,
+      latest: last, change_pct: chg,
+    },
+  };
+}
+
+function _spSetPeriod(id, days) {
+  const chart = _chartStore[id];
+  const el = document.getElementById(id);
+  if (!chart || !el) return;
+  el.querySelector('.sp-body').innerHTML = _renderSparklineSVG(_sliceChart(chart, days));
+  el.querySelectorAll('.sp-btn').forEach(b => b.classList.toggle('active', +b.dataset.days === days));
+}
+
+function _msSetPeriod(id, days) {
+  const chart = _chartStore[id];
+  const el = document.getElementById(id);
+  if (!chart || !el) return;
+  const sliced = {...chart, series: chart.series.map(s => ({...s, points: s.points.slice(-days)}))};
+  el.querySelector('.sp-body').innerHTML = _renderMultiSVG(sliced);
+  el.querySelectorAll('.sp-btn').forEach(b => b.classList.toggle('active', +b.dataset.days === days));
+}
+
+function _dsSetPeriod(id, days) {
+  const chart = _chartStore[id];
+  const el = document.getElementById(id);
+  if (!chart || !el) return;
+  const sliced = {...chart, series: chart.series.map(s => ({...s, points: s.points.slice(-days)}))};
+  el.querySelector('.sp-body').innerHTML = _renderDualSVG(sliced);
+  el.querySelectorAll('.sp-btn').forEach(b => b.classList.toggle('active', +b.dataset.days === days));
+}
+
 function getChannelBadge(channel, period, channelFilter){
   if(period!=='day' || channelFilter!=='ALL') return '';
   if(channel==='파워FM') return '<span class="pr-badge channel-fm">파워</span>';
@@ -3316,6 +3367,10 @@ function renderAiAnswer(cardId, question, data) {
   let chartHTML = '';
   if (chart && chart.type === 'timeseries' && chart.points && chart.points.length >= 2) {
     chartHTML = renderSparkline(chart);
+  } else if (chart && chart.type === 'timeseries_multi' && chart.series && chart.series.length >= 2) {
+    chartHTML = renderMultiSparkline(chart);
+  } else if (chart && chart.type === 'timeseries_dual' && chart.series && chart.series.length >= 2) {
+    chartHTML = renderDualSparkline(chart);
   } else if (chart && chart.type === 'comparison' && chart.items && chart.items.length >= 2) {
     chartHTML = renderBarChart(chart);
   } else if (chart && chart.type === 'table' && chart.subtype === 'overview' && chart.rows && chart.rows.length) {
@@ -3336,12 +3391,20 @@ function renderAiAnswer(cardId, question, data) {
     ${chartHTML}${sourceHTML}`;
 }
 
-function renderSparkline(chart) {
+function _renderSparklineSVG(chart) {
   const pts = chart.points;
   const W = 600, H = 80, padX = 10, padY = 12;
   const isRate = chart.unit === '%';
   const values = pts.map(p => p.value);
-  const minV = Math.min(...values), maxV = Math.max(...values);
+  const fmtVal = v => isRate ? `${v.toFixed(1)}%` : v.toLocaleString();
+
+  // 전주 비교선
+  const prevPts = chart.points_prev || [];
+  const hasPrev = prevPts.length >= 2;
+
+  // Y 스케일: current + prev 합산
+  const allVals = hasPrev ? [...values, ...prevPts.map(p => p.value)] : values;
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals);
   const rangeV = maxV - minV || 1;
   const xStep = (W - padX * 2) / Math.max(pts.length - 1, 1);
 
@@ -3351,16 +3414,13 @@ function renderSparkline(chart) {
     date: p.date, value: p.value,
   }));
 
-  // min/max 인덱스
-  const maxIdx = values.indexOf(maxV);
-  const minIdx = values.indexOf(minV);
+  const currMinV = Math.min(...values), currMaxV = Math.max(...values);
+  const maxIdx = values.indexOf(currMaxV), minIdx = values.indexOf(currMinV);
 
   const polyline = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
   const area = polyline + ` ${coords[coords.length-1].x.toFixed(1)},${H} ${coords[0].x.toFixed(1)},${H}`;
 
-  // 포인트: 30일 이상이면 점 생략, 최신점만 항상 표시
   const showDots = pts.length <= 20;
-  const fmtVal = v => isRate ? `${v.toFixed(1)}%` : v.toLocaleString();
   const dots = coords.map((c, i) => {
     const isMax = i === maxIdx, isMin = i === minIdx, isLast = i === coords.length - 1;
     const r = (isMax || isMin || isLast) ? 4 : (showDots ? 2.5 : 0);
@@ -3369,20 +3429,28 @@ function renderSparkline(chart) {
     return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${r}" fill="${fill}"><title>${c.date}: ${fmtVal(c.value)}</title></circle>`;
   }).join('');
 
-  // 최고/최저 레이블
   const labelStyle = 'font-size:9px;font-family:var(--mono)';
   const maxC = coords[maxIdx], minC = coords[minIdx];
   const maxLabelX = Math.min(Math.max(maxC.x, 18), W - 18);
   const minLabelX = Math.min(Math.max(minC.x, 18), W - 18);
-  const maxLabel = `<text x="${maxLabelX.toFixed(1)}" y="${(maxC.y - 6).toFixed(1)}" text-anchor="middle" fill="#1d9e75" style="${labelStyle}">${fmtVal(maxV)}</text>`;
-  const minLabel = `<text x="${minLabelX.toFixed(1)}" y="${(minC.y + 13).toFixed(1)}" text-anchor="middle" fill="#e24b4a" style="${labelStyle}">${fmtVal(minV)}</text>`;
+  const maxLabel = `<text x="${maxLabelX.toFixed(1)}" y="${(maxC.y - 6).toFixed(1)}" text-anchor="middle" fill="#1d9e75" style="${labelStyle}">${fmtVal(currMaxV)}</text>`;
+  const minLabel = `<text x="${minLabelX.toFixed(1)}" y="${(minC.y + 13).toFixed(1)}" text-anchor="middle" fill="#e24b4a" style="${labelStyle}">${fmtVal(currMinV)}</text>`;
 
-  // 평균선
   const avgV = values.reduce((a, b) => a + b, 0) / values.length;
   const avgY = padY + ((maxV - avgV) / rangeV) * (H - padY * 2);
   const avgLine = `<line x1="${padX}" y1="${avgY.toFixed(1)}" x2="${W - padX}" y2="${avgY.toFixed(1)}" stroke="var(--dim)" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>`;
 
-  // X축 날짜 레이블 — 7일: 전체, 14일: 격일, 30일+: 주 경계(월요일)만
+  let prevLineHTML = '';
+  if (hasPrev) {
+    const prevAligned = prevPts.slice(-pts.length);
+    const prevXStep = (W - padX * 2) / Math.max(prevAligned.length - 1, 1);
+    const prevCoords = prevAligned.map((p, i) => ({
+      x: padX + i * prevXStep,
+      y: padY + ((maxV - p.value) / rangeV) * (H - padY * 2),
+    }));
+    prevLineHTML = `<polyline points="${prevCoords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ')}" fill="none" stroke="var(--dim)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.55"/>`;
+  }
+
   const _DAYS_KO = ['일','월','화','수','목','금','토'];
   let xLabels = '';
   if (pts.length <= 10) {
@@ -3395,7 +3463,6 @@ function renderSparkline(chart) {
       `<text x="${c.x.toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${c.date.slice(5)}</text>`
     ).join('');
   } else {
-    // 월요일(getDay()==1)만 표시
     xLabels = coords.filter(c => new Date(c.date).getDay() === 1).map(c =>
       `<text x="${c.x.toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${c.date.slice(5)}</text>`
     ).join('');
@@ -3406,20 +3473,258 @@ function renderSparkline(chart) {
     ? `<span style="color:${summary.change_pct >= 0 ? '#1d9e75' : '#e24b4a'};font-weight:600;">${summary.change_pct >= 0 ? '+' : ''}${summary.change_pct}%</span>`
     : '';
   const avgTxt = `<span style="color:var(--sub);font-size:11px;">평균 ${fmtVal(Math.round(avgV * 10) / 10)}</span>`;
+  const prevLegend = hasPrev
+    ? `<span style="color:var(--dim);font-size:10px;margin-left:8px;">— 이번 / - - 전기간(${prevPts[0].date.slice(5)}~${prevPts[prevPts.length-1].date.slice(5)})</span>`
+    : '';
 
-  return `<div class="ai-chart-box">
-    <div class="ai-chart-meta">
+  return `<div class="ai-chart-meta">
       <span>${escapeHtml(chart.title || chart.metric || '')} · ${pts[0].date} ~ ${pts[pts.length-1].date}</span>
-      <span>${avgTxt} ${changeTxt}</span>
+      <span>${avgTxt} ${changeTxt}${prevLegend}</span>
     </div>
     <svg viewBox="0 0 ${W} ${H + 14}" style="width:100%;height:${H + 14}px;overflow:visible;display:block;">
       <polygon points="${area}" fill="#185fa5" opacity="0.08"/>
+      ${prevLineHTML}
       <polyline points="${polyline}" fill="none" stroke="#185fa5" stroke-width="2"/>
       ${avgLine}
       ${maxLabel}${minLabel}
       ${dots}
       ${xLabels}
-    </svg>
+    </svg>`;
+}
+
+function renderSparkline(chart) {
+  const id = 'sp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  _chartStore[id] = chart;
+  const totalPts = chart.points.length;
+  const _PERIODS = [7, 14, 30];
+  const available = _PERIODS.filter(d => d <= totalPts);
+  const initDays = available.length ? Math.max(...available) : totalPts;
+  const btnHtml = _PERIODS.map(d => {
+    const dis = d > totalPts ? ' disabled' : '';
+    const act = d === initDays ? ' active' : '';
+    return `<button class="sp-btn${act}" data-days="${d}" onclick="_spSetPeriod('${id}',${d})"${dis}>${d}일</button>`;
+  }).join('');
+  const sliced = initDays < totalPts ? _sliceChart(chart, initDays) : chart;
+  return `<div class="ai-chart-box" id="${id}">
+    <div class="sp-period-btns">${btnHtml}</div>
+    <div class="sp-body">${_renderSparklineSVG(sliced)}</div>
+  </div>`;
+}
+
+function _renderMultiSVG(chart) {
+  const series = chart.series || [];
+  const W = 600, H = 100, padX = 10, padY = 14;
+  const isRate = chart.unit === '%';
+  const fmtVal = v => isRate ? `${v.toFixed(1)}%` : v.toLocaleString();
+  const COLORS = ['#185fa5', '#1d9e75', '#d97706', '#dc2626', '#7c3aed'];
+
+  const allVals = series.flatMap(s => s.points.map(p => p.value));
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+  const rangeV = maxV - minV || 1;
+
+  const refPts = series[0].points;
+  const xStep = (W - padX * 2) / Math.max(refPts.length - 1, 1);
+
+  const seriesLines = series.map((s, si) => {
+    const color = s.color || COLORS[si % COLORS.length];
+    const sXStep = (W - padX * 2) / Math.max(s.points.length - 1, 1);
+    const sCoords = s.points.map((p, i) => ({
+      x: padX + i * sXStep,
+      y: padY + ((maxV - p.value) / rangeV) * (H - padY * 2),
+      date: p.date, value: p.value,
+    }));
+    const polyline = sCoords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+    const lastC = sCoords[sCoords.length - 1];
+    const lastDot = `<circle cx="${lastC.x.toFixed(1)}" cy="${lastC.y.toFixed(1)}" r="3.5" fill="${color}"><title>${escapeHtml(s.label)} ${lastC.date}: ${fmtVal(lastC.value)}</title></circle>`;
+    // 시리즈별 끝값 레이블 (우측, 색상별)
+    const endLabel = `<text x="${(lastC.x + 5).toFixed(1)}" y="${(lastC.y + 3.5).toFixed(1)}" fill="${color}" style="font-size:9px;font-family:var(--mono)">${fmtVal(lastC.value)}</text>`;
+    return `<polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="2"/>${lastDot}${endLabel}`;
+  }).join('');
+
+  // Y축 min/max 스케일 레이블 (좌측, 회색)
+  const yMaxLabel = `<text x="${padX + 2}" y="${padY + 4}" text-anchor="start" fill="var(--dim)" style="font-size:9px;font-family:var(--mono)">${fmtVal(maxV)}</text>`;
+  const yMinLabel = `<text x="${padX + 2}" y="${H - 2}" text-anchor="start" fill="var(--dim)" style="font-size:9px;font-family:var(--mono)">${fmtVal(minV)}</text>`;
+
+  const _DAYS_KO = ['일','월','화','수','목','금','토'];
+  let xLabels = '';
+  if (refPts.length <= 10) {
+    xLabels = refPts.map((p, i) => {
+      const d = new Date(p.date); const dow = _DAYS_KO[d.getDay()];
+      return `<text x="${(padX + i * xStep).toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}(${dow})</text>`;
+    }).join('');
+  } else if (refPts.length <= 20) {
+    xLabels = refPts.map((p, i) => i % 2 !== 0 ? '' :
+      `<text x="${(padX + i * xStep).toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}</text>`
+    ).join('');
+  } else {
+    xLabels = refPts.map((p, i) => new Date(p.date).getDay() !== 1 ? '' :
+      `<text x="${(padX + i * xStep).toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}</text>`
+    ).join('');
+  }
+
+  const legend = series.map((s, si) => {
+    const color = s.color || COLORS[si % COLORS.length];
+    const latest = s.points[s.points.length - 1]?.value;
+    return `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;">
+      <svg width="16" height="2" viewBox="0 0 16 2" style="vertical-align:middle;"><line x1="0" y1="1" x2="16" y2="1" stroke="${color}" stroke-width="2"/></svg>
+      <span style="font-size:11px;color:var(--sub)">${escapeHtml(s.label)}${latest != null ? ' ' + fmtVal(latest) : ''}</span>
+    </span>`;
+  }).join('');
+
+  return `<div class="ai-chart-meta">
+      <span>${escapeHtml(chart.title || '')} · ${refPts[0]?.date} ~ ${refPts[refPts.length-1]?.date}</span>
+      <span>${legend}</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H + 14}" style="width:100%;height:${H + 14}px;overflow:visible;display:block;">
+      ${yMaxLabel}${yMinLabel}
+      ${seriesLines}
+      ${xLabels}
+    </svg>`;
+}
+
+function renderMultiSparkline(chart) {
+  const series = chart.series || [];
+  if (series.length < 2) return '';
+  const id = 'ms' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  _chartStore[id] = chart;
+  const totalPts = series[0].points.length;
+  const _PERIODS = [7, 14, 30];
+  const available = _PERIODS.filter(d => d <= totalPts);
+  const initDays = available.length ? Math.max(...available) : totalPts;
+  const btnHtml = _PERIODS.map(d => {
+    const dis = d > totalPts ? ' disabled' : '';
+    const act = d === initDays ? ' active' : '';
+    return `<button class="sp-btn${act}" data-days="${d}" onclick="_msSetPeriod('${id}',${d})"${dis}>${d}일</button>`;
+  }).join('');
+  const sliced = initDays < totalPts
+    ? {...chart, series: chart.series.map(s => ({...s, points: s.points.slice(-initDays)}))}
+    : chart;
+  return `<div class="ai-chart-box" id="${id}">
+    <div class="sp-period-btns">${btnHtml}</div>
+    <div class="sp-body">${_renderMultiSVG(sliced)}</div>
+  </div>`;
+}
+
+function _renderDualSVG(chart) {
+  const series = chart.series || [];
+  if (series.length < 2) return '';
+  const W = 600, H = 100, padX = 10, padY = 14;
+  const COLORS = ['#185fa5', '#1d9e75', '#d97706'];
+
+  // 동일 단위 여부 — 같은 단위면 공유 Y 스케일 사용
+  const units = series.map(s => s.unit || '');
+  const sameUnit = units.every(u => u === units[0]);
+  const allVals = sameUnit ? series.flatMap(s => s.points.map(p => p.value)) : [];
+  const globalMin = sameUnit ? Math.min(...allVals) : 0;
+  const globalMax = sameUnit ? Math.max(...allVals) : 0;
+  const globalRange = globalMax - globalMin || 1;
+
+  const seriesLines = series.map((s, si) => {
+    const color = s.color || COLORS[si % COLORS.length];
+    const unit = s.unit || '';
+    const fmtV = v => unit === '%' ? `${v.toFixed(1)}%` : v.toLocaleString();
+    const vals = s.points.map(p => p.value);
+    const sMin = sameUnit ? globalMin : Math.min(...vals);
+    const sMax = sameUnit ? globalMax : Math.max(...vals);
+    const sRange = sameUnit ? globalRange : (sMax - sMin || 1);
+    const sXStep = (W - padX * 2) / Math.max(s.points.length - 1, 1);
+
+    const sCoords = s.points.map((p, i) => ({
+      x: padX + i * sXStep,
+      y: padY + ((sMax - p.value) / sRange) * (H - padY * 2),
+      date: p.date, value: p.value,
+    }));
+    const polyline = sCoords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+    const lastC = sCoords[sCoords.length - 1];
+
+    // Min/Max 사이드 레이블: 2시리즈 독립척도일 때만 표시
+    let sideLabels = '';
+    if (!sameUnit && series.length === 2) {
+      const sMaxV = Math.max(...vals), sMinV = Math.min(...vals);
+      const maxC = sCoords[vals.indexOf(sMaxV)], minC = sCoords[vals.indexOf(sMinV)];
+      const anchor = si === 0 ? 'start' : 'end';
+      const lx = si === 0 ? padX + 2 : W - padX - 2;
+      sideLabels = `<text x="${lx}" y="${(maxC.y - 3).toFixed(1)}" text-anchor="${anchor}" fill="${color}" style="font-size:9px;font-family:var(--mono)">${fmtV(sMaxV)}</text>
+      <text x="${lx}" y="${(minC.y + 10).toFixed(1)}" text-anchor="${anchor}" fill="${color}" style="font-size:9px;font-family:var(--mono)">${fmtV(sMinV)}</text>`;
+    }
+
+    const lastDot = `<circle cx="${lastC.x.toFixed(1)}" cy="${lastC.y.toFixed(1)}" r="3.5" fill="${color}"><title>${escapeHtml(s.label)} ${lastC.date}: ${fmtV(lastC.value)}</title></circle>`;
+    const fillEl = si === 0
+      ? `<polygon points="${polyline} ${sCoords[sCoords.length-1].x.toFixed(1)},${H} ${sCoords[0].x.toFixed(1)},${H}" fill="${color}" opacity="0.06"/>`
+      : '';
+
+    return `${fillEl}<polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="2"/>${lastDot}${sideLabels}`;
+  }).join('');
+
+  // X축 레이블 (첫 번째 시리즈 기준)
+  const refPts = series[0].points;
+  const xStep = (W - padX * 2) / Math.max(refPts.length - 1, 1);
+  const _DAYS_KO = ['일','월','화','수','목','금','토'];
+  let xLabels = '';
+  if (refPts.length <= 10) {
+    xLabels = refPts.map((p, i) => {
+      const d = new Date(p.date); const dow = _DAYS_KO[d.getDay()];
+      return `<text x="${(padX + i * xStep).toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}(${dow})</text>`;
+    }).join('');
+  } else if (refPts.length <= 20) {
+    xLabels = refPts.map((p, i) => i % 2 !== 0 ? '' :
+      `<text x="${(padX + i * xStep).toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}</text>`
+    ).join('');
+  } else {
+    xLabels = refPts.map((p, i) => new Date(p.date).getDay() !== 1 ? '' :
+      `<text x="${(padX + i * xStep).toFixed(1)}" y="${H + 11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}</text>`
+    ).join('');
+  }
+
+  // 범례
+  const legend = series.map((s, si) => {
+    const color = s.color || COLORS[si % COLORS.length];
+    const unit = s.unit || '';
+    const fmtV = v => unit === '%' ? `${v.toFixed(1)}%` : v.toLocaleString();
+    const latest = s.points[s.points.length - 1]?.value;
+    return `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;">
+      <svg width="16" height="2" viewBox="0 0 16 2" style="vertical-align:middle;"><line x1="0" y1="1" x2="16" y2="1" stroke="${color}" stroke-width="2"/></svg>
+      <span style="font-size:11px;color:var(--sub)">${escapeHtml(s.label)}${latest != null ? ' ' + fmtV(latest) : ''}</span>
+    </span>`;
+  }).join('');
+
+  const scaleNote = sameUnit
+    ? `<div style="font-size:10px;color:var(--dim);margin-bottom:2px;">※ 공통 척도 (${escapeHtml(units[0])})</div>`
+    : series.length === 2
+      ? `<div style="font-size:10px;color:var(--dim);margin-bottom:2px;">※ 각 지표 독립 척도 (좌: ${escapeHtml(series[0]?.label||'')} / 우: ${escapeHtml(series[1]?.label||'')})</div>`
+      : `<div style="font-size:10px;color:var(--dim);margin-bottom:2px;">※ 각 지표 독립 척도</div>`;
+
+  return `<div class="ai-chart-meta">
+      <span>${escapeHtml(chart.title || '')} · ${refPts[0]?.date} ~ ${refPts[refPts.length-1]?.date}</span>
+      <span>${legend}</span>
+    </div>
+    ${scaleNote}
+    <svg viewBox="0 0 ${W} ${H + 14}" style="width:100%;height:${H + 14}px;overflow:visible;display:block;">
+      ${seriesLines}
+      ${xLabels}
+    </svg>`;
+}
+
+function renderDualSparkline(chart) {
+  const series = chart.series || [];
+  if (series.length < 2) return '';
+  const id = 'ds' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  _chartStore[id] = chart;
+  const totalPts = series[0].points.length;
+  const _PERIODS = [7, 14, 30];
+  const available = _PERIODS.filter(d => d <= totalPts);
+  const initDays = available.length ? Math.max(...available) : totalPts;
+  const btnHtml = _PERIODS.map(d => {
+    const dis = d > totalPts ? ' disabled' : '';
+    const act = d === initDays ? ' active' : '';
+    return `<button class="sp-btn${act}" data-days="${d}" onclick="_dsSetPeriod('${id}',${d})"${dis}>${d}일</button>`;
+  }).join('');
+  const sliced = initDays < totalPts
+    ? {...chart, series: chart.series.map(s => ({...s, points: s.points.slice(-initDays)}))}
+    : chart;
+  return `<div class="ai-chart-box" id="${id}">
+    <div class="sp-period-btns">${btnHtml}</div>
+    <div class="sp-body">${_renderDualSVG(sliced)}</div>
   </div>`;
 }
 

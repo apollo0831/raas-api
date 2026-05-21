@@ -113,7 +113,7 @@ def _metric_meta(metric_field: str):
     return _METRIC_LABELS.get(metric_field, (metric_field, ''))
 
 
-def build_chart_timeseries(title, metric, unit, points, source):
+def build_chart_timeseries(title, metric, unit, points, source, points_prev=None):
     """시계열 → sparkline dict. points < 2이면 None."""
     pts = [p for p in points if p.get('value') is not None]
     if len(pts) < 2:
@@ -121,7 +121,7 @@ def build_chart_timeseries(title, metric, unit, points, source):
     values = [p['value'] for p in pts]
     first, latest = values[0], values[-1]
     change_pct = round((latest - first) / first * 100, 1) if first else None
-    return {
+    result = {
         "type": "timeseries",
         "title": title,
         "metric": metric,
@@ -134,6 +134,30 @@ def build_chart_timeseries(title, metric, unit, points, source):
             "latest": latest,
             "change_pct": change_pct,
         },
+        "source": source,
+    }
+    if points_prev:
+        prev_pts = [p for p in points_prev if p.get('value') is not None]
+        if len(prev_pts) >= 2:
+            result['points_prev'] = prev_pts
+    return result
+
+
+def build_chart_multi_timeseries(title, metric, unit, series, source):
+    """멀티시리즈 시계열 → timeseries_multi dict. valid series < 2이면 None."""
+    valid = []
+    for s in series:
+        pts = [p for p in s.get('points', []) if p.get('value') is not None]
+        if len(pts) >= 2:
+            valid.append({**s, 'points': pts})
+    if len(valid) < 2:
+        return None
+    return {
+        "type": "timeseries_multi",
+        "title": title,
+        "metric": metric,
+        "unit": unit,
+        "series": valid,
         "source": source,
     }
 
@@ -162,17 +186,94 @@ def build_chart_data(data: dict, intent: dict, question: str):
         scope_name  = data.get('scope_name', scope)
         date_max    = (data.get('date_max') or '').replace('/', '-')
 
-        # trend → timeseries
+        # trend → timeseries (+ 전주 비교선)
         if intent_type == 'trend' and 'trend' in data:
             t = data['trend']
             points = [{"date": d.replace('/', '-'), "value": v}
                       for d, v in t['data'] if v is not None]
             metric, unit = _metric_meta(t['metric_field'])
+            points_prev = None
+            if data.get('trend_prev') and data['trend_prev'].get('data'):
+                points_prev = [{"date": d.replace('/', '-'), "value": v}
+                               for d, v in data['trend_prev']['data'] if v is not None]
             return build_chart_timeseries(
                 title=f"{scope_name} {metric}",
                 metric=metric, unit=unit, points=points,
-                source=f"timeline:{scope}/{t['metric_field']}"
+                source=f"timeline:{scope}/{t['metric_field']}",
+                points_prev=points_prev
             )
+
+        # dual_trend → 동일 단위면 timeseries_multi, 혼합 단위면 timeseries_dual
+        if intent_type == 'dual_trend' and data.get('dual_trend'):
+            dt = data['dual_trend']
+            _DT_COLORS = ['#185fa5', '#1d9e75', '#d97706']
+            series = []
+            for i, s in enumerate(dt['series']):
+                pts = [{"date": d.replace('/', '-'), "value": v}
+                       for d, v in s.get('data', []) if v is not None]
+                if len(pts) >= 2:
+                    series.append({
+                        'label': s['label'], 'unit': s['unit'],
+                        'color': _DT_COLORS[i % len(_DT_COLORS)], 'points': pts,
+                    })
+            if len(series) >= 2:
+                title = f"{scope_name} {' · '.join(s['label'] for s in series)} 추이"
+                _units = [s['unit'] for s in series]
+                if len(set(_units)) == 1:
+                    # 동일 단위 → timeseries_multi (공유 Y스케일)
+                    multi = build_chart_multi_timeseries(
+                        title=title, metric=' · '.join(s['label'] for s in series),
+                        unit=_units[0], series=series, source=f"timeline:{scope}"
+                    )
+                    if multi:
+                        return multi
+                else:
+                    # 혼합 단위 → timeseries_dual (독립 Y스케일)
+                    return {
+                        "type": "timeseries_dual",
+                        "title": title,
+                        "series": series,
+                        "source": f"timeline:{scope}",
+                    }
+            # 1개 시리즈만 유효하면 단일 timeseries로 fallback
+            if len(series) == 1:
+                s0 = series[0]
+                metric0, unit0 = s0['label'], s0['unit']
+                return build_chart_timeseries(
+                    title=f"{scope_name} {metric0} 추이",
+                    metric=metric0, unit=unit0, points=s0['points'],
+                    source=f"timeline:{scope}/dual_fallback"
+                )
+
+        # compare_trend → timeseries_multi (fallback: snapshot comparison bar)
+        if intent_type == 'compare_trend' and data.get('compare_trend'):
+            ct = data['compare_trend']
+            metric, unit = _metric_meta(ct['metric_field'])
+            _SERIES_COLORS = ['#185fa5', '#1d9e75', '#d97706', '#dc2626']
+            series = [
+                {**s, 'color': _SERIES_COLORS[i % len(_SERIES_COLORS)]}
+                for i, s in enumerate(ct['series'])
+            ]
+            multi = build_chart_multi_timeseries(
+                title=f"채널별 {metric} 추이",
+                metric=metric, unit=unit, series=series,
+                source=f"timeline:multi/{ct['metric_field']}"
+            )
+            if multi:
+                return multi
+            # 추이 데이터 부족 시 스냅샷 최신값으로 bar chart fallback
+            snap_items = []
+            for s in ct['series']:
+                pts = s.get('points', [])
+                if pts:
+                    snap_items.append({'label': s['label'], 'value': pts[-1]['value']})
+            if len(snap_items) >= 2:
+                return build_chart_comparison(
+                    title=f"채널별 {metric} 비교 ({date_max})",
+                    metric=metric, unit=unit,
+                    date=date_max, items=snap_items,
+                    source=f"snapshot:{date_max}"
+                )
 
         # overview → 편성시간 순 전 지표 현황표
         if intent_type == 'overview' and data.get('overview'):
@@ -406,7 +507,9 @@ INTENT_SYSTEM = """RAAS 데이터 분석 시스템의 질의 분류기입니다.
 intent 정의:
 - snapshot: 특정 날짜 단일 시점 (어제 DAU, 오늘 현황)
 - trend: 추세/흐름 (최근 N일 변화, 오르고 있나)
-- compare: 채널/기간 비교 (파워FM vs 러브FM)
+- compare: 채널/기간 단일 시점 비교 (파워FM vs 러브FM DAU)
+- compare_trend: 채널 간 추이 비교 (파워FM vs 러브FM DAU 추이, 두 채널 변화 비교)
+- dual_trend: 동일 채널에서 두 지표 동시 추이 (DAU와 깊은청취율, 복귀율과 이탈률)
 - ranking: 순위 TOP N (가장 많이 들은 프로그램)
 - overview: 여러 지표를 한 테이블에 (편성시간 순 현황표, "DAU·WAU·MAU 함께", "전 지표 보여줘")
 - health: 건강도/위험 프로그램 (잘 되고 있어? 위험한 거 있어?)
@@ -658,8 +761,8 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
     intent_type = intent.get('intent', 'general')
     scope = intent.get('scope', 'T00')
     metric = intent.get('metric', 'all')
-    # trend는 30일 기본, 나머지는 7일 기본
-    _default_days = 30 if intent_type == 'trend' else 7
+    # trend/dual_trend/compare_trend는 30일 기본, 나머지는 7일 기본
+    _default_days = 30 if intent_type in ('trend', 'dual_trend', 'compare_trend') else 7
     days = min(intent.get('days', _default_days), len(available_dates))
 
     if scope not in timeline:
@@ -701,8 +804,15 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             'all': 'dau',
         }
         mf = field_map.get(metric, 'dau')
-        trend_data = BE.get_metric_trend(timeline, scope, mf, days=days)
-        data['trend'] = {'metric_field': mf, 'days': len(trend_data), 'data': trend_data}
+        # 전주 비교선: 현재 기간 + 직전 동일 기간 (최대 2x days)
+        _double = min(days * 2, len(available_dates))
+        _all_trend = BE.get_metric_trend(timeline, scope, mf, days=_double)
+        _curr_trend = _all_trend[max(0, len(_all_trend) - days):]
+        _prev_trend = _all_trend[:max(0, len(_all_trend) - days)]
+        _prev_trend = _prev_trend[max(0, len(_prev_trend) - days):]  # 최대 days개
+        data['trend'] = {'metric_field': mf, 'days': len(_curr_trend), 'data': _curr_trend}
+        if _prev_trend:
+            data['trend_prev'] = {'metric_field': mf, 'data': _prev_trend}
 
     # ranking
     if intent_type in ('ranking', 'health', 'general'):
@@ -1021,6 +1131,52 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
                 }
                 # trend도 채워서 차트 렌더링 활용
                 data['trend'] = {'metric_field': 'dau', 'days': len(valid_pts), 'data': valid_pts}
+
+    # dual_trend — 동일 채널에서 두 지표 동시 추이
+    if intent_type == 'dual_trend':
+        _dual_field_map = {
+            'dau': ('dau', 'DAU', '명'), 'wau': ('wau', 'WAU', '명'), 'mau': ('mau', 'MAU', '명'),
+            'dau_r7': ('dau_r7', '7일롤링DAU', '명'), 'dau_r30': ('dau_r30', '30일롤링DAU', '명'),
+            'new': ('new', '신규(일)', '명'),
+            'react_rate': ('react_rate', '복귀율', '%'), 'churn': ('churn_rate', '이탈률', '%'),
+            'deep': ('deep_rate', '깊은청취율', '%'), 'real': ('real_rate', '실청취율', '%'),
+            'engage': ('engage_rate', '참여율', '%'), 'habit': ('habit_rate', '습관형성률', '%'),
+            'd1_ret': ('d1_ret', 'D1유지율', '%'), 'd7_ret': ('d7_ret', 'D7유지율', '%'),
+            'w1_ret': ('w1_ret', 'W1유지율', '%'), 'm1_ret': ('m1_ret', 'M1유지율', '%'),
+            'new_d1_ret': ('new_d1_ret', '신규D1유지율', '%'), 'new_d7_ret': ('new_d7_ret', '신규D7유지율', '%'),
+            'new_w1_ret': ('new_w1_ret', '신규W1유지율', '%'), 'new_m1_ret': ('new_m1_ret', '신규M1유지율', '%'),
+        }
+        _dt_series = []
+        for m in (intent.get('dual_metrics') or ['dau', 'deep']):
+            mf, label, unit = _dual_field_map.get(m, (m, m.upper(), ''))
+            trend_data = BE.get_metric_trend(timeline, scope, mf, days=days)
+            _dt_series.append({
+                'metric': m, 'metric_field': mf, 'label': label,
+                'unit': unit, 'data': trend_data,
+            })
+        data['dual_trend'] = {'series': _dt_series}
+
+    # compare_trend — 채널 간 추이 멀티시리즈
+    if intent_type == 'compare_trend':
+        _selected = intent.get('compare_channels') or ['F00', 'L00']
+        ct_field_map = {
+            'dau': 'dau', 'wau': 'wau', 'mau': 'mau',
+            'deep': 'deep_rate', 'churn': 'churn_rate',
+            'new': 'new', 'react': 'react', 'habit': 'habit_rate', 'all': 'dau',
+        }
+        mf_ct = ct_field_map.get(metric, 'dau')
+        _ct_series = []
+        for ch_code in _selected:
+            if ch_code not in timeline:
+                continue
+            ch_trend = BE.get_metric_trend(timeline, ch_code, mf_ct, days=days)
+            _ct_series.append({
+                'code': ch_code,
+                'label': BE._pgm_name(ch_code),
+                'points': [{'date': d.replace('/', '-'), 'value': v}
+                           for d, v in ch_trend if v is not None],
+            })
+        data['compare_trend'] = {'metric_field': mf_ct, 'series': _ct_series}
 
     # health — 위험 프로그램
     # Phase 5 Step 4: 어댑터의 find_at_risk_programs 우선 + 인라인 룰 fallback
@@ -1416,6 +1572,33 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
             )
         lines.append('')
 
+    if data.get('dual_trend'):
+        dt = data['dual_trend']
+        lines.append(f"[듀얼 지표 추이 — {data['date_max']}]")
+        for s in dt['series']:
+            pts = [(d, v) for d, v in s.get('data', []) if v is not None]
+            if pts:
+                v0, v1 = pts[0][1], pts[-1][1]
+                chg = round((v1 - v0) / v0 * 100, 1) if v0 else None
+                val_fmt = _fmt_pct if s['unit'] == '%' else _fmt_dau
+                chg_str = f"({chg:+.1f}%)" if chg is not None else ""
+                lines.append(f"  {s['label']}: {val_fmt(v0)} → {val_fmt(v1)} {chg_str}")
+        lines.append('')
+
+    if data.get('compare_trend'):
+        ct = data['compare_trend']
+        mf_label, mf_unit = _metric_meta(ct['metric_field'])
+        lines.append(f"[채널별 {mf_label} 추이 비교]")
+        for s in ct['series']:
+            pts = [p for p in s.get('points', []) if p.get('value') is not None]
+            if pts:
+                v0, v1 = pts[0]['value'], pts[-1]['value']
+                chg = round((v1 - v0) / v0 * 100, 1) if v0 else None
+                chg_str = f"({chg:+.1f}%)" if chg is not None else ""
+                val_fmt = _fmt_pct if mf_unit == '%' else _fmt_dau
+                lines.append(f"  {s['label']}: {val_fmt(v0)} → {val_fmt(v1)} {chg_str}")
+        lines.append('')
+
     if data.get('weekly_compare'):
         wc = data['weekly_compare']
         w1, w2 = wc['week1'], wc['week2']
@@ -1576,7 +1759,7 @@ def query_with_timeline(question: str, timeline: dict,
 
 # intent별 max_tokens 상한
 _INTENT_TOKENS = {
-    'snapshot': 500, 'trend': 600, 'compare': 600,
+    'snapshot': 500, 'trend': 600, 'compare': 600, 'compare_trend': 600, 'dual_trend': 600,
     'ranking': 500, 'overview': 600, 'health': 600,
     'funnel': 800, 'engagement': 700, 'growth': 700,
     'anomaly': 500, 'report': 1400, 'general': 600,
@@ -1612,6 +1795,47 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
                     '지표 한눈', '한눈에 보', 'dau와 wau', 'wau와 mau', 'dau·wau', 'wau·mau')
     if any(kw in question for kw in _OVERVIEW_KW):
         intent['intent'] = 'overview'
+    # compare_trend 감지: 채널 2개 이상 언급 + 추이/추세 키워드 (또는 vs)
+    _HAS_TREND_KW = any(kw in question for kw in ('추이', '추세', '트렌드', '변화'))
+    _CH_DETECT = {
+        'F00': ('파워FM', '파워fm', '파워 fm', 'powerfm'),
+        'L00': ('러브FM', '러브fm', '러브 fm', 'lovefm'),
+        'G00': ('고릴라M', '고릴라m', 'gorillam'),
+        'P00': ('픽채널', 'pickch'),
+    }
+    _ct_channels = [code for code, kws in _CH_DETECT.items()
+                    if any(kw in question for kw in kws)]
+    if (_HAS_TREND_KW or 'vs' in question.lower()) and len(_ct_channels) >= 2:
+        intent['intent'] = 'compare_trend'
+        intent['compare_channels'] = _ct_channels
+        intent['days'] = 30  # 추이 쿼리는 항상 30일 기준
+    # dual_trend 감지: 동일 채널에서 2개 이상 지표 언급 + 추이 키워드 + 연결어
+    if intent.get('intent') not in ('compare_trend',):
+        _DUAL_METRIC_KW = {
+            'dau':        ('DAU', 'dau', '일간 사용자'),
+            'wau':        ('WAU', 'wau'),
+            'mau':        ('MAU', 'mau'),
+            'dau_r7':     ('7일롤링', 'R7', 'r7', '7일 롤링', '7일롤링DAU'),
+            'dau_r30':    ('30일롤링', 'R30', 'r30', '30일 롤링', '30일롤링DAU'),
+            'new':        ('신규 사용자', '신규자', '신규수'),
+            'react_rate': ('복귀율',),
+            'churn':      ('이탈률', '이탈율'),
+            'deep':       ('깊은청취율', '깊은청취'),
+            'real':       ('실청취율', '실청취'),
+            'engage':     ('참여율',),
+            'habit':      ('습관형성률', '습관형성'),
+            'd1_ret':     ('D1유지율', 'D1 유지율', 'D1유지', 'D1'),
+            'd7_ret':     ('D7유지율', 'D7 유지율', 'D7유지', 'D7'),
+            'w1_ret':     ('W1유지율', 'W1 유지율', 'W1유지', 'W1'),
+            'm1_ret':     ('M1유지율', 'M1 유지율', 'M1유지', 'M1'),
+        }
+        _DUAL_CONNECT = ('와 ', '과 ', '랑 ', '와', '과', '+', '함께', '같이', '동시에')
+        _dual_metrics = [m for m, kws in _DUAL_METRIC_KW.items() if any(kw in question for kw in kws)]
+        if (_HAS_TREND_KW and len(_dual_metrics) >= 2
+                and any(kw in question for kw in _DUAL_CONNECT)):
+            intent['intent'] = 'dual_trend'
+            intent['dual_metrics'] = _dual_metrics[:3]
+            intent['days'] = 30  # 추이 쿼리는 항상 30일 기준
     if verbose:
         print(f"  -> {intent.get('summary')}: intent={intent.get('intent')}, "
               f"scope={intent.get('scope')}, days={intent.get('days')}", flush=True)
@@ -1639,7 +1863,12 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
         f"- 사용자가 '오늘'이라고 하면 아직 데이터 미수집임을 안내할 것\n"
         f"- '{date_max} 기준 핵심 지표'는 어제 데이터임"
     ) if today_str and date_max else ''
-    # intent별 추가 지시
+    # 차트 먼저 빌드 — intent_note를 chart 가용 여부에 따라 조정하기 위해
+    chart_data = build_chart_data(data, intent, question)
+    _has_chart = chart_data is not None
+    _chart_type = chart_data.get('type', '') if _has_chart else ''
+
+    # intent별 추가 지시 (차트 가용 여부 반영)
     intent_note = ''
     if intent.get('intent') == 'ranking':
         intent_note = (
@@ -1659,8 +1888,41 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
             " 날짜별 수치 나열·기간 요약 테이블은 답변 텍스트에 절대 포함하지 마세요."
             " 추세의 방향·특징·주목할 변화에 대한 설명을 1~2문장으로 작성하세요."
         )
+    if intent.get('intent') == 'compare_trend':
+        if _chart_type == 'timeseries_multi':
+            intent_note = (
+                "\n\n[채널 비교 추이 응답 규칙] 멀티시리즈 차트는 UI에서 자동 시각화됩니다."
+                " 날짜별 수치 나열은 절대 포함하지 마세요."
+                " 각 채널의 추세 방향과 채널 간 차이를 1~2문장으로 비교 설명하세요."
+            )
+        elif _has_chart:
+            intent_note = (
+                "\n\n[채널 비교 응답 규칙] 채널 비교 차트가 UI에 표시됩니다."
+                " 마크다운 테이블 없이 현재 수치 차이와 특이점을 1~2문장으로 설명하세요."
+            )
+        else:
+            intent_note = (
+                "\n\n[채널 비교 응답 규칙] 추이 차트 데이터가 부족합니다."
+                " 마크다운 테이블 없이 2~3문장으로 간결하게 비교 설명하세요."
+            )
+    if intent.get('intent') == 'dual_trend':
+        if _chart_type in ('timeseries_multi', 'timeseries_dual'):
+            intent_note = (
+                "\n\n[듀얼 지표 응답 규칙] 두 지표의 차트는 UI에서 자동 시각화됩니다."
+                " 날짜별 수치 나열은 절대 포함하지 마세요."
+                " 두 지표의 상관관계 또는 추세 특징을 1~2문장으로 설명하세요."
+            )
+        elif _chart_type == 'timeseries':
+            intent_note = (
+                "\n\n[지표 추이 응답 규칙] 일부 지표만 차트로 표시됩니다."
+                " 마크다운 테이블 없이 확인 가능한 데이터 기준으로 1~2문장 설명하세요."
+            )
+        else:
+            intent_note = (
+                "\n\n[듀얼 지표 응답 규칙] 추이 데이터가 없어 스냅샷 기준으로 답합니다."
+                " 마크다운 테이블·목록 없이 2~3문장으로 간결하게 설명하세요."
+            )
     answer_text = call_claude(QUERY_SYSTEM_PROMPT + date_system + intent_note, context, max_tokens=max_tokens)
-    chart_data = build_chart_data(data, intent, question)
     return {"answer": answer_text, "chart_data": chart_data}
 
 
