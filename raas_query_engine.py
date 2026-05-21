@@ -142,6 +142,22 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 source=f"timeline:{scope}/{t['metric_field']}"
             )
 
+        # overview → 편성시간 순 전 지표 현황표
+        if intent_type == 'overview' and data.get('overview'):
+            ov_rows = data['overview']
+            _ch = data.get('overview_channel')
+            _ch_name = BE.PGM_NAMES.get(_ch, '') if _ch else '전체'
+            _wknd_sfx = ''
+            if _ch == 'L00':
+                _wknd_sfx = ' (주말 포함)' if data.get('overview_include_weekend') else ' (주말 제외)'
+            return {
+                'type':    'table',
+                'subtype': 'overview',
+                'title':   f"{_ch_name} 프로그램 현황 (편성시간 순, {date_max}){_wknd_sfx}",
+                'rows':    ov_rows,
+                'source':  f"snapshot:{date_max}",
+            }
+
         # compare → comparison (채널별 DAU)
         if intent_type == 'compare' and data.get('compare'):
             items = [{"label": c['name'], "value": c['dau']}
@@ -319,7 +335,7 @@ INTENT_SYSTEM = """RAAS 데이터 분석 시스템의 질의 분류기입니다.
 
 응답 형식:
 {
-  "intent": "snapshot|trend|compare|ranking|health|funnel|engagement|growth|anomaly|report|general",
+  "intent": "snapshot|trend|compare|ranking|overview|health|funnel|engagement|growth|anomaly|report|general",
   "scope": "T00|F00|L00|G00|P00 또는 PGM_CODE 또는 null",
   "scope_keyword": "사용자가 언급한 채널/프로그램 키워드 또는 null",
   "metric": "dau|deep|new|react|churn|engage|habit|real|all",
@@ -334,6 +350,7 @@ intent 정의:
 - trend: 추세/흐름 (최근 N일 변화, 오르고 있나)
 - compare: 채널/기간 비교 (파워FM vs 러브FM)
 - ranking: 순위 TOP N (가장 많이 들은 프로그램)
+- overview: 여러 지표를 한 테이블에 (편성시간 순 현황표, "DAU·WAU·MAU 함께", "전 지표 보여줘")
 - health: 건강도/위험 프로그램 (잘 되고 있어? 위험한 거 있어?)
 - funnel: 사용자 흐름 (신규·유지·이탈·복귀 비율, D1/D7/W1/M1 유지율, 리텐션, 코호트)
 - engagement: 청취 품질 (깊은청취율, 실청취율, 참여율, 몰입도)
@@ -787,6 +804,107 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
         data['ranking_channel'] = _rank_channel  # None이면 전체
         data['ranking_include_weekend'] = _include_weekend
 
+    # overview — 편성시간 순 전 지표 현황표
+    if intent_type == 'overview':
+        # 편성시간 순 프로그램 순서 (raas_time_schema.ttl startTime 기준)
+        _SCHEDULE_ORDER = [
+            # 파워FM (00:00 기준 순환)
+            'F02','F03','F04','F05','F06','F07','F08','F09','F10','F11','F12','F13','F01',
+            # 러브FM 평일
+            'L01','L02','L03','L05','L06','L07','L08','L09','L10','L11','L13','L12','L14','L15',
+            # 러브FM 주말
+            'M05','M10','M07','M11',
+        ]
+        _order_map = {code: i for i, code in enumerate(_SCHEDULE_ORDER)}
+        _CH_PROGRAMS = {'F00': set(BE.PGM_F), 'L00': set(BE.PGM_L)}
+        _ov_channel = scope if scope in ('F00', 'L00') else None
+        _allowed_ov = _CH_PROGRAMS.get(_ov_channel) if _ov_channel else None
+        _include_wknd = intent.get('include_weekend', False)
+        _WEEKEND_PGMS = {'M05', 'M07', 'M10', 'M11'}
+        exclude_ov = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
+        ov_rows = []
+        fn = BE._fn
+        for code in _SCHEDULE_ORDER:
+            if code in exclude_ov:
+                continue
+            if _allowed_ov is not None and code not in _allowed_ov:
+                continue
+            if _ov_channel == 'L00' and not _include_wknd and code in _WEEKEND_PGMS:
+                continue
+            date_rows = timeline.get(code)
+            if not date_rows:
+                continue
+            row = date_rows.get(latest_date)
+            if not row:
+                continue
+            # 채널 결정
+            ch = 'F00' if code in set(BE.PGM_F) else 'L00' if code in set(BE.PGM_L) else None
+            ch_name = BE.PGM_NAMES.get(ch, '') if ch else ''
+            is_wknd = code in _WEEKEND_PGMS
+            ov_rows.append({
+                'code': code,
+                'name': BE._pgm_name(code, row=row),
+                'channel': ch_name,
+                'is_weekend': is_wknd,
+                # 볼륨
+                'dau':    BE._i(row.get('dau')) or None,
+                'wau':    BE._i(row.get('wau')) or None,
+                'mau':    BE._i(row.get('mau')) or None,
+                'dau_r7': BE._i(row.get('dau_r7')) or None,
+                'dau_r30':BE._i(row.get('dau_r30')) or None,
+                # WoW
+                'dau_wow':      fn(row.get('dau_chg')),
+                'dau_week_wow': fn(row.get('wau_chg')),
+                'dau_mon_wow':  fn(row.get('mau_chg')),
+                # 신규
+                'new':      BE._i(row.get('new')) or None,
+                'new_week': BE._i(row.get('new_week')) or None,
+                'new_mon':  BE._i(row.get('new_mon')) or None,
+                'new_pct':  fn(row.get('new_pct')),
+                'new_week_pct': fn(row.get('new_week_pct')),
+                # 복귀사용자
+                'react':      BE._i(row.get('react')) or None,
+                'react_week': BE._i(row.get('react_week')) or None,
+                'react_mon':  BE._i(row.get('react_mon')) or None,
+                # 복귀율
+                'react_rate':      fn(row.get('react_rate')),
+                'react_rate_week': fn(row.get('react_rate_week')),
+                'react_rate_mon':  fn(row.get('react_rate_mon')),
+                # 이탈율
+                'churn_rate':      fn(row.get('churn_rate')),
+                'churn_rate_week': fn(row.get('churn_rate_week')),
+                'churn_rate_mon':  fn(row.get('churn_rate_mon')),
+                # 실청취율
+                'real_rate':      fn(row.get('real_rate')),
+                'real_rate_week': fn(row.get('real_rate_week')),
+                'real_rate_mon':  fn(row.get('real_rate_mon')),
+                # 깊은청취율
+                'deep_rate':      fn(row.get('deep_rate')),
+                'deep_rate_week': fn(row.get('deep_rate_week')),
+                'deep_rate_mon':  fn(row.get('deep_rate_mon')),
+                # 참여율
+                'engage_rate':      fn(row.get('engage_rate')),
+                'engage_rate_week': fn(row.get('engage_rate_week')),
+                'engage_rate_mon':  fn(row.get('engage_rate_mon')),
+                # 습관형성율
+                'habit_rate':      fn(row.get('habit_rate')),
+                'habit_rate_week': fn(row.get('habit_rate_week')),
+                'habit_rate_mon':  fn(row.get('habit_rate_mon')),
+                # 전체 코호트 유지율
+                'd1_ret': fn(row.get('d1_ret')),
+                'd7_ret': fn(row.get('d7_ret')),
+                'w1_ret': fn(row.get('w1_ret')),
+                'm1_ret': fn(row.get('m1_ret')),
+                # 신규 코호트 유지율
+                'new_d1_ret': fn(row.get('new_d1_ret')),
+                'new_d7_ret': fn(row.get('new_d7_ret')),
+                'new_w1_ret': fn(row.get('new_w1_ret')),
+                'new_m1_ret': fn(row.get('new_m1_ret')),
+            })
+        data['overview'] = ov_rows
+        data['overview_channel'] = _ov_channel
+        data['overview_include_weekend'] = _include_wknd
+
     # compare
     if intent_type == 'compare':
         _channel_scopes = {'T00', 'F00', 'L00', 'G00', 'P00'}
@@ -1206,6 +1324,18 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
             )
         lines.append('')
 
+    if data.get('overview'):
+        _ov_ch = data.get('overview_channel')
+        _ov_ch_name = BE.PGM_NAMES.get(_ov_ch, '') if _ov_ch else '전체'
+        lines.append(f"[{_ov_ch_name} 프로그램 편성시간 순 현황]")
+        for r in data['overview']:
+            wknd = ' [주말]' if r.get('is_weekend') else ''
+            lines.append(
+                f"  {r['name']}{wknd}: DAU {_fmt_dau(r.get('dau'))} | WAU {_fmt_dau(r.get('wau'))} | MAU {_fmt_dau(r.get('mau'))} | "
+                f"깊은청취 {_fmt_pct(r.get('deep_rate'))} | 복귀율 {_fmt_pct(r.get('react_rate'))} | 이탈율 {_fmt_pct(r.get('churn_rate'))}"
+            )
+        lines.append('')
+
     if data.get('compare'):
         lines.append("[채널별 비교]")
         for c in data['compare']:
@@ -1376,7 +1506,7 @@ def query_with_timeline(question: str, timeline: dict,
 # intent별 max_tokens 상한
 _INTENT_TOKENS = {
     'snapshot': 500, 'trend': 600, 'compare': 600,
-    'ranking': 500, 'health': 600,
+    'ranking': 500, 'overview': 600, 'health': 600,
     'funnel': 800, 'engagement': 700, 'growth': 700,
     'anomaly': 500, 'report': 1400, 'general': 600,
 }
@@ -1406,6 +1536,11 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
         intent['date_type'] = 'specific'
     # 주말 프로그램 포함 여부 (러브FM 한정)
     intent['include_weekend'] = any(kw in question for kw in ('주말 프로그램 포함', '주말포함', '주말 포함'))
+    # overview 키워드 강제 감지 — classifier가 ranking으로 오분류하는 경우 보정
+    _OVERVIEW_KW = ('편성시간 순', '편성순', '함께 보여', '전 지표', '전체 지표', '모든 지표',
+                    '지표 한눈', '한눈에 보', 'dau와 wau', 'wau와 mau', 'dau·wau', 'wau·mau')
+    if any(kw in question for kw in _OVERVIEW_KW):
+        intent['intent'] = 'overview'
     if verbose:
         print(f"  -> {intent.get('summary')}: intent={intent.get('intent')}, "
               f"scope={intent.get('scope')}, days={intent.get('days')}", flush=True)

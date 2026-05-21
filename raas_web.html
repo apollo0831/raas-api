@@ -675,6 +675,25 @@ body{
 .rk-toggle-btn{display:block;width:100%;margin-top:6px;padding:7px 0;background:none;border:1px solid var(--line);border-radius:6px;color:var(--sub);font-size:12px;cursor:pointer;text-align:center;}
 .rk-toggle-btn:hover{background:var(--bg2);color:var(--fg);}
 
+/* ── 프로그램 현황 overview 테이블 ── */
+.ov-wrap{overflow:hidden;}
+.ov-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.ov-table{border-collapse:collapse;font-size:12px;white-space:nowrap;min-width:max-content;}
+.ov-table thead tr{background:var(--bg2);}
+.ov-group-row th{padding:3px 6px;font-size:11px;color:var(--sub);border-bottom:1px solid var(--line);text-align:center;border-right:2px solid var(--line);}
+.ov-group-th{border-right:2px solid var(--line);}
+.ov-th,.ov-th-no,.ov-th-name{padding:5px 8px;font-size:11px;color:var(--sub);border-bottom:1px solid var(--line);text-align:right;font-weight:500;}
+.ov-th-no,.ov-th-name{text-align:left;}
+.ov-sticky{position:sticky;left:0;z-index:2;background:var(--bg);border-right:1px solid var(--line);}
+.ov-sticky2{position:sticky;left:36px;z-index:2;background:var(--bg);border-right:2px solid var(--line);}
+.ov-table thead .ov-sticky{background:var(--bg2);z-index:3;}
+.ov-table thead .ov-sticky2{background:var(--bg2);z-index:3;}
+.ov-no{padding:5px 8px;color:var(--dim);font-size:11px;}
+.ov-name{padding:5px 10px;color:var(--fg);font-weight:500;min-width:120px;max-width:180px;overflow:hidden;text-overflow:ellipsis;}
+.ov-v{padding:4px 8px;text-align:right;color:var(--sub);border-top:1px solid rgba(255,255,255,.04);}
+.ov-table tbody tr:hover .ov-sticky,.ov-table tbody tr:hover .ov-sticky2{background:var(--bg2);}
+.ov-table tbody tr:hover td{background:rgba(255,255,255,.03);}
+
 /* ── 청취 전환 퍼널 ── */
 .qlty-funnel{background:var(--bg2);border-radius:12px;padding:12px 14px;border:1px solid var(--line);}
 .qlty-funnel-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
@@ -3299,6 +3318,8 @@ function renderAiAnswer(cardId, question, data) {
     chartHTML = renderSparkline(chart);
   } else if (chart && chart.type === 'comparison' && chart.items && chart.items.length >= 2) {
     chartHTML = renderBarChart(chart);
+  } else if (chart && chart.type === 'table' && chart.subtype === 'overview' && chart.rows && chart.rows.length) {
+    chartHTML = renderOverviewTable(chart);
   } else if (chart && chart.type === 'table' && chart.rows && chart.rows.length) {
     chartHTML = renderRankingTable(chart);
   }
@@ -3488,6 +3509,117 @@ function toggleRankingRows(btn, defaultN) {
     rows.forEach(r => r.classList.remove('rk-hidden'));
     btn.textContent = '▲ 접기';
   }
+}
+
+function renderOverviewTable(chart) {
+  const rows = chart.rows || [];
+  if (!rows.length) return '';
+
+  const _D = '<span style="color:var(--dim)">—</span>';
+  function fmtN(v)  { return v != null ? v.toLocaleString() : _D; }
+  function fmtR(v)  { return v != null ? `${v.toFixed(1)}%` : _D; }
+  function fmtW(v)  {
+    if (v == null) return _D;
+    return `<span class="${v >= 0 ? 'rk-pos' : 'rk-neg'}">${v >= 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
+  }
+
+  // 컬럼 그룹 정의: [field, header, fmt, group]
+  const COLS = [
+    // 볼륨
+    ['dau',           'DAU(일)',    'n', '볼륨'],
+    ['wau',           'WAU(주)',    'n', '볼륨'],
+    ['mau',           'MAU(월)',    'n', '볼륨'],
+    ['dau_r7',        '7일롤링',   'n', '볼륨'],
+    ['dau_wow',       'WoW(7일)',   'w', '볼륨'],
+    ['dau_week_wow',  'WoW(전주)', 'w', '볼륨'],
+    ['dau_mon_wow',   'WoW(전월)', 'w', '볼륨'],
+    // 신규
+    ['new',           '신규(일)',  'n', '신규'],
+    ['new_week',      '신규(주)',  'n', '신규'],
+    ['new_mon',       '신규(월)',  'n', '신규'],
+    // 복귀사용자
+    ['react',         '복귀(일)',  'n', '복귀'],
+    ['react_week',    '복귀(주)',  'n', '복귀'],
+    ['react_mon',     '복귀(월)',  'n', '복귀'],
+    // 복귀율
+    ['react_rate',      '복귀율(일)', 'r', '복귀율'],
+    ['react_rate_week', '복귀율(주)', 'r', '복귀율'],
+    ['react_rate_mon',  '복귀율(월)', 'r', '복귀율'],
+    // 이탈율
+    ['churn_rate',      '이탈율(일)', 'r', '이탈'],
+    ['churn_rate_week', '이탈율(주)', 'r', '이탈'],
+    ['churn_rate_mon',  '이탈율(월)', 'r', '이탈'],
+    // 실청취율
+    ['real_rate',      '실청취(일)', 'r', '실청취'],
+    ['real_rate_week', '실청취(주)', 'r', '실청취'],
+    ['real_rate_mon',  '실청취(월)', 'r', '실청취'],
+    // 깊은청취율
+    ['deep_rate',      '깊은청취(일)', 'r', '깊은청취'],
+    ['deep_rate_week', '깊은청취(주)', 'r', '깊은청취'],
+    ['deep_rate_mon',  '깊은청취(월)', 'r', '깊은청취'],
+    // 참여율
+    ['engage_rate',      '참여율(일)', 'r', '참여'],
+    ['engage_rate_week', '참여율(주)', 'r', '참여'],
+    ['engage_rate_mon',  '참여율(월)', 'r', '참여'],
+    // 습관형성율
+    ['habit_rate',      '습관(일)', 'r', '습관'],
+    ['habit_rate_week', '습관(주)', 'r', '습관'],
+    ['habit_rate_mon',  '습관(월)', 'r', '습관'],
+    // 전체 코호트 유지율
+    ['d1_ret', 'D1유지', 'r', '유지율(전체)'],
+    ['d7_ret', 'D7유지', 'r', '유지율(전체)'],
+    ['w1_ret', 'W1유지', 'r', '유지율(전체)'],
+    ['m1_ret', 'M1유지', 'r', '유지율(전체)'],
+    // 신규 코호트 유지율
+    ['new_d1_ret', 'D1유지', 'r', '유지율(신규)'],
+    ['new_d7_ret', 'D7유지', 'r', '유지율(신규)'],
+    ['new_w1_ret', 'W1유지', 'r', '유지율(신규)'],
+    ['new_m1_ret', 'M1유지', 'r', '유지율(신규)'],
+  ];
+  const FMTS = { n: fmtN, r: fmtR, w: fmtW };
+
+  // 그룹 헤더 행 생성
+  const groups = [];
+  let curGroup = null, curSpan = 0;
+  for (const [,,, g] of COLS) {
+    if (g === curGroup) { curSpan++; }
+    else { if (curGroup) groups.push([curGroup, curSpan]); curGroup = g; curSpan = 1; }
+  }
+  if (curGroup) groups.push([curGroup, curSpan]);
+
+  const _WEEKEND_CODES = new Set(['M05','M07','M10','M11']);
+  // 채널별 배경 구분용
+  const _CH_COLOR = { '파워FM': 'rgba(239,68,68,.06)', '러브FM': 'rgba(132,204,22,.06)' };
+
+  const groupRow = `<tr class="ov-group-row">
+    <th colspan="2" style="position:sticky;left:0;z-index:3;background:var(--bg2)"></th>
+    ${groups.map(([g, span]) => `<th colspan="${span}" class="ov-group-th">${g}</th>`).join('')}
+  </tr>`;
+  const headerRow = `<tr>
+    <th class="ov-sticky ov-th-no">편성순</th>
+    <th class="ov-sticky2 ov-th-name">프로그램</th>
+    ${COLS.map(([,h]) => `<th class="ov-th">${h}</th>`).join('')}
+  </tr>`;
+  const bodyRows = rows.map((r, i) => {
+    const wkndBadge = _WEEKEND_CODES.has(r.code) ? '<span class="pr-badge weekend">주말</span>' : '';
+    const bgColor = _CH_COLOR[r.channel] || '';
+    const bgStyle = bgColor ? `style="background:${bgColor}"` : '';
+    const tds = COLS.map(([f,,fmt]) => `<td class="ov-v">${FMTS[fmt](r[f])}</td>`).join('');
+    return `<tr ${bgStyle}><td class="ov-sticky ov-no">${i + 1}</td><td class="ov-sticky2 ov-name">${escapeHtml(r.name)}${wkndBadge}</td>${tds}</tr>`;
+  }).join('');
+
+  return `<div class="ai-chart-box ov-wrap">
+    <div class="ai-chart-meta">
+      <span>${escapeHtml(chart.title || '')}</span>
+      <span>자동 시각화</span>
+    </div>
+    <div class="ov-scroll">
+      <table class="ov-table">
+        <thead>${groupRow}${headerRow}</thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>
+  </div>`;
 }
 
 async function loadHistory() {
