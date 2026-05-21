@@ -1576,6 +1576,12 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
             " 답변 텍스트에 마크다운 테이블·순위 목록을 절대 포함하지 마세요."
             " 핵심 인사이트(1위 프로그램, 주목할 변화 등) 1~2문장으로만 답하세요."
         )
+    if intent.get('intent') == 'overview':
+        intent_note = (
+            "\n\n[현황표 응답 규칙] 전 지표 현황 테이블은 UI에서 자동 시각화됩니다."
+            " 답변 텍스트에 테이블·목록·수치를 절대 포함하지 마세요."
+            " 표를 안내하는 자연스러운 한 문장(예: '편성시간 순으로 전체 지표를 정리했습니다.')만 작성하세요."
+        )
     answer_text = call_claude(QUERY_SYSTEM_PROMPT + date_system + intent_note, context, max_tokens=max_tokens)
     chart_data = build_chart_data(data, intent, question)
     return {"answer": answer_text, "chart_data": chart_data}
