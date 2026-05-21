@@ -150,11 +150,37 @@ def build_chart_data(data: dict, intent: dict, question: str):
             _wknd_sfx = ''
             if _ch == 'L00':
                 _wknd_sfx = ' (주말 포함)' if data.get('overview_include_weekend') else ' (주말 제외)'
+            # 질문에서 명시된 지표만 추출 (없으면 None → 전체 표시)
+            _q_low = question.lower()
+            _OV_GROUPS = [
+                (['dau'],                           ['dau', 'dau_wow']),
+                (['wau'],                           ['wau', 'dau_week_wow']),
+                (['mau'],                           ['mau', 'dau_mon_wow']),
+                (['7일롤링', 'r7'],                  ['dau_r7']),
+                (['30일롤링', 'r30'],                 ['dau_r30']),
+                (['신규'],                           ['new', 'new_week', 'new_mon']),
+                (['복귀율'],                         ['react_rate', 'react_rate_week', 'react_rate_mon']),
+                (['복귀'],                           ['react', 'react_week', 'react_mon']),
+                (['이탈'],                           ['churn_rate', 'churn_rate_week', 'churn_rate_mon']),
+                (['실청취'],                         ['real_rate', 'real_rate_week', 'real_rate_mon']),
+                (['깊은청취'],                       ['deep_rate', 'deep_rate_week', 'deep_rate_mon']),
+                (['참여'],                           ['engage_rate', 'engage_rate_week', 'engage_rate_mon']),
+                (['습관'],                           ['habit_rate', 'habit_rate_week', 'habit_rate_mon']),
+                (['유지율', 'd1', 'd7', 'w1', 'm1', '리텐션', '코호트'],
+                 ['d1_ret', 'd7_ret', 'w1_ret', 'm1_ret',
+                  'new_d1_ret', 'new_d7_ret', 'new_w1_ret', 'new_m1_ret']),
+            ]
+            _matched = []
+            for kws, fields in _OV_GROUPS:
+                if any(kw in _q_low for kw in kws):
+                    _matched.extend(fields)
+            _ov_columns = _matched if _matched else None  # None → 전체
             return {
                 'type':    'table',
                 'subtype': 'overview',
                 'title':   f"{_ch_name} 프로그램 현황 (편성시간 순, {date_max}){_wknd_sfx}",
                 'rows':    ov_rows,
+                'columns': _ov_columns,
                 'source':  f"snapshot:{date_max}",
             }
 

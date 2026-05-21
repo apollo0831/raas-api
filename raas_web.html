@@ -3578,10 +3578,15 @@ function renderOverviewTable(chart) {
   ];
   const FMTS = { n: fmtN, r: fmtR, w: fmtW };
 
+  // 명시된 지표만 필터링 (columns 없으면 전체)
+  const activeCols = chart.columns
+    ? COLS.filter(([f]) => chart.columns.includes(f))
+    : COLS;
+
   // 그룹 헤더 행 생성
   const groups = [];
   let curGroup = null, curSpan = 0;
-  for (const [,,, g] of COLS) {
+  for (const [,,, g] of activeCols) {
     if (g === curGroup) { curSpan++; }
     else { if (curGroup) groups.push([curGroup, curSpan]); curGroup = g; curSpan = 1; }
   }
@@ -3598,13 +3603,13 @@ function renderOverviewTable(chart) {
   const headerRow = `<tr>
     <th class="ov-sticky ov-th-no">편성순</th>
     <th class="ov-sticky2 ov-th-name">프로그램</th>
-    ${COLS.map(([,h]) => `<th class="ov-th">${h}</th>`).join('')}
+    ${activeCols.map(([,h]) => `<th class="ov-th">${h}</th>`).join('')}
   </tr>`;
   const bodyRows = rows.map((r, i) => {
     const wkndBadge = _WEEKEND_CODES.has(r.code) ? '<span class="pr-badge weekend">주말</span>' : '';
     const bgColor = _CH_COLOR[r.channel] || '';
     const bgStyle = bgColor ? `style="background:${bgColor}"` : '';
-    const tds = COLS.map(([f,,fmt]) => `<td class="ov-v">${FMTS[fmt](r[f])}</td>`).join('');
+    const tds = activeCols.map(([f,,fmt]) => `<td class="ov-v">${FMTS[fmt](r[f])}</td>`).join('');
     return `<tr ${bgStyle}><td class="ov-sticky ov-no">${i + 1}</td><td class="ov-sticky2 ov-name">${escapeHtml(r.name)}${wkndBadge}</td>${tds}</tr>`;
   }).join('');
 
