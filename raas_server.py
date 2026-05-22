@@ -225,7 +225,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                 latest_row = timeline[code].get(max(timeline[code].keys()), {})
                 self.send_json({
                     "ok": True, "code": code,
-                    "name": latest_row.get("PGM_NAME", "") or BE.PGM_NAMES.get(code, code),
+                    "name": latest_row.get("PGM_NAME", "") or BE._pgm_name(code),
                     "metric": metric, "days": days,
                     "data": [{"date": d, "value": v} for d, v in trend]
                 })
@@ -250,7 +250,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                 for code, row in snapshot.items():
                     result[code] = {
                         "code": code,
-                        "name": row.get("PGM_NAME", "") or BE.PGM_NAMES.get(code, code),
+                        "name": row.get("PGM_NAME", "") or BE._pgm_name(code),
                         "dau": BE._i(row.get("dau_today")),
                         "dau_wow": BE._fn(row.get("dau_wow")),
                         "dau_week": BE._i(row.get("dau_week")),
@@ -283,7 +283,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                 trend = BE.get_metric_trend(timeline, scope, metric, days=days, date_field=date_key)
                 self.send_json({
                     "ok": True, "scope": scope,
-                    "name": BE.PGM_NAMES.get(scope, scope),
+                    "name": BE._pgm_name(scope),
                     "metric": metric, "days": days,
                     "data": [{"date": d, "value": v} for d, v in trend]
                 })
@@ -401,7 +401,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     return
                 sorted_rows = sorted(date_rows.values(),
                                      key=lambda r: r.get("DATE", ""), reverse=True)
-                name = BE.PGM_NAMES.get(code, code)
+                name = BE._pgm_name(code)
                 self.send_json({"ok": True, "code": code, "name": name,
                                 "count": len(sorted_rows), "rows": sorted_rows})
             except Exception as e:

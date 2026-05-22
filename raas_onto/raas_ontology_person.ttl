@@ -1,0 +1,446 @@
+# =============================================================================
+# RAAS Person Ontology — 스키마 + 인스턴스 통합본
+#
+# 출연자 모델링:
+# - Person: 사람 (진행자, 대타 DJ, 게스트 등)
+# - Role: 역할 (MainHost/SubstituteHost/Guest/DJ 등)
+#
+# Episode·Participation 스키마는 raas_ontology_episode.ttl 참조.
+#
+# guestname 컬럼 해석:
+# - '/' 구분자의 의미가 프로그램마다 다름 → 프로그램별 정책으로 관리
+# =============================================================================
+
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+
+# =============================================================================
+# 1. 클래스 정의
+# =============================================================================
+
+raas:Person a owl:Class ;
+    rdfs:label "사람"@ko ;
+    rdfs:comment "라디오 프로그램에 출연하는 사람 (진행자, 대타 DJ, 게스트 등)"@ko .
+
+raas:Role a owl:Class ;
+    rdfs:label "역할"@ko ;
+    rdfs:comment "라디오 프로그램에서의 역할 분류"@ko .
+
+raas:ProgramType a owl:Class ;
+    rdfs:label "프로그램 유형"@ko ;
+    rdfs:comment "진행자 유무에 따른 프로그램 본질적 분류"@ko .
+
+raas:GuestnameInterpretationPolicy a owl:Class ;
+    rdfs:label "guestname 해석 정책"@ko ;
+    rdfs:comment "특정 프로그램의 guestname 컬럼을 어떻게 해석할지 정의. 같은 텍스트도 정책에 따라 다른 의미."@ko .
+
+
+# =============================================================================
+# 2. 속성 정의
+# =============================================================================
+
+# ─── Person 속성 ────────────────────────────────────────────────────────────
+
+raas:personName a owl:DatatypeProperty ;
+    rdfs:domain raas:Person ;
+    rdfs:label "본명"@ko ;
+    rdfs:comment "사람의 본명 (예: '김태균', '김영철')"@ko .
+
+raas:stageName a owl:DatatypeProperty ;
+    rdfs:domain raas:Person ;
+    rdfs:label "예명/활동명"@ko ;
+    rdfs:comment "예명 또는 활동명 (예: 'DJ 푸디토리움', '컬투의 김태균')"@ko .
+
+raas:personOccupation a owl:DatatypeProperty ;
+    rdfs:domain raas:Person ;
+    rdfs:label "직업"@ko ;
+    rdfs:comment "직업 또는 전문 분야 (예: '가수', '배우', '감독', '변호사')"@ko .
+
+raas:personGender a owl:DatatypeProperty ;
+    rdfs:domain raas:Person ;
+    rdfs:label "성별"@ko ;
+    rdfs:comment "M/F (선택 속성, 알려진 경우만)"@ko .
+
+# ─── 직접 관계 속성 (안정적 정보) ───────────────────────────────────────────
+
+raas:hasMainHost a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:Person ;
+    rdfs:label "주 진행자"@ko ;
+    rdfs:comment "프로그램의 정규 주 진행자. 변경 시 트리플 갱신 필요."@ko .
+
+raas:hasCoHost a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:Person ;
+    rdfs:label "공동 진행자"@ko ;
+    rdfs:comment "정규 공동 진행자 (예: 듀오 DJ)."@ko .
+
+raas:hasRegularGuest a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:Person ;
+    rdfs:label "고정 게스트"@ko ;
+    rdfs:comment "프로그램의 고정 출연 게스트. 일회성 게스트가 아닌 정기 출연자."@ko .
+
+raas:hasProgramType a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:ProgramType ;
+    rdfs:label "프로그램 유형"@ko .
+
+# ─── guestname 정책 속성 ────────────────────────────────────────────────────
+
+raas:guestnameInterpretation a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:GuestnameInterpretationPolicy ;
+    rdfs:label "guestname 해석 정책"@ko .
+
+raas:parsesRoleAs a owl:ObjectProperty ;
+    rdfs:domain raas:GuestnameInterpretationPolicy ;
+    rdfs:range raas:Role ;
+    rdfs:label "전체를 어떤 Role로 해석"@ko ;
+    rdfs:comment "구분자 없이 모든 인물을 같은 역할로 해석할 때 사용."@ko .
+
+raas:parsesPrefixAs a owl:ObjectProperty ;
+    rdfs:domain raas:GuestnameInterpretationPolicy ;
+    rdfs:range raas:Role ;
+    rdfs:label "'/' 앞 부분의 Role"@ko .
+
+raas:parsesSuffixAs a owl:ObjectProperty ;
+    rdfs:domain raas:GuestnameInterpretationPolicy ;
+    rdfs:range raas:Role ;
+    rdfs:label "'/' 뒤 부분의 Role"@ko .
+
+raas:exampleProgram a owl:ObjectProperty ;
+    rdfs:domain raas:GuestnameInterpretationPolicy ;
+    rdfs:range raas:Program ;
+    rdfs:label "정책 적용 프로그램 예시"@ko .
+
+raas:exampleText a owl:DatatypeProperty ;
+    rdfs:domain raas:GuestnameInterpretationPolicy ;
+    rdfs:label "정책 해석 예시"@ko .
+
+
+# =============================================================================
+# 3. Role 인스턴스
+# =============================================================================
+
+raas:MainHost a raas:Role ;
+    rdfs:label "주 진행자"@ko ;
+    raas:altLabel "Main Host"@en, "정규 진행자"@ko, "DJ"@ko ;
+    rdfs:comment "프로그램의 정규 주 진행자. 프로그램명에 이름이 들어가는 경우가 많음."@ko .
+
+raas:CoHost a raas:Role ;
+    rdfs:label "공동 진행자"@ko ;
+    raas:altLabel "Co-Host"@en, "공동 DJ"@ko ;
+    rdfs:comment "정규 공동 진행자. 한 프로그램에 2명 이상의 정규 진행자가 있을 때."@ko .
+
+raas:SubstituteHost a raas:Role ;
+    rdfs:label "대타 진행자"@ko ;
+    raas:altLabel "Substitute Host"@en, "대타 DJ"@ko, "Substitute DJ"@en ;
+    rdfs:comment "정규 진행자가 부재한 날의 대타 진행자. CSV의 guestname에 표기되는 경우가 있음."@ko .
+
+raas:Guest a raas:Role ;
+    rdfs:label "게스트"@ko ;
+    raas:altLabel "Guest"@en, "출연자"@ko ;
+    rdfs:comment "일회성 또는 단기 출연 게스트. 해당 회차에만 참여."@ko .
+
+raas:DJ a raas:Role ;
+    rdfs:label "DJ"@ko ;
+    raas:altLabel "DJ"@en, "음악 큐레이터"@ko ;
+    rdfs:comment "음악 중심 프로그램의 DJ (예: 'DJ래피'). MainHost의 특수 형태로 볼 수 있으나 음악 큐레이션 역할 강조."@ko .
+
+raas:RotatingHost a raas:Role ;
+    rdfs:label "요일별 순환 진행자"@ko ;
+    raas:altLabel "Rotating Host"@en, "요일 DJ"@ko, "요일별 DJ"@ko ;
+    rdfs:comment "요일마다 다른 진행자가 진행하는 프로그램의 DJ (예: 애프터 클럽). 정규 진행자이지만 특정 요일만 담당."@ko .
+
+raas:RegularGuest a raas:Role ;
+    rdfs:label "고정 게스트"@ko ;
+    raas:altLabel "Regular Guest"@en, "레귤러"@ko, "레귤러 게스트"@ko ;
+    rdfs:comment "특정 코너/요일에 정기적으로 출연하는 고정 게스트 (예: 김영철의 파워FM의 정상근). 일회성 게스트와 구분됨."@ko .
+
+
+# =============================================================================
+# 4. ProgramType 인스턴스
+# =============================================================================
+# 일부 프로그램은 진행자 없이 자동 편성됨 (F03 파워스테이션, L01 YESTERDAY 20).
+# 이는 단순한 정보 누락이 아니라 본질적 차이 — 광고 단가, 콘텐츠 분석 모두 다름.
+
+raas:HostedProgram a raas:ProgramType ;
+    rdfs:label "진행자 있는 프로그램"@ko ;
+    rdfs:comment "정규 진행자가 있어 멘트, 게스트 인터뷰, 사연 소개 등이 있는 프로그램."@ko .
+
+raas:AutomatedProgram a raas:ProgramType ;
+    rdfs:label "자동 음악 프로그램"@ko ;
+    raas:altLabel "DJ-less Program"@en ;
+    rdfs:comment "진행자 없이 음악만 자동 편성되는 프로그램. 광고 단가·콘텐츠 분석 방식이 진행자 프로그램과 다름."@ko .
+
+
+# =============================================================================
+# 5. guestname 해석 정책 인스턴스
+# =============================================================================
+# 핵심 발견: '/' 구분자의 의미가 프로그램마다 다름
+# - 컬투쇼 패턴: '/' 앞=대타DJ, 뒤=게스트
+# - 김영철 파워FM 패턴: '/' 앞=고정게스트, 뒤=초대손님
+# - 애프터클럽 패턴: 'DJ XXX' 단독=요일별 순환진행자
+
+raas:Policy_RotatingHost a raas:GuestnameInterpretationPolicy ;
+    rdfs:label "요일별 순환 진행자 정책"@ko ;
+    rdfs:comment "guestname이 그날의 정규 진행자(요일별 다름). 예: 애프터 클럽."@ko ;
+    raas:parsesRoleAs raas:RotatingHost ;
+    raas:exampleProgram raas:F02 ;
+    raas:exampleText "'DJ 푸디토리움' → 그날의 RotatingHost"@ko .
+
+raas:Policy_RegularPlusGuest a raas:GuestnameInterpretationPolicy ;
+    rdfs:label "고정 게스트 + 초대 손님 정책"@ko ;
+    rdfs:comment "'/' 앞 = 고정 게스트(RegularGuest), 뒤 = 초대 손님(Guest). 예: 김영철의 파워FM."@ko ;
+    raas:parsesPrefixAs raas:RegularGuest ;
+    raas:parsesSuffixAs raas:Guest ;
+    raas:exampleProgram raas:F05 ;
+    raas:exampleText "'김헌, 정상근, 피터 / 배혜지' → 김헌·정상근·피터=RegularGuest, 배혜지=Guest"@ko .
+
+raas:Policy_SubstituteOrGuest a raas:GuestnameInterpretationPolicy ;
+    rdfs:label "대타 DJ 또는 게스트 정책"@ko ;
+    rdfs:comment "정규 DJ가 부재한 날 대타 DJ를 'DJ XXX' 형태로 표기, 그 외엔 일반 게스트. 예: 두시탈출 컬투쇼."@ko ;
+    raas:parsesPrefixAs raas:SubstituteHost ;
+    raas:parsesSuffixAs raas:Guest ;
+    raas:condition "DJ-prefixed name before '/' indicates SubstituteHost" ;
+    raas:exampleProgram raas:F09 ;
+    raas:exampleText "'DJ 박보영 / 이광수, 김성훈 감독' → 박보영=SubstituteHost, 이광수+김성훈=Guest"@ko .
+
+raas:Policy_AllGuests a raas:GuestnameInterpretationPolicy ;
+    rdfs:label "전체 게스트 정책"@ko ;
+    rdfs:comment "'/' 구분자 없이 콤마로만 나열. 모두 일반 게스트로 해석."@ko ;
+    raas:parsesRoleAs raas:Guest ;
+    raas:exampleText "'이채연, 이지훈' → 이채연·이지훈 모두 Guest"@ko .
+
+raas:Policy_Unknown a raas:GuestnameInterpretationPolicy ;
+    rdfs:label "정책 미정"@ko ;
+    rdfs:comment "도메인 전문가 검증이 필요한 프로그램. 임시로 모두 Guest로 해석하나 신뢰도 낮음."@ko ;
+    raas:status "needs_verification"@ko .
+
+# 확정된 프로그램별 정책 적용
+raas:F02 raas:guestnameInterpretation raas:Policy_RotatingHost .
+raas:F05 raas:guestnameInterpretation raas:Policy_RegularPlusGuest .
+raas:F09 raas:guestnameInterpretation raas:Policy_SubstituteOrGuest .
+# 나머지 프로그램은 향후 도메인 전문가 검증 후 추가 (F08, F13, L05~L13 등)
+
+
+# =============================================================================
+# 6. 주 진행자 (MainHost) 인스턴스
+# =============================================================================
+
+raas:Person_DinDin a raas:Person ;
+    rdfs:label "딘딘"@ko ;
+    raas:personName "딘딘"@ko ;
+    raas:stageName "딘딘"@ko ;
+    raas:personOccupation "방송인"@ko .
+raas:F01 raas:hasMainHost raas:Person_DinDin .
+
+raas:Person_LeeInGwon a raas:Person ;
+    rdfs:label "이인권"@ko ;
+    raas:personName "이인권"@ko .
+raas:F04 raas:hasMainHost raas:Person_LeeInGwon .
+
+raas:Person_KimYoungChul a raas:Person ;
+    rdfs:label "김영철"@ko ;
+    raas:personName "김영철"@ko ;
+    raas:personOccupation "방송인, 코미디언"@ko .
+raas:F05 raas:hasMainHost raas:Person_KimYoungChul .
+
+raas:Person_BongTaeGyu a raas:Person ;
+    rdfs:label "봉태규"@ko ;
+    raas:personName "봉태규"@ko ;
+    raas:personOccupation "배우"@ko .
+raas:F06 raas:hasMainHost raas:Person_BongTaeGyu .
+
+raas:Person_ParkHaSun a raas:Person ;
+    rdfs:label "박하선"@ko ;
+    raas:personName "박하선"@ko ;
+    raas:personOccupation "배우"@ko .
+raas:F07 raas:hasMainHost raas:Person_ParkHaSun .
+
+raas:Person_JuHyunYoung a raas:Person ;
+    rdfs:label "주현영"@ko ;
+    raas:personName "주현영"@ko ;
+    raas:personOccupation "배우, 방송인"@ko .
+raas:F08 raas:hasMainHost raas:Person_JuHyunYoung .
+
+raas:Person_KimTaeKyun a raas:Person ;
+    rdfs:label "김태균"@ko ;
+    raas:personName "김태균"@ko ;
+    raas:stageName "컬투의 김태균"@ko ;
+    raas:personOccupation "방송인, 코미디언"@ko ;
+    rdfs:comment "두시탈출 컬투쇼 단독 DJ. 컬투 듀오의 김태균."@ko .
+raas:F09 raas:hasMainHost raas:Person_KimTaeKyun .
+
+raas:Person_HwangJaeSung a raas:Person ;
+    rdfs:label "황제성"@ko ;
+    raas:personName "황제성"@ko ;
+    rdfs:comment "F10 황제파워의 진행자. 프로그램명 '황제파워'는 진행자명 황제성에서 유래."@ko .
+raas:F10 raas:hasMainHost raas:Person_HwangJaeSung .
+
+raas:Person_ParkSoHyun a raas:Person ;
+    rdfs:label "박소현"@ko ;
+    raas:personName "박소현"@ko ;
+    raas:personOccupation "방송인"@ko .
+raas:F11 raas:hasMainHost raas:Person_ParkSoHyun .
+
+raas:Person_Wendy a raas:Person ;
+    rdfs:label "웬디"@ko ;
+    raas:personName "손승완"@ko ;
+    raas:stageName "웬디"@ko ;
+    raas:personOccupation "가수 (Red Velvet)"@ko .
+raas:F12 raas:hasMainHost raas:Person_Wendy .
+
+raas:Person_BaeSungJae a raas:Person ;
+    rdfs:label "배성재"@ko ;
+    raas:personName "배성재"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:F13 raas:hasMainHost raas:Person_BaeSungJae .
+
+raas:Person_KoHyunJun a raas:Person ;
+    rdfs:label "고현준"@ko ;
+    raas:personName "고현준"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:L05 raas:hasMainHost raas:Person_KoHyunJun .
+
+raas:Person_KimTaeHyun a raas:Person ;
+    rdfs:label "김태현"@ko ;
+    raas:personName "김태현"@ko .
+raas:L06 raas:hasMainHost raas:Person_KimTaeHyun .
+
+raas:Person_LeeSukYoung a raas:Person ;
+    rdfs:label "이숙영"@ko ;
+    raas:personName "이숙영"@ko ;
+    raas:personOccupation "방송인"@ko .
+raas:L07 raas:hasMainHost raas:Person_LeeSukYoung .
+
+raas:Person_ParkYeonMi a raas:Person ;
+    rdfs:label "박연미"@ko ;
+    raas:personName "박연미"@ko .
+raas:L08 raas:hasMainHost raas:Person_ParkYeonMi .
+
+raas:Person_YooMinSang a raas:Person ;
+    rdfs:label "유민상"@ko ;
+    raas:personName "유민상"@ko ;
+    raas:personOccupation "코미디언"@ko .
+raas:L09 raas:hasMainHost raas:Person_YooMinSang .
+
+raas:Person_JungYeop a raas:Person ;
+    rdfs:label "정엽"@ko ;
+    raas:personName "정엽"@ko ;
+    raas:personOccupation "가수"@ko .
+raas:L10 raas:hasMainHost raas:Person_JungYeop .
+
+raas:Person_LeeSangMi a raas:Person ;
+    rdfs:label "이상미"@ko ;
+    raas:personName "이상미"@ko ;
+    raas:stageName "DJ 이상미"@ko ;
+    rdfs:comment "L11 인생은 오디션 진행자."@ko .
+raas:L11 raas:hasMainHost raas:Person_LeeSangMi .
+
+raas:Person_KimChangWan a raas:Person ;
+    rdfs:label "김창완"@ko ;
+    raas:personName "김창완"@ko ;
+    raas:personOccupation "가수, 배우"@ko .
+raas:L12 raas:hasMainHost raas:Person_KimChangWan .
+
+raas:Person_PyeonSangWook a raas:Person ;
+    rdfs:label "편상욱"@ko ;
+    raas:personName "편상욱"@ko ;
+    raas:personOccupation "기자"@ko .
+raas:L13 raas:hasMainHost raas:Person_PyeonSangWook .
+
+raas:Person_KimYunSang a raas:Person ;
+    rdfs:label "김윤상"@ko ;
+    raas:personName "김윤상"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:L14 raas:hasMainHost raas:Person_KimYunSang .
+
+raas:Person_ParkEunKyung a raas:Person ;
+    rdfs:label "박은경"@ko ;
+    raas:personName "박은경"@ko .
+raas:L15 raas:hasMainHost raas:Person_ParkEunKyung .
+
+raas:Person_KimSunJae a raas:Person ;
+    rdfs:label "김선재"@ko ;
+    raas:personName "김선재"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:M05 raas:hasMainHost raas:Person_KimSunJae .
+
+raas:Person_DJRapi a raas:Person ;
+    rdfs:label "DJ래피"@ko ;
+    raas:stageName "DJ래피"@ko ;
+    raas:personOccupation "DJ"@ko ;
+    rdfs:comment "M07·M11 (주말 드라이브 뮤직) 진행자."@ko .
+raas:M07 raas:hasMainHost raas:Person_DJRapi .
+raas:M11 raas:hasMainHost raas:Person_DJRapi .
+
+raas:Person_ChoiYoungJoo a raas:Person ;
+    rdfs:label "최영주"@ko ;
+    raas:personName "최영주"@ko ;
+    raas:personOccupation "아나운서"@ko .
+raas:M10 raas:hasMainHost raas:Person_ChoiYoungJoo .
+
+
+# =============================================================================
+# 7. 프로그램 유형 분류
+# =============================================================================
+
+raas:F03 raas:hasProgramType raas:AutomatedProgram .
+raas:L01 raas:hasProgramType raas:AutomatedProgram .
+
+raas:F01 raas:hasProgramType raas:HostedProgram .
+raas:F02 raas:hasProgramType raas:HostedProgram .
+raas:F04 raas:hasProgramType raas:HostedProgram .
+raas:F05 raas:hasProgramType raas:HostedProgram .
+raas:F06 raas:hasProgramType raas:HostedProgram .
+raas:F07 raas:hasProgramType raas:HostedProgram .
+raas:F08 raas:hasProgramType raas:HostedProgram .
+raas:F09 raas:hasProgramType raas:HostedProgram .
+raas:F10 raas:hasProgramType raas:HostedProgram .
+raas:F11 raas:hasProgramType raas:HostedProgram .
+raas:F12 raas:hasProgramType raas:HostedProgram .
+raas:F13 raas:hasProgramType raas:HostedProgram .
+raas:L02 raas:hasProgramType raas:HostedProgram .
+raas:L03 raas:hasProgramType raas:HostedProgram .
+raas:L05 raas:hasProgramType raas:HostedProgram .
+raas:L06 raas:hasProgramType raas:HostedProgram .
+raas:L07 raas:hasProgramType raas:HostedProgram .
+raas:L08 raas:hasProgramType raas:HostedProgram .
+raas:L09 raas:hasProgramType raas:HostedProgram .
+raas:L10 raas:hasProgramType raas:HostedProgram .
+raas:L11 raas:hasProgramType raas:HostedProgram .
+raas:L12 raas:hasProgramType raas:HostedProgram .
+raas:L13 raas:hasProgramType raas:HostedProgram .
+raas:L14 raas:hasProgramType raas:HostedProgram .
+raas:L15 raas:hasProgramType raas:HostedProgram .
+raas:M05 raas:hasProgramType raas:HostedProgram .
+raas:M07 raas:hasProgramType raas:HostedProgram .
+raas:M10 raas:hasProgramType raas:HostedProgram .
+raas:M11 raas:hasProgramType raas:HostedProgram .
+
+
+# =============================================================================
+# 8. 고정 게스트 (RegularGuest) 인스턴스
+# =============================================================================
+
+raas:Person_JungSangGeun a raas:Person ;
+    rdfs:label "정상근"@ko ;
+    raas:personName "정상근"@ko ;
+    rdfs:comment "F05 김영철의 파워FM 고정 게스트."@ko .
+raas:F05 raas:hasRegularGuest raas:Person_JungSangGeun .
+
+raas:Person_LeeJaeIk a raas:Person ;
+    rdfs:label "이재익"@ko ;
+    raas:personName "이재익"@ko ;
+    rdfs:comment "L07 이숙영의 러브FM 고정 출연자. 4/29, 4/30, 5/01 연속 출연 확인."@ko .
+raas:L07 raas:hasRegularGuest raas:Person_LeeJaeIk .
+
+
+# =============================================================================
+# 끝
+# =============================================================================

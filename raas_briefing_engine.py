@@ -15,20 +15,11 @@ def _i(v,d=0):
 def _fn(v):
     try: return float(v) if v not in (None,'','None','null') else None
     except: return None
+def _yn(v):
+    """'Y'/'N' 문자열 그대로 반환. 그 외 값·빈값 → None."""
+    s = (v or '').strip().upper()
+    return s if s in ('Y', 'N') else None
 
-PGM_NAMES={
-    'T00':'전체','F00':'파워FM','L00':'러브FM','G00':'고릴라M','P00':'픽채널',
-    'F01':'뮤직하이','F02':'애프터클럽','F03':'팝스테이션','F04':'펀펀투데이',
-    'F05':'김영철의파워FM','F06':'아름다운이아침봉태규','F07':'씨네타운',
-    'F08':'12시엔주현영','F09':'컬투쇼','F10':'황제파워','F11':'러브게임',
-    'F12':'영스트리트','F13':'배텐',
-    'L01':'YESTERDAY','L02':'LOVE20','L03':'OLDIES20',
-    'L05':'뉴스브리핑','L06':'정치쇼','L07':'이숙영의러브FM',
-    'L08':'목돈연구소','L09':'배고픈라디오','L10':'정엽입니다',
-    'L11':'인생은오디션','L12':'저녁바람','L13':'뉴스직격',
-    'L14':'뮤직투나잇','L15':'음악이흐르는밤',
-    'M05':'책하고놀자','M07':'드라이브뮤직오전','M10':'최영주의러브FM','M11':'드라이브뮤직오후',
-}
 PGM_F=['F01','F02','F03','F04','F05','F06','F07','F08','F09','F10','F11','F12','F13']
 PGM_L=['L01','L02','L03','L04','L05','L06','L07','L08','L09','L10','L11',
         'L12','L13','L14','L15','M05','M07','M10','M11']
@@ -37,24 +28,14 @@ ALL=PGM_F+PGM_L
 
 
 def _pgm_name(code, row=None, default=None):
-    """프로그램/채널 코드 → 표시 이름.
-
-    Phase 5 Step 2 (호환성 우선 하이브리드):
-      1. PGM_NAMES (운영 약칭) — 기존 출력 호환 유지
-      2. 어댑터 (raas_onto, 정식 풀네임) — PGM_NAMES에 없는 코드 fallback
-      3. row.pgm_name — CSV에 있는 SPL 출력 이름
-      4. code — 최종 fallback
-
-    Step 2의 의도: 어댑터 통합 인프라 도입 + 출력은 PGM_NAMES와 동일 유지.
-    향후 Step 6 정리 단계에서 PGM_NAMES 제거하면 자동으로 어댑터 우선이 됨.
+    """프로그램/채널/플랫폼 코드 → 표시 이름.
+    우선순위: TTL(어댑터) → row.pgm_name → code
     """
-    if code in PGM_NAMES:
-        return PGM_NAMES[code]
     try:
         from raas_onto import get_adapter
-        meta = get_adapter().get_program_meta(code)
-        if meta and meta.get('label'):
-            return meta['label']
+        label = get_adapter()._onto.label_ko(f"raas:{code}")
+        if label and label != f"raas:{code}":
+            return label
     except Exception:
         pass
     if row is not None:
@@ -570,6 +551,8 @@ def _pgm_dict(code, row, rank=None, name=None, channel=None, dau=None):
         'w1_diff':             _fn(row.get('w1_ret_diff')),
         'm1_diff':             _fn(row.get('m1_ret_diff')),
         'guestname':           (row.get('guestname') or '').strip(),
+        'view_radio_yn':       _yn(row.get('view_radio_yn')),
+        'live_yn':             _yn(row.get('live_yn')),
     }
 
 def build_s5(kpi):

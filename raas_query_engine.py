@@ -37,29 +37,49 @@ def _weekday_ko(date_str: str) -> str:
         return ""
 
 # ── PGM_CODE 매핑 ──────────────────────────────────────────
-SCOPE_MAP = {
-    'platform': 'T00', 'all': 'T00', 'T00': 'T00',
-    '전체': 'T00', '고릴라': 'T00',
-    'powerfm': 'F00', '파워fm': 'F00', '파워': 'F00', 'F00': 'F00',
-    'lovefm': 'L00', '러브fm': 'L00', '러브': 'L00', 'L00': 'L00',
-    'gorillam': 'G00', '고릴라m': 'G00', 'G00': 'G00',
-    'pickch': 'P00', '픽채널': 'P00', 'P00': 'P00',
-}
+def _build_scope_map() -> dict:
+    """TTL에서 채널·플랫폼 키워드→코드 맵 빌드. 어댑터 실패 시 하드코딩 fallback."""
+    try:
+        from raas_onto import get_adapter
+        adapter = get_adapter()
+        idx = {}
+        for cls in ("raas:Platform", "raas:Channel"):
+            for subj in adapter._onto.instances_of(cls):
+                code = adapter._onto.value_str(adapter._onto.get_one(subj, "raas:code"))
+                if not code:
+                    continue
+                idx[code] = code
+                idx[code.lower()] = code
+                for label in adapter._all_labels(subj):
+                    idx[label.lower()] = code
+        return idx
+    except Exception:
+        return {
+            'platform': 'T00', 'all': 'T00', 'T00': 'T00',
+            '전체': 'T00', '고릴라': 'T00',
+            'powerfm': 'F00', '파워fm': 'F00', '파워': 'F00', 'F00': 'F00',
+            'lovefm': 'L00', '러브fm': 'L00', '러브': 'L00', 'L00': 'L00',
+            'gorillam': 'G00', '고릴라m': 'G00', 'G00': 'G00',
+            'pickch': 'P00', '픽채널': 'P00', 'P00': 'P00',
+        }
 
-def _build_keyword_index():
-    idx = {}
-    for code, name in BE.PGM_NAMES.items():
-        if not name:
-            continue
-        idx[name.lower()] = code
-        if '김영철' in name: idx['김영철'] = code
-        if '컬투' in name:   idx['컬투쇼'] = code; idx['컬투'] = code
-        if '봉태규' in name: idx['봉태규'] = code
-        if '주현영' in name: idx['주현영'] = code
-        if '황제' in name:   idx['황제파워'] = code
-        if '정치쇼' in name: idx['정치쇼'] = code
-        if '이숙영' in name: idx['이숙영'] = code
-    return idx
+SCOPE_MAP = _build_scope_map()
+
+def _build_keyword_index() -> dict:
+    """TTL 어댑터에서 프로그램 키워드→코드 인덱스 빌드."""
+    try:
+        from raas_onto import get_adapter
+        adapter = get_adapter()
+        idx = {}
+        for label, subjects in adapter._keyword_index.items():
+            lbl = label.lower()
+            for subj in subjects:
+                code = adapter._onto.value_str(adapter._onto.get_one(subj, "raas:code"))
+                if code:
+                    idx[lbl] = code
+        return idx
+    except Exception:
+        return {}
 
 KEYWORD_TO_CODE = _build_keyword_index()
 
@@ -279,7 +299,7 @@ def build_chart_data(data: dict, intent: dict, question: str):
         if intent_type == 'overview' and data.get('overview'):
             ov_rows = data['overview']
             _ch = data.get('overview_channel')
-            _ch_name = BE.PGM_NAMES.get(_ch, '') if _ch else '전체'
+            _ch_name = BE._pgm_name(_ch, default='') if _ch else '전체'
             _wknd_sfx = ''
             if _ch == 'L00':
                 _wknd_sfx = ' (주말 포함)' if data.get('overview_include_weekend') else ' (주말 제외)'
@@ -360,7 +380,7 @@ def build_chart_data(data: dict, intent: dict, question: str):
                     'new_w1_ret': 'W1유지(신규)', 'new_m1_ret': 'M1유지(신규)',
                 }.get(_rm2, _rm2.upper())
                 _ch2 = data.get('ranking_channel')
-                _ch2_name = BE.PGM_NAMES.get(_ch2, '') if _ch2 else ''
+                _ch2_name = BE._pgm_name(_ch2, default='') if _ch2 else ''
                 _scope_prefix = f"{_ch2_name} " if _ch2_name else ""
                 _show_all = data.get('ranking_show_all', False)
                 _wknd_suffix = ''
@@ -551,12 +571,16 @@ def classify_intent(question: str, today: str = None) -> dict:
 
         # scope_keyword → PGM_CODE 매핑
         # Phase 5 Step 4: 어댑터 우선 → SCOPE_MAP/KEYWORD_TO_CODE fallback
-        if intent.get('scope_keyword') and not intent.get('scope'):
+        if intent.get('scope_keyword') and intent.get('scope') in (None, '', 'T00'):
             kw_raw = intent['scope_keyword'].strip()
             kw = kw_raw.lower()
-            # 1) SCOPE_MAP 우선 (채널/플랫폼 영문/한글 매핑은 어댑터에 없음)
-            for key, code in SCOPE_MAP.items():
-                if key.lower() in kw:
+            # 1) 채널·플랫폼 매핑 — TTL에서 매번 빌드 (hot-reload 반영)
+            try:
+                _scope_map = _build_scope_map()
+            except Exception:
+                _scope_map = SCOPE_MAP
+            for key, code in _scope_map.items():
+                if key.lower() == kw:
                     intent['scope'] = code
                     break
             # 2) 어댑터 find_program_by_keyword (정식명/별칭/영문명 검색)
@@ -568,9 +592,13 @@ def classify_intent(question: str, today: str = None) -> dict:
                         intent['scope'] = matches[0]['code']
                 except Exception:
                     pass
-            # 3) KEYWORD_TO_CODE fallback (기존 하드코딩 별칭)
+            # 3) 키워드 인덱스 fallback (TTL 어댑터에서 재빌드 — hot-reload 반영)
             if not intent.get('scope'):
-                for kw_key, code in KEYWORD_TO_CODE.items():
+                try:
+                    fresh_kw = _build_keyword_index()
+                except Exception:
+                    fresh_kw = KEYWORD_TO_CODE
+                for kw_key, code in fresh_kw.items():
                     if kw_key in kw or kw in kw_key:
                         intent['scope'] = code
                         break
@@ -600,7 +628,7 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
     """CSV row에서 전체 필드 추출 — 유지율·전주비교·롤링·주간·월간 포함.
     CSV에 _prev/_diff 직접 필드가 있으면 우선 사용, 없으면 current - diff 역산.
     """
-    i = BE._i; fn = BE._fn
+    i = BE._i; fn = BE._fn; yn = BE._yn
 
     return {
         'date': date,
@@ -748,6 +776,8 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
         'daily_corner':  (row.get('daily_corner') or '').strip(),
         'weekly_corner': (row.get('weekly_corner') or '').strip(),
         'program_title': (row.get('program_title') or row.get('PGM_NAME') or '').strip(),
+        'view_radio_yn': yn(row.get('view_radio_yn')),
+        'live_yn':       yn(row.get('live_yn')),
     }
 
 
@@ -1020,7 +1050,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
                 continue
             # 채널 결정
             ch = 'F00' if code in set(BE.PGM_F) else 'L00' if code in set(BE.PGM_L) else None
-            ch_name = BE.PGM_NAMES.get(ch, '') if ch else ''
+            ch_name = BE._pgm_name(ch, default='') if ch else ''
             is_wknd = code in _WEEKEND_PGMS
             ov_rows.append({
                 'code': code,
@@ -1533,7 +1563,7 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
         _rm_label = _rm_label_map.get(_rm, _rm.upper())
         _is_rate = _rm.endswith('_rate') or _rm.endswith('_ret')
         _rch = data.get('ranking_channel')
-        _rch_name = BE.PGM_NAMES.get(_rch, '') if _rch else ''
+        _rch_name = BE._pgm_name(_rch, default='') if _rch else ''
         _rch_prefix = f"{_rch_name} " if _rch_name else ""
         lines.append(f"[최신일 {_rch_prefix}프로그램 순위 TOP 10 ({_rm_label} 기준)]")
         for i, r in enumerate(data['ranking'], 1):
@@ -1553,7 +1583,7 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
 
     if data.get('overview'):
         _ov_ch = data.get('overview_channel')
-        _ov_ch_name = BE.PGM_NAMES.get(_ov_ch, '') if _ov_ch else '전체'
+        _ov_ch_name = BE._pgm_name(_ov_ch, default='') if _ov_ch else '전체'
         lines.append(f"[{_ov_ch_name} 프로그램 편성시간 순 현황]")
         for r in data['overview']:
             wknd = ' [주말]' if r.get('is_weekend') else ''

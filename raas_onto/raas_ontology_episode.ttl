@@ -1,0 +1,132 @@
+# =============================================================================
+# RAAS Episode Ontology — 방송 회차 스키마
+#
+# 방송 회차(Episode) 모델링:
+# - Episode: 특정 날짜의 프로그램 방송 회차 (Splunk KPI 행 하나에 대응)
+# - Participation: Person이 Episode에 어떤 Role로 참여하는가 (매개 객체)
+# - BroadcastStatus: 정상방송 / 결방 / 특집 등 방송 상태
+#
+# 인스턴스 정책:
+# - Episode 인스턴스는 Splunk/CSV에 위임 (매일 생성되는 휘발 데이터)
+# - 이 파일은 구조 정의(스키마)만 담당
+# =============================================================================
+
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+
+# =============================================================================
+# 1. 클래스 정의
+# =============================================================================
+
+raas:Episode a owl:Class ;
+    rdfs:label "방송 회차"@ko ;
+    rdfs:comment "특정 날짜에 방송된 프로그램의 한 회차. Splunk KPI 행 하나에 대응."@ko .
+
+raas:Participation a owl:Class ;
+    rdfs:label "출연"@ko ;
+    rdfs:comment "특정 Person이 특정 Episode에 특정 Role로 참여한 사실을 나타내는 매개 객체."@ko .
+
+raas:BroadcastStatus a owl:Class ;
+    rdfs:label "방송 상태"@ko ;
+    rdfs:comment "해당 회차의 방송 진행 상태. 정상방송 / 결방 / 특집 등."@ko .
+
+
+# =============================================================================
+# 2. Episode 속성
+# =============================================================================
+
+raas:ofProgram a owl:ObjectProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range raas:Program ;
+    rdfs:label "방송 프로그램"@ko ;
+    rdfs:comment "이 회차가 속한 프로그램."@ko .
+
+raas:airDate a owl:DatatypeProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range xsd:date ;
+    rdfs:label "방송일"@ko ;
+    rdfs:comment "방송된 날짜 리터럴. 예: '2026-05-22'^^xsd:date."@ko .
+
+raas:onDate a owl:ObjectProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range raas:CalendarDay ;
+    rdfs:label "방송일 (캘린더)"@ko ;
+    rdfs:comment "CalendarDay 인스턴스와 연결. 공휴일·요일 정보 조회 시 사용."@ko .
+
+raas:broadcastStatus a owl:ObjectProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range raas:BroadcastStatus ;
+    rdfs:label "방송 상태"@ko .
+
+raas:rawGuestName a owl:DatatypeProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:label "원본 guestname"@ko ;
+    rdfs:comment "Splunk CSV의 guestname 컬럼 원본 텍스트. 파싱 전 값."@ko .
+
+raas:hasParticipation a owl:ObjectProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range raas:Participation ;
+    rdfs:label "출연 정보"@ko ;
+    rdfs:comment "이 회차에 참여한 Person의 출연 정보."@ko .
+
+raas:viewRadioYn a owl:DatatypeProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range xsd:string ;
+    rdfs:label "보는라디오 편성유무"@ko ;
+    rdfs:comment "해당 회차가 보는라디오(영상 라디오) 편성인지 여부. Splunk view_radio_yn 컬럼. Y/N."@ko .
+
+raas:liveYn a owl:DatatypeProperty ;
+    rdfs:domain raas:Episode ;
+    rdfs:range xsd:string ;
+    rdfs:label "생방송유무"@ko ;
+    rdfs:comment "해당 회차가 생방송인지 여부. Splunk live_yn 컬럼. Y/N."@ko .
+
+
+# =============================================================================
+# 3. Participation 속성
+# =============================================================================
+
+raas:ofPerson a owl:ObjectProperty ;
+    rdfs:domain raas:Participation ;
+    rdfs:range raas:Person ;
+    rdfs:label "참여자"@ko .
+
+raas:hasRole a owl:ObjectProperty ;
+    rdfs:domain raas:Participation ;
+    rdfs:range raas:Role ;
+    rdfs:label "역할"@ko .
+
+raas:participatesIn a owl:ObjectProperty ;
+    rdfs:domain raas:Participation ;
+    rdfs:range raas:Episode ;
+    rdfs:label "참여 회차"@ko ;
+    rdfs:comment "역방향 조회용. inverse of hasParticipation."@ko .
+
+
+# =============================================================================
+# 4. BroadcastStatus 인스턴스
+# =============================================================================
+
+raas:NormalBroadcast a raas:BroadcastStatus ;
+    rdfs:label "정상방송"@ko ;
+    raas:altLabel "Normal"@en ;
+    rdfs:comment "정규 편성대로 정상 방송된 회차."@ko .
+
+raas:Cancelled a raas:BroadcastStatus ;
+    rdfs:label "결방"@ko ;
+    raas:altLabel "Cancelled"@en ;
+    rdfs:comment "편성되었으나 방송되지 않은 회차. 스포츠 중계, 긴급뉴스 등으로 인한 결방."@ko .
+
+raas:SpecialBroadcast a raas:BroadcastStatus ;
+    rdfs:label "특집"@ko ;
+    raas:altLabel "Special"@en ;
+    rdfs:comment "정규 편성과 다른 특집 방송 회차."@ko .
+
+
+# =============================================================================
+# 끝 — Episode 인스턴스는 Splunk/CSV에 위임
+# =============================================================================

@@ -60,13 +60,13 @@ def _find_ontology_dir() -> Path:
 ONTOLOGY_DIR = _find_ontology_dir()
 
 ONTOLOGY_FILES = [
-    "raas_kpi_ontology.ttl",
-    "raas_domain_entities.ttl",
-    "raas_time_schema.ttl",
-    "raas_business_rules.ttl",
-    "raas_calendar.ttl",
-    "raas_person_schema.ttl",
-    "raas_person_instances.ttl",
+    "raas_ontology_kpi.ttl",
+    "raas_ontology_program.ttl",
+    "raas_ontology_time.ttl",
+    "raas_ontology_noteworthy.ttl",
+    "raas_ontology_calendar.ttl",
+    "raas_ontology_person.ttl",
+    "raas_ontology_episode.ttl",
 ]
 
 
@@ -350,6 +350,7 @@ class OntologyAdapter:
 
     def find_program_by_keyword(self, keyword: str) -> list[dict]:
         """자연어 키워드로 검색. 챕터 3.3.2 참조."""
+        _TYPE_PRIORITY = {"Program": 0, "Channel": 1, "Platform": 2}
         results = []
         seen_subjects = set()
 
@@ -362,18 +363,38 @@ class OntologyAdapter:
                     seen_subjects.add(subj)
                     results.append(self._search_result(subj, label, score=1.0))
 
-        # 부분 일치
-        if not results:
-            for label, subjects in self._keyword_index.items():
-                if keyword in label:
-                    for subj in subjects:
-                        if subj in seen_subjects:
-                            continue
-                        seen_subjects.add(subj)
-                        score = len(keyword) / len(label)
-                        results.append(self._search_result(subj, label, score=score))
+        if results:
+            results.sort(key=lambda r: (
+                -r["score"], _TYPE_PRIORITY.get(r["type"], 3)
+            ))
+            return results
 
-        results.sort(key=lambda r: -r["score"])
+        # 순방향 부분 일치: keyword가 label 안에 포함
+        for label, subjects in self._keyword_index.items():
+            if keyword in label:
+                for subj in subjects:
+                    if subj in seen_subjects:
+                        continue
+                    seen_subjects.add(subj)
+                    score = len(keyword) / len(label)
+                    results.append(self._search_result(subj, label, score=score))
+
+        # 역방향 부분 일치: label이 keyword 안에 포함 (예: "김영철"이 "김영철의파워FM"에 포함)
+        # Program 타입에 +0.2 보너스를 주어 채널명 중복 매칭보다 우선
+        for label, subjects in self._keyword_index.items():
+            if label in keyword and label != keyword:
+                for subj in subjects:
+                    if subj in seen_subjects:
+                        continue
+                    seen_subjects.add(subj)
+                    cls = self._classify(subj)
+                    type_bonus = 0.2 if cls == "Program" else 0.0
+                    score = len(label) / len(keyword) + type_bonus
+                    results.append(self._search_result(subj, label, score=score))
+
+        results.sort(key=lambda r: (
+            -r["score"], _TYPE_PRIORITY.get(r["type"], 3)
+        ))
         return results
 
     def _search_result(self, subj: str, matched_label: str, score: float) -> dict:
@@ -1212,12 +1233,29 @@ class OntologyAdapter:
 
 class _AdapterCache:
     _instance: Optional[OntologyAdapter] = None
+    _mtime: float = 0.0
+
+    @classmethod
+    def _ttl_mtime(cls) -> float:
+        try:
+            mtimes = [
+                (ONTOLOGY_DIR / f).stat().st_mtime
+                for f in ONTOLOGY_FILES
+                if (ONTOLOGY_DIR / f).exists()
+            ]
+            return max(mtimes) if mtimes else 0.0
+        except Exception:
+            return 0.0
 
     @classmethod
     def get(cls) -> OntologyAdapter:
-        if cls._instance is None:
+        current_mtime = cls._ttl_mtime()
+        if cls._instance is None or current_mtime > cls._mtime:
+            if cls._instance is not None:
+                logger.info("TTL 파일 변경 감지 — 어댑터 자동 재로드")
             try:
                 cls._instance = OntologyAdapter()
+                cls._mtime = current_mtime
                 logger.info(f"OntologyAdapter 로드 완료: {len(cls._instance._onto.triples)}개 트리플")
             except Exception as e:
                 logger.error(f"OntologyAdapter 로드 실패: {e}")
@@ -1227,6 +1265,7 @@ class _AdapterCache:
     @classmethod
     def reload(cls) -> OntologyAdapter:
         cls._instance = None
+        cls._mtime = 0.0
         return cls.get()
 
 

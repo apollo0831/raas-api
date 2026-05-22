@@ -64,13 +64,13 @@ def get_ontology_paths():
     """온톨로지 .ttl 파일들의 경로 반환."""
     base_dir = Path(__file__).parent
     return [
-        base_dir / "raas_kpi_ontology.ttl",
-        base_dir / "raas_domain_entities.ttl",
-        base_dir / "raas_time_schema.ttl",
-        base_dir / "raas_business_rules.ttl",
-        base_dir / "raas_calendar.ttl",
-        base_dir / "raas_person_schema.ttl",
-        base_dir / "raas_person_instances.ttl",
+        base_dir / "raas_ontology_kpi.ttl",
+        base_dir / "raas_ontology_program.ttl",
+        base_dir / "raas_ontology_time.ttl",
+        base_dir / "raas_ontology_noteworthy.ttl",
+        base_dir / "raas_ontology_calendar.ttl",
+        base_dir / "raas_ontology_person.ttl",
+        base_dir / "raas_ontology_episode.ttl",
     ]
 
 

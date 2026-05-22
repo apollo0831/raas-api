@@ -42,7 +42,7 @@ raas:L00 a raas:Channel ;
 raas:G00 a raas:Channel ;
     raas:code "G00" ;
     rdfs:label "고릴라M"@ko ;
-    raas:altLabel "GorillaM"@en, "고릴라엠"@ko ;
+    raas:altLabel "GorillaM"@en, "고릴라엠"@ko, "앰채널"@ko, "DMB채널"@ko ;
     raas:partOfPlatform raas:T00 ;
     raas:channelNature "non-programmed"@en ;
     rdfs:comment "프로그램 단위 편성 없이 채널 자체로 청취가 측정됨 (큐레이션/비편성 채널)"@ko .
@@ -69,15 +69,15 @@ raas:F01 a raas:Program ;
 
 raas:F02 a raas:Program ;
     raas:code "F02" ;
-    rdfs:label "애프터 클럽"@ko ;
-    raas:altLabel "애프터클럽"@ko, "After Club"@en ;
+    rdfs:label "애프터클럽"@ko ;
+    raas:altLabel "애프터 클럽"@ko, "After Club"@en ;
     raas:belongsToChannel raas:F00 ;
     raas:airTimeStr "01:00" .
 
 raas:F03 a raas:Program ;
     raas:code "F03" ;
-    rdfs:label "파워 스테이션"@ko ;
-    raas:altLabel "파워스테이션"@ko, "팝스테이션"@ko, "Power Station"@en ;
+    rdfs:label "김주우의 팝스테이션"@ko ;
+    raas:altLabel "팝스"@ko, "팝스테이션"@ko, "Power Station"@en ;
     raas:belongsToChannel raas:F00 ;
     raas:airTimeStr "03:00" .
 
@@ -91,14 +91,14 @@ raas:F04 a raas:Program ;
 raas:F05 a raas:Program ;
     raas:code "F05" ;
     rdfs:label "김영철의 파워FM"@ko ;
-    raas:altLabel "김영철의 파워FM"@ko, "김영철"@ko, "김철벙커"@ko ;
+    raas:altLabel "영철파워"@ko, "김영철"@ko, "철파엠"@ko ;
     raas:belongsToChannel raas:F00 ;
     raas:airTimeStr "07:00" .
 
 raas:F06 a raas:Program ;
     raas:code "F06" ;
     rdfs:label "아름다운 이 아침 봉태규입니다"@ko ;
-    raas:altLabel "봉태규"@ko, "아이아"@ko, "아름다운 이 아침"@ko ;
+    raas:altLabel "봉태규"@ko, "아침봉"@ko, "아름다운 이 아침"@ko, "이아침"@ko ;
     raas:belongsToChannel raas:F00 ;
     raas:airTimeStr "09:00" .
 
@@ -119,7 +119,7 @@ raas:F08 a raas:Program ;
 raas:F09 a raas:Program ;
     raas:code "F09" ;
     rdfs:label "두시탈출 컬투쇼"@ko ;
-    raas:altLabel "컬투쇼"@ko, "컬투"@ko, "두시탈출"@ko, "두탈컬"@ko ;
+    raas:altLabel "컬투쇼"@ko, "컬투"@ko, "두시탈출"@ko, "김태균"@ko ;
     raas:belongsToChannel raas:F00 ;
     raas:airTimeStr "14:00" .
 
@@ -140,14 +140,14 @@ raas:F11 a raas:Program ;
 raas:F12 a raas:Program ;
     raas:code "F12" ;
     rdfs:label "웬디의 영스트리트"@ko ;
-    raas:altLabel "영스트리트"@ko, "웬디"@ko, "Young Street"@en, "영스트"@ko ;
+    raas:altLabel "영스트리트"@ko, "웬디"@ko, "Young Street"@en, "영스"@ko ;
     raas:belongsToChannel raas:F00 ;
     raas:airTimeStr "20:00" .
 
 raas:F13 a raas:Program ;
     raas:code "F13" ;
     rdfs:label "배성재의 텐"@ko ;
-    raas:altLabel "배텐"@ko, "배성재"@ko, "Ten"@en ;
+    raas:altLabel "배텐"@ko, "배성재"@ko, "텐"@ko, "Ten"@en ;
     raas:belongsToChannel raas:F00 ;
     raas:airTimeStr "22:00" .
 
@@ -184,7 +184,7 @@ raas:L03 a raas:Program ;
 raas:L05 a raas:Program ;
     raas:code "L05" ;
     rdfs:label "고현준의 뉴스 브리핑"@ko ;
-    raas:altLabel "뉴스브리핑"@ko, "고현준"@ko ;
+    raas:altLabel "뉴스브리핑"@ko, "고현준"@ko, "고뉴브"@ko ;
     raas:belongsToChannel raas:L00 ;
     raas:airTimeStr "06:00" .
 
@@ -198,21 +198,21 @@ raas:L06 a raas:Program ;
 raas:L07 a raas:Program ;
     raas:code "L07" ;
     rdfs:label "이숙영의 러브FM"@ko ;
-    raas:altLabel "이숙영"@ko, "이숙영러브"@ko ;
+    raas:altLabel "이숙영"@ko, "이러엠"@ko ;
     raas:belongsToChannel raas:L00 ;
     raas:airTimeStr "09:00" .
 
 raas:L08 a raas:Program ;
     raas:code "L08" ;
     rdfs:label "박연미의 목돈연구소"@ko ;
-    raas:altLabel "목돈연구소"@ko, "박연미"@ko ;
+    raas:altLabel "목돈연구소"@ko, "박연미"@ko, "목돈"@ko ;
     raas:belongsToChannel raas:L00 ;
     raas:airTimeStr "11:00" .
 
 raas:L09 a raas:Program ;
     raas:code "L09" ;
     rdfs:label "유민상의 배고픈 라디오"@ko ;
-    raas:altLabel "배고픈 라디오"@ko, "유민상"@ko ;
+    raas:altLabel "배고픈 라디오"@ko, "유민상"@ko, "유배라"@ko ;
     raas:belongsToChannel raas:L00 ;
     raas:airTimeStr "12:00" .
 
@@ -226,21 +226,21 @@ raas:L10 a raas:Program ;
 raas:L11 a raas:Program ;
     raas:code "L11" ;
     rdfs:label "인생은 오디션"@ko ;
-    raas:altLabel "인생오디션"@ko, "어예진의 방과후 목돈연구소"@ko ;
+    raas:altLabel "인생오디션"@ko, "오디션"@ko ;
     raas:belongsToChannel raas:L00 ;
     raas:airTimeStr "16:00" .
 
 raas:L12 a raas:Program ;
     raas:code "L12" ;
     rdfs:label "6시 저녁바람 김창완입니다"@ko ;
-    raas:altLabel "저녁바람"@ko, "김창완"@ko, "6시 저녁바람"@ko ;
+    raas:altLabel "저녁바람"@ko, "김창완"@ko, "저녁창"@ko, "6시 저녁바람"@ko ;
     raas:belongsToChannel raas:L00 ;
     raas:airTimeStr "18:00" .
 
 raas:L13 a raas:Program ;
     raas:code "L13" ;
     rdfs:label "편상욱의 뉴스직격"@ko ;
-    raas:altLabel "뉴스직격"@ko, "편상욱"@ko, "주영진의 뉴스직격"@ko ;
+    raas:altLabel "뉴스직격"@ko, "편상욱"@ko ;
     raas:belongsToChannel raas:L00 ;
     raas:airTimeStr "17:00" .
 
@@ -254,7 +254,7 @@ raas:L14 a raas:Program ;
 raas:L15 a raas:Program ;
     raas:code "L15" ;
     rdfs:label "음악이 흐르는 밤 박은경입니다"@ko ;
-    raas:altLabel "음악이 흐르는 밤"@ko, "박은경"@ko, "최백호의 낭만시대"@ko ;
+    raas:altLabel "음악이 흐르는 밤"@ko, "박은경"@ko, "최백호의 낭만시대(종방)"@ko ;
     raas:belongsToChannel raas:L00 ;
     raas:airTimeStr "22:00" .
 
@@ -275,19 +275,19 @@ raas:M05 a raas:Program ;
 
 raas:M07 a raas:Program ;
     raas:code "M07" ;
-    rdfs:label "최영주의 러브FM"@ko ;
-    raas:altLabel "최영주"@ko, "최영주의러브FM"@ko ;
+    rdfs:label "DJ래피의 드라이브 뮤직 (오전)"@ko ;
+    raas:altLabel "드라이브뮤직오전"@ko, "드라이브뮤직"@ko, "드라이브 뮤직"@ko, "DJ래피"@ko, "Drive Music"@en ;
     raas:belongsToChannel raas:L00 ;
-    raas:airTimeStr "09:00" ;
+    raas:airTimeStr "07:00" ;
     raas:scheduleNote "주말 전용 (토·일)"@ko .
 
 raas:M10 a raas:Program ;
     raas:code "M10" ;
-    rdfs:label "DJ래피의 드라이브 뮤직"@ko ;
-    raas:altLabel "드라이브 뮤직"@ko, "드라이브뮤직"@ko, "DJ래피"@ko, "Drive Music"@en ;
+    rdfs:label "최영주의 러브FM"@ko ;
+    raas:altLabel "최영주의러브FM"@ko, "최영주"@ko ;
     raas:belongsToChannel raas:L00 ;
-    raas:airTimeStr "07:00" ;
-    raas:scheduleNote "주말 전용 (토·일) — 오전 시간대"@ko .
+    raas:airTimeStr "09:00" ;
+    raas:scheduleNote "주말 전용 (토·일)"@ko .
 
 raas:M11 a raas:Program ;
     raas:code "M11" ;
