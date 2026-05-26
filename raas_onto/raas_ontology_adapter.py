@@ -50,7 +50,7 @@ def _find_ontology_dir() -> Path:
     ]
     for c in candidates:
         # 첫 번째 .ttl 파일 존재 여부로 판정
-        if (c / "raas_kpi_ontology.ttl").exists():
+        if (c / "raas_ontology_kpi.ttl").exists():
             return c
 
     # 못 찾으면 같은 폴더로 (어댑터 init 시 경고 발생)
@@ -256,6 +256,14 @@ class OntologyAdapter:
             self._field_to_variant.keys(), key=len, reverse=True
         )
 
+        # csvField → 속성 IRI (메타데이터 필드 역방향 조회)
+        self._csv_field_to_property: dict[str, str] = {}
+        for s, p, o in self._onto.triples:
+            if p == "raas:csvField":
+                col = self._onto.value_str(o)
+                if col:
+                    self._csv_field_to_property[col] = s
+
         # 키워드 → Subject (Platform/Channel/Program 통합)
         self._keyword_index: dict[str, list[str]] = defaultdict(list)
         for cls in ("raas:Platform", "raas:Channel", "raas:Program"):
@@ -337,6 +345,41 @@ class OntologyAdapter:
     def get_all_fields(self) -> list[str]:
         """온톨로지에 정의된 모든 필드명 (변형 접미사 적용 전)."""
         return list(self._field_to_variant.keys())
+
+    def get_metadata_field_info(self, csv_column: str) -> Optional[dict]:
+        """CSV 컬럼명 → 메타데이터 속성 정보 (raas:csvField 어노테이션 기반).
+
+        KPI 지표(raas:fieldName)가 아닌 메타데이터 필드 전용.
+        예: get_metadata_field_info("view_radio_yn") →
+            {"csv_column": "view_radio_yn",
+             "property": "raas:viewRadioYn",
+             "label": "보는라디오 편성유무",
+             "domain": "raas:Episode",
+             "range": "xsd:string"}
+        """
+        prop_iri = self._csv_field_to_property.get(csv_column)
+        if not prop_iri:
+            return None
+
+        domain = self._onto.get_one(prop_iri, "rdfs:domain")
+        range_ = self._onto.get_one(prop_iri, "rdfs:range")
+        comment = self._onto.value_str(self._onto.get_one(prop_iri, "rdfs:comment"))
+
+        return {
+            "csv_column": csv_column,
+            "property": prop_iri,
+            "label": self._onto.label_ko(prop_iri),
+            "domain": domain,
+            "range": range_,
+            "comment": comment,
+        }
+
+    def get_all_metadata_fields(self) -> list[dict]:
+        """raas:csvField로 연결된 모든 메타데이터 컬럼 목록."""
+        return [
+            self.get_metadata_field_info(col)
+            for col in self._csv_field_to_property
+        ]
 
     def get_legacy_field_aliases(self) -> dict[str, str]:
         """레거시 alias 매핑 (briefing_engine FIELD_ALIASES 호환).
@@ -1215,8 +1258,20 @@ class OntologyAdapter:
                 "variant": "Current",
             }
 
+        # metadata_fields — csvField 어노테이션된 메타데이터 컬럼
+        metadata_fields = {
+            info["csv_column"]: {
+                "property": info["property"],
+                "label": info["label"],
+                "domain": info["domain"],
+                "range": info["range"],
+            }
+            for info in self.get_all_metadata_fields()
+            if info
+        }
+
         return {
-            "version": "0.5",
+            "version": "0.6",
             "generated_at": datetime.utcnow().isoformat() + "Z",
             "metrics": metrics,
             "channels": channels,
@@ -1224,6 +1279,7 @@ class OntologyAdapter:
             "dayparts": dayparts,
             "concepts": concepts,
             "field_to_meta": field_to_meta,
+            "metadata_fields": metadata_fields,
         }
 
 

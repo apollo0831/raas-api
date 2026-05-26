@@ -99,6 +99,11 @@ raas:RollingGranularity a owl:Class ;
     rdfs:label "롤링 시간 단위"@ko ;
     rdfs:comment "오늘 기준 소급 이동 윈도우"@ko .
 
+raas:PeriodAvgGranularity a owl:Class ;
+    rdfs:subClassOf raas:Granularity ;
+    rdfs:label "기간 평균 단위"@ko ;
+    rdfs:comment "전주/전월 기간의 일평균 — 누적값이 아닌 기간 내 평균"@ko .
+
 raas:Variant a owl:Class ;
     rdfs:label "변형"@ko ;
     rdfs:comment "현재값/직전값/변동률/차이/비중/어제값"@ko .
@@ -244,6 +249,11 @@ raas:variantSuffix a owl:DatatypeProperty ;
 raas:typicalUnit a owl:DatatypeProperty ;
     rdfs:domain raas:MeasureType .
 
+# CSV 컬럼 연결용 어노테이션
+raas:csvField a owl:AnnotationProperty ;
+    rdfs:label "CSV 필드명"@ko ;
+    rdfs:comment "온톨로지 속성(Property)과 대응하는 Splunk CSV 컬럼명. MetricVariant의 raas:fieldName과 달리 메타데이터 속성에 직접 부착."@ko .
+
 # 시간 차원 메타정보
 raas:dayOffset a owl:DatatypeProperty ;
     rdfs:label "일 단위 오프셋"@ko ;
@@ -330,6 +340,19 @@ raas:Rolling30Day a raas:RollingGranularity ;
     raas:rollingFrom "today" ;
     raas:appliesTo raas:DAU ;
     raas:order 5 .
+
+# ─── 3.3b Period Average Granularity ─────────────────────────────────────────
+
+raas:PrevWeekAvg a raas:PeriodAvgGranularity ;
+    rdfs:label "전주 일평균 (월~일 7일간 DAU 평균)"@ko ;
+    raas:windowDays 7 ;
+    raas:windowType "period_avg" ;
+    raas:order 6 .
+
+raas:PrevMonAvg a raas:PeriodAvgGranularity ;
+    rdfs:label "전월 일평균 (1일~말일 기간 평균)"@ko ;
+    raas:windowType "period_avg" ;
+    raas:order 7 .
 
 # ─── 3.4 Variant (변형) ──────────────────────────────────────────────────────
 
@@ -664,6 +687,53 @@ raas:HabitRate_Month a raas:MetricVariant ;
     raas:ofMetric raas:HabitRate ;
     raas:granularity raas:Month ;
     raas:fieldName "habit_rate_mon" .
+
+
+# ─── 4.3b 실청취율 ───────────────────────────────────────────────────────────
+
+raas:RealListenRate a raas:Metric ;
+    rdfs:label "실청취율"@ko ;
+    raas:altLabel "Real Listen Rate"@en, "실청취"@ko ;
+    raas:unit "%" ;
+    raas:hasMeasureType raas:Percentage ;
+    raas:definition "추정 노출 대비 실제 청취 비율"@ko ;
+    raas:dictionarySection "D. user_quality" .
+
+raas:RealListenRate_Day a raas:MetricVariant ;
+    raas:ofMetric raas:RealListenRate ;
+    raas:granularity raas:Day ;
+    raas:fieldName "real_rate" .
+
+raas:RealListenRate_Week a raas:MetricVariant ;
+    raas:ofMetric raas:RealListenRate ;
+    raas:granularity raas:Week ;
+    raas:fieldName "real_rate_week" .
+
+raas:RealListenRate_Month a raas:MetricVariant ;
+    raas:ofMetric raas:RealListenRate ;
+    raas:granularity raas:Month ;
+    raas:fieldName "real_rate_mon" .
+
+
+# ─── 4.3c 기간 평균 지표 ─────────────────────────────────────────────────────
+
+raas:DAU_WeekAvg a raas:MetricVariant ;
+    raas:ofMetric raas:DAU ;
+    raas:granularity raas:PrevWeekAvg ;
+    raas:fieldName "dau_week_avg" ;
+    rdfs:comment "전주 월~일 7일간 DAU 일평균"@ko .
+
+raas:DAU_MonAvg a raas:MetricVariant ;
+    raas:ofMetric raas:DAU ;
+    raas:granularity raas:PrevMonAvg ;
+    raas:fieldName "dau_mon_avg" ;
+    rdfs:comment "전월 1일~말일 DAU 일평균"@ko .
+
+raas:WAU_MonAvg a raas:MetricVariant ;
+    raas:ofMetric raas:DAU ;
+    raas:granularity raas:PrevMonAvg ;
+    raas:fieldName "wau_mon_avg" ;
+    rdfs:comment "전월 1일~말일 7D롤링 WAU 일평균"@ko .
 
 
 # ─── 4.4 그룹 D: 유지율 (단일 metric + 윈도우 × 코호트) ──────────────────────

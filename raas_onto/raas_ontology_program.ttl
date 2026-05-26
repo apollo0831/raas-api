@@ -14,6 +14,27 @@
 
 
 # =============================================================================
+# 0. Program 도메인 속성 정의
+# =============================================================================
+
+raas:airTimeStr a owl:DatatypeProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:label "편성 시간 문자열"@ko ;
+    rdfs:comment "프로그램 편성 시작 시각. 예: '07:00'."@ko ;
+    raas:csvField "STIME" .
+
+raas:partOfPlatform a owl:ObjectProperty ;
+    rdfs:domain raas:Channel ;
+    rdfs:range raas:Platform ;
+    rdfs:label "소속 플랫폼"@ko .
+
+raas:channelNature a owl:DatatypeProperty ;
+    rdfs:domain raas:Channel ;
+    rdfs:label "채널 성격"@ko ;
+    rdfs:comment "programmed | non-programmed"@ko .
+
+
+# =============================================================================
 # 1. Platform 인스턴스 (1개)
 # =============================================================================
 

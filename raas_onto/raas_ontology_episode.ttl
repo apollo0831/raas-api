@@ -65,7 +65,8 @@ raas:broadcastStatus a owl:ObjectProperty ;
 raas:rawGuestName a owl:DatatypeProperty ;
     rdfs:domain raas:Episode ;
     rdfs:label "원본 guestname"@ko ;
-    rdfs:comment "Splunk CSV의 guestname 컬럼 원본 텍스트. 파싱 전 값."@ko .
+    rdfs:comment "Splunk CSV의 guestname 컬럼 원본 텍스트. 파싱 전 값."@ko ;
+    raas:csvField "guestname" .
 
 raas:hasParticipation a owl:ObjectProperty ;
     rdfs:domain raas:Episode ;
@@ -77,13 +78,15 @@ raas:viewRadioYn a owl:DatatypeProperty ;
     rdfs:domain raas:Episode ;
     rdfs:range xsd:string ;
     rdfs:label "보는라디오 편성유무"@ko ;
-    rdfs:comment "해당 회차가 보는라디오(영상 라디오) 편성인지 여부. Splunk view_radio_yn 컬럼. Y/N."@ko .
+    rdfs:comment "해당 회차가 보는라디오(영상 라디오) 편성인지 여부. Splunk view_radio_yn 컬럼. Y/N."@ko ;
+    raas:csvField "view_radio_yn" .
 
 raas:liveYn a owl:DatatypeProperty ;
     rdfs:domain raas:Episode ;
     rdfs:range xsd:string ;
     rdfs:label "생방송유무"@ko ;
-    rdfs:comment "해당 회차가 생방송인지 여부. Splunk live_yn 컬럼. Y/N."@ko .
+    rdfs:comment "해당 회차가 생방송인지 여부. Splunk live_yn 컬럼. Y/N."@ko ;
+    raas:csvField "live_yn" .
 
 
 # =============================================================================
