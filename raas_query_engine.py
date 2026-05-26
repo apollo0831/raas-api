@@ -18,7 +18,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import raas_briefing_engine as BE
+import pandas as _pd
 from raas_prompts import QUERY_SYSTEM_PROMPT
 from raas_briefing_context import build_query_context
 
@@ -26,6 +26,146 @@ from raas_briefing_context import build_query_context
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 # ──────────────────────────────────────────────────────────
+
+
+# =============================================================================
+# 데이터 유틸리티 (raas_briefing_engine 통합)
+# =============================================================================
+
+def _f(v, d=0.0):
+    try: return float(v) if v not in (None, '', 'None', 'null') else d
+    except: return d
+
+def _i(v, d=0):
+    try: return int(float(v)) if v not in (None, '', 'None', 'null') else d
+    except: return d
+
+def _fn(v):
+    try: return float(v) if v not in (None, '', 'None', 'null') else None
+    except: return None
+
+def _yn(v):
+    """'Y'/'N' 문자열 그대로 반환. 그 외 값·빈값 → None."""
+    s = (v or '').strip().upper()
+    return s if s in ('Y', 'N') else None
+
+PGM_F = ['F01','F02','F03','F04','F05','F06','F07','F08','F09','F10','F11','F12','F13']
+PGM_L = ['L01','L02','L03','L04','L05','L06','L07','L08','L09','L10','L11',
+          'L12','L13','L14','L15','M05','M07','M10','M11']
+CH  = ['F00', 'L00', 'G00', 'P00']
+ALL = PGM_F + PGM_L
+
+
+def _pgm_name(code, row=None, default=None):
+    """프로그램/채널/플랫폼 코드 → 표시 이름.
+    우선순위: TTL(어댑터) → row.pgm_name → code
+    """
+    try:
+        from raas_onto import get_adapter
+        label = get_adapter()._onto.label_ko(f"raas:{code}")
+        if label and label != f"raas:{code}":
+            return label
+    except Exception:
+        pass
+    if row is not None:
+        nm = (row.get('pgm_name') or '').strip()
+        if nm:
+            return nm
+    return default if default is not None else code
+
+
+def _load_timeline(search):
+    """raas_kpi_latest.csv → timeline dict {PGM_CODE: {DATE: row}}."""
+    source = 'splunk'
+    try:
+        rows = search("| inputlookup raas_kpi_latest.csv")
+    except Exception as e:
+        base = os.path.dirname(__file__)
+        candidates = [
+            os.path.join(base, 'data', 'raas_kpi_latest.csv'),
+            os.path.join(base, 'raas_kpi_latest.csv'),
+        ]
+        local_path = next((p for p in candidates if os.path.exists(p)), None)
+        if local_path:
+            print(f"  [fallback] Splunk {type(e).__name__} → local CSV: {local_path}")
+            df = _pd.read_csv(local_path, dtype=str, keep_default_na=False)
+            rows = df.to_dict(orient='records')
+            source = 'csv_fallback'
+        else:
+            raise
+    timeline = {}
+    for r in rows:
+        code = r.get('PGM_CODE')
+        date = r.get('DATE')
+        if not code or not date:
+            continue
+        timeline.setdefault(code, {})[date] = r
+    if timeline:
+        all_dates = set()
+        for code_rows in timeline.values():
+            all_dates.update(code_rows.keys())
+        print(f"  [timeline] source={source}, {len(timeline)} codes x {len(all_dates)} dates "
+              f"({min(all_dates)} ~ {max(all_dates)})")
+    return timeline, source
+
+
+def _latest_snapshot(timeline):
+    """각 PGM_CODE의 최신 행만 추출."""
+    return {code: date_rows[max(date_rows.keys())]
+            for code, date_rows in timeline.items() if date_rows}
+
+
+def _load(search):
+    """호환성 유지용: _load_timeline + _latest_snapshot."""
+    timeline, _ = _load_timeline(search)
+    return _latest_snapshot(timeline)
+
+
+def get_timeseries(timeline, code, days=30):
+    """특정 코드의 최근 N일 {date: row} dict."""
+    date_rows = timeline.get(code, {})
+    sorted_dates = sorted(date_rows.keys(), reverse=True)[:days]
+    return {d: date_rows[d] for d in sorted_dates}
+
+
+def get_snapshot_at(timeline, target_date):
+    """특정 날짜의 모든 코드 {code: row} dict."""
+    norm = target_date.replace('-', '/')
+    return {code: date_rows[norm]
+            for code, date_rows in timeline.items() if norm in date_rows}
+
+
+def get_metric_trend(timeline, code, metric_field, days=30, date_field=None):
+    """코드+지표의 시계열 [(date, value)] 반환."""
+    date_rows = timeline.get(code, {})
+    sorted_dates = sorted(date_rows.keys(), reverse=True)[:days]
+    result = []
+    for d in reversed(sorted_dates):
+        row = date_rows[d]
+        raw = row.get(metric_field)
+        try:
+            val = float(raw) if raw not in (None, '', 'None', 'null') else None
+        except (ValueError, TypeError):
+            val = None
+        result.append((d, val))
+    return result
+
+
+def get_available_dates(timeline):
+    """timeline 내 모든 날짜 (오름차순)."""
+    all_dates = set()
+    for date_rows in timeline.values():
+        all_dates.update(date_rows.keys())
+    return sorted(all_dates)
+
+
+def get_codes_summary(timeline):
+    """코드별 데이터 가용성 요약."""
+    return {code: {'dates': len(dr), 'latest': max(dr.keys()) if dr else None}
+            for code, dr in timeline.items()}
+
+
+# =============================================================================
 
 _WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
 
@@ -299,7 +439,7 @@ def build_chart_data(data: dict, intent: dict, question: str):
         if intent_type == 'overview' and data.get('overview'):
             ov_rows = data['overview']
             _ch = data.get('overview_channel')
-            _ch_name = BE._pgm_name(_ch, default='') if _ch else '전체'
+            _ch_name = _pgm_name(_ch, default='') if _ch else '전체'
             _wknd_sfx = ''
             if _ch == 'L00':
                 _wknd_sfx = ' (주말 포함)' if data.get('overview_include_weekend') else ' (주말 제외)'
@@ -380,7 +520,7 @@ def build_chart_data(data: dict, intent: dict, question: str):
                     'new_w1_ret': 'W1유지(신규)', 'new_m1_ret': 'M1유지(신규)',
                 }.get(_rm2, _rm2.upper())
                 _ch2 = data.get('ranking_channel')
-                _ch2_name = BE._pgm_name(_ch2, default='') if _ch2 else ''
+                _ch2_name = _pgm_name(_ch2, default='') if _ch2 else ''
                 _scope_prefix = f"{_ch2_name} " if _ch2_name else ""
                 _show_all = data.get('ranking_show_all', False)
                 _wknd_suffix = ''
@@ -628,7 +768,7 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
     """CSV row에서 전체 필드 추출 — 유지율·전주비교·롤링·주간·월간 포함.
     CSV에 _prev/_diff 직접 필드가 있으면 우선 사용, 없으면 current - diff 역산.
     """
-    i = BE._i; fn = BE._fn; yn = BE._yn
+    i = _i; fn = _fn; yn = _yn
 
     return {
         'date': date,
@@ -784,7 +924,7 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
 def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
     if not timeline:
         return {'error': 'timeline 없음'}
-    available_dates = BE.get_available_dates(timeline)
+    available_dates = get_available_dates(timeline)
     if not available_dates:
         return {'error': '데이터 없음'}
 
@@ -800,7 +940,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
 
     data = {
         'scope': scope,
-        'scope_name': BE._pgm_name(scope),
+        'scope_name': _pgm_name(scope),
         'metric': metric,
         'date_min': available_dates[0],
         'date_max': available_dates[-1],
@@ -836,7 +976,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
         mf = field_map.get(metric, 'dau')
         # 전주 비교선: 현재 기간 + 직전 동일 기간 (최대 2x days)
         _double = min(days * 2, len(available_dates))
-        _all_trend = BE.get_metric_trend(timeline, scope, mf, days=_double)
+        _all_trend = get_metric_trend(timeline, scope, mf, days=_double)
         _curr_trend = _all_trend[max(0, len(_all_trend) - days):]
         _prev_trend = _all_trend[:max(0, len(_all_trend) - days)]
         _prev_trend = _prev_trend[max(0, len(_prev_trend) - days):]  # 최대 days개
@@ -850,8 +990,8 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
         exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
         # 채널 범위 필터
         _CH_PROGRAMS = {
-            'F00': set(BE.PGM_F),
-            'L00': set(BE.PGM_L),
+            'F00': set(PGM_F),
+            'L00': set(PGM_L),
         }
         _rank_channel = scope if scope in ('F00', 'L00', 'G00', 'P00') else None
         _allowed = _CH_PROGRAMS.get(_rank_channel) if _rank_channel else None
@@ -876,54 +1016,54 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             row = date_rows.get(latest_date)
             if not row:
                 continue
-            dau = BE._i(row.get('dau'))
+            dau = _i(row.get('dau'))
             # 주말 프로그램(include_weekend=True)은 주중엔 dau=0이므로 WAU로 활성 판단
             if _include_weekend and code in _WEEKEND_PGMS:
-                if not (BE._i(row.get('wau')) or BE._i(row.get('mau')) or dau):
+                if not (_i(row.get('wau')) or _i(row.get('mau')) or dau):
                     continue
             elif not dau or dau <= 0:
                 continue
-            fn = BE._fn
+            fn = _fn
             rows.append({
-                'code': code, 'name': BE._pgm_name(code, row=row),
+                'code': code, 'name': _pgm_name(code, row=row),
                 # DAU / 롤링
                 'dau': dau,
-                'dau_r7': BE._i(row.get('dau_r7')) or None,
-                'dau_r30': BE._i(row.get('dau_r30')) or None,
-                'wau': BE._i(row.get('wau')) or None,
-                'mau': BE._i(row.get('mau')) or None,
+                'dau_r7': _i(row.get('dau_r7')) or None,
+                'dau_r30': _i(row.get('dau_r30')) or None,
+                'wau': _i(row.get('wau')) or None,
+                'mau': _i(row.get('mau')) or None,
                 'dau_wow': fn(row.get('dau_chg')),
                 'dau_week_wow': fn(row.get('wau_chg')),
                 'dau_mon_wow': fn(row.get('mau_chg')),
                 # 신규 / 복귀 / 이탈 — 일간
-                'new': BE._i(row.get('new')) or None,
-                'react': BE._i(row.get('react')) or None,
+                'new': _i(row.get('new')) or None,
+                'react': _i(row.get('react')) or None,
                 'churn_rate': fn(row.get('churn_rate')),
                 # 신규 / 복귀 / 이탈 — 주간
-                'new_week': BE._i(row.get('new_week')) or None,
-                'react_week': BE._i(row.get('react_week')) or None,
+                'new_week': _i(row.get('new_week')) or None,
+                'react_week': _i(row.get('react_week')) or None,
                 'churn_rate_week': fn(row.get('churn_rate_week')),
                 # 신규 / 복귀 / 이탈 — 월간
-                'new_mon': BE._i(row.get('new_mon')) or None,
-                'react_mon': BE._i(row.get('react_mon')) or None,
+                'new_mon': _i(row.get('new_mon')) or None,
+                'react_mon': _i(row.get('react_mon')) or None,
                 'churn_rate_mon': fn(row.get('churn_rate_mon')),
                 # 청취 품질 — 일간
-                'dau_1min': BE._i(row.get('dau_1min')) or None,
-                'dau_10min': BE._i(row.get('dau_10min')) or None,
+                'dau_1min': _i(row.get('dau_1min')) or None,
+                'dau_10min': _i(row.get('dau_10min')) or None,
                 'real_rate': fn(row.get('real_rate')),
                 'deep_rate': fn(row.get('deep_rate')),
                 'engage_rate': fn(row.get('engage_rate')),
                 'habit_rate': fn(row.get('habit_rate')),
                 # 청취 품질 — 주간
-                'wau_1min': BE._i(row.get('wau_1min')) or None,
-                'wau_10min': BE._i(row.get('wau_10min')) or None,
+                'wau_1min': _i(row.get('wau_1min')) or None,
+                'wau_10min': _i(row.get('wau_10min')) or None,
                 'real_rate_week': fn(row.get('real_rate_week')),
                 'deep_rate_week': fn(row.get('deep_rate_week')),
                 'engage_rate_week': fn(row.get('engage_rate_week')),
                 'habit_rate_week': fn(row.get('habit_rate_week')),
                 # 청취 품질 — 월간
-                'mau_1min': BE._i(row.get('mau_1min')) or None,
-                'mau_10min': BE._i(row.get('mau_10min')) or None,
+                'mau_1min': _i(row.get('mau_1min')) or None,
+                'mau_10min': _i(row.get('mau_10min')) or None,
                 'real_rate_mon': fn(row.get('real_rate_mon')),
                 'deep_rate_mon': fn(row.get('deep_rate_mon')),
                 'engage_rate_mon': fn(row.get('engage_rate_mon')),
@@ -1027,14 +1167,14 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             # 러브FM 주말
             'M05','M10','M07','M11',
         ]
-        _CH_PROGRAMS = {'F00': set(BE.PGM_F), 'L00': set(BE.PGM_L)}
+        _CH_PROGRAMS = {'F00': set(PGM_F), 'L00': set(PGM_L)}
         _ov_channel = scope if scope in ('F00', 'L00') else None
         _allowed_ov = _CH_PROGRAMS.get(_ov_channel) if _ov_channel else None
         _include_wknd = intent.get('include_weekend', False)
         _WEEKEND_PGMS = {'M05', 'M07', 'M10', 'M11'}
         exclude_ov = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
         ov_rows = []
-        fn = BE._fn
+        fn = _fn
         for code in _SCHEDULE_ORDER:
             if code in exclude_ov:
                 continue
@@ -1049,34 +1189,34 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             if not row:
                 continue
             # 채널 결정
-            ch = 'F00' if code in set(BE.PGM_F) else 'L00' if code in set(BE.PGM_L) else None
-            ch_name = BE._pgm_name(ch, default='') if ch else ''
+            ch = 'F00' if code in set(PGM_F) else 'L00' if code in set(PGM_L) else None
+            ch_name = _pgm_name(ch, default='') if ch else ''
             is_wknd = code in _WEEKEND_PGMS
             ov_rows.append({
                 'code': code,
-                'name': BE._pgm_name(code, row=row),
+                'name': _pgm_name(code, row=row),
                 'channel': ch_name,
                 'is_weekend': is_wknd,
                 # 볼륨
-                'dau':    BE._i(row.get('dau')) or None,
-                'wau':    BE._i(row.get('wau')) or None,
-                'mau':    BE._i(row.get('mau')) or None,
-                'dau_r7': BE._i(row.get('dau_r7')) or None,
-                'dau_r30':BE._i(row.get('dau_r30')) or None,
+                'dau':    _i(row.get('dau')) or None,
+                'wau':    _i(row.get('wau')) or None,
+                'mau':    _i(row.get('mau')) or None,
+                'dau_r7': _i(row.get('dau_r7')) or None,
+                'dau_r30':_i(row.get('dau_r30')) or None,
                 # WoW
                 'dau_wow':      fn(row.get('dau_chg')),
                 'dau_week_wow': fn(row.get('wau_chg')),
                 'dau_mon_wow':  fn(row.get('mau_chg')),
                 # 신규
-                'new':      BE._i(row.get('new')) or None,
-                'new_week': BE._i(row.get('new_week')) or None,
-                'new_mon':  BE._i(row.get('new_mon')) or None,
+                'new':      _i(row.get('new')) or None,
+                'new_week': _i(row.get('new_week')) or None,
+                'new_mon':  _i(row.get('new_mon')) or None,
                 'new_pct':  fn(row.get('new_pct')),
                 'new_week_pct': fn(row.get('new_week_pct')),
                 # 복귀사용자
-                'react':      BE._i(row.get('react')) or None,
-                'react_week': BE._i(row.get('react_week')) or None,
-                'react_mon':  BE._i(row.get('react_mon')) or None,
+                'react':      _i(row.get('react')) or None,
+                'react_week': _i(row.get('react_week')) or None,
+                'react_mon':  _i(row.get('react_mon')) or None,
                 # 복귀율
                 'react_rate':      fn(row.get('react_rate')),
                 'react_rate_week': fn(row.get('react_rate_week')),
@@ -1128,17 +1268,17 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
                 if not row:
                     continue
                 ch_rows.append({
-                    'code': ch, 'name': BE._pgm_name(ch, row=row),
-                    'dau': BE._i(row.get('dau')),
-                    'dau_wow': BE._fn(row.get('dau_chg')),
-                    'deep_rate': BE._fn(row.get('deep_rate')),
-                    'churn_rate': BE._fn(row.get('churn_rate')),
+                    'code': ch, 'name': _pgm_name(ch, row=row),
+                    'dau': _i(row.get('dau')),
+                    'dau_wow': _fn(row.get('dau_chg')),
+                    'deep_rate': _fn(row.get('deep_rate')),
+                    'churn_rate': _fn(row.get('churn_rate')),
                 })
             data['compare'] = ch_rows
         else:
             # 프로그램 스코프: 주간 비교 (지난주 vs 지지난주)
             compare_days = max(days * 2, 14)
-            raw_trend = BE.get_metric_trend(timeline, scope, 'dau', days=compare_days)
+            raw_trend = get_metric_trend(timeline, scope, 'dau', days=compare_days)
             valid_pts = [(d, v) for d, v in raw_trend if v is not None]
             if valid_pts:
                 mid = len(valid_pts) // 2
@@ -1155,7 +1295,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
                     }
                 data['weekly_compare'] = {
                     'scope': scope,
-                    'scope_name': BE._pgm_name(scope),
+                    'scope_name': _pgm_name(scope),
                     'week1': _wk(w1_pts),
                     'week2': _wk(w2_pts),
                 }
@@ -1179,7 +1319,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
         _dt_series = []
         for m in (intent.get('dual_metrics') or ['dau', 'deep']):
             mf, label, unit = _dual_field_map.get(m, (m, m.upper(), ''))
-            trend_data = BE.get_metric_trend(timeline, scope, mf, days=days)
+            trend_data = get_metric_trend(timeline, scope, mf, days=days)
             _dt_series.append({
                 'metric': m, 'metric_field': mf, 'label': label,
                 'unit': unit, 'data': trend_data,
@@ -1199,10 +1339,10 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
         for ch_code in _selected:
             if ch_code not in timeline:
                 continue
-            ch_trend = BE.get_metric_trend(timeline, ch_code, mf_ct, days=days)
+            ch_trend = get_metric_trend(timeline, ch_code, mf_ct, days=days)
             _ct_series.append({
                 'code': ch_code,
-                'label': BE._pgm_name(ch_code),
+                'label': _pgm_name(ch_code),
                 'points': [{'date': d.replace('/', '-'), 'value': v}
                            for d, v in ch_trend if v is not None],
             })
@@ -1226,9 +1366,9 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
                     continue
                 # 어댑터 룰은 dau/churn_rate/dau_chg 사용 (alias된 row가 들어와야 함)
                 snapshot[code] = {
-                    'dau':         BE._i(row.get('dau')),
-                    'churn_rate':  BE._fn(row.get('churn_rate')),
-                    'dau_chg':     BE._fn(row.get('dau_chg')),
+                    'dau':         _i(row.get('dau')),
+                    'churn_rate':  _fn(row.get('churn_rate')),
+                    'dau_chg':     _fn(row.get('dau_chg')),
                 }
             adapter_risks = get_adapter().find_at_risk_programs(snapshot)
             # 어댑터 결과를 quey_engine 포맷으로 변환 (name/dau_wow 키 호환)
@@ -1239,10 +1379,10 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
                     row = (timeline.get(code, {}) or {}).get(latest_date, {})
                     risks.append({
                         'code': code,
-                        'name': BE._pgm_name(code, row=row),
-                        'dau':        BE._i(row.get('dau')),
-                        'churn_rate': BE._fn(row.get('churn_rate')),
-                        'dau_wow':    BE._fn(row.get('dau_chg')),
+                        'name': _pgm_name(code, row=row),
+                        'dau':        _i(row.get('dau')),
+                        'churn_rate': _fn(row.get('churn_rate')),
+                        'dau_wow':    _fn(row.get('dau_chg')),
                     })
         except Exception:
             risks = None
@@ -1253,12 +1393,12 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
                 if code in exclude:
                     continue
                 row = date_rows.get(latest_date, {})
-                churn = BE._fn(row.get('churn_rate'))
-                wow   = BE._fn(row.get('dau_chg'))
-                dau   = BE._i(row.get('dau'))
+                churn = _fn(row.get('churn_rate'))
+                wow   = _fn(row.get('dau_chg'))
+                dau   = _i(row.get('dau'))
                 if churn and wow and dau and dau >= 1000 and churn >= 30 and wow <= -5:
                     risks.append({
-                        'code': code, 'name': BE._pgm_name(code, row=row),
+                        'code': code, 'name': _pgm_name(code, row=row),
                         'dau': dau, 'churn_rate': churn, 'dau_wow': wow,
                     })
         risks.sort(key=lambda x: x.get('dau_wow') or 0)
@@ -1275,34 +1415,34 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             latest_date = available_dates[-1]
             row = timeline.get('T00', {}).get(latest_date, {})
             data['funnel'] = {
-                'dau':              BE._i(row.get('dau')),
-                'new_user':         BE._i(row.get('new')),
-                'new_share':        BE._fn(row.get('new_share')),
-                'new_wow':          BE._fn(row.get('new_chg')),
-                'react_user':       BE._i(row.get('react')),
-                'react_share':      BE._fn(row.get('react_share')),
-                'react_rate':       BE._fn(row.get('react_rate')),
-                'churn_rate':       BE._fn(row.get('churn_rate')),
-                'churn_diff':       BE._fn(row.get('churn_rate_diff')),
-                'd1_ret':           BE._fn(row.get('d1_ret')),
-                'd1_ret_diff':      BE._fn(row.get('d1_ret_diff')),
-                'd7_ret':           BE._fn(row.get('d7_ret')),
-                'new_d1_ret':       BE._fn(row.get('new_d1_ret')),
-                'new_d7_ret':       BE._fn(row.get('new_d7_ret')),
-                'new_w1_ret':       BE._fn(row.get('new_w1_ret')),
-                'new_m1_ret':       BE._fn(row.get('new_m1_ret')),
-                'new_week':         BE._i(row.get('new_week')),
-                'new_week_share':   BE._fn(row.get('new_week_share')),
-                'churn_rate_week':  BE._fn(row.get('churn_rate_week')),
-                'w1_ret':           BE._fn(row.get('w1_ret')),
-                'react_week':       BE._i(row.get('react_week')),
-                'react_rate_week':  BE._fn(row.get('react_rate_week')),
-                'new_mon':          BE._i(row.get('new_mon')),
-                'new_mon_share':    BE._fn(row.get('new_mon_share')),
-                'churn_rate_mon':   BE._fn(row.get('churn_rate_mon')),
-                'm1_ret':           BE._fn(row.get('m1_ret')),
-                'react_mon':        BE._i(row.get('react_mon')),
-                'react_rate_mon':   BE._fn(row.get('react_rate_mon')),
+                'dau':              _i(row.get('dau')),
+                'new_user':         _i(row.get('new')),
+                'new_share':        _fn(row.get('new_share')),
+                'new_wow':          _fn(row.get('new_chg')),
+                'react_user':       _i(row.get('react')),
+                'react_share':      _fn(row.get('react_share')),
+                'react_rate':       _fn(row.get('react_rate')),
+                'churn_rate':       _fn(row.get('churn_rate')),
+                'churn_diff':       _fn(row.get('churn_rate_diff')),
+                'd1_ret':           _fn(row.get('d1_ret')),
+                'd1_ret_diff':      _fn(row.get('d1_ret_diff')),
+                'd7_ret':           _fn(row.get('d7_ret')),
+                'new_d1_ret':       _fn(row.get('new_d1_ret')),
+                'new_d7_ret':       _fn(row.get('new_d7_ret')),
+                'new_w1_ret':       _fn(row.get('new_w1_ret')),
+                'new_m1_ret':       _fn(row.get('new_m1_ret')),
+                'new_week':         _i(row.get('new_week')),
+                'new_week_share':   _fn(row.get('new_week_share')),
+                'churn_rate_week':  _fn(row.get('churn_rate_week')),
+                'w1_ret':           _fn(row.get('w1_ret')),
+                'react_week':       _i(row.get('react_week')),
+                'react_rate_week':  _fn(row.get('react_rate_week')),
+                'new_mon':          _i(row.get('new_mon')),
+                'new_mon_share':    _fn(row.get('new_mon_share')),
+                'churn_rate_mon':   _fn(row.get('churn_rate_mon')),
+                'm1_ret':           _fn(row.get('m1_ret')),
+                'react_mon':        _i(row.get('react_mon')),
+                'react_rate_mon':   _fn(row.get('react_rate_mon')),
             }
 
     # engagement — s3_engagement 우선; 추세 차트용 trend도 함께 수집
@@ -1313,22 +1453,22 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             latest_date = available_dates[-1]
             row = timeline.get('T00', {}).get(latest_date, {})
             data['engagement'] = {
-                'dau_1min':          BE._i(row.get('dau_1min')),
-                'dau_10min':         BE._i(row.get('dau_10min')),
-                'deep_rate':         BE._fn(row.get('deep_rate')),
-                'deep_rate_diff':    BE._fn(row.get('deep_rate_diff')),
-                'deep_rate_week':    BE._fn(row.get('deep_rate_week')),
-                'deep_rate_mon':     BE._fn(row.get('deep_rate_mon')),
-                'real_rate':         BE._fn(row.get('real_rate')),
-                'real_rate_diff':    BE._fn(row.get('real_rate_diff')),
-                'real_rate_week':    BE._fn(row.get('real_rate_week')),
-                'real_rate_mon':     BE._fn(row.get('real_rate_mon')),
-                'engage_rate':       BE._fn(row.get('engage_rate')),
-                'engage_week':       BE._fn(row.get('engage_rate_week')),
-                'engage_mon':        BE._fn(row.get('engage_rate_mon')),
+                'dau_1min':          _i(row.get('dau_1min')),
+                'dau_10min':         _i(row.get('dau_10min')),
+                'deep_rate':         _fn(row.get('deep_rate')),
+                'deep_rate_diff':    _fn(row.get('deep_rate_diff')),
+                'deep_rate_week':    _fn(row.get('deep_rate_week')),
+                'deep_rate_mon':     _fn(row.get('deep_rate_mon')),
+                'real_rate':         _fn(row.get('real_rate')),
+                'real_rate_diff':    _fn(row.get('real_rate_diff')),
+                'real_rate_week':    _fn(row.get('real_rate_week')),
+                'real_rate_mon':     _fn(row.get('real_rate_mon')),
+                'engage_rate':       _fn(row.get('engage_rate')),
+                'engage_week':       _fn(row.get('engage_rate_week')),
+                'engage_mon':        _fn(row.get('engage_rate_mon')),
             }
         # 깊은청취율 trend (차트용)
-        dr_trend = BE.get_metric_trend(timeline, scope, 'deep_rate', days=days)
+        dr_trend = get_metric_trend(timeline, scope, 'deep_rate', days=days)
         data['engagement_trend'] = dr_trend
 
     # growth — s4_growth 우선
@@ -1339,13 +1479,13 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
             latest_date = available_dates[-1]
             row = timeline.get('T00', {}).get(latest_date, {})
             data['growth'] = {
-                'habit_rate':       BE._fn(row.get('habit_rate')),
-                'habit_diff':       BE._fn(row.get('habit_rate_diff')),
-                'habit_week':       BE._fn(row.get('habit_rate_week')),
-                'habit_mon':        BE._fn(row.get('habit_rate_mon')),
-                'react_rate':       BE._fn(row.get('react_rate')),
-                'react_rate_week':  BE._fn(row.get('react_rate_week')),
-                'react_rate_mon':   BE._fn(row.get('react_rate_mon')),
+                'habit_rate':       _fn(row.get('habit_rate')),
+                'habit_diff':       _fn(row.get('habit_rate_diff')),
+                'habit_week':       _fn(row.get('habit_rate_week')),
+                'habit_mon':        _fn(row.get('habit_rate_mon')),
+                'react_rate':       _fn(row.get('react_rate')),
+                'react_rate_week':  _fn(row.get('react_rate_week')),
+                'react_rate_mon':   _fn(row.get('react_rate_mon')),
                 'top3_habit':       [],
             }
 
@@ -1375,13 +1515,13 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None) -> dict:
                 if code in exclude: continue
                 r_row = date_rows.get(latest_date)
                 if not r_row: continue
-                dau = BE._i(r_row.get('dau'))
+                dau = _i(r_row.get('dau'))
                 if not dau or dau <= 0: continue
                 rows.append({
-                    'code': code, 'name': BE._pgm_name(code, row=r_row), 'dau': dau,
-                    'deep_rate': BE._fn(r_row.get('deep_rate')),
-                    'churn_rate': BE._fn(r_row.get('churn_rate')),
-                    'dau_wow': BE._fn(r_row.get('dau_chg')),
+                    'code': code, 'name': _pgm_name(code, row=r_row), 'dau': dau,
+                    'deep_rate': _fn(r_row.get('deep_rate')),
+                    'churn_rate': _fn(r_row.get('churn_rate')),
+                    'dau_wow': _fn(r_row.get('dau_chg')),
                 })
             rows.sort(key=lambda x: x['dau'], reverse=True)
             data['ranking'] = rows[:5]
@@ -1563,7 +1703,7 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
         _rm_label = _rm_label_map.get(_rm, _rm.upper())
         _is_rate = _rm.endswith('_rate') or _rm.endswith('_ret')
         _rch = data.get('ranking_channel')
-        _rch_name = BE._pgm_name(_rch, default='') if _rch else ''
+        _rch_name = _pgm_name(_rch, default='') if _rch else ''
         _rch_prefix = f"{_rch_name} " if _rch_name else ""
         lines.append(f"[최신일 {_rch_prefix}프로그램 순위 TOP 10 ({_rm_label} 기준)]")
         for i, r in enumerate(data['ranking'], 1):
@@ -1583,7 +1723,7 @@ def format_for_claude(data: dict, intent: dict, question: str) -> str:
 
     if data.get('overview'):
         _ov_ch = data.get('overview_channel')
-        _ov_ch_name = BE._pgm_name(_ov_ch, default='') if _ov_ch else '전체'
+        _ov_ch_name = _pgm_name(_ov_ch, default='') if _ov_ch else '전체'
         lines.append(f"[{_ov_ch_name} 프로그램 편성시간 순 현황]")
         for r in data['overview']:
             wknd = ' [주말]' if r.get('is_weekend') else ''
@@ -1771,7 +1911,7 @@ def query(question: str, target_date: str = None, verbose: bool = False) -> dict
         import pandas as pd
         df = pd.read_csv(local_path, dtype=str, keep_default_na=False)
         rows = df.to_dict(orient='records')
-        timeline, _ = BE._load_timeline(lambda _: rows)
+        timeline, _ = _load_timeline(lambda _: rows)
     except Exception as e:
         return {"answer": f"데이터 로드 실패: {e}", "chart_data": None}
 
@@ -1799,7 +1939,7 @@ _INTENT_TOKENS = {
 def _answer(question, timeline, target_date, verbose, briefing_data=None):
     if verbose:
         print("  [2/3] 의도 분류 중...", flush=True)
-    available_dates = BE.get_available_dates(timeline)
+    available_dates = get_available_dates(timeline)
     today_str = None
     if available_dates:
         try:

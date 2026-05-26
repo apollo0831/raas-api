@@ -32,10 +32,9 @@ import os
 load_dotenv()
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
-import raas_briefing_engine as BE
 from raas_history_db import init_db, save_query, get_history, get_popular
-from raas_prompts import BRIEFING_SYSTEM_PROMPT, QUERY_SYSTEM_PROMPT
-from raas_briefing_context import build_briefing_context, build_query_context
+from raas_prompts import QUERY_SYSTEM_PROMPT
+from raas_briefing_context import build_query_context
 
 # ── 설정 ─────────────────────────────────────────────
 PORT            = 5000
@@ -72,9 +71,7 @@ def get_cached_timeline():
     cached = cache_get("timeline")
     if cached:
         return cached
-    data = BE.collect_all(splunk_search, return_timeline=True)
-    timeline = data.get("_timeline", {})
-    source = data.get("_timeline_source", "unknown")
+    timeline, source = QE._load_timeline(splunk_search)
     cache_set("timeline", timeline)
     cache_set("timeline_source", source)
     return timeline
@@ -176,37 +173,6 @@ class RAASHandler(BaseHTTPRequestHandler):
             else:
                 self.send_html("<h2>raas_web.html 파일을 같은 폴더에 두세요</h2>")
 
-        elif self.path.startswith("/api/briefing"):
-            try:
-                qs = self.path.split("?", 1)[1] if "?" in self.path else ""
-                period = dict(urllib.parse.parse_qsl(qs)).get("period", "day")
-                if period not in ("day", "week", "mon"):
-                    period = "day"
-
-                cache_key = f"briefing_{period}"
-                cached = cache_get(cache_key)
-                if cached:
-                    self.send_json({"ok": True, "data": cached, "_cached": True})
-                    return
-
-                # 전체 데이터 수집 (day 기준 캐시 재활용)
-                base_data = cache_get("briefing_base")
-                if base_data is None:
-                    base_data = BE.collect_all(splunk_search)
-                    cache_set("briefing_base", base_data)
-
-                context = base_data.get("claude_context", "")
-                target_date = base_data.get("date") or datetime.now().strftime("%Y-%m-%d")
-                enriched_context = build_briefing_context(context, base_data, target_date, period=period)
-
-                brief_text = call_claude(BRIEFING_SYSTEM_PROMPT, enriched_context)
-
-                result = {**base_data, "brief": brief_text}
-                cache_set(cache_key, result)
-                self.send_json({"ok": True, "data": result})
-            except Exception as e:
-                self.send_json({"ok": False, "error": str(e)}, 500)
-
         elif self.path.startswith("/api/timeseries/program/"):
             try:
                 parts = self.path.split("?", 1)
@@ -221,11 +187,11 @@ class RAASHandler(BaseHTTPRequestHandler):
                 if code not in timeline:
                     self.send_json({"ok": False, "error": f"코드 '{code}' 데이터 없음"}, 404)
                     return
-                trend = BE.get_metric_trend(timeline, code, metric, days=days)
+                trend = QE.get_metric_trend(timeline, code, metric, days=days)
                 latest_row = timeline[code].get(max(timeline[code].keys()), {})
                 self.send_json({
                     "ok": True, "code": code,
-                    "name": latest_row.get("PGM_NAME", "") or BE._pgm_name(code),
+                    "name": latest_row.get("PGM_NAME", "") or QE._pgm_name(code),
                     "metric": metric, "days": days,
                     "data": [{"date": d, "value": v} for d, v in trend]
                 })
@@ -239,28 +205,28 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "error": "날짜가 필요합니다 (YYYY/MM/DD)"}, 400)
                     return
                 timeline = get_cached_timeline()
-                snapshot = BE.get_snapshot_at(timeline, target_date)
+                snapshot = QE.get_snapshot_at(timeline, target_date)
                 if not snapshot:
                     self.send_json({
                         "ok": False, "error": f"'{target_date}' 데이터 없음",
-                        "available_dates": BE.get_available_dates(timeline)
+                        "available_dates": QE.get_available_dates(timeline)
                     }, 404)
                     return
                 result = {}
                 for code, row in snapshot.items():
                     result[code] = {
                         "code": code,
-                        "name": row.get("PGM_NAME", "") or BE._pgm_name(code),
-                        "dau": BE._i(row.get("dau_today")),
-                        "dau_wow": BE._fn(row.get("dau_wow")),
-                        "dau_week": BE._i(row.get("dau_week")),
-                        "dau_mon": BE._i(row.get("dau_mon")),
-                        "deep_rate": BE._fn(row.get("deep_rate")),
-                        "engage_rate": BE._fn(row.get("engage_rate")),
-                        "habit_rate": BE._fn(row.get("habit_rate")),
-                        "new_user": BE._i(row.get("new_today")),
-                        "react_user": BE._i(row.get("react_today")),
-                        "churn_rate": BE._fn(row.get("churn_rate"))
+                        "name": row.get("PGM_NAME", "") or QE._pgm_name(code),
+                        "dau": QE._i(row.get("dau_today")),
+                        "dau_wow": QE._fn(row.get("dau_wow")),
+                        "dau_week": QE._i(row.get("dau_week")),
+                        "dau_mon": QE._i(row.get("dau_mon")),
+                        "deep_rate": QE._fn(row.get("deep_rate")),
+                        "engage_rate": QE._fn(row.get("engage_rate")),
+                        "habit_rate": QE._fn(row.get("habit_rate")),
+                        "new_user": QE._i(row.get("new_today")),
+                        "react_user": QE._i(row.get("react_today")),
+                        "churn_rate": QE._fn(row.get("churn_rate"))
                     }
                 self.send_json({"ok": True, "date": target_date,
                                 "codes_count": len(result), "data": result})
@@ -280,10 +246,10 @@ class RAASHandler(BaseHTTPRequestHandler):
                 if scope not in timeline:
                     self.send_json({"ok": False, "error": f"스코프 '{scope}' 데이터 없음"}, 404)
                     return
-                trend = BE.get_metric_trend(timeline, scope, metric, days=days, date_field=date_key)
+                trend = QE.get_metric_trend(timeline, scope, metric, days=days, date_field=date_key)
                 self.send_json({
                     "ok": True, "scope": scope,
-                    "name": BE._pgm_name(scope),
+                    "name": QE._pgm_name(scope),
                     "metric": metric, "days": days,
                     "data": [{"date": d, "value": v} for d, v in trend]
                 })
@@ -293,7 +259,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         elif self.path == "/api/timeline/meta":
             try:
                 timeline = get_cached_timeline()
-                dates = BE.get_available_dates(timeline)
+                dates = QE.get_available_dates(timeline)
                 source = get_timeline_source()
                 resp = {
                     "ok": True,
@@ -401,7 +367,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     return
                 sorted_rows = sorted(date_rows.values(),
                                      key=lambda r: r.get("DATE", ""), reverse=True)
-                name = BE._pgm_name(code)
+                name = QE._pgm_name(code)
                 self.send_json({"ok": True, "code": code, "name": name,
                                 "count": len(sorted_rows), "rows": sorted_rows})
             except Exception as e:
@@ -432,21 +398,14 @@ class RAASHandler(BaseHTTPRequestHandler):
 
                 if QUERY_ENGINE_AVAILABLE:
                     timeline = get_cached_timeline()
-                    briefing_base = cache_get("briefing_base")
                     result = QE.query_with_timeline(
                         question, timeline,
                         target_date=target_date,
-                        briefing_data=briefing_base
                     )
                     answer = result["answer"]
                     chart_data = result.get("chart_data")
                 else:
-                    if not context:
-                        try:
-                            bd = BE.collect_all(splunk_search)
-                            context = bd.get("claude_context", "")
-                        except Exception as e:
-                            print(f"[WARN] collect_all 실패: {e}")
+                    # QE 로드 실패 시 간단 fallback
                     enriched_context = build_query_context(question, context)
                     answer = call_claude(
                         QUERY_SYSTEM_PROMPT,
