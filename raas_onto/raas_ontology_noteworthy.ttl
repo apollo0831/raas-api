@@ -115,8 +115,91 @@ raas:emoji a owl:DatatypeProperty ;
 
 
 # =============================================================================
-# 3. PlatformAlert 인스턴스 (9개 알림 룰)
+# 3. Z-score 기반 모니터링 설정 (MetricMonitorConfig)
 # =============================================================================
+# 실제 임계값 평가는 raas_zscore_detector.py (Robust Z-score) 가 담당.
+# 이 섹션은 어떤 지표를 모니터링하는지, 방향/기간/카테고리 메타데이터를 정의.
+
+raas:MetricMonitorConfig a owl:Class ;
+    rdfs:label "지표 모니터링 설정"@ko ;
+    rdfs:comment "Robust Z-score 엔진이 모니터링할 지표별 설정 (방향/기간/카테고리)"@ko .
+
+raas:monitorField a owl:DatatypeProperty ;
+    rdfs:domain raas:MetricMonitorConfig ;
+    rdfs:label "모니터링 CSV 필드명"@ko .
+
+raas:monitorDirection a owl:DatatypeProperty ;
+    rdfs:domain raas:MetricMonitorConfig ;
+    rdfs:label "이상 방향"@ko ;
+    rdfs:comment "lower_is_bad: 하락이 이상 / higher_is_bad: 상승이 이상"@ko .
+
+raas:monitorPeriod a owl:DatatypeProperty ;
+    rdfs:domain raas:MetricMonitorConfig ;
+    rdfs:label "평가 주기"@ko ;
+    rdfs:comment "day: 매일 / week: 월요일 / month: 매월 1일"@ko .
+
+raas:monitorCategory a owl:DatatypeProperty ;
+    rdfs:domain raas:MetricMonitorConfig ;
+    rdfs:label "적용 카테고리"@ko ;
+    rdfs:comment "platform / channel / program (복수 가능)"@ko .
+
+# ─── 인스턴스 (Python METRIC_CONFIGS 와 1:1 대응) ─────────────────────────────
+
+raas:Monitor_DAU_WoW a raas:MetricMonitorConfig ;
+    rdfs:label "DAU WoW 모니터링"@ko ;
+    raas:monitorField "dau_chg" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "day" ; raas:monitorCategory "platform" , "channel" , "program" .
+
+raas:Monitor_DeepRate_Diff a raas:MetricMonitorConfig ;
+    rdfs:label "깊은청취율 전주대비 모니터링"@ko ;
+    raas:monitorField "deep_rate_diff" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "day" ; raas:monitorCategory "platform" , "channel" , "program" .
+
+raas:Monitor_ChurnRate_Diff a raas:MetricMonitorConfig ;
+    rdfs:label "이탈률 전주대비 모니터링"@ko ;
+    raas:monitorField "churn_rate_diff" ; raas:monitorDirection "higher_is_bad" ;
+    raas:monitorPeriod "day" ; raas:monitorCategory "platform" , "channel" , "program" .
+
+raas:Monitor_New_WoW a raas:MetricMonitorConfig ;
+    rdfs:label "신규 WoW 모니터링"@ko ;
+    raas:monitorField "new_chg" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "day" ; raas:monitorCategory "platform" , "channel" .
+
+raas:Monitor_HabitRate a raas:MetricMonitorConfig ;
+    rdfs:label "습관형성률 모니터링"@ko ;
+    raas:monitorField "habit_rate" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "day" ; raas:monitorCategory "platform" .
+
+raas:Monitor_ReactRate_Diff a raas:MetricMonitorConfig ;
+    rdfs:label "복귀율 전주대비 모니터링"@ko ;
+    raas:monitorField "react_rate_diff" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "day" ; raas:monitorCategory "platform" .
+
+raas:Monitor_NewD1_Ret a raas:MetricMonitorConfig ;
+    rdfs:label "신규D1 유지율 모니터링"@ko ;
+    raas:monitorField "new_d1_ret" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "day" ; raas:monitorCategory "platform" .
+
+raas:Monitor_NewD7_Ret a raas:MetricMonitorConfig ;
+    rdfs:label "신규D7 유지율 모니터링"@ko ;
+    raas:monitorField "new_d7_ret" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "day" ; raas:monitorCategory "platform" .
+
+raas:Monitor_WAU_WoW a raas:MetricMonitorConfig ;
+    rdfs:label "WAU WoW 주간 모니터링"@ko ;
+    raas:monitorField "dau_chg" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "week" ; raas:monitorCategory "platform" , "channel" , "program" .
+
+raas:Monitor_DeepRate_Week a raas:MetricMonitorConfig ;
+    rdfs:label "깊은청취율 주간 모니터링"@ko ;
+    raas:monitorField "deep_rate_week" ; raas:monitorDirection "lower_is_bad" ;
+    raas:monitorPeriod "week" ; raas:monitorCategory "platform" , "channel" .
+
+
+# =============================================================================
+# 4. PlatformAlert 인스턴스 (고정 임계값 룰 — z-score fallback)
+# =============================================================================
+# ZScoreDetector(n>=14)가 우선 평가. n<14(데이터 부족)일 때 아래 고정 룰 사용.
 
 # ─── 룰 1: DAU 급락 ────────────────────────────────────────────────────────
 

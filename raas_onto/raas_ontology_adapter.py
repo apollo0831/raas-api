@@ -1038,12 +1038,12 @@ class OntologyAdapter:
     }
 
     def evaluate_platform_alerts(self, kpi: dict) -> list[dict]:
-        """플랫폼 알림 룰 평가. build_s7 대체."""
+        """고정 임계값 알림 룰 평가 (z-score fallback용)."""
         alerts = []
         for rule in self._onto.instances_of("raas:PlatformAlert"):
             rule_id = rule.replace("raas:Alert_", "")
             if rule_id not in self._ALERT_EVALUATORS:
-                continue  # AtRiskProgramDetected는 별도 처리
+                continue
 
             evaluator = self._ALERT_EVALUATORS[rule_id]
             try:
@@ -1066,6 +1066,61 @@ class OntologyAdapter:
             })
 
         return alerts
+
+    def evaluate_zscore_alerts(
+        self,
+        timeline: dict,
+        ref_date: str,
+        is_holiday: bool = False,
+    ) -> list[dict]:
+        """
+        Robust Z-score 기반 알림 평가 (메인 엔진).
+
+        Args:
+            timeline:   {code: {date_str: row_dict}}
+            ref_date:   평가 기준일
+            is_holiday: True면 볼륨 하락 알림 억제
+
+        Returns:
+            통합 알림 리스트 [{code, label, level, msg, z, value, ...}]
+        """
+        try:
+            from .raas_zscore_detector import get_detector
+        except ImportError:
+            return []
+
+        detector = get_detector()
+        raw_alerts = detector.evaluate(timeline, ref_date, is_holiday=is_holiday)
+
+        # query_engine / format_for_claude 호환 포맷으로 변환
+        formatted: list[dict] = []
+        _level_emoji = {'red': '🔴', 'yellow': '🟡', 'green': '🟢'}
+        _sign = lambda v: f'{v:+.2f}' if isinstance(v, float) else str(v)
+
+        for a in raw_alerts:
+            emoji = _level_emoji.get(a['level'], '')
+            scope = {'platform': '플랫폼', 'channel': '채널', 'program': '프로그램'}.get(a['category'], '')
+            code_str = f"[{a['code']}]" if a['category'] != 'platform' else ''
+            msg = (
+                f"{emoji} {a['label']}{code_str} {_sign(a['value'])} "
+                f"(z={a['z']:+.1f}, 기준 {a['baseline_median']:+.2f})"
+            )
+            formatted.append({
+                'rule_id':   f"zscore_{a['field']}_{a['code']}",
+                'level':     a['level'],
+                'msg':       msg,
+                'value':     a['value'],
+                'z':         a['z'],
+                'code':      a['code'],
+                'category':  a['category'],
+                'field':     a['field'],
+                'label':     a['label'],
+                'period':    a['period'],
+                'baseline_median': a['baseline_median'],
+                'baseline_n':      a['baseline_n'],
+            })
+
+        return formatted
 
     def find_at_risk_programs(self, all_kpi: dict[str, dict]) -> list[dict]:
         """모든 프로그램 중 AtRiskProgram 분류."""
