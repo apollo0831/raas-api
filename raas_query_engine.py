@@ -204,8 +204,6 @@ def _build_scope_map() -> dict:
             'pickch': 'P00', '픽채널': 'P00', 'P00': 'P00',
         }
 
-SCOPE_MAP = _build_scope_map()
-
 def _build_keyword_index() -> dict:
     """TTL 어댑터에서 프로그램 키워드→코드 인덱스 빌드."""
     try:
@@ -221,8 +219,6 @@ def _build_keyword_index() -> dict:
         return idx
     except Exception:
         return {}
-
-KEYWORD_TO_CODE = _build_keyword_index()
 
 
 # ── 차트 빌더 ──────────────────────────────────────────────
@@ -785,17 +781,12 @@ def classify_intent(question: str, today: str = None) -> dict:
                 result = result[4:]
         intent = json.loads(result.strip())
 
-        # scope_keyword → PGM_CODE 매핑
-        # Phase 5 Step 4: 어댑터 우선 → SCOPE_MAP/KEYWORD_TO_CODE fallback
+        # scope_keyword → PGM_CODE 매핑 (어댑터 3단계 조회)
         if intent.get('scope_keyword') and intent.get('scope') in (None, '', 'T00'):
             kw_raw = intent['scope_keyword'].strip()
             kw = kw_raw.lower()
             # 1) 채널·플랫폼 매핑 — TTL에서 매번 빌드 (hot-reload 반영)
-            try:
-                _scope_map = _build_scope_map()
-            except Exception:
-                _scope_map = SCOPE_MAP
-            for key, code in _scope_map.items():
+            for key, code in _build_scope_map().items():
                 if key.lower() == kw:
                     intent['scope'] = code
                     break
@@ -808,13 +799,9 @@ def classify_intent(question: str, today: str = None) -> dict:
                         intent['scope'] = matches[0]['code']
                 except Exception:
                     pass
-            # 3) 키워드 인덱스 fallback (TTL 어댑터에서 재빌드 — hot-reload 반영)
+            # 3) 키워드 인덱스 (부분 일치 fallback)
             if not intent.get('scope'):
-                try:
-                    fresh_kw = _build_keyword_index()
-                except Exception:
-                    fresh_kw = KEYWORD_TO_CODE
-                for kw_key, code in fresh_kw.items():
+                for kw_key, code in _build_keyword_index().items():
                     if kw_key in kw or kw in kw_key:
                         intent['scope'] = code
                         break
