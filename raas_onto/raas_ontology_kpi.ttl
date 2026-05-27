@@ -213,7 +213,10 @@ raas:hasVariant a owl:ObjectProperty ;
 
 raas:code a owl:DatatypeProperty ;
     rdfs:label "코드"@ko ;
-    rdfs:comment "예: F09, F00 — RAAS 시스템 내부 식별자"@ko .
+    rdfs:comment "예: F09, F00 — RAAS 시스템 내부 식별자"@ko ;
+    raas:csvField "PGM_CODE" .
+
+rdfs:label raas:csvField "PGM_NAME" .
 
 raas:altLabel a owl:DatatypeProperty ;
     rdfs:label "별칭"@ko ;
