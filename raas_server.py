@@ -354,6 +354,20 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path.startswith("/api/briefing"):
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                timeline = get_cached_timeline()
+                data = QE.collect_briefing_data(timeline)
+                if 'error' in data:
+                    self.send_json({"ok": False, "error": data['error']}, 503)
+                    return
+                self.send_json({"ok": True, "data": data})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path.startswith("/api/rawdata"):
             try:
                 params = {}

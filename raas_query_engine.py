@@ -984,6 +984,353 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
     }
 
 
+def _build_funnel_dict(row: dict) -> dict:
+    return {
+        'dau':              _i(row.get('dau')),
+        'dau_yday':         _i(row.get('dau_prev')),
+        'new_user':         _i(row.get('new')),
+        'new_pct':          _fn(row.get('new_share')),
+        'new_share':        _fn(row.get('new_share')),
+        'new_wow':          _fn(row.get('new_chg')),
+        'react_user':       _i(row.get('react')),
+        'react_pct':        _fn(row.get('react_share')),
+        'react_share':      _fn(row.get('react_share')),
+        'react_wow':        _fn(row.get('react_chg')),
+        'react_rate':       _fn(row.get('react_rate')),
+        'churn_rate':       _fn(row.get('churn_rate')),
+        'churn_diff':       _fn(row.get('churn_rate_diff')),
+        'churn_rate_pw':    _fn(row.get('churn_rate_prev')),
+        'd1_ret':           _fn(row.get('d1_ret')),
+        'd1_ret_diff':      _fn(row.get('d1_ret_diff')),
+        'd7_ret':           _fn(row.get('d7_ret')),
+        'new_d1_ret':       _fn(row.get('new_d1_ret')),
+        'new_d7_ret':       _fn(row.get('new_d7_ret')),
+        'new_w1_ret':       _fn(row.get('new_w1_ret')),
+        'new_m1_ret':       _fn(row.get('new_m1_ret')),
+        # 주간
+        'dau_week':         _i(row.get('wau')),
+        'dau_week_wow':     _fn(row.get('wau_chg')),
+        'wau_prev':         _i(row.get('wau_prev')),
+        'new_week':         _i(row.get('new_week')),
+        'new_week_pct':     _fn(row.get('new_week_share')),
+        'new_week_share':   _fn(row.get('new_week_share')),
+        'new_week_wow':     _fn(row.get('new_week_chg')),
+        'churn_rate_week':  _fn(row.get('churn_rate_week')),
+        'churn_week':       _fn(row.get('churn_rate_week')),
+        'churn_week_diff':  _fn(row.get('churn_rate_week_diff')),
+        'churn_week_pw':    _fn(row.get('churn_rate_week_prev')),
+        'w1_ret':           _fn(row.get('w1_ret')),
+        'react_week':       _i(row.get('react_week')),
+        'react_week_pct':   _fn(row.get('react_week_share')),
+        'react_week_share': _fn(row.get('react_week_share')),
+        'react_week_wow':   _fn(row.get('react_week_chg')),
+        'react_rate_week':  _fn(row.get('react_rate_week')),
+        # 월간
+        'dau_mon':          _i(row.get('mau')),
+        'dau_mon_wow':      _fn(row.get('mau_chg')),
+        'mau_prev':         _i(row.get('mau_prev')),
+        'new_mon':          _i(row.get('new_mon')),
+        'new_mon_pct':      _fn(row.get('new_mon_share')),
+        'new_mon_share':    _fn(row.get('new_mon_share')),
+        'new_mon_wow':      _fn(row.get('new_mon_chg')),
+        'churn_rate_mon':   _fn(row.get('churn_rate_mon')),
+        'churn_mon':        _fn(row.get('churn_rate_mon')),
+        'churn_mon_diff':   _fn(row.get('churn_rate_mon_diff')),
+        'churn_mon_pw':     _fn(row.get('churn_rate_mon_prev')),
+        'm1_ret':           _fn(row.get('m1_ret')),
+        'react_mon':        _i(row.get('react_mon')),
+        'react_mon_pct':    _fn(row.get('react_mon_share')),
+        'react_mon_share':  _fn(row.get('react_mon_share')),
+        'react_mon_wow':    _fn(row.get('react_mon_chg')),
+        'react_rate_mon':   _fn(row.get('react_rate_mon')),
+    }
+
+
+def _build_engagement_dict(row: dict) -> dict:
+    return {
+        'dau_1min':          _i(row.get('dau_1min')),
+        'dau_10min':         _i(row.get('dau_10min')),
+        'deep_rate':         _fn(row.get('deep_rate')),
+        'deep_rate_diff':    _fn(row.get('deep_rate_diff')),
+        'deep_rate_week':    _fn(row.get('deep_rate_week')),
+        'deep_rate_mon':     _fn(row.get('deep_rate_mon')),
+        'real_rate':         _fn(row.get('real_rate')),
+        'real_rate_diff':    _fn(row.get('real_rate_diff')),
+        'real_rate_week':    _fn(row.get('real_rate_week')),
+        'real_rate_mon':     _fn(row.get('real_rate_mon')),
+        'engage_rate':       _fn(row.get('engage_rate')),
+        'engage_week':       _fn(row.get('engage_rate_week')),
+        'engage_mon':        _fn(row.get('engage_rate_mon')),
+        'wau_1min':          _i(row.get('wau_1min')),
+        'wau_10min':         _i(row.get('wau_10min')),
+        'mau_1min':          _i(row.get('mau_1min')),
+        'mau_10min':         _i(row.get('mau_10min')),
+    }
+
+
+def _build_growth_dict(row: dict) -> dict:
+    return {
+        'habit_rate':       _fn(row.get('habit_rate')),
+        'habit_diff':       _fn(row.get('habit_rate_diff')),
+        'habit_week':       _fn(row.get('habit_rate_week')),
+        'habit_mon':        _fn(row.get('habit_rate_mon')),
+        'react_rate':       _fn(row.get('react_rate')),
+        'react_rate_week':  _fn(row.get('react_rate_week')),
+        'react_rate_mon':   _fn(row.get('react_rate_mon')),
+        'top3_habit':       [],
+    }
+
+
+def _build_alert_kpi(row: dict) -> dict:
+    return {
+        'dau_chg':         _fn(row.get('dau_chg')),
+        'deep_rate_diff':  _fn(row.get('deep_rate_diff')),
+        'new_chg':         _fn(row.get('new_chg')),
+        'churn_rate_diff': _fn(row.get('churn_rate_diff')),
+        'react_rate':      _fn(row.get('react_rate')),
+        'habit_rate':      _fn(row.get('habit_rate')),
+    }
+
+
+def _evaluate_alerts(row: dict, timeline_snap: dict, latest_dt: str) -> dict:
+    """Z-score 기반 알림 평가 (우선) + 고정룰 fallback + 위험 프로그램 감지."""
+    alerts = []
+    try:
+        from raas_onto import get_adapter
+        adapter = get_adapter()
+
+        alerts = adapter.evaluate_zscore_alerts(timeline_snap, latest_dt)
+
+        zscore_fields = {a['field'] for a in alerts}
+        if not alerts or len(alerts) < 2:
+            kpi = _build_alert_kpi(row)
+            fixed_alerts = adapter.evaluate_platform_alerts(kpi)
+            for fa in fixed_alerts:
+                field_hint = {
+                    'DauPlunge': 'dau_chg', 'DauSurge': 'dau_chg',
+                    'DeepRatePlunge': 'deep_rate_diff',
+                    'NewUserPlunge': 'new_chg',
+                    'ChurnRateRise': 'churn_rate_diff',
+                    'HabitRateAchieved': 'habit_rate', 'HabitRateLow': 'habit_rate',
+                }
+                rid = fa.get('rule_id', '').replace('raas:Alert_', '')
+                if field_hint.get(rid) not in zscore_fields:
+                    fa['source'] = 'fixed_rule'
+                    alerts.append(fa)
+
+        exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
+        prog_snap = {}
+        for code, date_rows in timeline_snap.items():
+            if code in exclude:
+                continue
+            r = date_rows.get(latest_dt, {})
+            prog_snap[code] = {
+                'dau':        _i(r.get('dau')),
+                'churn_rate': _fn(r.get('churn_rate')),
+                'dau_chg':    _fn(r.get('dau_chg')),
+            }
+        risk_progs = adapter.find_at_risk_programs(prog_snap)
+        if risk_progs:
+            names = [
+                _pgm_name(r.get('code'),
+                          row=(timeline_snap.get(r.get('code'), {}) or {}).get(latest_dt, {}))
+                for r in risk_progs[:3]
+            ]
+            alerts.append({
+                'level': 'yellow',
+                'msg':   f"🟡 위험 프로그램 감지: {', '.join(names)}",
+                'rule_id': 'AtRiskProgramDetected',
+            })
+
+    except Exception:
+        pass
+
+    if not alerts:
+        alerts = [{'level': 'green', 'msg': '🟢 이상 없음 — 모든 지표 정상 범위', 'rule_id': 'NoAlert'}]
+    return {'alerts': alerts}
+
+
+def _channel_name(code: str) -> str:
+    _MAP = {'F00': '파워FM', 'L00': '러브FM', 'G00': '고릴라M', 'P00': '픽채널', 'T00': '전체'}
+    return _MAP.get(code, code)
+
+
+def _program_channel(code: str) -> str:
+    if code.startswith('F'):
+        return '파워FM'
+    if code.startswith('L') or code.startswith('M'):
+        return '러브FM'
+    if code.startswith('G'):
+        return '고릴라M'
+    if code.startswith('P'):
+        return '픽채널'
+    return ''
+
+
+def collect_briefing_data(timeline: dict) -> dict:
+    """timeline에서 s1~s7 브리핑 데이터 딕셔너리를 빌드."""
+    available = get_available_dates(timeline)
+    if not available:
+        return {'error': '데이터 없음'}
+    latest_dt = available[-1]
+    row = timeline.get('T00', {}).get(latest_dt, {})
+
+    # ── s1: 경영 요약 ──────────────────────────────────────────────
+    s1 = {
+        'date':           row.get('DATE') or latest_dt,
+        'date_week':      (row.get('DATE_WEEK') or '').replace('/', '-'),
+        'date_mon':       (row.get('DATE_MON') or '').replace('/', '-'),
+        'dau':            _i(row.get('dau')),
+        'dau_chg':        _fn(row.get('dau_chg')),
+        'dau_wow':        _fn(row.get('dau_chg')),
+        'dau_r7':         _i(row.get('dau_r7')),
+        'dau_r7_chg':     _fn(row.get('dau_r7_chg')),
+        'dau_r30':        _i(row.get('dau_r30')),
+        'dau_r30_chg':    _fn(row.get('dau_r30_chg')),
+        'wau':            _i(row.get('wau')),
+        'wau_chg':        _fn(row.get('wau_chg')),
+        'mau':            _i(row.get('mau')),
+        'mau_chg':        _fn(row.get('mau_chg')),
+        'dau_week_wow':   _fn(row.get('wau_chg')),
+        'dau_mon_wow':    _fn(row.get('mau_chg')),
+        'new_user':       _i(row.get('new')),
+        'new_share':      _fn(row.get('new_share')),
+        'react_user':     _i(row.get('react')),
+        'react_share':    _fn(row.get('react_share')),
+    }
+
+    # ── s2: 퍼널 ────────────────────────────────────────────────────
+    s2 = _build_funnel_dict(row)
+
+    # ── s3: 인게이지먼트 ─────────────────────────────────────────────
+    s3 = _build_engagement_dict(row)
+    # 채널별 깊은청취율
+    channel_deep = []
+    for ch_code in ['F00', 'L00', 'G00', 'P00']:
+        ch_r = timeline.get(ch_code, {}).get(latest_dt, {})
+        dr = _fn(ch_r.get('deep_rate'))
+        if dr is not None:
+            channel_deep.append({
+                'code': ch_code, 'name': _channel_name(ch_code),
+                'rate': dr,
+                'rate_week': _fn(ch_r.get('deep_rate_week')),
+                'rate_mon':  _fn(ch_r.get('deep_rate_mon')),
+            })
+    s3['channel_deep'] = channel_deep
+
+    # ── s4: 성장 품질 ────────────────────────────────────────────────
+    s4 = _build_growth_dict(row)
+
+    # ── s5: 프로그램 랭킹 ────────────────────────────────────────────
+    exclude_codes = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
+    all_pgms = []
+    for code, date_rows in timeline.items():
+        if code in exclude_codes:
+            continue
+        r = date_rows.get(latest_dt, {})
+        dau = _i(r.get('dau'))
+        all_pgms.append({
+            'code':          code,
+            'name':          _pgm_name(code, row=r),
+            'channel':       _program_channel(code),
+            'guestname':     (r.get('guestname') or '').strip() or None,
+            'dau':           dau,
+            'dau_wow':       _fn(r.get('dau_chg')),
+            'dau_week':      _i(r.get('wau')),
+            'dau_week_wow':  _fn(r.get('wau_chg')),
+            'dau_mon':       _i(r.get('mau')),
+            'dau_mon_wow':   _fn(r.get('mau_chg')),
+            'deep_rate':     _fn(r.get('deep_rate')),
+            'deep_rate_diff':_fn(r.get('deep_rate_diff')),
+            'deep_rate_week':_fn(r.get('deep_rate_week')),
+            'deep_rate_week_diff': _fn(r.get('deep_rate_week_diff')),
+            'deep_rate_mon': _fn(r.get('deep_rate_mon')),
+            'deep_rate_mon_diff':  _fn(r.get('deep_rate_mon_diff')),
+            'dau_10min':     _i(r.get('dau_10min')),
+            'wau_10min':     _i(r.get('wau_10min')),
+            'mau_10min':     _i(r.get('mau_10min')),
+            'new_user':      _i(r.get('new')),
+            'new_pct':       _fn(r.get('new_share')),
+            'new_wow':       _fn(r.get('new_chg')),
+            'new_week':      _i(r.get('new_week')),
+            'new_week_pct':  _fn(r.get('new_week_share')),
+            'new_week_wow':  _fn(r.get('new_week_chg')),
+            'new_mon':       _i(r.get('new_mon')),
+            'new_mon_pct':   _fn(r.get('new_mon_share')),
+            'new_mon_wow':   _fn(r.get('new_mon_chg')),
+            'habit_rate':    _fn(r.get('habit_rate')),
+            'habit_week':    _fn(r.get('habit_rate_week')),
+            'habit_mon':     _fn(r.get('habit_rate_mon')),
+            'churn_rate':    _fn(r.get('churn_rate')),
+            'd1_ret':        _fn(r.get('d1_ret')),
+            'w1_ret':        _fn(r.get('w1_ret')),
+            'm1_ret':        _fn(r.get('m1_ret')),
+        })
+    all_pgms.sort(key=lambda x: x.get('dau') or 0, reverse=True)
+    s5 = {'all_programs': all_pgms, 'dau_top10': all_pgms[:10]}
+
+    # ── s6: 채널별 ──────────────────────────────────────────────────
+    ch_list = []
+    total_dau_1min = _i(row.get('dau_1min')) or 1
+    for ch_code in ['F00', 'L00', 'G00', 'P00']:
+        ch_r = timeline.get(ch_code, {}).get(latest_dt, {})
+        ch_dau_1min = _i(ch_r.get('dau_1min')) or 0
+        share = round(ch_dau_1min / total_dau_1min * 100, 1) if total_dau_1min else None
+        ch_list.append({
+            'code':          ch_code,
+            'name':          _channel_name(ch_code),
+            'share':         share,
+            'dau':           _i(ch_r.get('dau')),
+            'dau_wow':       _fn(ch_r.get('dau_chg')),
+            'dau_week':      _i(ch_r.get('wau')),
+            'dau_week_wow':  _fn(ch_r.get('wau_chg')),
+            'dau_mon':       _i(ch_r.get('mau')),
+            'dau_mon_wow':   _fn(ch_r.get('mau_chg')),
+            'deep_rate':     _fn(ch_r.get('deep_rate')),
+            'deep_rate_week':_fn(ch_r.get('deep_rate_week')),
+            'deep_rate_mon': _fn(ch_r.get('deep_rate_mon')),
+            'real_rate':     _fn(ch_r.get('real_rate')),
+            'real_rate_week':_fn(ch_r.get('real_rate_week')),
+            'real_rate_mon': _fn(ch_r.get('real_rate_mon')),
+            'engage_rate':   _fn(ch_r.get('engage_rate')),
+            'engage_week':   _fn(ch_r.get('engage_rate_week')),
+            'engage_mon':    _fn(ch_r.get('engage_rate_mon')),
+            'churn_rate':    _fn(ch_r.get('churn_rate')),
+            'churn_week':    _fn(ch_r.get('churn_rate_week')),
+            'churn_mon':     _fn(ch_r.get('churn_rate_mon')),
+            'react_rate':    _fn(ch_r.get('react_rate')),
+            'react_rate_week':_fn(ch_r.get('react_rate_week')),
+            'react_rate_mon':_fn(ch_r.get('react_rate_mon')),
+            'new_pct':       _fn(ch_r.get('new_share')),
+            'new_week_pct':  _fn(ch_r.get('new_week_share')),
+            'new_mon_pct':   _fn(ch_r.get('new_mon_share')),
+            'habit_rate':    _fn(ch_r.get('habit_rate')),
+            'habit_week':    _fn(ch_r.get('habit_rate_week')),
+            'habit_mon':     _fn(ch_r.get('habit_rate_mon')),
+            'd1_ret':        _fn(ch_r.get('d1_ret')),
+            'w1_ret':        _fn(ch_r.get('w1_ret')),
+            'm1_ret':        _fn(ch_r.get('m1_ret')),
+            'new_user':      _i(ch_r.get('new')),
+            'new_week':      _i(ch_r.get('new_week')),
+            'new_mon':       _i(ch_r.get('new_mon')),
+        })
+    s6 = {'channels': ch_list}
+
+    # ── s7: 이상 알림 (ZScoreDetector) ──────────────────────────────
+    s7 = _evaluate_alerts(row, timeline, latest_dt)
+
+    return {
+        'collected_at':  latest_dt,
+        's1_executive':  s1,
+        's2_funnel':     s2,
+        's3_engagement': s3,
+        's4_growth':     s4,
+        's5_rankings':   s5,
+        's6_channels':   s6,
+        's7_anomalies':  s7,
+    }
+
+
 def extract_data(timeline, intent: dict, briefing_data: dict = None, question: str = '') -> dict:
     if not timeline:
         return {'error': 'timeline 없음'}
@@ -1529,145 +1876,6 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
 
     # ── 신규 intent: timeline에서 직접 빌드 ──────────────────────────
     _t00_row = timeline.get('T00', {}).get(available_dates[-1] if available_dates else '', {})
-
-    def _build_funnel_dict(row: dict) -> dict:
-        return {
-            'dau':              _i(row.get('dau')),
-            'new_user':         _i(row.get('new')),
-            'new_share':        _fn(row.get('new_share')),
-            'new_wow':          _fn(row.get('new_chg')),
-            'react_user':       _i(row.get('react')),
-            'react_share':      _fn(row.get('react_share')),
-            'react_rate':       _fn(row.get('react_rate')),
-            'churn_rate':       _fn(row.get('churn_rate')),
-            'churn_diff':       _fn(row.get('churn_rate_diff')),
-            'd1_ret':           _fn(row.get('d1_ret')),
-            'd1_ret_diff':      _fn(row.get('d1_ret_diff')),
-            'd7_ret':           _fn(row.get('d7_ret')),
-            'new_d1_ret':       _fn(row.get('new_d1_ret')),
-            'new_d7_ret':       _fn(row.get('new_d7_ret')),
-            'new_w1_ret':       _fn(row.get('new_w1_ret')),
-            'new_m1_ret':       _fn(row.get('new_m1_ret')),
-            'new_week':         _i(row.get('new_week')),
-            'new_week_share':   _fn(row.get('new_week_share')),
-            'churn_rate_week':  _fn(row.get('churn_rate_week')),
-            'w1_ret':           _fn(row.get('w1_ret')),
-            'react_week':       _i(row.get('react_week')),
-            'react_rate_week':  _fn(row.get('react_rate_week')),
-            'new_mon':          _i(row.get('new_mon')),
-            'new_mon_share':    _fn(row.get('new_mon_share')),
-            'churn_rate_mon':   _fn(row.get('churn_rate_mon')),
-            'm1_ret':           _fn(row.get('m1_ret')),
-            'react_mon':        _i(row.get('react_mon')),
-            'react_rate_mon':   _fn(row.get('react_rate_mon')),
-        }
-
-    def _build_engagement_dict(row: dict) -> dict:
-        return {
-            'dau_1min':          _i(row.get('dau_1min')),
-            'dau_10min':         _i(row.get('dau_10min')),
-            'deep_rate':         _fn(row.get('deep_rate')),
-            'deep_rate_diff':    _fn(row.get('deep_rate_diff')),
-            'deep_rate_week':    _fn(row.get('deep_rate_week')),
-            'deep_rate_mon':     _fn(row.get('deep_rate_mon')),
-            'real_rate':         _fn(row.get('real_rate')),
-            'real_rate_diff':    _fn(row.get('real_rate_diff')),
-            'real_rate_week':    _fn(row.get('real_rate_week')),
-            'real_rate_mon':     _fn(row.get('real_rate_mon')),
-            'engage_rate':       _fn(row.get('engage_rate')),
-            'engage_week':       _fn(row.get('engage_rate_week')),
-            'engage_mon':        _fn(row.get('engage_rate_mon')),
-        }
-
-    def _build_growth_dict(row: dict) -> dict:
-        return {
-            'habit_rate':       _fn(row.get('habit_rate')),
-            'habit_diff':       _fn(row.get('habit_rate_diff')),
-            'habit_week':       _fn(row.get('habit_rate_week')),
-            'habit_mon':        _fn(row.get('habit_rate_mon')),
-            'react_rate':       _fn(row.get('react_rate')),
-            'react_rate_week':  _fn(row.get('react_rate_week')),
-            'react_rate_mon':   _fn(row.get('react_rate_mon')),
-            'top3_habit':       [],
-        }
-
-    def _build_alert_kpi(row: dict) -> dict:
-        return {
-            'dau_chg':         _fn(row.get('dau_chg')),
-            'deep_rate_diff':  _fn(row.get('deep_rate_diff')),
-            'new_chg':         _fn(row.get('new_chg')),
-            'churn_rate_diff': _fn(row.get('churn_rate_diff')),
-            'react_rate':      _fn(row.get('react_rate')),
-            'habit_rate':      _fn(row.get('habit_rate')),
-        }
-
-    def _evaluate_alerts(row: dict, timeline_snap: dict, latest_dt: str) -> dict:
-        """
-        Z-score 기반 알림 평가 (우선) + 고정룰 fallback + 위험 프로그램 감지.
-
-        우선순위:
-          1. ZScoreDetector (n >= 14인 지표)
-          2. 고정 임계값 룰 (n < 14 데이터 부족 시 fallback)
-          3. AtRiskProgram 프로그램 단위 감지 (항상 병행)
-        """
-        alerts = []
-        try:
-            from raas_onto import get_adapter
-            adapter = get_adapter()
-
-            # 1. Z-score 기반 알림 (메인)
-            alerts = adapter.evaluate_zscore_alerts(timeline_snap, latest_dt)
-
-            # 2. z-score 감지 건수가 적을 때 고정룰 보완
-            zscore_fields = {a['field'] for a in alerts}
-            if not alerts or len(alerts) < 2:
-                kpi = _build_alert_kpi(row)
-                fixed_alerts = adapter.evaluate_platform_alerts(kpi)
-                for fa in fixed_alerts:
-                    # z-score가 이미 잡은 지표는 중복 추가 안 함
-                    field_hint = {
-                        'DauPlunge': 'dau_chg', 'DauSurge': 'dau_chg',
-                        'DeepRatePlunge': 'deep_rate_diff',
-                        'NewUserPlunge': 'new_chg',
-                        'ChurnRateRise': 'churn_rate_diff',
-                        'HabitRateAchieved': 'habit_rate', 'HabitRateLow': 'habit_rate',
-                    }
-                    rid = fa.get('rule_id', '').replace('raas:Alert_', '')
-                    if field_hint.get(rid) not in zscore_fields:
-                        fa['source'] = 'fixed_rule'
-                        alerts.append(fa)
-
-            # 3. 위험 프로그램 감지 (프로그램 단위, 항상 병행)
-            exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
-            prog_snap = {}
-            for code, date_rows in timeline_snap.items():
-                if code in exclude:
-                    continue
-                r = date_rows.get(latest_dt, {})
-                prog_snap[code] = {
-                    'dau':        _i(r.get('dau')),
-                    'churn_rate': _fn(r.get('churn_rate')),
-                    'dau_chg':    _fn(r.get('dau_chg')),
-                }
-            risk_progs = adapter.find_at_risk_programs(prog_snap)
-            if risk_progs:
-                names = [
-                    _pgm_name(r.get('code'),
-                              row=(timeline_snap.get(r.get('code'), {}) or {}).get(latest_dt, {}))
-                    for r in risk_progs[:3]
-                ]
-                alerts.append({
-                    'level': 'yellow',
-                    'msg':   f"🟡 위험 프로그램 감지: {', '.join(names)}",
-                    'rule_id': 'AtRiskProgramDetected',
-                })
-
-        except Exception:
-            pass
-
-        if not alerts:
-            alerts = [{'level': 'green', 'msg': '🟢 이상 없음 — 모든 지표 정상 범위', 'rule_id': 'NoAlert'}]
-        return {'alerts': alerts}
 
     # funnel
     if intent_type == 'funnel':
