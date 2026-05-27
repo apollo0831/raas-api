@@ -3393,7 +3393,7 @@ function renderAiAnswer(cardId, question, data) {
 
 function _renderSparklineSVG(chart) {
   const pts = chart.points;
-  const W = 600, H = 80, padX = 10, padY = 12;
+  const W = 600, H = 220, padX = 10, padY = 18;
   const isRate = chart.unit === '%';
   const values = pts.map(p => p.value);
   const fmtVal = v => isRate ? `${v.toFixed(1)}%` : v.toLocaleString();
@@ -3513,7 +3513,7 @@ function renderSparkline(chart) {
 
 function _renderMultiSVG(chart) {
   const series = chart.series || [];
-  const W = 600, H = 100, padX = 10, padY = 14;
+  const W = 600, H = 220, padX = 10, padY = 18;
   const isRate = chart.unit === '%';
   const fmtVal = v => isRate ? `${v.toFixed(1)}%` : v.toLocaleString();
   const COLORS = ['#185fa5', '#1d9e75', '#d97706', '#dc2626', '#7c3aed'];
@@ -3608,7 +3608,7 @@ function renderMultiSparkline(chart) {
 function _renderDualSVG(chart) {
   const series = chart.series || [];
   if (series.length < 2) return '';
-  const W = 600, H = 100, padX = 10, padY = 14;
+  const W = 600, H = 220, padX = 10, padY = 18;
   const COLORS = ['#185fa5', '#1d9e75', '#d97706'];
 
   // 동일 단위 여부 — 같은 단위면 공유 Y 스케일 사용
@@ -3775,8 +3775,14 @@ function renderRankingTable(chart) {
     dau:     { c: [['dau','DAU','num'],['dau_wow','WoW(7일전)','pct'],['real_rate','실청취율','rate']] },
     wau:     { c: [['wau','WAU','num'],['dau_week_wow','WoW(전주)','pct'],['real_rate_week','실청취율','rate']] },
     mau:     { c: [['mau','MAU','num'],['dau_mon_wow','WoW(전월)','pct'],['real_rate_mon','실청취율','rate']] },
-    dau_r7:  { c: [['dau_r7','7일롤링','num'],['dau_wow','전일대비','pct'],['real_rate','실청취율','rate']] },
-    dau_r30: { c: [['dau_r30','30일롤링','num'],['dau_wow','전일대비','pct'],['real_rate','실청취율','rate']] },
+    dau_r7:   { c: [['dau_r7','7일롤링','num'],['dau_wow','전일대비','pct'],['real_rate','실청취율','rate']] },
+    dau_r30:  { c: [['dau_r30','30일롤링','num'],['dau_wow','전일대비','pct'],['real_rate','실청취율','rate']] },
+    dau_1min: { c: [['dau_1min','1분이상청취자','num'],['dau_wow','WoW(7일전)','pct'],['real_rate','실청취율','rate']] },
+    dau_10min:{ c: [['dau_10min','10분이상청취자','num'],['dau_wow','WoW(7일전)','pct'],['deep_rate','깊은청취율','rate']] },
+    wau_1min: { c: [['wau_1min','1분이상청취자(주)','num'],['dau_week_wow','WoW(전주)','pct'],['real_rate_week','실청취율','rate']] },
+    wau_10min:{ c: [['wau_10min','10분이상청취자(주)','num'],['dau_week_wow','WoW(전주)','pct'],['deep_rate_week','깊은청취율','rate']] },
+    mau_1min: { c: [['mau_1min','1분이상청취자(월)','num'],['dau_mon_wow','WoW(전월)','pct'],['real_rate_mon','실청취율','rate']] },
+    mau_10min:{ c: [['mau_10min','10분이상청취자(월)','num'],['dau_mon_wow','WoW(전월)','pct'],['deep_rate_mon','깊은청취율','rate']] },
     // 신규/복귀 — 지표값 | 전기대비WoW% | 활성사용자 대비 구성비율
     new:          { c: [['new','신규(일)','num'],['new_wow','전일대비','pct'],['new_pct','DAU비중','share']] },
     new_week:     { c: [['new_week','신규(주)','num'],['new_week_wow','전주대비','pct'],['new_week_pct','WAU비중','share']] },
