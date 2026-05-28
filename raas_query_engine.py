@@ -1046,6 +1046,87 @@ def _build_funnel_dict(row: dict) -> dict:
     }
 
 
+def _compute_funnel_diffs(row: dict) -> dict:
+    """퍼널 차트 pp diff 파생 필드 계산 (CSV에 없는 값, 기존 필드 조합으로 산출)."""
+    def _pct(num, den):
+        try:
+            n, d = float(num), float(den)
+            return round(n / d * 100, 1) if d != 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    def _pp(a, b):
+        try:
+            return round(float(a) - float(b), 1)
+        except (TypeError, ValueError):
+            return None
+
+    # ── 일간 ──────────────────────────────────────────────────────
+    dau        = _fn(row.get('dau'))
+    dau_prev   = _fn(row.get('dau_prev'))
+    dau_d2     = _fn(row.get('dau_d2'))
+    new_share  = _fn(row.get('new_share'))
+    react_share= _fn(row.get('react_share'))
+    new_prev   = _fn(row.get('new_prev'))
+    react_prev = _fn(row.get('react_prev'))
+    d1_ret     = _fn(row.get('d1_ret'))
+    d1_ret_prev= _fn(row.get('d1_ret_prev'))
+
+    # 전일 신규·복귀 비율 (new_prev/dau_prev, react_prev/dau_prev)
+    new_share_prev   = _pct(new_prev, dau_prev)
+    react_share_prev = _pct(react_prev, dau_prev)
+
+    # 유지 사용자 (D1 유지율 기반: maint = dau_prev × d1_ret/100)
+    maint_today = (dau_prev * d1_ret / 100) if dau_prev and d1_ret else None
+    maint_yest  = (dau_d2  * d1_ret_prev / 100) if dau_d2 and d1_ret_prev else None
+    maint_p_today = _pct(maint_today, dau)
+    maint_p_yest  = _pct(maint_yest, dau_prev)
+
+    # ── 주간 ──────────────────────────────────────────────────────
+    wau              = _fn(row.get('wau'))
+    wau_prev         = _fn(row.get('wau_prev'))
+    new_week         = _fn(row.get('new_week'))
+    new_week_prev    = _fn(row.get('new_week_prev'))
+    react_week       = _fn(row.get('react_week'))
+    react_week_prev  = _fn(row.get('react_week_prev'))
+    new_week_share   = _fn(row.get('new_week_share'))
+    react_week_share = _fn(row.get('react_week_share'))
+
+    nws_prev = _pct(new_week_prev, wau_prev)
+    rws_prev = _pct(react_week_prev, wau_prev)
+
+    def _maint(total, nw, rw):
+        if any(v is None for v in [total, nw, rw]):
+            return None
+        return total - nw - rw
+
+    maint_wk_today = _maint(wau, new_week, react_week)
+    maint_wk_prev  = _maint(wau_prev, new_week_prev, react_week_prev)
+    maint_p_wk_today = _pct(maint_wk_today, wau)
+    maint_p_wk_prev  = _pct(maint_wk_prev, wau_prev)
+
+    return {
+        # 일간
+        'funnel_new_p_day_diff':    _pp(new_share, new_share_prev),
+        'funnel_react_p_day_diff':  _pp(react_share, react_share_prev),
+        'funnel_maint_p_day_diff':  _pp(maint_p_today, maint_p_yest),
+        'funnel_maint_p2_day_diff': _fn(row.get('d1_ret_diff')),    # maint/dau_prev = d1_ret
+        'funnel_churn_p2_day_diff': _fn(row.get('churn_rate_diff')),
+        # 주간
+        'funnel_new_p_week_diff':    _pp(new_week_share, nws_prev),
+        'funnel_react_p_week_diff':  _pp(react_week_share, rws_prev),
+        'funnel_maint_p_week_diff':  _pp(maint_p_wk_today, maint_p_wk_prev),
+        'funnel_maint_p2_week_diff': None,   # wau_d2 없어 계산 불가
+        'funnel_churn_p2_week_diff': _fn(row.get('churn_rate_week_diff')),
+        # 월간 — react_mon·churn_rate_mon null, 일부만 제공
+        'funnel_new_p_mon_diff':    None,   # new_mon_share_prev 없음
+        'funnel_react_p_mon_diff':  None,   # react_mon null
+        'funnel_maint_p_mon_diff':  None,   # react_mon null로 유지 계산 불가
+        'funnel_maint_p2_mon_diff': None,   # mau_d2 없음
+        'funnel_churn_p2_mon_diff': _fn(row.get('churn_rate_mon_diff')),
+    }
+
+
 def _build_engagement_dict(row: dict) -> dict:
     return {
         'dau_1min':          _i(row.get('dau_1min')),
@@ -1201,6 +1282,7 @@ def collect_briefing_data(timeline: dict) -> dict:
 
     # ── s2: 퍼널 ────────────────────────────────────────────────────
     s2 = _build_funnel_dict(row)
+    s2.update(_compute_funnel_diffs(row))
 
     # ── s3: 인게이지먼트 ─────────────────────────────────────────────
     s3 = _build_engagement_dict(row)
