@@ -32,7 +32,8 @@ import os
 load_dotenv()
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
-from raas_history_db import init_db, save_query, get_history, get_popular
+from raas_history_db import (init_db, save_query, get_history, get_popular,
+                             resolve_user_name, set_ip_user, delete_ip_user, get_all_ip_users)
 from raas_prompts import QUERY_SYSTEM_PROMPT
 from raas_briefing_context import build_query_context
 
@@ -140,6 +141,13 @@ HTML_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.h
 class RAASHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {format % args}")
+
+    def _get_client_ip(self) -> str:
+        """ngrok/프록시 환경은 X-Forwarded-For 우선, 직접 접속은 client_address."""
+        forwarded = self.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return self.client_address[0]
 
     def send_json(self, data, status=200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -387,6 +395,13 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path == "/api/ip-users":
+            try:
+                items = get_all_ip_users()
+                self.send_json({"ok": True, "your_ip": self._get_client_ip(), "items": items})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/status":
             self.send_json({"ok": True, "server": "RAAS",
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
@@ -398,13 +413,35 @@ class RAASHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
 
-        if self.path == "/api/query":
+        if self.path == "/api/ip-users":
+            try:
+                action = body.get("action", "set")
+                ip     = body.get("ip", "").strip()
+                if not ip:
+                    self.send_json({"ok": False, "error": "ip 필요"}, 400)
+                    return
+                if action == "delete":
+                    delete_ip_user(ip)
+                    self.send_json({"ok": True, "deleted": ip})
+                else:
+                    name = body.get("name", "").strip()
+                    if not name:
+                        self.send_json({"ok": False, "error": "name 필요"}, 400)
+                        return
+                    set_ip_user(ip, name)
+                    self.send_json({"ok": True, "ip": ip, "name": name})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/query":
             try:
                 question    = body.get("question", "")
                 context     = body.get("context", "")
                 target_date = body.get("date", None)
                 user_id     = (self.headers.get("X-User-Id")
                                or body.get("user_id", "anonymous") or "anonymous")
+                ip          = self._get_client_ip()
+                user_name   = resolve_user_name(ip)
 
                 if not question:
                     self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
@@ -427,7 +464,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                     )
                     chart_data = None
 
-                query_id = save_query(user_id, question, answer, chart_data=chart_data)
+                query_id = save_query(user_id, question, answer, chart_data=chart_data,
+                                      ip=ip, user_name=user_name)
                 self.send_json({"ok": True, "answer": answer,
                                 "query_id": query_id, "chart_data": chart_data})
             except Exception as e:

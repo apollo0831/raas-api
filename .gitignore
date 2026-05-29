@@ -33,6 +33,7 @@ server_test_err.log
 # 운영 데이터 (로컬 전용)
 raas_history.db
 *.db
+data/raas_query_log.jsonl
 
 # macOS
 ._*
