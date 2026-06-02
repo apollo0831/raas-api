@@ -20,8 +20,21 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import pandas as _pd
+from pathlib import Path
 from raas_prompts import QUERY_SYSTEM_PROMPT
 from raas_briefing_context import build_query_context
+
+_RULES_PATH = Path(__file__).parent / "data" / "raas_rules.md"
+
+def _load_rules() -> str:
+    """data/raas_rules.md 를 읽어 시스템 프롬프트 추가 섹션으로 반환. 파일 없으면 빈 문자열."""
+    try:
+        text = _RULES_PATH.read_text(encoding="utf-8")
+        # HTML 주석 제거 (<!-- ... -->)
+        text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL).strip()
+        return f"\n\n[운영 규칙 — 반드시 준수]\n{text}" if text else ""
+    except FileNotFoundError:
+        return ""
 
 # ── 설정 ──────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -270,19 +283,108 @@ def _metric_meta(metric_field: str):
     return _METRIC_LABELS.get(metric_field, (metric_field, ''))
 
 
-def build_chart_timeseries(title, metric, unit, points, source, points_prev=None):
+# ── 지표 cadence 분류 ─────────────────────────────────────────────────────────
+_WEEKLY_FIELDS = {
+    'wau', 'wau_1min', 'wau_10min',
+    'new_week', 'react_week',
+    'churn_rate_week', 'react_rate_week', 'deep_rate_week',
+    'engage_rate_week', 'habit_rate_week', 'real_rate_week',
+    'w1_ret', 'new_w1_ret',
+}
+_MONTHLY_FIELDS = {
+    'mau', 'mau_1min', 'mau_10min',
+    'new_mon', 'react_mon',
+    'churn_rate_mon', 'react_rate_mon', 'deep_rate_mon',
+    'engage_rate_mon', 'habit_rate_mon', 'real_rate_mon',
+    'm1_ret', 'new_m1_ret',
+}
+
+def _get_metric_cadence(field_name: str) -> str:
+    if field_name in _WEEKLY_FIELDS or field_name.endswith('_week'):
+        return 'weekly'
+    if field_name in _MONTHLY_FIELDS or field_name.endswith('_mon'):
+        return 'monthly'
+    return 'daily'
+
+def _downsample_weekly(points: list) -> list:
+    """ISO 주 단위로 1포인트 (주 내 마지막 날). 현재 진행 중인 미완성 주는 제외."""
+    if not points:
+        return []
+    buckets = {}
+    for p in points:
+        try:
+            d = datetime.strptime(p['date'].replace('/', '-'), '%Y-%m-%d')
+            key = d.isocalendar()[:2]  # (year, iso_week)
+            if key not in buckets or p['date'] > buckets[key]['date']:
+                buckets[key] = p
+        except Exception:
+            continue
+    if not buckets:
+        return []
+    # 마지막 포인트의 요일이 일요일(ISO 7)이 아니면 해당 주는 미완성 → 제외
+    try:
+        last_d = datetime.strptime(points[-1]['date'].replace('/', '-'), '%Y-%m-%d')
+        if last_d.isoweekday() != 7:
+            incomplete_key = last_d.isocalendar()[:2]
+            buckets.pop(incomplete_key, None)
+    except Exception:
+        pass
+    return [buckets[k] for k in sorted(buckets.keys())]
+
+def _downsample_monthly(points: list) -> list:
+    """월 단위로 1포인트 (월 내 마지막 날). 현재 진행 중인 미완성 월은 제외."""
+    import calendar as _cal
+    if not points:
+        return []
+    buckets = {}
+    for p in points:
+        key = p['date'].replace('/', '-')[:7]  # YYYY-MM
+        if key not in buckets or p['date'] > buckets[key]['date']:
+            buckets[key] = p
+    if not buckets:
+        return []
+    # 마지막 포인트가 월말이 아니면 해당 월은 미완성 → 제외
+    try:
+        last_d = datetime.strptime(points[-1]['date'].replace('/', '-'), '%Y-%m-%d')
+        _, last_day = _cal.monthrange(last_d.year, last_d.month)
+        if last_d.day != last_day:
+            incomplete_key = points[-1]['date'].replace('/', '-')[:7]
+            buckets.pop(incomplete_key, None)
+    except Exception:
+        pass
+    return [buckets[k] for k in sorted(buckets.keys())]
+
+def _apply_cadence_downsample(pts: list, cadence: str) -> list:
+    if cadence == 'weekly':
+        return _downsample_weekly(pts)
+    if cadence == 'monthly':
+        return _downsample_monthly(pts)
+    return pts
+
+
+def build_chart_timeseries(title, metric, unit, points, source, points_prev=None, cadence='daily', initial_days=None):
     """시계열 → sparkline dict. points < 2이면 None."""
-    pts = [p for p in points if p.get('value') is not None]
+    pts = _apply_cadence_downsample(
+        [p for p in points if p.get('value') is not None], cadence
+    )
     if len(pts) < 2:
         return None
     values = [p['value'] for p in pts]
     first, latest = values[0], values[-1]
     change_pct = round((latest - first) / first * 100, 1) if first else None
+    # initial_days를 다운샘플 후 포인트 수 기준으로 변환 (프런트엔드 기간 버튼 선택용)
+    if initial_days is not None:
+        if cadence == 'weekly':
+            initial_days = max(1, round(initial_days / 7))
+        elif cadence == 'monthly':
+            initial_days = max(1, round(initial_days / 30))
     result = {
         "type": "timeseries",
         "title": title,
         "metric": metric,
         "unit": unit,
+        "cadence": cadence,
+        "initial_days": initial_days,
         "points": pts,
         "summary": {
             "min": min(values),
@@ -294,26 +396,40 @@ def build_chart_timeseries(title, metric, unit, points, source, points_prev=None
         "source": source,
     }
     if points_prev:
-        prev_pts = [p for p in points_prev if p.get('value') is not None]
+        prev_pts = _apply_cadence_downsample(
+            [p for p in points_prev if p.get('value') is not None], cadence
+        )
+        # prev가 메인보다 길면 최신 데이터 기준으로 정렬; 메인은 항상 전체 유지
+        if len(prev_pts) > len(pts):
+            prev_pts = prev_pts[-len(pts):]
         if len(prev_pts) >= 2:
             result['points_prev'] = prev_pts
     return result
 
 
-def build_chart_multi_timeseries(title, metric, unit, series, source):
+def build_chart_multi_timeseries(title, metric, unit, series, source, cadence='daily', initial_days=None):
     """멀티시리즈 시계열 → timeseries_multi dict. valid series < 2이면 None."""
     valid = []
     for s in series:
-        pts = [p for p in s.get('points', []) if p.get('value') is not None]
+        pts = _apply_cadence_downsample(
+            [p for p in s.get('points', []) if p.get('value') is not None], cadence
+        )
         if len(pts) >= 2:
             valid.append({**s, 'points': pts})
     if len(valid) < 2:
         return None
+    if initial_days is not None:
+        if cadence == 'weekly':
+            initial_days = max(1, round(initial_days / 7))
+        elif cadence == 'monthly':
+            initial_days = max(1, round(initial_days / 30))
     return {
         "type": "timeseries_multi",
         "title": title,
         "metric": metric,
         "unit": unit,
+        "cadence": cadence,
+        "initial_days": initial_days,
         "series": valid,
         "source": source,
     }
@@ -349,6 +465,8 @@ def build_chart_data(data: dict, intent: dict, question: str):
             points = [{"date": d.replace('/', '-'), "value": v}
                       for d, v in t['data'] if v is not None]
             metric, unit = _metric_meta(t['metric_field'])
+            cadence = _get_metric_cadence(t['metric_field'])
+            initial_days = t.get('initial_days')
             points_prev = None
             if data.get('trend_prev') and data['trend_prev'].get('data'):
                 points_prev = [{"date": d.replace('/', '-'), "value": v}
@@ -357,7 +475,7 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 title=f"{scope_name} {metric}",
                 metric=metric, unit=unit, points=points,
                 source=f"timeline:{scope}/{t['metric_field']}",
-                points_prev=points_prev
+                points_prev=points_prev, cadence=cadence, initial_days=initial_days
             )
 
         # dual_trend → 동일 단위면 timeseries_multi, 혼합 단위면 timeseries_dual
@@ -365,6 +483,7 @@ def build_chart_data(data: dict, intent: dict, question: str):
             dt = data['dual_trend']
             _DT_COLORS = ['#185fa5', '#1d9e75', '#d97706']
             series = []
+            _dt_cadences = []
             for i, s in enumerate(dt['series']):
                 pts = [{"date": d.replace('/', '-'), "value": v}
                        for d, v in s.get('data', []) if v is not None]
@@ -373,6 +492,10 @@ def build_chart_data(data: dict, intent: dict, question: str):
                         'label': s['label'], 'unit': s['unit'],
                         'color': _DT_COLORS[i % len(_DT_COLORS)], 'points': pts,
                     })
+                    _dt_cadences.append(_get_metric_cadence(s.get('metric_field', '')))
+            # 모든 시리즈가 동일 cadence면 사용, 혼합이면 daily
+            _dt_cadence = _dt_cadences[0] if _dt_cadences and len(set(_dt_cadences)) == 1 else 'daily'
+            _dt_initial = dt.get('initial_days')
             if len(series) >= 2:
                 title = f"{scope_name} {' · '.join(s['label'] for s in series)} 추이"
                 _units = [s['unit'] for s in series]
@@ -380,16 +503,23 @@ def build_chart_data(data: dict, intent: dict, question: str):
                     # 동일 단위 → timeseries_multi (공유 Y스케일)
                     multi = build_chart_multi_timeseries(
                         title=title, metric=' · '.join(s['label'] for s in series),
-                        unit=_units[0], series=series, source=f"timeline:{scope}"
+                        unit=_units[0], series=series, source=f"timeline:{scope}",
+                        cadence=_dt_cadence, initial_days=_dt_initial
                     )
                     if multi:
                         return multi
                 else:
                     # 혼합 단위 → timeseries_dual (독립 Y스케일)
+                    _ds_series = [
+                        {**s, 'points': _apply_cadence_downsample(s['points'], _dt_cadence)}
+                        for s in series
+                    ]
                     return {
                         "type": "timeseries_dual",
                         "title": title,
-                        "series": series,
+                        "cadence": _dt_cadence,
+                        "initial_days": _dt_initial,
+                        "series": _ds_series,
                         "source": f"timeline:{scope}",
                     }
             # 1개 시리즈만 유효하면 단일 timeseries로 fallback
@@ -399,13 +529,15 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 return build_chart_timeseries(
                     title=f"{scope_name} {metric0} 추이",
                     metric=metric0, unit=unit0, points=s0['points'],
-                    source=f"timeline:{scope}/dual_fallback"
+                    source=f"timeline:{scope}/dual_fallback",
+                    cadence=_dt_cadence, initial_days=_dt_initial
                 )
 
         # compare_trend → timeseries_multi (fallback: snapshot comparison bar)
         if intent_type == 'compare_trend' and data.get('compare_trend'):
             ct = data['compare_trend']
             metric, unit = _metric_meta(ct['metric_field'])
+            _ct_cadence = _get_metric_cadence(ct['metric_field'])
             _is_pgm_grp = intent.get('pgm_group_trend', False)
             _grp_label = '프로그램별' if _is_pgm_grp else '채널별'
             _SERIES_COLORS = [
@@ -421,7 +553,8 @@ def build_chart_data(data: dict, intent: dict, question: str):
             multi = build_chart_multi_timeseries(
                 title=f"{_grp_label} {metric} 추이",
                 metric=metric, unit=unit, series=series,
-                source=f"timeline:multi/{ct['metric_field']}"
+                source=f"timeline:multi/{ct['metric_field']}",
+                cadence=_ct_cadence, initial_days=ct.get('initial_days')
             )
             if multi:
                 return multi
@@ -555,10 +688,17 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 points = [{"date": d.replace('/', '-'), "value": v}
                           for d, v in t['data'] if v is not None]
                 metric, unit = _metric_meta(t['metric_field'])
+                _h_cadence = _get_metric_cadence(t['metric_field'])
+                _h_initial = t.get('initial_days')
+                _h_prev = None
+                if data.get('trend_prev') and data['trend_prev'].get('data'):
+                    _h_prev = [{"date": d.replace('/', '-'), "value": v}
+                               for d, v in data['trend_prev']['data'] if v is not None]
                 return build_chart_timeseries(
                     title=f"{scope_name} {metric} 추이",
                     metric=metric, unit=unit, points=points,
-                    source=f"timeline:{scope}/{t['metric_field']}"
+                    source=f"timeline:{scope}/{t['metric_field']}",
+                    points_prev=_h_prev, cadence=_h_cadence, initial_days=_h_initial
                 )
             if data.get('ranking'):
                 _rm_h = data.get('ranking_metric', 'dau')
@@ -636,7 +776,7 @@ def build_chart_data(data: dict, intent: dict, question: str):
 
         # general / snapshot: 질문 키워드 기반 fallback
         q = question.lower()
-        trend_kw   = ["추세", "추이", "변화", "최근", "지난주", "이번 주", "트렌드", "흐름"]
+        trend_kw   = ["추세", "추이", "변화", "최근", "지난주", "이번 주", "트렌드", "흐름", "그래프", "차트"]
         compare_kw = ["vs", "비교", "차이", "1위", "top", "순위", "어디가"]
 
         if any(kw in q for kw in trend_kw) and 'trend' in data:
@@ -644,10 +784,17 @@ def build_chart_data(data: dict, intent: dict, question: str):
             points = [{"date": d.replace('/', '-'), "value": v}
                       for d, v in t['data'] if v is not None]
             metric, unit = _metric_meta(t['metric_field'])
+            _fb_cadence = _get_metric_cadence(t['metric_field'])
+            _fb_initial = t.get('initial_days')
+            _fb_prev = None
+            if data.get('trend_prev') and data['trend_prev'].get('data'):
+                _fb_prev = [{"date": d.replace('/', '-'), "value": v}
+                            for d, v in data['trend_prev']['data'] if v is not None]
             return build_chart_timeseries(
                 title=f"{scope_name} {metric}",
                 metric=metric, unit=unit, points=points,
-                source=f"timeline:{scope}/{t['metric_field']}"
+                source=f"timeline:{scope}/{t['metric_field']}",
+                points_prev=_fb_prev, cadence=_fb_cadence, initial_days=_fb_initial
             )
 
         if any(kw in q for kw in compare_kw) and data.get('ranking'):
@@ -733,8 +880,13 @@ INTENT_SYSTEM = """RAAS 데이터 분석 시스템의 질의 분류기입니다.
   "date_type": "yesterday|today|specific|range",
   "specific_date": "YYYY/MM/DD 또는 null",
   "days": 7,
+  "has_period": false,
   "summary": "질문 한 줄 요약"
 }
+
+has_period: 사용자가 기간을 명시했으면 true, 아니면 false
+- true 예시: "이번주", "지난 4주간", "이번달", "최근 3개월", "지난달"
+- false 예시: "WAU 추이", "WAU 그래프 보여줘", "DAU 어때" (기간 미명시)
 
 intent 정의:
 - snapshot: 특정 날짜 단일 시점 (어제 DAU, 오늘 현황)
@@ -755,6 +907,7 @@ intent 정의:
 scope 결정:
 - 채널 언급 시: F00(파워FM) / L00(러브FM) / G00(고릴라M) / P00(픽채널)
 - "전체" 또는 미언급 시: T00
+- "고릴라"(단독) = T00 (플랫폼 전체) — "고릴라M" 또는 "고릴라엠"일 때만 G00
 - 프로그램 언급 시: scope_keyword에 키워드 입력
 
 metric: dau|wau|mau|dau_r7|dau_r30|new|new_week|new_mon|react|react_week|react_mon|react_rate|react_rate_week|react_rate_mon|churn|churn_week|churn_mon|real|real_week|real_mon|deep|deep_week|deep_mon|engage|engage_week|engage_mon|habit|habit_week|habit_mon|d1|d7|w1|m1|new_d1|new_d7|new_w1|new_m1|1min|10min|all
@@ -1466,15 +1619,23 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
             'all': 'dau',
         }
         mf = field_map.get(metric, 'dau')
-        # 전주 비교선: 현재 기간 + 직전 동일 기간 (최대 2x days)
-        _double = min(days * 2, len(available_dates))
-        _all_trend = get_metric_trend(timeline, scope, mf, days=_double)
-        _curr_trend = _all_trend[max(0, len(_all_trend) - days):]
-        _prev_trend = _all_trend[:max(0, len(_all_trend) - days)]
-        _prev_trend = _prev_trend[max(0, len(_prev_trend) - days):]  # 최대 days개
-        data['trend'] = {'metric_field': mf, 'days': len(_curr_trend), 'data': _curr_trend}
-        if _prev_trend:
-            data['trend_prev'] = {'metric_field': mf, 'data': _prev_trend}
+        # points: 전체 가용 데이터 (기간 버튼 활성화 최대화)
+        _full_days = len(available_dates)
+        _curr_trend = get_metric_trend(timeline, scope, mf, days=_full_days)
+        # points_prev: 주간/월간 지표는 기간 명시 추이 쿼리일 때만 비교선 생성
+        _cadence = _get_metric_cadence(mf)
+        _has_period = intent.get('has_period', False)
+        _build_prev = (_cadence == 'daily') or _has_period
+        if _build_prev:
+            # 현재 initial_days 윈도우 직전의 동일 기간을 prev로 사용 (갭 없음)
+            _prev_end = _full_days - days
+            if _prev_end > 0:
+                _prev_start = max(0, _prev_end - days)
+                _prev_trend = _curr_trend[_prev_start:_prev_end]
+                if _prev_trend:
+                    data['trend_prev'] = {'metric_field': mf, 'data': _prev_trend}
+        data['trend'] = {'metric_field': mf, 'initial_days': days,
+                         'days': len(_curr_trend), 'data': _curr_trend}
 
     # ranking
     if intent_type in ('ranking', 'health', 'general'):
@@ -1869,14 +2030,15 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
             'new_w1_ret': ('new_w1_ret', '신규W1유지율', '%'), 'new_m1_ret': ('new_m1_ret', '신규M1유지율', '%'),
         }
         _dt_series = []
+        _dt_fetch_days = len(available_dates)  # 가용 전체 데이터 반환
         for m in (intent.get('dual_metrics') or ['dau', 'deep']):
             mf, label, unit = _dual_field_map.get(m, (m, m.upper(), ''))
-            trend_data = get_metric_trend(timeline, scope, mf, days=days)
+            trend_data = get_metric_trend(timeline, scope, mf, days=_dt_fetch_days)
             _dt_series.append({
                 'metric': m, 'metric_field': mf, 'label': label,
                 'unit': unit, 'data': trend_data,
             })
-        data['dual_trend'] = {'series': _dt_series}
+        data['dual_trend'] = {'series': _dt_series, 'initial_days': days}
 
     # compare_trend — 채널 간 추이 멀티시리즈
     if intent_type == 'compare_trend':
@@ -1887,18 +2049,19 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
             'new': 'new', 'react': 'react', 'habit': 'habit_rate', 'all': 'dau',
         }
         mf_ct = ct_field_map.get(metric, 'dau')
+        _ct_fetch_days = len(available_dates)  # 가용 전체 데이터 반환
         _ct_series = []
         for ch_code in _selected:
             if ch_code not in timeline:
                 continue
-            ch_trend = get_metric_trend(timeline, ch_code, mf_ct, days=days)
+            ch_trend = get_metric_trend(timeline, ch_code, mf_ct, days=_ct_fetch_days)
             _ct_series.append({
                 'code': ch_code,
                 'label': _pgm_name(ch_code),
                 'points': [{'date': d.replace('/', '-'), 'value': v}
                            for d, v in ch_trend if v is not None],
             })
-        data['compare_trend'] = {'metric_field': mf_ct, 'series': _ct_series}
+        data['compare_trend'] = {'metric_field': mf_ct, 'series': _ct_series, 'initial_days': days}
 
     # health — 위험 프로그램
     # Phase 5 Step 4: 어댑터의 find_at_risk_programs 우선 + 인라인 룰 fallback
@@ -2738,7 +2901,7 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
             " 실청취율·깊은청취율·이탈률로 근거를 보완하세요."
             " 마크다운 테이블 없이 서술형으로 작성하세요."
         )
-    answer_text = call_claude(QUERY_SYSTEM_PROMPT + date_system + intent_note, context, max_tokens=max_tokens)
+    answer_text = call_claude(QUERY_SYSTEM_PROMPT + date_system + intent_note + _load_rules(), context, max_tokens=max_tokens)
     return {"answer": answer_text, "chart_data": chart_data}
 
 

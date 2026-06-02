@@ -41,7 +41,7 @@ raas:channelNature a owl:DatatypeProperty ;
 raas:T00 a raas:Platform ;
     raas:code "T00" ;
     rdfs:label "고릴라 플랫폼 전체"@ko ;
-    raas:altLabel "고릴라"@ko, "고릴라 앱"@ko, "전체"@ko, "플랫폼"@ko, "Platform"@en .
+    raas:altLabel "고릴라"@ko, "고릴라 앱"@ko, "고릴라 전체"@ko, "전체"@ko, "플랫폼"@ko, "Platform"@en .
 
 
 # =============================================================================
