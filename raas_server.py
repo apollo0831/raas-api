@@ -135,6 +135,36 @@ def call_claude(system: str, user: str) -> str:
             raise Exception(f"Claude API 오류: {e}")
     raise Exception("Claude API 일시 과부하. 잠시 후 다시 시도해 주세요.")
 
+def call_claude_stream(system: str, user: str, max_tokens: int = 1000):
+    """Claude API 스트리밍 — text 청크를 yield."""
+    payload = json.dumps({
+        "model": CLAUDE_MODEL, "max_tokens": max_tokens,
+        "stream": True,
+        "system": system,
+        "messages": [{"role": "user", "content": user}]
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages", data=payload,
+        headers={"Content-Type": "application/json",
+                 "anthropic-version": "2023-06-01",
+                 "x-api-key": ANTHROPIC_API_KEY})
+    with urllib.request.urlopen(req, timeout=90) as resp:
+        for raw in resp:
+            line = raw.decode("utf-8").rstrip("\n\r")
+            if not line.startswith("data: "):
+                continue
+            chunk = line[6:]
+            if chunk == "[DONE]":
+                break
+            try:
+                ev = json.loads(chunk)
+                if ev.get("type") == "content_block_delta":
+                    text = ev.get("delta", {}).get("text", "")
+                    if text:
+                        yield text
+            except json.JSONDecodeError:
+                pass
+
 # HTML 파일 경로 (서버와 같은 폴더)
 HTML_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.html")
 
@@ -432,6 +462,62 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.send_json({"ok": True, "ip": ip, "name": name})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/query/stream":
+            try:
+                question    = body.get("question", "")
+                target_date = body.get("date", None)
+                user_id     = (self.headers.get("X-User-Id")
+                               or body.get("user_id", "anonymous") or "anonymous")
+                ip          = self._get_client_ip()
+                user_name   = resolve_user_name(ip)
+
+                if not question:
+                    self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
+                    return
+                if not QUERY_ENGINE_AVAILABLE:
+                    self.send_json({"ok": False, "error": "Query engine unavailable"}, 500)
+                    return
+
+                timeline = get_cached_timeline()
+                sys_prompt, ctx, max_tok, chart_data = QE.query_with_timeline_stream(
+                    question, timeline, target_date=target_date
+                )
+                if sys_prompt is None:
+                    self.send_json({"ok": False, "error": "데이터를 사용할 수 없습니다."}, 500)
+                    return
+
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+
+                def sse(data: dict):
+                    self.wfile.write(
+                        ("data: " + json.dumps(data, ensure_ascii=False) + "\n\n").encode("utf-8")
+                    )
+                    self.wfile.flush()
+
+                sse({"type": "meta", "chart_data": chart_data})
+                full_text = []
+                for chunk in call_claude_stream(sys_prompt, ctx, max_tokens=max_tok):
+                    full_text.append(chunk)
+                    sse({"type": "token", "text": chunk})
+                answer = "".join(full_text)
+                query_id = save_query(user_id, question, answer, chart_data=chart_data,
+                                      ip=ip, user_name=user_name)
+                sse({"type": "done", "query_id": query_id})
+                self.close_connection = True  # SSE 완료 후 연결 명시적 종료
+            except Exception as e:
+                try:
+                    self.wfile.write(
+                        ("data: " + json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False) + "\n\n").encode("utf-8")
+                    )
+                    self.wfile.flush()
+                except Exception:
+                    pass
 
         elif self.path == "/api/query":
             try:

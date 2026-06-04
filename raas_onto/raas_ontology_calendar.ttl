@@ -227,6 +227,11 @@ raas:D_2026_05_25 a raas:CalendarDay ;
     raas:dayType raas:SubstituteDay ; raas:holidayType raas:SubstituteHoliday ;
     raas:holidayName "대체공휴일 (부처님오신날)"@ko .
 
+raas:D_2026_06_03 a raas:CalendarDay ;
+    raas:dateValue "2026-06-03" ; raas:dayOfWeek raas:Wednesday ;
+    raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
+    raas:holidayName "전국동시지방선거일"@ko .
+
 raas:D_2026_06_06 a raas:CalendarDay ;
     raas:dateValue "2026-06-06" ; raas:dayOfWeek raas:Saturday ;
     raas:dayType raas:HolidayDay ; raas:holidayType raas:NationalHoliday ;
