@@ -240,8 +240,8 @@ _METRIC_LABELS = {
     'dau':              ('DAU',          '명'),
     'wau':              ('WAU',          '명'),
     'mau':              ('MAU',          '명'),
-    'dau_r7':           ('7일롤링DAU',   '명'),
-    'dau_r30':          ('30일롤링DAU',  '명'),
+    'dau_r7':           ('롤링 7일 WAU', '명'),
+    'dau_r30':          ('롤링 30일 MAU','명'),
     # 신규/복귀 사용자 수
     'new':              ('신규(일)',      '명'),
     'new_week':         ('신규(주)',      '명'),
@@ -591,8 +591,8 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 (['dau'],                           ['dau', 'dau_wow']),
                 (['wau'],                           ['wau', 'dau_week_wow']),
                 (['mau'],                           ['mau', 'dau_mon_wow']),
-                (['7일롤링', 'r7'],                  ['dau_r7']),
-                (['30일롤링', 'r30'],                 ['dau_r30']),
+                (['7일롤링', 'r7', '롤링wau', '롤링7일wau', '7일wau', '최근7일 활성사용자', '7일mau'], ['dau_r7']),
+                (['30일롤링', 'r30', '롤링mau', '롤링30일mau', '30일mau', '최근30일 활성사용자'],    ['dau_r30']),
                 (['신규'],                           ['new', 'new_week', 'new_mon']),
                 (['복귀율'],                         ['react_rate', 'react_rate_week', 'react_rate_mon']),
                 (['복귀'],                           ['react', 'react_week', 'react_mon']),
@@ -647,7 +647,7 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 _rm2 = data.get('ranking_metric', 'dau')
                 _rm2_label = {
                     'dau': 'DAU', 'wau': 'WAU', 'mau': 'MAU',
-                    'dau_r7': '7일롤링', 'dau_r30': '30일롤링',
+                    'dau_r7': '롤링WAU', 'dau_r30': '롤링MAU',
                     'dau_1min': '1분이상청취자', 'dau_10min': '10분이상청취자',
                     'wau_1min': '1분이상청취자(주)', 'wau_10min': '10분이상청취자(주)',
                     'mau_1min': '1분이상청취자(월)', 'mau_10min': '10분이상청취자(월)',
@@ -729,7 +729,8 @@ def build_chart_data(data: dict, intent: dict, question: str):
                     title="신규 코호트 유지율 추이 (D1·D7·W1·M1)",
                     metric="유지율", unit="%",
                     series=series,
-                    source=f"timeline:{data.get('scope', 'T00')}/retention"
+                    source=f"timeline:{data.get('scope', 'T00')}/retention",
+                    initial_days=data.get('retention_trend_initial_days', 30),
                 )
                 if multi:
                     return multi
@@ -759,7 +760,8 @@ def build_chart_data(data: dict, intent: dict, question: str):
             return build_chart_timeseries(
                 title=f"{scope_name} 깊은청취율 추이",
                 metric="깊은청취율", unit="%", points=pts,
-                source=f"timeline:{scope}/deep_rate"
+                source=f"timeline:{scope}/deep_rate",
+                initial_days=data.get('engagement_trend_initial_days'),
             )
 
         # growth → 습관형성률 TOP3 comparison
@@ -905,13 +907,16 @@ intent 정의:
 - general: 기타 (위 분류에 해당 없음)
 
 scope 결정:
-- 채널 언급 시: F00(파워FM) / L00(러브FM) / G00(고릴라M) / P00(픽채널)
+- 채널 전체 명시 시만 채널코드 사용: F00(파워FM) / L00(러브FM) / G00(고릴라M) / P00(픽채널)
+  ※ 채널코드(F00 등)는 채널 전체를 명시할 때만 — 프로그램 이름이 채널명을 연상시켜도(예: 철파엠·영철파워·파타) scope_keyword 사용
 - "전체" 또는 미언급 시: T00
 - "고릴라"(단독) = T00 (플랫폼 전체) — "고릴라M" 또는 "고릴라엠"일 때만 G00
-- 프로그램 언급 시: scope_keyword에 키워드 입력
+- 프로그램 코드 직접 언급 시 (F01, L03, M07 등): scope_keyword에 코드 그대로 입력
+- 프로그램명/별명 언급 시: scope_keyword에 키워드 입력, scope는 null
 
 metric: dau|wau|mau|dau_r7|dau_r30|new|new_week|new_mon|react|react_week|react_mon|react_rate|react_rate_week|react_rate_mon|churn|churn_week|churn_mon|real|real_week|real_mon|deep|deep_week|deep_mon|engage|engage_week|engage_mon|habit|habit_week|habit_mon|d1|d7|w1|m1|new_d1|new_d7|new_w1|new_m1|1min|10min|all
 (react=복귀사용자수, react_rate=복귀율%; 1min=1분이상청취자수(절대값), 10min=10분이상청취자수(절대값), real=실청취율(비율); 명시 없으면 all, 기간이 명시되면 _week/_mon suffix 사용)
+(dau_r7=롤링 7일 WAU — 별칭: 롤링WAU, 7일MAU, 최근7일 활성사용자; dau_r30=롤링 30일 MAU — 별칭: 롤링MAU, 30일MAU, 최근30일 활성사용자)
 days: trend intent는 기간 명시 없으면 30, 나머지는 7"""
 
 
@@ -938,26 +943,31 @@ def classify_intent(question: str, today: str = None) -> dict:
         if intent.get('scope_keyword') and intent.get('scope') in (None, '', 'T00'):
             kw_raw = intent['scope_keyword'].strip()
             kw = kw_raw.lower()
-            # 1) 채널·플랫폼 매핑 — TTL에서 매번 빌드 (hot-reload 반영)
-            for key, code in _build_scope_map().items():
-                if key.lower() == kw:
-                    intent['scope'] = code
-                    break
-            # 2) 어댑터 find_program_by_keyword (정식명/별칭/영문명 검색)
-            if not intent.get('scope'):
-                try:
-                    from raas_onto import get_adapter
-                    matches = get_adapter().find_program_by_keyword(kw_raw)
-                    if matches:
-                        intent['scope'] = matches[0]['code']
-                except Exception:
-                    pass
-            # 3) 키워드 인덱스 (부분 일치 fallback)
-            if not intent.get('scope'):
-                for kw_key, code in _build_keyword_index().items():
-                    if kw_key in kw or kw in kw_key:
+            # 0) 직접 PGM_CODE 입력 — F01·L03·M07 등 코드 형식 그대로 사용
+            _CHANNEL_CODES = {'T00', 'F00', 'L00', 'G00', 'P00'}
+            if re.match(r'^[A-Z]\d{2,3}$', kw_raw.upper()) and kw_raw.upper() not in _CHANNEL_CODES:
+                intent['scope'] = kw_raw.upper()
+            else:
+                # 1) 채널·플랫폼 매핑 — TTL에서 매번 빌드 (hot-reload 반영)
+                for key, code in _build_scope_map().items():
+                    if key.lower() == kw:
                         intent['scope'] = code
                         break
+                # 2) 어댑터 find_program_by_keyword (정식명/별칭/영문명 검색)
+                if not intent.get('scope'):
+                    try:
+                        from raas_onto import get_adapter
+                        matches = get_adapter().find_program_by_keyword(kw_raw)
+                        if matches:
+                            intent['scope'] = matches[0]['code']
+                    except Exception:
+                        pass
+                # 3) 키워드 인덱스 (부분 일치 fallback)
+                if not intent.get('scope'):
+                    for kw_key, code in _build_keyword_index().items():
+                        if kw_key in kw or kw in kw_key:
+                            intent['scope'] = code
+                            break
 
         intent.setdefault('intent', 'general')
         intent.setdefault('scope', 'T00')
@@ -1625,15 +1635,8 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
         # points_prev: 주간/월간 지표는 기간 명시 추이 쿼리일 때만 비교선 생성
         _cadence = _get_metric_cadence(mf)
         _has_period = intent.get('has_period', False)
-        _build_prev = (_cadence == 'daily') or _has_period
-        if _build_prev:
-            # 현재 initial_days 윈도우 직전의 동일 기간을 prev로 사용 (갭 없음)
-            _prev_end = _full_days - days
-            if _prev_end > 0:
-                _prev_start = max(0, _prev_end - days)
-                _prev_trend = _curr_trend[_prev_start:_prev_end]
-                if _prev_trend:
-                    data['trend_prev'] = {'metric_field': mf, 'data': _prev_trend}
+        # prev는 클라이언트(chart.points 전체 기반)가 기간 버튼별로 동적 계산하므로
+        # 서버는 chart.points에 전체 히스토리를 내려주기만 하면 됨 — trend_prev 불필요
         data['trend'] = {'metric_field': mf, 'initial_days': days,
                          'days': len(_curr_trend), 'data': _curr_trend}
 
@@ -2019,7 +2022,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
     if intent_type == 'dual_trend':
         _dual_field_map = {
             'dau': ('dau', 'DAU', '명'), 'wau': ('wau', 'WAU', '명'), 'mau': ('mau', 'MAU', '명'),
-            'dau_r7': ('dau_r7', '7일롤링DAU', '명'), 'dau_r30': ('dau_r30', '30일롤링DAU', '명'),
+            'dau_r7': ('dau_r7', '롤링 7일 WAU', '명'), 'dau_r30': ('dau_r30', '롤링 30일 MAU', '명'),
             'new': ('new', '신규(일)', '명'),
             'react_rate': ('react_rate', '복귀율', '%'), 'churn': ('churn_rate', '이탈률', '%'),
             'deep': ('deep_rate', '깊은청취율', '%'), 'real': ('real_rate', '실청취율', '%'),
@@ -2132,18 +2135,21 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
                 ('신규W1', 'new_w1_ret'), ('신규M1', 'new_m1_ret'),
             ]
             _ret_series = []
+            _ret_fetch_days = len(available_dates)  # 전체 히스토리 — 클라이언트가 기간 슬라이싱
             for label, field in _ret_fields:
-                trend = get_metric_trend(timeline, scope, field, days=30)
+                trend = get_metric_trend(timeline, scope, field, days=_ret_fetch_days)
                 valid = [(d, v) for d, v in trend if v is not None]
                 if len(valid) >= 3:
                     _ret_series.append({'label': label, 'field': field, 'data': valid, 'unit': '%'})
             if _ret_series:
                 data['retention_trend'] = _ret_series
+                data['retention_trend_initial_days'] = 30
 
     # engagement — 깊은청취율 추세 차트도 함께 수집
     if intent_type == 'engagement':
         data['engagement'] = _build_engagement_dict(_t00_row)
-        data['engagement_trend'] = get_metric_trend(timeline, scope, 'deep_rate', days=days)
+        data['engagement_trend'] = get_metric_trend(timeline, scope, 'deep_rate', days=len(available_dates))
+        data['engagement_trend_initial_days'] = days
 
     # growth
     if intent_type == 'growth':
@@ -2288,9 +2294,9 @@ def format_for_claude(data: dict, intent: dict, question: str, timeline: dict = 
         if s.get('dau_d2'):
             lines.append(f"    그저께(D-2) DAU: {_fmt_dau(s.get('dau_d2'))}")
         if s.get('dau_r7'):
-            lines.append(f"    7일롤링: {_fmt_dau(s.get('dau_r7'))} (WoW {_fmt_arrow(s.get('dau_r7_chg'))})")
+            lines.append(f"    롤링 7일 WAU: {_fmt_dau(s.get('dau_r7'))} (WoW {_fmt_arrow(s.get('dau_r7_chg'))})")
         if s.get('dau_r30'):
-            lines.append(f"    30일롤링: {_fmt_dau(s.get('dau_r30'))} (MoM {_fmt_arrow(s.get('dau_r30_chg'))})")
+            lines.append(f"    롤링 30일 MAU: {_fmt_dau(s.get('dau_r30'))} (MoM {_fmt_arrow(s.get('dau_r30_chg'))})")
         if s.get('dau_1min') or s.get('dau_10min'):
             lines.append(f"    1분↑청취자: {_fmt_dau(s.get('dau_1min'))} (WoW {_fmt_arrow(s.get('dau_1min_wow'))} | 전주 {_fmt_dau(s.get('dau_1min_prev'))})")
             lines.append(f"    10분↑청취자: {_fmt_dau(s.get('dau_10min'))} (WoW {_fmt_arrow(s.get('dau_10min_wow'))} | 전주 {_fmt_dau(s.get('dau_10min_prev'))})")
@@ -2409,7 +2415,7 @@ def format_for_claude(data: dict, intent: dict, question: str, timeline: dict = 
         _rm = data.get('ranking_metric', 'dau')
         _rm_label_map = {
             'dau': 'DAU', 'wau': 'WAU', 'mau': 'MAU',
-            'dau_r7': '7일롤링', 'dau_r30': '30일롤링',
+            'dau_r7': '롤링WAU', 'dau_r30': '롤링MAU',
             'new': '신규(일)', 'new_week': '신규(주)', 'new_mon': '신규(월)',
             'react': '복귀(일)', 'react_week': '복귀(주)', 'react_mon': '복귀(월)',
             'react_rate': '복귀율(일)', 'react_rate_week': '복귀율(주)', 'react_rate_mon': '복귀율(월)',
@@ -2638,6 +2644,16 @@ def query_with_timeline(question: str, timeline: dict,
     return _answer(question, timeline, target_date, verbose=False, briefing_data=briefing_data)
 
 
+def query_with_timeline_stream(question: str, timeline: dict,
+                               target_date: str = None,
+                               briefing_data: dict = None):
+    """스트리밍용 — (system, context, max_tokens, chart_data) 반환. Claude 호출 없음."""
+    if not timeline:
+        return None, None, None, None
+    return _answer(question, timeline, target_date, verbose=False,
+                   briefing_data=briefing_data, _return_context=True)
+
+
 # intent별 max_tokens 상한
 _INTENT_TOKENS = {
     'snapshot': 700, 'trend': 800, 'compare': 800, 'compare_trend': 800, 'dual_trend': 800,
@@ -2647,7 +2663,7 @@ _INTENT_TOKENS = {
 }
 
 
-def _answer(question, timeline, target_date, verbose, briefing_data=None):
+def _answer(question, timeline, target_date, verbose, briefing_data=None, _return_context=False):
     if verbose:
         print("  [2/3] 의도 분류 중...", flush=True)
     available_dates = get_available_dates(timeline)
@@ -2729,8 +2745,8 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
             'dau':        ('DAU', 'dau', '일간 사용자'),
             'wau':        ('WAU', 'wau'),
             'mau':        ('MAU', 'mau'),
-            'dau_r7':     ('7일롤링', 'R7', 'r7', '7일 롤링', '7일롤링DAU'),
-            'dau_r30':    ('30일롤링', 'R30', 'r30', '30일 롤링', '30일롤링DAU'),
+            'dau_r7':     ('롤링 7일 WAU', '롤링WAU', '7일롤링', 'R7', 'r7', '7일 롤링', '7일롤링DAU', '7일WAU', '7일MAU', '최근7일 활성사용자'),
+            'dau_r30':    ('롤링 30일 MAU', '롤링MAU', '30일롤링', 'R30', 'r30', '30일 롤링', '30일롤링DAU', '30일MAU', '최근30일 활성사용자'),
             'new':        ('신규 사용자', '신규자', '신규수'),
             'react_rate': ('복귀율',),
             'churn':      ('이탈률', '이탈율'),
@@ -2901,7 +2917,10 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None):
             " 실청취율·깊은청취율·이탈률로 근거를 보완하세요."
             " 마크다운 테이블 없이 서술형으로 작성하세요."
         )
-    answer_text = call_claude(QUERY_SYSTEM_PROMPT + date_system + intent_note + _load_rules(), context, max_tokens=max_tokens)
+    full_system = QUERY_SYSTEM_PROMPT + date_system + intent_note + _load_rules()
+    if _return_context:
+        return full_system, context, max_tokens, chart_data
+    answer_text = call_claude(full_system, context, max_tokens=max_tokens)
     return {"answer": answer_text, "chart_data": chart_data}
 
 

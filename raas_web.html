@@ -330,8 +330,7 @@ body{
 
 /* ── CHARTS (AI answer blocks) ── */
 .ai-chart-box{
-  margin:10px 0;background:var(--bg2);border:1px solid var(--line);
-  border-radius:10px;padding:12px;overflow:hidden;
+  margin:10px 0;padding:12px;overflow:hidden;
 }
 .ai-chart-meta{
   display:flex;justify-content:space-between;align-items:flex-start;
@@ -403,6 +402,7 @@ body{
 }
 @media(max-width:600px){
   .thread-inner{padding:0 14px}
+  .msg-ai-text{line-height:1.4}
 }
 </style>
 </head>
@@ -443,7 +443,6 @@ body{
       </svg>
     </button>
     <span class="chat-header-title">고릴라 라디오 데이터 어시스턴트</span>
-    <span class="chat-header-meta" id="headerDate">—</span>
     <button class="btn-icon" id="btnToggleKpi" title="KPI 패널">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -510,12 +509,13 @@ const RAAS_USER_ID = (() => {
 const QUICK_QUERIES = [
   '어제 DAU는?',
   '이번 주 DAU 추이',
-  '파워FM vs 러브FM DAU 비교',
-  '깊은청취율 TOP5 프로그램',
+  '파워FM vs 러브FM DAU 추이',
+  '컬투쇼 유지율 현황',
+  '프로그램별 MAU 순위',
   '최근 이탈율 변화',
   '신규 유입 트렌드',
   '전체 종합 지표 요약',
-  'D1 유지율 현황',
+  'RAAS에는 어떤 지표들이 있나요?',
 ];
 
 // ────────────────────────────────────────────────
@@ -542,6 +542,24 @@ function _cleanQCache() {
   _saveQCache(arr);
 }
 
+// 데이터 버전 체크 — Splunk/CSV 갱신 시 캐시 자동 무효화
+async function _checkDataVersion() {
+  try {
+    const res = await fetch('/api/timeline/meta');
+    if (!res.ok) return;
+    const meta = await res.json();
+    const newVer = meta.date_max;
+    if (!newVer) return;
+    const storedVer = localStorage.getItem('raas_data_version');
+    if (storedVer !== newVer) {
+      // 데이터 갱신됨 → 캐시된 답변 HTML 전체 무효화
+      const arr = _loadQCache().map(e => ({ ...e, answerHTML: null }));
+      _saveQCache(arr);
+      localStorage.setItem('raas_data_version', newVer);
+    }
+  } catch (_) {}
+}
+
 function _getCachedAnswer(question) {
   const refresh = _todayRefresh();
   return _loadQCache()
@@ -563,7 +581,6 @@ function _saveCachedAnswer(question, answerHTML) {
   const d = new Date();
   const s = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
   document.getElementById('sidebarDate').textContent = s;
-  document.getElementById('headerDate').textContent = s;
 })();
 
 // ────────────────────────────────────────────────
@@ -573,6 +590,9 @@ function escapeHtml(s) {
   if (s == null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+function renderAiText(s) {
+  return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 }
 function fmtK(v) {
   if (v == null || isNaN(v)) return '—';
@@ -648,12 +668,19 @@ function _buildPeriodBtns(totalPts, id, handlerName, cadence, hintDays) {
 }
 
 function _sliceChart(chart, days) {
-  const pts = chart.points.slice(-days);
-  // 비교선: initial_days 이하 기간만 표시 (그 이상은 prev 길이 불일치로 숨김)
-  const withinPrev = !chart.initial_days || days <= chart.initial_days;
-  const prev = (withinPrev && chart.points_prev)
-    ? chart.points_prev.slice(-Math.min(days, chart.points_prev.length))
-    : null;
+  const allPts = chart.points;          // 전체 히스토리 (chartStore에 보존)
+  const pts = allPts.slice(-days);
+  // 비교선: 선택된 days마다 동적 계산 — daily는 7의 배수로 정렬해 요일 매칭
+  let prev = null;
+  const cadence = chart.cadence || 'daily';
+  const prevEnd = allPts.length - days; // 현재 창 시작 인덱스
+  if (prevEnd > 0) {
+    const alignedDays = cadence === 'daily'
+      ? Math.max(7, Math.round(days / 7) * 7)
+      : days;
+    const prevSlice = allPts.slice(Math.max(0, prevEnd - alignedDays), prevEnd);
+    if (prevSlice.length >= 2) prev = prevSlice;
+  }
   const vals = pts.map(p => p.value);
   const first = vals[0], last = vals[vals.length-1];
   const chg = first ? Math.round((last-first)/first*1000)/10 : null;
@@ -685,25 +712,30 @@ function _dsSetPeriod(id, days) {
 // ────────────────────────────────────────────────
 // SVG CHART RENDERERS
 // ────────────────────────────────────────────────
+function _chartFs()     { return window.innerWidth < 600 ? '24px' : '15px'; } // SVG 축 라벨·값
+function _chartFsMeta() { return window.innerWidth < 600 ? '15px' : '15px'; } // HTML legend·평균
+function _chartFsSm()   { return window.innerWidth < 600 ? '15px' : '15px'; } // HTML 보조 텍스트
+
 function _xLabels(pts, W, padX, H, xStep) {
+  const fs = _chartFs();
   if (pts.length <= 10) {
     return pts.map((p,i) => {
       const dow = _DAYS_KO[new Date(p.date).getDay()];
-      return `<text x="${(padX+i*xStep).toFixed(1)}" y="${H+11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}(${dow})</text>`;
+      return `<text x="${(padX+i*xStep).toFixed(1)}" y="${H+14}" text-anchor="middle" fill="var(--dim)" style="font-size:${fs}">${p.date.slice(5)}(${dow})</text>`;
     }).join('');
   } else if (pts.length <= 20) {
     return pts.map((p,i) => i%2!==0 ? '' :
-      `<text x="${(padX+i*xStep).toFixed(1)}" y="${H+11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}</text>`
+      `<text x="${(padX+i*xStep).toFixed(1)}" y="${H+14}" text-anchor="middle" fill="var(--dim)" style="font-size:${fs}">${p.date.slice(5)}</text>`
     ).join('');
   }
   return pts.map((p,i) => new Date(p.date).getDay()!==1 ? '' :
-    `<text x="${(padX+i*xStep).toFixed(1)}" y="${H+11}" text-anchor="middle" fill="var(--dim)" style="font-size:9px">${p.date.slice(5)}</text>`
+    `<text x="${(padX+i*xStep).toFixed(1)}" y="${H+14}" text-anchor="middle" fill="var(--dim)" style="font-size:${fs}">${p.date.slice(5)}</text>`
   ).join('');
 }
 
 function _renderSparklineSVG(chart) {
   const pts = chart.points;
-  const W = 600, H = 220, padX = 10, padY = 18;
+  const W = 600, H = 390, padX = 10, padY = 18;
   const isRate = chart.unit === '%';
   const fmtVal = v => isRate ? `${v.toFixed(1)}%` : v.toLocaleString();
   const values = pts.map(p => p.value);
@@ -729,7 +761,7 @@ function _renderSparklineSVG(chart) {
     if (!r) return '';
     return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${r}" fill="${fill}"><title>${c.date}: ${fmtVal(c.value)}</title></circle>`;
   }).join('');
-  const ls = 'font-size:9px;font-family:var(--mono)';
+  const ls = `font-size:${_chartFs()};font-family:var(--mono)`;
   const maxC=coords[maxIdx], minC=coords[minIdx];
   const mxLx=Math.min(Math.max(maxC.x,18),W-18), mnLx=Math.min(Math.max(minC.x,18),W-18);
   const maxLabel=`<text x="${mxLx.toFixed(1)}" y="${(maxC.y-6).toFixed(1)}" text-anchor="middle" fill="#1d9e75" style="${ls}">${fmtVal(currMaxV)}</text>`;
@@ -739,20 +771,21 @@ function _renderSparklineSVG(chart) {
   const avgLine = `<line x1="${padX}" y1="${avgY.toFixed(1)}" x2="${W-padX}" y2="${avgY.toFixed(1)}" stroke="var(--dim)" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>`;
   let prevHTML = '';
   if (hasPrev) {
-    const pa = prevPts.slice(-pts.length), pxs=(W-padX*2)/Math.max(pa.length-1,1);
-    const pc = pa.map((p,i)=>({x:padX+i*pxs, y:padY+((maxV-p.value)/rangeV)*(H-padY*2)}));
+    // slice(0, pts.length): 시작점 기준 정렬 — prev[0]과 pts[0]이 같은 요일
+    const pa = prevPts.slice(0, pts.length);
+    const pc = pa.map((p,i)=>({x:padX+i*xStep, y:padY+((maxV-p.value)/rangeV)*(H-padY*2)}));
     prevHTML = `<polyline points="${pc.map(c=>`${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ')}" fill="none" stroke="var(--dim)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.55"/>`;
   }
   const summary = chart.summary || {};
   const changeTxt = summary.change_pct!=null
     ? `<span style="color:${summary.change_pct>=0?'#1d9e75':'#e24b4a'};font-weight:600;">${summary.change_pct>=0?'+':''}${summary.change_pct}%</span>` : '';
-  const avgTxt = `<span style="color:var(--sub);font-size:11px;">평균 ${fmtVal(Math.round(avgV*10)/10)}</span>`;
-  const prevLeg = hasPrev ? `<span style="color:var(--dim);font-size:10px;margin-left:8px;">— 이번 / - - 전기간</span>` : '';
+  const avgTxt = `<span style="color:var(--sub);font-size:${_chartFsMeta()};">평균 ${fmtVal(Math.round(avgV*10)/10)}</span>`;
+  const prevLeg = hasPrev ? `<span style="color:var(--dim);font-size:${_chartFsSm()};margin-left:8px;">— 이번 / - - 전기간</span>` : '';
   return `<div class="ai-chart-meta">
     <span>${escapeHtml(chart.title||chart.metric||'')} · ${pts[0].date} ~ ${pts[pts.length-1].date}</span>
     <span>${avgTxt} ${changeTxt}${prevLeg}</span>
   </div>
-  <svg viewBox="0 0 ${W} ${H+14}" style="width:100%;height:${H+14}px;overflow:visible;display:block;">
+  <svg viewBox="0 0 ${W} ${H+22}" style="width:100%;overflow:visible;display:block;">
     <polygon points="${area}" fill="#185fa5" opacity="0.08"/>
     ${prevHTML}
     <polyline points="${polyline}" fill="none" stroke="#185fa5" stroke-width="2"/>
@@ -775,38 +808,59 @@ function renderSparkline(chart) {
 
 function _renderMultiSVG(chart) {
   const series = chart.series || [];
-  const W=600,H=220,padX=10,padY=18;
+  const W=600, H=390, padX=50, padR=10, padY=18;
+  const fs=_chartFs();
   const isRate = chart.unit==='%';
   const fmtVal = v => isRate ? `${v.toFixed(1)}%` : v.toLocaleString();
   const COLORS = ['#185fa5','#1d9e75','#d97706','#dc2626','#7c3aed'];
   const allVals = series.flatMap(s=>s.points.map(p=>p.value));
   const minV=Math.min(...allVals),maxV=Math.max(...allVals),rangeV=maxV-minV||1;
   const refPts = series[0].points;
-  const xStep = (W-padX*2)/Math.max(refPts.length-1,1);
+  const plotW = W - padX - padR;
+  const yBottom = H - padY;
+  const xStep = plotW / Math.max(refPts.length-1, 1);
+  const GRID_N = 4;
+  const _rndStep = isRate ? 10 : (rangeV>=1000000?100000 : rangeV>=100000?10000 : rangeV>=10000?1000 : rangeV>=1000?100 : rangeV>=100?10 : 1);
+  const _fmtAxis = v => {
+    const r = Math.round(v / _rndStep) * _rndStep;
+    if (isRate) return `${r}%`;
+    if (Math.abs(r)>=1000000) return `${+(r/1000000).toFixed(1)}M`;
+    if (Math.abs(r)>=10000)   return `${Math.round(r/1000)}K`;
+    if (Math.abs(r)>=1000)    return `${+(r/1000).toFixed(1)}K`;
+    return `${r}`;
+  };
+  const gridSvg = Array.from({length: GRID_N}, (_,i) => {
+    const frac = i / (GRID_N - 1);
+    const gy = (padY + frac * (H - padY*2)).toFixed(1);
+    const gv = maxV - frac * rangeV;
+    return `<line x1="${padX}" y1="${gy}" x2="${padX+plotW}" y2="${gy}" stroke="var(--dim)" stroke-width="0.5" opacity="0.2"/>
+      <text x="${padX-5}" y="${(+gy+4).toFixed(1)}" text-anchor="end" fill="var(--dim)" style="font-size:${_chartFs()};font-family:var(--mono)">${_fmtAxis(gv)}</text>`;
+  }).join('');
+  const axesSvg = `<line x1="${padX}" y1="${padY}" x2="${padX}" y2="${yBottom}" stroke="var(--dim)" stroke-width="1" opacity="0.4"/>
+    <line x1="${padX}" y1="${yBottom}" x2="${padX+plotW}" y2="${yBottom}" stroke="var(--dim)" stroke-width="1" opacity="0.4"/>`;
   const seriesLines = series.map((s,si) => {
     const color = s.color||COLORS[si%COLORS.length];
-    const sXs = (W-padX*2)/Math.max(s.points.length-1,1);
+    const sXs = plotW / Math.max(s.points.length-1, 1);
     const sc = s.points.map((p,i)=>({x:padX+i*sXs,y:padY+((maxV-p.value)/rangeV)*(H-padY*2),date:p.date,value:p.value}));
     const pl = sc.map(c=>`${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
     const lc = sc[sc.length-1];
     return `<polyline points="${pl}" fill="none" stroke="${color}" stroke-width="2"/>
       <circle cx="${lc.x.toFixed(1)}" cy="${lc.y.toFixed(1)}" r="3.5" fill="${color}"><title>${escapeHtml(s.label)} ${lc.date}: ${fmtVal(lc.value)}</title></circle>
-      <text x="${(lc.x+5).toFixed(1)}" y="${(lc.y+3.5).toFixed(1)}" fill="${color}" style="font-size:9px;font-family:var(--mono)">${fmtVal(lc.value)}</text>`;
+      <text x="${(lc.x-6).toFixed(1)}" y="${(lc.y-6).toFixed(1)}" text-anchor="end" fill="${color}" style="font-size:${fs};font-family:var(--mono)">${fmtVal(lc.value)}</text>`;
   }).join('');
   const legend = series.map((s,si) => {
     const color=s.color||COLORS[si%COLORS.length];
     const latest=s.points[s.points.length-1]?.value;
     return `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;">
       <svg width="16" height="2" viewBox="0 0 16 2" style="vertical-align:middle;"><line x1="0" y1="1" x2="16" y2="1" stroke="${color}" stroke-width="2"/></svg>
-      <span style="font-size:11px;color:var(--sub)">${escapeHtml(s.label)}${latest!=null?' '+fmtVal(latest):''}</span></span>`;
+      <span style="font-size:${_chartFsMeta()};color:var(--sub)">${escapeHtml(s.label)}${latest!=null?' '+fmtVal(latest):''}</span></span>`;
   }).join('');
   return `<div class="ai-chart-meta">
     <span>${escapeHtml(chart.title||'')} · ${refPts[0]?.date} ~ ${refPts[refPts.length-1]?.date}</span>
     <span>${legend}</span>
   </div>
-  <svg viewBox="0 0 ${W} ${H+14}" style="width:100%;height:${H+14}px;overflow:visible;display:block;">
-    <text x="${padX+2}" y="${padY+4}" text-anchor="start" fill="var(--dim)" style="font-size:9px;font-family:var(--mono)">${fmtVal(maxV)}</text>
-    <text x="${padX+2}" y="${H-2}" text-anchor="start" fill="var(--dim)" style="font-size:9px;font-family:var(--mono)">${fmtVal(minV)}</text>
+  <svg viewBox="0 0 ${W} ${H+22}" style="width:100%;overflow:visible;display:block;">
+    ${gridSvg}${axesSvg}
     ${seriesLines}${_xLabels(refPts,W,padX,H,xStep)}
   </svg>`;
 }
@@ -828,7 +882,8 @@ function renderMultiSparkline(chart) {
 function _renderDualSVG(chart) {
   const series = chart.series||[];
   if (series.length < 2) return '';
-  const W=600,H=220,padX=10,padY=18;
+  const fs=_chartFs();
+  const W=600,H=390,padX=10,padY=18;
   const COLORS=['#185fa5','#1d9e75','#d97706'];
   const units = series.map(s=>s.unit||'');
   const sameUnit = units.every(u=>u===units[0]);
@@ -848,8 +903,8 @@ function _renderDualSVG(chart) {
       const smx=Math.max(...vals), smn=Math.min(...vals);
       const mxC=sc[vals.indexOf(smx)], mnC=sc[vals.indexOf(smn)];
       const anchor=si===0?'start':'end', lx=si===0?padX+2:W-padX-2;
-      sideLabels=`<text x="${lx}" y="${(mxC.y-3).toFixed(1)}" text-anchor="${anchor}" fill="${color}" style="font-size:9px;font-family:var(--mono)">${fmtV(smx)}</text>
-        <text x="${lx}" y="${(mnC.y+10).toFixed(1)}" text-anchor="${anchor}" fill="${color}" style="font-size:9px;font-family:var(--mono)">${fmtV(smn)}</text>`;
+      sideLabels=`<text x="${lx}" y="${(mxC.y-3).toFixed(1)}" text-anchor="${anchor}" fill="${color}" style="font-size:${fs};font-family:var(--mono)">${fmtV(smx)}</text>
+        <text x="${lx}" y="${(mnC.y+10).toFixed(1)}" text-anchor="${anchor}" fill="${color}" style="font-size:${fs};font-family:var(--mono)">${fmtV(smn)}</text>`;
     }
     const fillEl = si===0 ? `<polygon points="${pl} ${sc[sc.length-1].x.toFixed(1)},${H} ${sc[0].x.toFixed(1)},${H}" fill="${color}" opacity="0.06"/>` : '';
     return `${fillEl}<polyline points="${pl}" fill="none" stroke="${color}" stroke-width="2"/>
@@ -862,18 +917,18 @@ function _renderDualSVG(chart) {
     const latest=s.points[s.points.length-1]?.value;
     return `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;">
       <svg width="16" height="2" viewBox="0 0 16 2" style="vertical-align:middle;"><line x1="0" y1="1" x2="16" y2="1" stroke="${color}" stroke-width="2"/></svg>
-      <span style="font-size:11px;color:var(--sub)">${escapeHtml(s.label)}${latest!=null?' '+fmtV(latest):''}</span></span>`;
+      <span style="font-size:${_chartFsMeta()};color:var(--sub)">${escapeHtml(s.label)}${latest!=null?' '+fmtV(latest):''}</span></span>`;
   }).join('');
   const scaleNote = sameUnit
-    ? `<div style="font-size:10px;color:var(--dim);margin-bottom:2px;">※ 공통 척도 (${escapeHtml(units[0])})</div>`
+    ? `<div style="font-size:${_chartFsSm()};color:var(--dim);margin-bottom:2px;">※ 공통 척도 (${escapeHtml(units[0])})</div>`
     : series.length===2
-      ? `<div style="font-size:10px;color:var(--dim);margin-bottom:2px;">※ 각 지표 독립 척도 (좌: ${escapeHtml(series[0]?.label||'')} / 우: ${escapeHtml(series[1]?.label||'')})</div>`
-      : `<div style="font-size:10px;color:var(--dim);margin-bottom:2px;">※ 각 지표 독립 척도</div>`;
+      ? `<div style="font-size:${_chartFsSm()};color:var(--dim);margin-bottom:2px;">※ 각 지표 독립 척도 (좌: ${escapeHtml(series[0]?.label||'')} / 우: ${escapeHtml(series[1]?.label||'')})</div>`
+      : `<div style="font-size:${_chartFsSm()};color:var(--dim);margin-bottom:2px;">※ 각 지표 독립 척도</div>`;
   return `<div class="ai-chart-meta">
     <span>${escapeHtml(chart.title||'')} · ${refPts[0]?.date} ~ ${refPts[refPts.length-1]?.date}</span>
     <span>${legend}</span>
   </div>${scaleNote}
-  <svg viewBox="0 0 ${W} ${H+14}" style="width:100%;height:${H+14}px;overflow:visible;display:block;">
+  <svg viewBox="0 0 ${W} ${H+22}" style="width:100%;overflow:visible;display:block;">
     ${seriesLines}${_xLabels(refPts,W,padX,H,xStep)}
   </svg>`;
 }
@@ -898,9 +953,9 @@ function renderBarChart(chart) {
   const bars=items.map((it,idx)=>{
     const h=Math.max((it.value/maxV)*72,6);
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
-      <span style="font-size:11px;font-weight:600;font-family:var(--mono);color:var(--text);">${it.value.toLocaleString()}</span>
+      <span style="font-size:${_chartFsMeta()};font-weight:600;font-family:var(--mono);color:var(--text);">${it.value.toLocaleString()}</span>
       <div style="width:80%;height:${h.toFixed(1)}px;background:${colors[idx%colors.length]};border-radius:3px 3px 0 0;"></div>
-      <span style="font-size:11px;color:var(--sub);text-align:center;word-break:keep-all;line-height:1.3;">${escapeHtml(it.label)}</span>
+      <span style="font-size:${_chartFsMeta()};color:var(--sub);text-align:center;word-break:keep-all;line-height:1.3;">${escapeHtml(it.label)}</span>
     </div>`;
   }).join('');
   return `<div class="ai-chart-box">
@@ -982,7 +1037,7 @@ function renderOverviewTable(chart) {
   const fmtW=v=>v==null?_D:`<span class="${v>=0?'rk-pos':'rk-neg'}">${v>=0?'+':''}${v.toFixed(1)}%</span>`;
   const COLS=[
     ['dau','DAU(일)','n','규모'],['wau','WAU(주)','n','규모'],['mau','MAU(월)','n','규모'],
-    ['dau_r7','7일롤링','n','규모'],['dau_wow','WoW(7일)','w','규모'],
+    ['dau_r7','롤링WAU','n','규모'],['dau_wow','WoW(7일)','w','규모'],
     ['dau_week_wow','WoW(전주)','w','규모'],['dau_mon_wow','WoW(전월)','w','규모'],
     ['new','신규(일)','n','신규'],['new_week','신규(주)','n','신규'],['new_mon','신규(월)','n','신규'],
     ['react','복귀(일)','n','복귀'],['react_week','복귀(주)','n','복귀'],['react_mon','복귀(월)','n','복귀'],
@@ -1056,27 +1111,29 @@ function addAiTyping() {
   return id;
 }
 
+function _buildChartHTML(chart) {
+  if (!chart) return '';
+  let h = '';
+  if (chart.type==='timeseries' && chart.points?.length>=2) h=renderSparkline(chart);
+  else if (chart.type==='timeseries_multi' && chart.series?.length>=2) h=renderMultiSparkline(chart);
+  else if (chart.type==='timeseries_dual' && chart.series?.length>=2) h=renderDualSparkline(chart);
+  else if (chart.type==='comparison' && chart.items?.length>=2) h=renderBarChart(chart);
+  else if (chart.type==='table' && chart.subtype==='overview' && chart.rows?.length) h=renderOverviewTable(chart);
+  else if (chart.type==='table' && chart.rows?.length) h=renderRankingTable(chart);
+  const src = chart.source
+    ? `<p class="ai-source">출처: ${escapeHtml(chart.source)}${chart.points?' · '+chart.points.length+'개 포인트':''}${chart.items?' · '+chart.items.length+'개 항목':''}</p>`
+    : '';
+  return h + src;
+}
+
 function fillAiMsg(id, data) {
   const el = document.getElementById(id);
   if (!el) return;
   const answer = (data && data.answer) ? data.answer : '(답변 없음)';
-  const chart = data && data.chart_data;
-  let chartHTML = '';
-  if (chart) {
-    if (chart.type==='timeseries' && chart.points?.length>=2) chartHTML=renderSparkline(chart);
-    else if (chart.type==='timeseries_multi' && chart.series?.length>=2) chartHTML=renderMultiSparkline(chart);
-    else if (chart.type==='timeseries_dual' && chart.series?.length>=2) chartHTML=renderDualSparkline(chart);
-    else if (chart.type==='comparison' && chart.items?.length>=2) chartHTML=renderBarChart(chart);
-    else if (chart.type==='table' && chart.subtype==='overview' && chart.rows?.length) chartHTML=renderOverviewTable(chart);
-    else if (chart.type==='table' && chart.rows?.length) chartHTML=renderRankingTable(chart);
-  }
-  const sourceHTML = chart?.source
-    ? `<p class="ai-source">출처: ${escapeHtml(chart.source)}${chart.points?' · '+chart.points.length+'개 포인트':''}${chart.items?' · '+chart.items.length+'개 항목':''}</p>`
-    : '';
   el.querySelector('.msg-body').innerHTML = `
     <div class="msg-ai-name">RAAS Assistant</div>
-    <div class="msg-ai-text">${escapeHtml(answer)}</div>
-    ${chartHTML}${sourceHTML}`;
+    <div class="msg-ai-text">${renderAiText(answer)}</div>
+    ${_buildChartHTML(data?.chart_data)}`;
   _scrollBottom();
 }
 
@@ -1105,19 +1162,57 @@ async function submitQuery(question) {
   document.getElementById('btnSend').disabled = true;
   addUserMsg(question);
   const aiId = addAiTyping();
+  const msgBody = document.getElementById(aiId).querySelector('.msg-body');
+
   try {
-    const res = await fetch('/api/query', {
+    const res = await fetch('/api/query/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-User-Id': RAAS_USER_ID },
       body: JSON.stringify({ question }),
     });
-    const data = await res.json();
-    fillAiMsg(aiId, data);
-    if (data?.answer) {
-      const aiEl = document.getElementById(aiId);
-      if (aiEl) _saveCachedAnswer(question, aiEl.querySelector('.msg-body').innerHTML);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    let rawText = '', chartData = null, initialized = false, streamDone = false;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch(e) { continue; }
+        if (ev.type === 'meta') {
+          chartData = ev.chart_data;
+        } else if (ev.type === 'token') {
+          if (!initialized) {
+            msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text" id="${aiId}-txt"></div>`;
+            initialized = true;
+          }
+          rawText += ev.text;
+          document.getElementById(`${aiId}-txt`).innerHTML = renderAiText(rawText);
+          _scrollBottom();
+        } else if (ev.type === 'done') {
+          msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text">${renderAiText(rawText)}</div>${_buildChartHTML(chartData)}`;
+          _saveCachedAnswer(question, msgBody.innerHTML);
+          refreshHistory();
+          _scrollBottom();
+          streamDone = true;
+          break;  // inner for loop 탈출 → 아래에서 while도 탈출
+        } else if (ev.type === 'error') {
+          msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text" style="color:var(--red);">오류: ${escapeHtml(ev.message)}</div>`;
+          streamDone = true;
+          break;
+        }
+      }
+      if (streamDone) break;  // while loop 탈출
     }
-    refreshHistory();
+    if (!initialized && !streamDone) fillAiError(aiId, '응답이 없습니다.');
   } catch (err) {
     fillAiError(aiId, err.message);
   } finally {
@@ -1414,6 +1509,7 @@ document.getElementById('btnTheme').addEventListener('click', function(){
 // INIT
 // ────────────────────────────────────────────────
 _cleanQCache();
+_checkDataVersion();  // 데이터 버전 확인 → 갱신 시 캐시 자동 무효화
 _initWelcomeChips();
 _initSidebarQueries();
 loadKpiPanel();
