@@ -342,6 +342,59 @@ class OntologyAdapter:
             "formula": self._onto.value_str(self._onto.get_one(metric_iri, "raas:formula")),
         }
 
+    def get_metric_definitions_block(self) -> str:
+        """TTL raas:definition/formula/rdfs:comment 기반 지표 정의 텍스트 블록.
+        LLM 시스템 프롬프트의 [지표 정의] 섹션을 대체한다."""
+        GROUPS = [
+            ("사용자 규모", [
+                ("raas:DAU_Day",   None),
+                ("raas:DAU_Week",  None),
+                ("raas:DAU_Month", None),
+                ("raas:DAU_R7",    None),
+                ("raas:DAU_R30",   None),
+            ]),
+            ("사용자 흐름 (신규/복귀/이탈)", [
+                ("raas:NewUser",         "raas:NewUser"),
+                ("raas:ReactivatedUser", "raas:ReactivatedUser"),
+                ("raas:ReactRate",       "raas:ReactRate"),
+                ("raas:ChurnRate",       "raas:ChurnRate"),
+            ]),
+            ("청취 품질", [
+                ("raas:RealListenRate",  "raas:RealListenRate"),
+                ("raas:DeepListenRate",  "raas:DeepListenRate"),
+                ("raas:EngageRate",      "raas:EngageRate"),
+                ("raas:HabitRate",       "raas:HabitRate"),
+            ]),
+            ("유지율", [
+                ("raas:RetentionRate_D1_All",     None),
+                ("raas:RetentionRate_D7_All",     None),
+                ("raas:RetentionRate_W1_All",     None),
+                ("raas:RetentionRate_M1_All",     None),
+                ("raas:RetentionRate_D1_NewUser", None),
+                ("raas:RetentionRate_D7_NewUser", None),
+                ("raas:RetentionRate_W1_NewUser", None),
+                ("raas:RetentionRate_M1_NewUser", None),
+            ]),
+        ]
+        lines = ["[지표 정의]"]
+        for group_name, items in GROUPS:
+            lines.append(f"\n{group_name}")
+            for variant_iri, metric_iri in items:
+                label = self._onto.label_ko(variant_iri)
+                comment = self._onto.value_str(self._onto.get_one(variant_iri, "rdfs:comment"))
+                if metric_iri:
+                    m = self._metric_dict(metric_iri)
+                    defn = m.get("definition") or comment or ""
+                    formula = m.get("formula") or ""
+                    label = label or m.get("label") or ""
+                    line = f"- {label}: {defn}"
+                    if formula:
+                        line += f" (계산식: {formula})"
+                else:
+                    line = f"- {label}: {comment}" if comment else f"- {label}"
+                lines.append(line)
+        return "\n".join(lines)
+
     def get_all_fields(self) -> list[str]:
         """온톨로지에 정의된 모든 필드명 (변형 접미사 적용 전)."""
         return list(self._field_to_variant.keys())

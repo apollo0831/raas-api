@@ -163,6 +163,114 @@ body{
 .history-empty{font-size:var(--fs-sm);color:var(--dim);padding:10px 12px;line-height:1.6}
 .hist-cached{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-right:2px}
 
+/* ── HISTORY MODAL BUTTON ── */
+.btn-history{
+  margin:4px 12px 6px;
+  display:flex;align-items:center;gap:9px;
+  padding:10px 12px;
+  background:transparent;border:none;border-radius:8px;
+  color:var(--sub);font-size:var(--fs-md);font-weight:400;
+  cursor:pointer;font-family:var(--sans);
+  transition:background .12s,color .12s;width:calc(100% - 24px);
+  line-height:1.4;
+}
+.btn-history:hover{background:var(--bg3);color:var(--text)}
+
+/* ── FEEDBACK BAR ── */
+.feedback-bar{
+  display:flex;align-items:center;gap:8px;
+  margin-top:10px;padding-top:8px;
+  border-top:1px solid var(--line);
+}
+.fb-btn{
+  display:flex;align-items:center;gap:5px;
+  padding:5px 12px;border-radius:6px;
+  border:1px solid var(--line2);background:transparent;
+  color:var(--sub);font-size:var(--fs-sm);font-family:var(--sans);
+  cursor:pointer;transition:all .12s;
+}
+.fb-btn:hover{background:var(--bg3);color:var(--text)}
+.fb-btn.fb-good.active{background:rgba(52,199,138,.15);border-color:var(--green);color:var(--green)}
+.fb-btn.fb-bad.active{background:rgba(242,107,107,.15);border-color:var(--red);color:var(--red)}
+
+/* ── HISTORY MODAL ── */
+.hist-modal{
+  display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  align-items:flex-start;justify-content:center;
+  padding:24px 16px;overflow-y:auto;
+}
+.hist-modal.open{display:flex}
+.hist-modal-inner{
+  width:100%;max-width:980px;
+  background:var(--bg1);border-radius:14px;border:1px solid var(--line2);
+  display:flex;flex-direction:column;
+  max-height:calc(100vh - 48px);overflow:hidden;
+}
+.hist-modal-hd{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 18px;border-bottom:1px solid var(--line);
+  flex-shrink:0;flex-wrap:wrap;
+}
+.hist-modal-title{font-size:var(--fs-lg);font-weight:600;flex-shrink:0}
+.hist-tabs{display:flex;gap:4px;flex-shrink:0}
+.hf-tab{
+  padding:5px 12px;border-radius:6px;
+  border:1px solid var(--line2);background:transparent;
+  color:var(--sub);font-size:var(--fs-sm);font-family:var(--sans);
+  cursor:pointer;transition:all .12s;
+}
+.hf-tab.active{background:var(--bg4);color:var(--text);border-color:var(--bg5)}
+.hf-search{
+  flex:1;min-width:120px;
+  padding:6px 12px;border-radius:7px;
+  border:1px solid var(--line2);background:var(--bg2);
+  color:var(--text);font-size:var(--fs-sm);font-family:var(--sans);outline:none;
+}
+.hf-search:focus{border-color:rgba(79,142,247,.5)}
+.hist-modal-body{flex:1;overflow-y:auto}
+.hm-row{border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s}
+.hm-row:hover .hm-summary{background:var(--bg2)}
+.hm-summary{display:flex;align-items:center;gap:10px;padding:11px 18px}
+.hm-time{font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono);white-space:nowrap;flex-shrink:0;min-width:90px}
+.hm-user{font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;flex-shrink:0;min-width:100px;overflow:hidden;text-overflow:ellipsis}
+.hm-q{flex:1;font-size:var(--fs-md);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hm-fb-icon{font-size:var(--fs-sm);flex-shrink:0;width:24px;text-align:center}
+.hm-detail{display:none;padding:0 18px 14px;border-top:1px solid var(--line);background:var(--bg0)}
+.hm-detail.open{display:block}
+.hm-detail-q{font-size:var(--fs-sm);color:var(--sub);font-weight:600;margin:10px 0 6px}
+.hm-answer{
+  font-size:var(--fs-sm);color:var(--text2);
+  white-space:pre-wrap;word-break:keep-all;line-height:1.7;
+  max-height:260px;overflow-y:auto;
+  border:1px solid var(--line);border-radius:8px;
+  padding:12px;background:var(--bg1);
+}
+.hm-actions{display:flex;align-items:center;gap:10px;margin-top:10px}
+.hm-reuse-btn{
+  padding:6px 14px;border-radius:7px;
+  background:var(--accent-soft);color:var(--accent);
+  border:1px solid rgba(79,142,247,.3);
+  font-size:var(--fs-sm);font-family:var(--sans);cursor:pointer;
+  transition:all .12s;
+}
+.hm-reuse-btn:hover{background:rgba(79,142,247,.25)}
+.hm-fb-status{font-size:var(--fs-xs);color:var(--dim)}
+.hist-modal-ft{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 18px;border-top:1px solid var(--line);
+  font-size:var(--fs-sm);color:var(--dim);flex-shrink:0;
+}
+.hm-pg-btns{display:flex;gap:4px}
+.hm-pg-btn{
+  padding:5px 12px;border-radius:6px;
+  border:1px solid var(--line2);background:transparent;
+  color:var(--sub);font-size:var(--fs-sm);font-family:var(--sans);cursor:pointer;transition:all .12s;
+}
+.hm-pg-btn:hover:not(:disabled){background:var(--bg3);color:var(--text)}
+.hm-pg-btn:disabled{opacity:.4;cursor:not-allowed}
+.hist-empty-msg{padding:40px;text-align:center;color:var(--dim);font-size:var(--fs-md)}
+
 /* ── MAIN CHAT ── */
 .chat-main{
   flex:1;height:100%;display:flex;flex-direction:column;
@@ -336,6 +444,13 @@ body{
   display:flex;justify-content:space-between;align-items:flex-start;
   gap:8px;font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;flex-wrap:wrap;
 }
+.dl-btn{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;font-size:var(--fs-xs);border-radius:5px;
+  border:1px solid var(--line2);background:transparent;color:var(--sub);
+  cursor:pointer;font-family:var(--sans);transition:all .12s;white-space:nowrap;
+}
+.dl-btn:hover{background:var(--bg3);color:var(--text);border-color:var(--accent)}
 .sp-period-btns{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
 .sp-btn{
   padding:4px 11px;font-size:var(--fs-xs);border-radius:5px;
@@ -364,16 +479,21 @@ body{
 .ov-table{border-collapse:collapse;font-size:var(--fs-sm);min-width:600px}
 .ov-group-row th{padding:4px 7px}
 .ov-group-th{text-align:center;font-size:var(--fs-xs);color:var(--dim);border-bottom:1px solid var(--line)}
-.ov-sticky{position:sticky;left:0;z-index:2;background:var(--bg2)}
-.ov-sticky2{position:sticky;left:0;z-index:3;background:var(--bg2)}
-.ov-th-no,.ov-th-name,.ov-th{padding:5px 7px;color:var(--sub);font-weight:500;text-align:right;white-space:nowrap}
+.ov-sticky{position:sticky;left:0;z-index:2;background:var(--bg2);min-width:54px;max-width:54px}
+.ov-sticky2{position:sticky;left:54px;z-index:2;background:var(--bg2)}
+.ov-th-ch,.ov-th-name,.ov-th{padding:5px 7px;color:var(--sub);font-weight:500;text-align:right;white-space:nowrap}
+.ov-th-ch{text-align:center}
 .ov-th-name{text-align:left;max-width:40vw;overflow:hidden;text-overflow:ellipsis}
-.ov-no,.ov-name,.ov-v{padding:5px 7px;border-bottom:1px solid var(--line);color:var(--text2);text-align:right;white-space:nowrap;font-family:var(--mono);font-size:var(--fs-sm)}
+.ov-ch,.ov-name,.ov-v{padding:5px 7px;border-bottom:1px solid var(--line);color:var(--text2);text-align:right;white-space:nowrap;font-family:var(--mono);font-size:var(--fs-sm)}
+.ov-ch{text-align:center;font-family:var(--sans);font-size:var(--fs-xs);color:var(--dim)}
 .ov-name{text-align:left;color:var(--text);font-family:var(--sans);max-width:40vw;overflow:hidden;text-overflow:ellipsis}
 
 /* badges */
 .pr-badge{display:inline-block;font-size:var(--fs-xs);padding:0 6px;border-radius:4px;font-weight:600;vertical-align:middle;margin-left:4px}
 .pr-badge.weekend{background:rgba(167,139,250,.2);color:var(--purple)}
+.pr-badge.live{background:rgba(239,68,68,.15);color:#ef4444}
+.pr-badge.rec{background:rgba(100,116,139,.15);color:#64748b}
+.pr-badge.bora{background:rgba(139,92,246,.2);color:#8b5cf6}
 
 /* ── RESPONSIVE ── */
 @media(max-width:900px){
@@ -423,6 +543,10 @@ body{
   <button class="btn-new-chat" id="btnNewChat">
     <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     새 대화
+  </button>
+  <button class="btn-history" onclick="openHistModal()">
+    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    이력 보기
   </button>
   <div class="sidebar-scroll">
     <div class="sidebar-section">빠른 질의</div>
@@ -507,15 +631,15 @@ const RAAS_USER_ID = (() => {
 })();
 
 const QUICK_QUERIES = [
-  '어제 DAU는?',
+  'RAAS에는 어떤 지표들이 있나',
+  '어제 MAU는?',
   '이번 주 DAU 추이',
-  '파워FM vs 러브FM DAU 추이',
-  '컬투쇼 유지율 현황',
-  '프로그램별 MAU 순위',
-  '최근 이탈율 변화',
-  '신규 유입 트렌드',
-  '전체 종합 지표 요약',
-  'RAAS에는 어떤 지표들이 있나요?',
+  '파워FM vs 러브FM 주간 신규유입 추이 비교',
+  '프로그램별 DAU 순위',
+  '철파엠 유지율 현황',
+  '지난주 컬투쇼 게스트 일자별로',
+  '어제 프로그램별로 생방송/보라 편성정보 알려줘',
+  '컬투쇼 코너 편성 알려줘',
 ];
 
 // ────────────────────────────────────────────────
@@ -973,9 +1097,12 @@ function renderRankingTable(chart) {
   const fmtRate=v=>v!=null?`${v.toFixed(1)}%`:_D;
   const fmtPct=v=>v==null?_D:`<span class="${v>=0?'rk-pos':'rk-neg'}">${v>=0?'+':''}${v.toFixed(1)}%</span>`;
   const fmtDiff=v=>v==null?_D:`<span class="${v>=0?'rk-pos':'rk-neg'}">${v>=0?'+':''}${v.toFixed(1)}pp</span>`;
-  const FMTS={num:fmtNum,pct:fmtPct,rate:fmtRate,diff:fmtDiff,share:fmtRate};
+  const fmtText=v=>v!=null&&v!==''?`<span style="font-family:var(--sans);font-size:var(--fs-xs)">${escapeHtml(String(v))}</span>`:_D;
+  const FMTS={num:fmtNum,pct:fmtPct,rate:fmtRate,diff:fmtDiff,share:fmtRate,text:fmtText};
   const SPECS={
     dau:{c:[['dau','DAU','num'],['dau_wow','WoW(7일전)','pct'],['real_rate','실청취율','rate']]},
+    dau_1min:{c:[['dau_1min','1분↑청취','num'],['dau','DAU','num'],['real_rate','실청취율','rate']]},
+    dau_10min:{c:[['dau_10min','10분↑청취','num'],['dau','DAU','num'],['real_rate','실청취율','rate']]},
     wau:{c:[['wau','WAU','num'],['dau_week_wow','WoW(전주)','pct'],['real_rate_week','실청취율','rate']]},
     mau:{c:[['mau','MAU','num'],['dau_mon_wow','WoW(전월)','pct'],['real_rate_mon','실청취율','rate']]},
     new:{c:[['new','신규(일)','num'],['new_wow','전일대비','pct'],['new_pct','DAU비중','share']]},
@@ -998,18 +1125,47 @@ function renderRankingTable(chart) {
     new_m1_ret:{c:[['new_m1_ret','M1유지(신규)','rate'],['new_m1_ret_diff','전기대비','diff']]},
   };
   const cols=(SPECS[sm]||SPECS.dau).c;
+  // extra_fields 동적 컬럼 추가 (이미 SPECS에 없는 필드만)
+  const EXTRA_COL_MAP={
+    guestname:  ['guestname','게스트','text'],
+    live_yn:    ['live_yn_v','편성','text'],
+    dau_1min:   ['dau_1min','1분↑청취','num'],
+    dau_10min:  ['dau_10min','10분↑청취','num'],
+    wau:        ['wau','WAU','num'],
+    mau:        ['mau','MAU','num'],
+    deep_rate:  ['deep_rate','깊은청취','rate'],
+    churn_rate: ['churn_rate','이탈율','rate'],
+    react_rate: ['react_rate','복귀율','rate'],
+    new:        ['new','신규(일)','num'],
+    habit_rate: ['habit_rate','습관형성','rate'],
+    engage_rate:['engage_rate','참여율','rate'],
+  };
+  const existFields=new Set(cols.map(c=>c[0]));
+  const extraCols=(chart.extra_fields||[]).filter(f=>EXTRA_COL_MAP[f]&&!existFields.has(EXTRA_COL_MAP[f][0])).map(f=>EXTRA_COL_MAP[f]);
+  const allCols=[...cols,...extraCols];
   const DEFAULT_N=10, startExp=chart.show_all||rows.length<=DEFAULT_N, hasMore=rows.length>DEFAULT_N;
   const _WE=new Set(['M05','M07','M10','M11']);
   const tbody=rows.map((r,i)=>{
     const hidden=!startExp&&i>=DEFAULT_N;
-    const tds=cols.map(([f,,fmt])=>`<td class="rk-v">${FMTS[fmt](r[f])}</td>`).join('');
+    const tds=allCols.map(([f,,fmt])=>`<td class="rk-v">${FMTS[fmt](r[f])}</td>`).join('');
     const wb=_WE.has(r.code)?'<span class="pr-badge weekend">주말</span>':'';
-    return `<tr${hidden?' class="rk-hidden"':''}><td class="rk-n">${r.rank}</td><td class="rk-name">${escapeHtml(r.name)}${wb}</td>${tds}</tr>`;
+    const lb=chart.period_ranking?'':r.live_yn==='생방송'?'<span class="pr-badge live">생</span>':r.live_yn==='녹음'?'<span class="pr-badge rec">녹</span>':'';
+    const bb=chart.period_ranking?'':r.view_radio_yn==='Y'?'<span class="pr-badge bora">보라</span>':'';
+    return `<tr${hidden?' class="rk-hidden"':''}><td class="rk-n">${r.rank}</td><td class="rk-name">${escapeHtml(r.name)}${wb}${lb}${bb}</td>${tds}</tr>`;
   }).join('');
   const toggleBtn=hasMore?`<button class="rk-toggle-btn" onclick="toggleRankingRows(this,${DEFAULT_N})">${startExp&&hasMore?'▲ 접기':`▼ 전체 보기 (${rows.length}개)`}</button>`:'';
-  const thead=cols.map(([,h])=>`<th style="text-align:right">${h}</th>`).join('');
+  const thead=allCols.map(([,h,fmt])=>`<th style="text-align:${fmt==='text'?'left':'right'}">${h}</th>`).join('');
   return `<div class="ai-chart-box">
-    <div class="ai-chart-meta"><span>${escapeHtml(chart.title||'')}</span><span>자동 시각화</span></div>
+    <div class="ai-chart-meta">
+      <span class="dl-title">${escapeHtml(chart.title||'')}</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <button class="dl-btn" onclick="downloadXLSX(this)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          엑셀
+        </button>
+        <span>자동 시각화</span>
+      </span>
+    </div>
     <div class="rk-scroll"><table class="ai-rank-table"><thead><tr><th>순위</th><th>프로그램</th>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>
     ${toggleBtn}
   </div>`;
@@ -1034,39 +1190,83 @@ function renderOverviewTable(chart) {
   const _D='<span style="color:var(--dim)">—</span>';
   const fmtN=v=>v!=null?v.toLocaleString():_D;
   const fmtR=v=>v!=null?`${v.toFixed(1)}%`:_D;
-  const fmtW=v=>v==null?_D:`<span class="${v>=0?'rk-pos':'rk-neg'}">${v>=0?'+':''}${v.toFixed(1)}%</span>`;
   const COLS=[
-    ['dau','DAU(일)','n','규모'],['wau','WAU(주)','n','규모'],['mau','MAU(월)','n','규모'],
-    ['dau_r7','롤링WAU','n','규모'],['dau_wow','WoW(7일)','w','규모'],
-    ['dau_week_wow','WoW(전주)','w','규모'],['dau_mon_wow','WoW(전월)','w','규모'],
-    ['new','신규(일)','n','신규'],['new_week','신규(주)','n','신규'],['new_mon','신규(월)','n','신규'],
-    ['react','복귀(일)','n','복귀'],['react_week','복귀(주)','n','복귀'],['react_mon','복귀(월)','n','복귀'],
-    ['react_rate','복귀율(일)','r','복귀율'],['react_rate_week','복귀율(주)','r','복귀율'],['react_rate_mon','복귀율(월)','r','복귀율'],
-    ['churn_rate','이탈율(일)','r','이탈'],['churn_rate_week','이탈율(주)','r','이탈'],['churn_rate_mon','이탈율(월)','r','이탈'],
-    ['real_rate','실청취(일)','r','실청취'],['real_rate_week','실청취(주)','r','실청취'],['real_rate_mon','실청취(월)','r','실청취'],
-    ['deep_rate','깊은청취(일)','r','깊은청취'],['deep_rate_week','깊은청취(주)','r','깊은청취'],['deep_rate_mon','깊은청취(월)','r','깊은청취'],
-    ['engage_rate','참여율(일)','r','참여'],['engage_rate_week','참여율(주)','r','참여'],['engage_rate_mon','참여율(월)','r','참여'],
-    ['habit_rate','습관(일)','r','습관'],['habit_rate_week','습관(주)','r','습관'],['habit_rate_mon','습관(월)','r','습관'],
-    ['d1_ret','D1유지','r','유지율(전체)'],['d7_ret','D7유지','r','유지율(전체)'],['w1_ret','W1유지','r','유지율(전체)'],['m1_ret','M1유지','r','유지율(전체)'],
-    ['new_d1_ret','D1유지','r','유지율(신규)'],['new_d7_ret','D7유지','r','유지율(신규)'],['new_w1_ret','W1유지','r','유지율(신규)'],['new_m1_ret','M1유지','r','유지율(신규)'],
+    ['dau',         'DAU(일)',    'n','사용자규모'],
+    ['wau',         'WAU(주)',    'n','사용자규모'],
+    ['mau',         'MAU(월)',    'n','사용자규모'],
+    ['dau_r7',      '롤링WAU',   'n','사용자규모'],
+    ['dau_r30',     '롤링MAU',   'n','사용자규모'],
+    ['new',         '신규(일)',   'n','유입/이탈'],
+    ['new_week',    '신규(주)',   'n','유입/이탈'],
+    ['new_mon',     '신규(월)',   'n','유입/이탈'],
+    ['react',       '복귀(일)',   'n','유입/이탈'],
+    ['react_week',  '복귀(주)',   'n','유입/이탈'],
+    ['react_mon',   '복귀(월)',   'n','유입/이탈'],
+    ['react_rate',      '복귀율(일)','r','유입/이탈'],
+    ['react_rate_week', '복귀율(주)','r','유입/이탈'],
+    ['react_rate_mon',  '복귀율(월)','r','유입/이탈'],
+    ['churn_rate',      '이탈율(일)','r','유입/이탈'],
+    ['churn_rate_week', '이탈율(주)','r','유입/이탈'],
+    ['churn_rate_mon',  '이탈율(월)','r','유입/이탈'],
+    ['real_rate',       '실청취(일)', 'r','품질'],
+    ['real_rate_week',  '실청취(주)', 'r','품질'],
+    ['real_rate_mon',   '실청취(월)', 'r','품질'],
+    ['deep_rate',       '깊은청취(일)','r','품질'],
+    ['deep_rate_week',  '깊은청취(주)','r','품질'],
+    ['deep_rate_mon',   '깊은청취(월)','r','품질'],
+    ['engage_rate',     '참여율(일)', 'r','품질'],
+    ['engage_rate_week','참여율(주)', 'r','품질'],
+    ['engage_rate_mon', '참여율(월)', 'r','품질'],
+    ['habit_rate',      '습관형성(일)','r','품질'],
+    ['habit_rate_week', '습관형성(주)','r','품질'],
+    ['habit_rate_mon',  '습관형성(월)','r','품질'],
+    ['d1_ret',    '전체D1유지','r','유지율'],
+    ['d7_ret',    '전체D7유지','r','유지율'],
+    ['w1_ret',    '전체W1유지','r','유지율'],
+    ['m1_ret',    '전체M1유지','r','유지율'],
+    ['new_d1_ret','신규D1유지','r','유지율'],
+    ['new_d7_ret','신규D7유지','r','유지율'],
+    ['new_w1_ret','신규W1유지','r','유지율'],
+    ['new_m1_ret','신규M1유지','r','유지율'],
   ];
-  const FMTS={n:fmtN,r:fmtR,w:fmtW};
+  const FMTS={n:fmtN,r:fmtR};
   const activeCols=chart.columns?COLS.filter(([f])=>chart.columns.includes(f)):COLS;
+  // 카테고리 그룹 계산 (고정 3열 포함)
   const groups=[];let cg=null,cs=0;
   for(const[,,,g]of activeCols){if(g===cg){cs++;}else{if(cg)groups.push([cg,cs]);cg=g;cs=1;}}
   if(cg)groups.push([cg,cs]);
   const _WE=new Set(['M05','M07','M10','M11']);
-  const _CH={'파워FM':'rgba(239,68,68,.06)','러브FM':'rgba(132,204,22,.06)'};
-  const groupRow=`<tr class="ov-group-row"><th colspan="2" style="position:sticky;left:0;z-index:3;background:var(--bg2)"></th>${groups.map(([g,span])=>`<th colspan="${span}" class="ov-group-th">${g}</th>`).join('')}</tr>`;
-  const headerRow=`<tr><th class="ov-sticky ov-th-no">편성순</th><th class="ov-sticky2 ov-th-name">프로그램</th>${activeCols.map(([,h])=>`<th class="ov-th">${h}</th>`).join('')}</tr>`;
-  const bodyRows=rows.map((r,i)=>{
+  const _BG={'파워FM':'rgba(239,68,68,.05)','러브FM':'rgba(132,204,22,.05)'};
+  // thead: 그룹 행 (고정 3열 + 카테고리 span) + 헤더 행
+  const groupRow=`<tr class="ov-group-row">
+    <th colspan="3" style="position:sticky;left:0;z-index:3;background:var(--bg2)"></th>
+    ${groups.map(([g,span])=>`<th colspan="${span}" class="ov-group-th">${g}</th>`).join('')}
+  </tr>`;
+  const headerRow=`<tr>
+    <th class="ov-sticky ov-th-ch">채널</th>
+    <th class="ov-sticky2 ov-th-name">프로그램</th>
+    <th class="ov-th" style="text-align:center">편성시간</th>
+    ${activeCols.map(([,h])=>`<th class="ov-th">${h}</th>`).join('')}
+  </tr>`;
+  const bodyRows=rows.map(r=>{
     const wb=_WE.has(r.code)?'<span class="pr-badge weekend">주말</span>':'';
-    const bg=_CH[r.channel]||'';
+    const lb=r.live_yn==='생방송'?'<span class="pr-badge live">생</span>':r.live_yn==='녹음'?'<span class="pr-badge rec">녹</span>':'';
+    const bb=r.view_radio_yn==='Y'?'<span class="pr-badge bora">보라</span>':'';
+    const bg=_BG[r.channel]||'';
     const tds=activeCols.map(([f,,fmt])=>`<td class="ov-v">${FMTS[fmt](r[f])}</td>`).join('');
-    return `<tr${bg?` style="background:${bg}"`:''}><td class="ov-sticky ov-no">${i+1}</td><td class="ov-sticky2 ov-name">${escapeHtml(r.name)}${wb}</td>${tds}</tr>`;
+    return `<tr${bg?` style="background:${bg}"`:''}><td class="ov-sticky ov-ch">${escapeHtml(r.channel||'')}</td><td class="ov-sticky2 ov-name">${escapeHtml(r.name)}${wb}${lb}${bb}</td><td class="ov-v" style="text-align:center;font-family:var(--sans)">${escapeHtml(r.airtime||'')}</td>${tds}</tr>`;
   }).join('');
   return `<div class="ai-chart-box ov-wrap">
-    <div class="ai-chart-meta"><span>${escapeHtml(chart.title||'')}</span><span>자동 시각화</span></div>
+    <div class="ai-chart-meta">
+      <span class="dl-title">${escapeHtml(chart.title||'')}</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <button class="dl-btn" onclick="downloadXLSX(this)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          엑셀
+        </button>
+        <span>자동 시각화</span>
+      </span>
+    </div>
     <div class="ov-scroll"><table class="ov-table"><thead>${groupRow}${headerRow}</thead><tbody>${bodyRows}</tbody></table></div>
   </div>`;
 }
@@ -1113,6 +1313,9 @@ function addAiTyping() {
 
 function _buildChartHTML(chart) {
   if (!chart) return '';
+  if (chart.type === 'multi_chart' && chart.charts?.length) {
+    return chart.charts.map(c => _buildChartHTML(c)).join('');
+  }
   let h = '';
   if (chart.type==='timeseries' && chart.points?.length>=2) h=renderSparkline(chart);
   else if (chart.type==='timeseries_multi' && chart.series?.length>=2) h=renderMultiSparkline(chart);
@@ -1198,8 +1401,10 @@ async function submitQuery(question) {
           document.getElementById(`${aiId}-txt`).innerHTML = renderAiText(rawText);
           _scrollBottom();
         } else if (ev.type === 'done') {
+          const qid = ev.query_id || null;
           msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text">${renderAiText(rawText)}</div>${_buildChartHTML(chartData)}`;
           _saveCachedAnswer(question, msgBody.innerHTML);
+          if (qid) msgBody.insertAdjacentHTML('beforeend', _buildFeedbackBar(qid));
           refreshHistory();
           _scrollBottom();
           streamDone = true;
@@ -1410,6 +1615,162 @@ async function refreshHistory() {
 }
 
 // ────────────────────────────────────────────────
+// FEEDBACK
+// ────────────────────────────────────────────────
+function _buildFeedbackBar(queryId) {
+  return `<div class="feedback-bar" id="fb-${queryId}">
+    <button class="fb-btn fb-good" onclick="sendFeedback(${queryId},1,this)">👍 도움됨</button>
+    <button class="fb-btn fb-bad"  onclick="sendFeedback(${queryId},-1,this)">👎 부정확</button>
+  </div>`;
+}
+
+async function sendFeedback(queryId, val, btn) {
+  const bar = document.getElementById('fb-' + queryId);
+  if (!bar) return;
+  try {
+    const res = await fetch('/api/query/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: queryId, feedback: val }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      bar.querySelectorAll('.fb-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  } catch (_) {}
+}
+
+// ────────────────────────────────────────────────
+// HISTORY MODAL
+// ────────────────────────────────────────────────
+let _histDays = 0, _histOffset = 0, _histTotal = 0;
+const HIST_PAGE_SIZE = 20;
+let _histAllItems = [];
+
+function openHistModal() {
+  _histOffset = 0;
+  document.getElementById('histSearch').value = '';
+  document.getElementById('histModal').classList.add('open');
+  loadHistAll();
+}
+
+function closeHistModal() {
+  document.getElementById('histModal').classList.remove('open');
+}
+
+function setHistDays(days, btn) {
+  _histDays = days;
+  _histOffset = 0;
+  document.querySelectorAll('.hf-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadHistAll();
+}
+
+function histPage(dir) {
+  _histOffset = Math.max(0, _histOffset + dir * HIST_PAGE_SIZE);
+  loadHistAll();
+}
+
+function _histFmt(iso) {
+  const d = new Date((iso.includes('Z') || iso.includes('+')) ? iso : iso + 'Z');
+  const now = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  const isToday = d.toDateString() === now.toDateString();
+  return isToday ? hh + ':' + mi : mm + '-' + dd + ' ' + hh + ':' + mi;
+}
+
+function _fbIcon(fb) {
+  if (fb === 1)  return '<span class="hm-fb-icon" title="도움됨">👍</span>';
+  if (fb === -1) return '<span class="hm-fb-icon" title="부정확">👎</span>';
+  return '<span class="hm-fb-icon" style="color:var(--dim)" title="미평가">—</span>';
+}
+
+async function loadHistAll() {
+  const body = document.getElementById('histModalBody');
+  body.innerHTML = '<div class="hist-empty-msg">로드 중...</div>';
+  try {
+    const params = new URLSearchParams({ limit: HIST_PAGE_SIZE, offset: _histOffset, days: _histDays });
+    const res  = await fetch('/api/query/history/all?' + params);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    _histTotal    = data.total;
+    _histAllItems = data.items;
+    _renderHistRows(data.items);
+    _updateHistFooter();
+  } catch (e) {
+    body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function _filterHistRows() {
+  const kw = document.getElementById('histSearch').value.trim().toLowerCase();
+  if (!kw) { _renderHistRows(_histAllItems); return; }
+  _renderHistRows(_histAllItems.filter(it => it.question.toLowerCase().includes(kw)));
+}
+
+function _renderHistRows(items) {
+  const body = document.getElementById('histModalBody');
+  if (!items.length) {
+    body.innerHTML = '<div class="hist-empty-msg">질의 내역이 없습니다.</div>';
+    return;
+  }
+  body.innerHTML = items.map(it => {
+    const time    = _histFmt(it.created_at);
+    const user    = (it.user_name || '').length > 18 ? (it.user_name || '').slice(0, 16) + '…' : (it.user_name || '—');
+    const qShort  = it.question.length > 60 ? it.question.slice(0, 58) + '…' : it.question;
+    const fbStatus = it.feedback === 1 ? '👍 도움됨' : it.feedback === -1 ? '👎 부정확' : '미평가';
+    return `
+    <div class="hm-row" onclick="_toggleHmRow(this)">
+      <div class="hm-summary">
+        <span class="hm-time">${escapeHtml(time)}</span>
+        <span class="hm-user">${escapeHtml(user)}</span>
+        <span class="hm-q">${escapeHtml(qShort)}</span>
+        ${_fbIcon(it.feedback)}
+      </div>
+      <div class="hm-detail">
+        <div class="hm-detail-q">Q. ${escapeHtml(it.question)}</div>
+        <div class="hm-answer">${renderAiText(it.answer || '')}</div>
+        <div class="hm-actions">
+          <button class="hm-reuse-btn" data-q="${escapeHtml(it.question)}"
+            onclick="event.stopPropagation();_reuseHistQuery(this)">이 질의 다시 하기</button>
+          <span class="hm-fb-status">${escapeHtml(fbStatus)}</span>
+          ${(it.input_tokens != null) ? `<span class="hm-fb-status" style="margin-left:8px">↑${it.input_tokens.toLocaleString()} ↓${(it.output_tokens||0).toLocaleString()} tok</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _toggleHmRow(row) {
+  row.querySelector('.hm-detail').classList.toggle('open');
+}
+
+function _reuseHistQuery(btn) {
+  closeHistModal();
+  submitQuery(btn.dataset.q);
+}
+
+function _updateHistFooter() {
+  const from = _histTotal ? _histOffset + 1 : 0;
+  const to   = Math.min(_histOffset + HIST_PAGE_SIZE, _histTotal);
+  document.getElementById('histModalCount').textContent =
+    _histTotal ? `${from}–${to} / 전체 ${_histTotal.toLocaleString()}건` : '0건';
+  document.getElementById('hmPgPrev').disabled = _histOffset === 0;
+  document.getElementById('hmPgNext').disabled = _histOffset + HIST_PAGE_SIZE >= _histTotal;
+}
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'histModal') closeHistModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeHistModal();
+});
+
+// ────────────────────────────────────────────────
 // KPI PANEL
 // ────────────────────────────────────────────────
 async function loadKpiPanel() {
@@ -1514,6 +1875,133 @@ _initWelcomeChips();
 _initSidebarQueries();
 loadKpiPanel();
 refreshHistory();
+</script>
+
+<!-- ── HISTORY MODAL ── -->
+<div class="hist-modal" id="histModal">
+  <div class="hist-modal-inner">
+    <div class="hist-modal-hd">
+      <span class="hist-modal-title">질의 이력</span>
+      <div class="hist-tabs">
+        <button class="hf-tab active" onclick="setHistDays(0,this)">전체</button>
+        <button class="hf-tab" onclick="setHistDays(7,this)">최근 7일</button>
+        <button class="hf-tab" onclick="setHistDays(1,this)">오늘</button>
+      </div>
+      <input class="hf-search" id="histSearch" placeholder="질문 검색..." oninput="_filterHistRows()">
+      <button class="btn-icon" onclick="closeHistModal()" title="닫기">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="hist-modal-body" id="histModalBody">
+      <div class="hist-empty-msg">로드 중...</div>
+    </div>
+    <div class="hist-modal-ft">
+      <span id="histModalCount">—</span>
+      <div class="hm-pg-btns">
+        <button class="hm-pg-btn" id="hmPgPrev" onclick="histPage(-1)" disabled>← 이전</button>
+        <button class="hm-pg-btn" id="hmPgNext" onclick="histPage(1)" disabled>다음 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// xlsx 라이브러리 동적 로딩 (CDN 순차 시도)
+(function(){
+  const CDNS=[
+    'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js',
+    'https://unpkg.com/xlsx/dist/xlsx.full.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  ];
+  function tryLoad(i){
+    if(i>=CDNS.length) return;
+    const s=document.createElement('script');
+    s.src=CDNS[i];
+    s.onload=()=>{ window._xlsxReady=true; };
+    s.onerror=()=>tryLoad(i+1);
+    document.head.appendChild(s);
+  }
+  tryLoad(0);
+})();
+
+function downloadXLSX(btn) {
+  if (typeof XLSX === 'undefined' || !window._xlsxReady) {
+    alert('엑셀 라이브러리가 로드되지 않았습니다.\n인터넷 연결을 확인하고 페이지를 새로고침 후 다시 시도해주세요.');
+    return;
+  }
+  const box  = btn.closest('.ai-chart-box');
+  const table= box.querySelector('table');
+  if (!table) return;
+  const title= (box.querySelector('.dl-title')?.textContent||'표').trim();
+
+  // ── thead 파싱 (colspan → merge 처리) ────────
+  const allRows=[], merges=[];
+  table.querySelectorAll('thead tr').forEach((tr,ri)=>{
+    const row=[]; let ci=0;
+    tr.querySelectorAll('th').forEach(th=>{
+      const text=th.textContent.trim();
+      const cs=parseInt(th.getAttribute('colspan')||'1');
+      row.push(text);
+      if(cs>1){ merges.push({s:{r:ri,c:ci},e:{r:ri,c:ci+cs-1}}); for(let k=1;k<cs;k++) row.push(null); }
+      ci+=cs;
+    });
+    allRows.push(row);
+  });
+  const hdrRowIdx = allRows.length - 1;
+  const fixedCols = table.querySelector('th.ov-sticky') ? 3 : 2; // overview=3, ranking=2
+
+  // ── tbody 파싱 (배지 제거, 숫자 변환) ────────
+  table.querySelectorAll('tbody tr').forEach(tr=>{
+    const row=[];
+    tr.querySelectorAll('td').forEach(td=>{
+      const clone=td.cloneNode(true);
+      clone.querySelectorAll('.pr-badge').forEach(b=>b.remove());
+      const text=clone.textContent.trim();
+      if(text==='—'||text===''){row.push('');return;}
+      const clean=text.replace(/,/g,'').replace('+','').replace('%','');
+      const num=Number(clean);
+      // % 포함이면 소수 비율로 저장 (엑셀 % 서식용)
+      if(!isNaN(num) && td.textContent.includes('%')) row.push(num/100);
+      else if(!isNaN(num)) row.push(num);
+      else row.push(text);
+    });
+    allRows.push(row);
+  });
+
+  // ── 시트 생성 ─────────────────────────────────
+  const ws=XLSX.utils.aoa_to_sheet(allRows);
+  if(merges.length) ws['!merges']=merges;
+
+  // ── 숫자 서식 적용 ────────────────────────────
+  const nCols=allRows[hdrRowIdx]?.length||0;
+  for(let ri=hdrRowIdx+1; ri<allRows.length; ri++){
+    for(let ci=fixedCols; ci<nCols; ci++){
+      const ref=XLSX.utils.encode_cell({r:ri,c:ci});
+      if(!ws[ref]) continue;
+      const v=ws[ref].v;
+      if(typeof v==='number'){
+        // 0~1 범위이면 % 서식, 아니면 정수 콤마 서식
+        ws[ref].z = (v>0&&v<=1) ? '0.0%' : '#,##0';
+      }
+    }
+  }
+
+  // ── 열 너비 자동 조정 ─────────────────────────
+  ws['!cols']=Array.from({length:nCols},(_,ci)=>{
+    const maxLen=Math.max(...allRows.map(r=>String(r[ci]??'').length));
+    return {wch:Math.min(Math.max(maxLen+2,7),28)};
+  });
+
+  // ── 틀 고정 (헤더 행 + 고정 열) ──────────────
+  ws['!freeze']={xSplit:fixedCols, ySplit:hdrRowIdx+1,
+                 topLeftCell:`${XLSX.utils.encode_col(fixedCols)}${hdrRowIdx+2}`, state:'frozen'};
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '데이터');
+  XLSX.writeFile(wb, `${title}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
 </script>
 </body>
 </html>

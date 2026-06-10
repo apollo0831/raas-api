@@ -31,7 +31,11 @@ def init_db():
             )
         """)
         # 기존 DB 마이그레이션: 컬럼이 없으면 추가
-        for col, typedef in [("ip", "TEXT"), ("user_name", "TEXT")]:
+        for col, typedef in [
+            ("ip", "TEXT"), ("user_name", "TEXT"), ("feedback", "INTEGER"),
+            ("input_tokens", "INTEGER"), ("output_tokens", "INTEGER"),
+            ("cache_creation_tokens", "INTEGER"), ("cache_read_tokens", "INTEGER"),
+        ]:
             try:
                 conn.execute(f"ALTER TABLE query_history ADD COLUMN {col} {typedef}")
             except Exception:
@@ -105,33 +109,45 @@ def get_all_ip_users() -> list:
 
 def save_query(user_id: str, question: str, answer: str,
                chart_data: Optional[dict] = None,
-               ip: str = None, user_name: str = None) -> int:
+               ip: str = None, user_name: str = None,
+               input_tokens: int = None, output_tokens: int = None,
+               cache_creation_tokens: int = None, cache_read_tokens: int = None) -> int:
     """질의 1건 DB 저장. JSONL 로그도 함께 기록."""
     chart_json = json.dumps(chart_data, ensure_ascii=False) if chart_data is not None else None
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO query_history (user_id, question, answer, chart_data, ip, user_name) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, question, answer, chart_json, ip, user_name)
+            "INSERT INTO query_history "
+            "(user_id, question, answer, chart_data, ip, user_name, "
+            " input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, question, answer, chart_json, ip, user_name,
+             input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens)
         )
         row_id = cur.lastrowid
 
-    _append_log(row_id, user_id, question, answer, ip, user_name)
+    _append_log(row_id, user_id, question, answer, ip, user_name,
+                input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens)
     return row_id
 
 
-def _append_log(row_id, user_id, question, answer, ip, user_name):
+def _append_log(row_id, user_id, question, answer, ip, user_name,
+                input_tokens=None, output_tokens=None,
+                cache_creation_tokens=None, cache_read_tokens=None):
     """data/raas_query_log.jsonl 에 1줄 append. 실패해도 무시."""
     try:
         LOG_PATH.parent.mkdir(exist_ok=True)
         entry = {
-            "ts":        datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "id":        row_id,
-            "user_id":   user_id,
-            "user_name": user_name or ip or "unknown",
-            "ip":        ip,
-            "question":  question,
-            "answer_len": len(answer),
+            "ts":                   datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "id":                   row_id,
+            "user_id":              user_id,
+            "user_name":            user_name or ip or "unknown",
+            "ip":                   ip,
+            "question":             question,
+            "answer_len":           len(answer),
+            "input_tokens":         input_tokens,
+            "output_tokens":        output_tokens,
+            "cache_creation_tokens": cache_creation_tokens,
+            "cache_read_tokens":    cache_read_tokens,
         }
         with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -139,11 +155,22 @@ def _append_log(row_id, user_id, question, answer, ip, user_name):
         pass
 
 
+def save_feedback(query_id: int, feedback: int) -> bool:
+    """질의 1건에 피드백 저장. feedback: 1(좋음) / -1(나쁨)."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE query_history SET feedback = ? WHERE id = ?",
+            (feedback, query_id)
+        )
+    return cur.rowcount > 0
+
+
 def get_history(user_id: str, limit: int = 20) -> list:
     """user_id의 최근 질의 N건. 최신순."""
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT id, question, answer, chart_data, created_at
+            """SELECT id, question, answer, chart_data, feedback,
+                      input_tokens, output_tokens, created_at
                FROM query_history
                WHERE user_id = ?
                ORDER BY created_at DESC
@@ -152,14 +179,61 @@ def get_history(user_id: str, limit: int = 20) -> list:
         ).fetchall()
     return [
         {
-            "id":         r["id"],
-            "question":   r["question"],
-            "answer":     r["answer"],
-            "chart_data": json.loads(r["chart_data"]) if r["chart_data"] else None,
-            "created_at": r["created_at"],
+            "id":            r["id"],
+            "question":      r["question"],
+            "answer":        r["answer"],
+            "chart_data":    json.loads(r["chart_data"]) if r["chart_data"] else None,
+            "feedback":      r["feedback"],
+            "input_tokens":  r["input_tokens"],
+            "output_tokens": r["output_tokens"],
+            "created_at":    r["created_at"],
         }
         for r in rows
     ]
+
+
+def get_all_history(limit: int = 50, offset: int = 0, days: int = 0) -> dict:
+    """전체 사용자 질의 이력. 최신순, 페이지네이션."""
+    where = ""
+    params_count: list = []
+    params_rows:  list = []
+    if days > 0:
+        since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        where = "WHERE created_at >= ?"
+        params_count = [since]
+        params_rows  = [since, limit, offset]
+    else:
+        params_rows = [limit, offset]
+
+    with get_conn() as conn:
+        total = conn.execute(f"SELECT COUNT(*) FROM query_history {where}", params_count).fetchone()[0]
+        rows  = conn.execute(
+            f"""SELECT id, user_id, user_name, ip, question, answer, chart_data,
+                       feedback, input_tokens, output_tokens, created_at
+                FROM query_history {where}
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?""",
+            params_rows
+        ).fetchall()
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id":            r["id"],
+                "user_id":       r["user_id"],
+                "user_name":     r["user_name"] or r["ip"] or "unknown",
+                "question":      r["question"],
+                "answer":        r["answer"],
+                "chart_data":    json.loads(r["chart_data"]) if r["chart_data"] else None,
+                "feedback":      r["feedback"],
+                "input_tokens":  r["input_tokens"],
+                "output_tokens": r["output_tokens"],
+                "created_at":    r["created_at"],
+            }
+            for r in rows
+        ],
+    }
 
 
 def get_popular(limit: int = 5, days: int = 7) -> list:

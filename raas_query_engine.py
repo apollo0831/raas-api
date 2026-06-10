@@ -39,6 +39,10 @@ def _load_rules() -> str:
 # ── 설정 ──────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
+HAIKU_MODEL       = os.getenv("HAIKU_MODEL",  "claude-haiku-4-5-20251001")
+
+# 단순 조회 intent — Haiku로 처리 (ranking·trend 계열은 Claude가 1~2줄만 작성)
+_HAIKU_INTENTS = {'ranking', 'trend', 'compare_trend', 'dual_trend', 'overview'}
 # ──────────────────────────────────────────────────────────
 
 
@@ -454,6 +458,11 @@ def build_chart_comparison(title, metric, unit, date, items, source):
 def build_chart_data(data: dict, intent: dict, question: str):
     """extract_data 결과 + intent → chart_data dict 또는 None."""
     try:
+        # 게스트 히스토리 질문 + 차트 요청 키워드 없음 → 차트 불필요
+        _chart_kws = ('그래프', '차트', '추이', '시각화', '꺾은선')
+        if data.get('guestname_history') and not any(k in question for k in _chart_kws):
+            return None
+
         intent_type = intent.get('intent', 'general')
         scope       = data.get('scope', 'T00')
         scope_name  = data.get('scope_name', scope)
@@ -610,13 +619,14 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 if any(kw in _q_low for kw in kws):
                     _matched.extend(fields)
             _ov_columns = _matched if _matched else None  # None → 전체
+            _ov_date_label = (data.get('overview_date') or date_max).replace('/', '-')
             return {
                 'type':    'table',
                 'subtype': 'overview',
-                'title':   f"{'채널별 현황' if _ch == 'channels' else f'{_ch_name} 프로그램 현황 (편성시간 순)'} ({date_max}){_wknd_sfx}",
+                'title':   f"{'채널별 현황' if _ch == 'channels' else f'{_ch_name} 프로그램 현황 (편성시간 순)'} ({_ov_date_label}){_wknd_sfx}",
                 'rows':    ov_rows,
                 'columns': _ov_columns,
-                'source':  f"snapshot:{date_max}",
+                'source':  f"snapshot:{_ov_date_label}",
             }
 
         # compare → comparison (채널별 DAU)
@@ -671,14 +681,37 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 _wknd_suffix = ''
                 if _ch2 == 'L00':
                     _wknd_suffix = ' (주말 포함)' if data.get('ranking_include_weekend') else ' (주말 제외)'
+                # 주/월/기간 지표 또는 집계 랭킹 → 생/녹·보라 배지 숨김
+                _PERIOD_METRICS = {
+                    'wau', 'mau', 'dau_r7', 'dau_r30',
+                    'wau_1min', 'wau_10min', 'mau_1min', 'mau_10min',
+                    'new_week', 'new_mon', 'react_week', 'react_mon',
+                    'react_rate_week', 'react_rate_mon',
+                    'churn_rate_week', 'churn_rate_mon',
+                    'deep_rate_week', 'deep_rate_mon',
+                    'engage_rate_week', 'engage_rate_mon',
+                    'habit_rate_week', 'habit_rate_mon',
+                    'real_rate_week', 'real_rate_mon',
+                    'd1_ret', 'd7_ret', 'w1_ret', 'm1_ret',
+                    'new_d1_ret', 'new_d7_ret', 'new_w1_ret', 'new_m1_ret',
+                }
+                _period_ranking = (
+                    bool(data.get('ranking_agg_func')) or
+                    bool(data.get('ranking_date_range')) or
+                    _rm2 in _PERIOD_METRICS
+                )
+                _title_date = data.get('ranking_date_range') or data.get('ranking_ref_date') or date_max
+                _title_date = _title_date.replace('/', '-')
                 return {
-                    'type':         'table',
-                    'subtype':      'ranking',
-                    'title':        f"{_scope_prefix}프로그램 {_rm2_label} TOP{len(rows)}{_wknd_suffix} ({date_max})",
-                    'sort_metric':  _rm2,
-                    'show_all':     _show_all,
-                    'rows':         rows,
-                    'source':       f"snapshot:{date_max}",
+                    'type':           'table',
+                    'subtype':        'ranking',
+                    'title':          f"{_scope_prefix}프로그램 {_rm2_label} TOP{len(rows)}{_wknd_suffix} ({_title_date})",
+                    'sort_metric':    _rm2,
+                    'show_all':       _show_all,
+                    'period_ranking': _period_ranking,
+                    'extra_fields':   data.get('ranking_extra_fields') or [],
+                    'rows':           rows,
+                    'source':         f"snapshot:{date_max}",
                 }
 
         # health → trend 있으면 timeseries, 없으면 ranking comparison
@@ -715,23 +748,37 @@ def build_chart_data(data: dict, intent: dict, question: str):
         # funnel + 유지율 키워드 → D1/D7/W1/M1 멀티라인 timeseries 우선
         if intent_type == 'funnel' and data.get('retention_trend'):
             _RET_COLORS = ['#185fa5', '#1d9e75', '#d97706', '#dc2626']
-            series = []
-            for i, s in enumerate(data['retention_trend']):
-                pts = [{"date": d.replace('/', '-'), "value": v}
-                       for d, v in s['data'] if v is not None]
-                if len(pts) >= 2:
-                    series.append({
-                        'label': s['label'], 'unit': '%',
-                        'color': _RET_COLORS[i % len(_RET_COLORS)], 'points': pts,
-                    })
-            if len(series) >= 2:
-                multi = build_chart_multi_timeseries(
-                    title="신규 코호트 유지율 추이 (D1·D7·W1·M1)",
-                    metric="유지율", unit="%",
-                    series=series,
-                    source=f"timeline:{data.get('scope', 'T00')}/retention",
-                    initial_days=data.get('retention_trend_initial_days', 30),
-                )
+
+            def _make_ret_chart(trend_list, cohort_label):
+                series = []
+                for i, s in enumerate(trend_list):
+                    pts = [{"date": d.replace('/', '-'), "value": v}
+                           for d, v in s['data'] if v is not None]
+                    if len(pts) >= 2:
+                        series.append({
+                            'label': s['label'], 'unit': '%',
+                            'color': _RET_COLORS[i % len(_RET_COLORS)], 'points': pts,
+                        })
+                if len(series) >= 2:
+                    return build_chart_multi_timeseries(
+                        title=f"{cohort_label} 코호트 유지율 추이 (D1·D7·W1·M1)",
+                        metric="유지율", unit="%", series=series,
+                        source=f"timeline:{data.get('scope', 'T00')}/retention",
+                        initial_days=data.get('retention_trend_initial_days', 30),
+                    )
+                return None
+
+            if data.get('retention_want_both') and data.get('retention_trend_new'):
+                c1 = _make_ret_chart(data['retention_trend'], '전체')
+                c2 = _make_ret_chart(data['retention_trend_new'], '신규')
+                charts = [c for c in [c1, c2] if c]
+                if len(charts) == 2:
+                    return {'type': 'multi_chart', 'charts': charts}
+                elif charts:
+                    return charts[0]
+            else:
+                _cohort_label = data.get('retention_cohort_type', '전체')
+                multi = _make_ret_chart(data['retention_trend'], _cohort_label)
                 if multi:
                     return multi
 
@@ -775,6 +822,11 @@ def build_chart_data(data: dict, intent: dict, question: str):
                     date=date_max, items=items,
                     source=f"growth:{date_max}"
                 )
+
+        # compare_trend / pgm_group_trend 는 위 블록(line 542)에서 이미 처리됨.
+        # 추이·비교 키워드가 질문에 있더라도 아래 일반 fallback이 DAU 차트를 덮어쓰지 않도록 차단.
+        if intent_type == 'compare_trend':
+            return None
 
         # general / snapshot: 질문 키워드 기반 fallback
         q = question.lower()
@@ -851,22 +903,34 @@ def build_chart_data(data: dict, intent: dict, question: str):
 
 
 # ── Claude 호출 ────────────────────────────────────────────
-def call_claude(system: str, user: str, max_tokens: int = 1000) -> str:
+_CACHE_HEADERS = {
+    "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "anthropic-beta": "prompt-caching-2024-07-31",
+    "x-api-key": ANTHROPIC_API_KEY,
+}
+
+def call_claude(system, user: str, max_tokens: int = 1000, model: str = None) -> tuple:
+    """(answer_text, usage_dict) 반환. system은 str 또는 (static_str, dynamic_str) 튜플."""
+    if isinstance(system, tuple):
+        static_part, dynamic_part = system
+        system_payload = [{"type": "text", "text": static_part, "cache_control": {"type": "ephemeral"}}]
+        if dynamic_part:
+            system_payload.append({"type": "text", "text": dynamic_part})
+    else:
+        system_payload = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
     payload = json.dumps({
-        "model": CLAUDE_MODEL,
+        "model": model or CLAUDE_MODEL,
         "max_tokens": max_tokens,
-        "system": system,
+        "system": system_payload,
         "messages": [{"role": "user", "content": user}]
     }).encode()
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages", data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "anthropic-version": "2023-06-01",
-            "x-api-key": ANTHROPIC_API_KEY
-        })
+        headers=_CACHE_HEADERS)
     with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read())["content"][0]["text"]
+        body = json.loads(r.read())
+        return body["content"][0]["text"], body.get("usage", {})
 
 
 # ── 의도 분류 ──────────────────────────────────────────────
@@ -878,7 +942,8 @@ INTENT_SYSTEM = """RAAS 데이터 분석 시스템의 질의 분류기입니다.
   "intent": "snapshot|trend|compare|ranking|overview|health|funnel|engagement|growth|anomaly|report|general",
   "scope": "T00|F00|L00|G00|P00 또는 PGM_CODE 또는 null",
   "scope_keyword": "사용자가 언급한 채널/프로그램 키워드 또는 null",
-  "metric": "dau|deep|new|react|churn|engage|habit|real|all",
+  "metric": "dau|wau|mau|dau_r7|dau_r30|new|new_week|new_mon|react|react_week|react_mon|react_rate|react_rate_week|react_rate_mon|churn|churn_week|churn_mon|real|real_week|real_mon|deep|deep_week|deep_mon|engage|engage_week|engage_mon|habit|habit_week|habit_mon|d1|d7|w1|m1|new_d1|new_d7|new_w1|new_m1|1min|10min|all",
+  "metrics": null,
   "date_type": "yesterday|today|specific|range",
   "specific_date": "YYYY/MM/DD 또는 null",
   "days": 7,
@@ -886,16 +951,22 @@ INTENT_SYSTEM = """RAAS 데이터 분석 시스템의 질의 분류기입니다.
   "summary": "질문 한 줄 요약"
 }
 
+metrics: trend/dual_trend 전용 — 추이를 볼 지표를 배열로 반환. 다른 intent는 null.
+- trend (단일 지표): ["dau"]
+- dual_trend (복수 지표, 최대 3개): ["new", "new_m1"]
+- 지표 코드는 아래 metric 목록과 동일한 값 사용
+- 1개면 단일 꺾은선, 2~3개면 단위가 같으면 다중 꺾은선(공유 Y축), 단위가 다르면 이중 Y축
+
 has_period: 사용자가 기간을 명시했으면 true, 아니면 false
 - true 예시: "이번주", "지난 4주간", "이번달", "최근 3개월", "지난달"
 - false 예시: "WAU 추이", "WAU 그래프 보여줘", "DAU 어때" (기간 미명시)
 
 intent 정의:
 - snapshot: 특정 날짜 단일 시점 (어제 DAU, 오늘 현황)
-- trend: 추세/흐름 (최근 N일 변화, 오르고 있나)
+- trend: 추세/흐름, 지표 1개 (최근 N일 변화, 오르고 있나)
 - compare: 채널/기간 단일 시점 비교 (파워FM vs 러브FM DAU)
 - compare_trend: 채널 간 추이 비교 (파워FM vs 러브FM DAU 추이, 두 채널 변화 비교)
-- dual_trend: 동일 채널에서 두 지표 동시 추이 (DAU와 깊은청취율, 복귀율과 이탈률)
+- dual_trend: 동일 채널에서 지표 2~3개 동시 추이 (DAU와 깊은청취율, 신규사용자와 신규M1유지율)
 - ranking: 순위 TOP N (가장 많이 들은 프로그램)
 - overview: 여러 지표를 한 테이블에 (편성시간 순 현황표, "DAU·WAU·MAU 함께", "전 지표 보여줘")
 - health: 건강도/위험 프로그램 (잘 되고 있어? 위험한 거 있어?)
@@ -917,7 +988,20 @@ scope 결정:
 metric: dau|wau|mau|dau_r7|dau_r30|new|new_week|new_mon|react|react_week|react_mon|react_rate|react_rate_week|react_rate_mon|churn|churn_week|churn_mon|real|real_week|real_mon|deep|deep_week|deep_mon|engage|engage_week|engage_mon|habit|habit_week|habit_mon|d1|d7|w1|m1|new_d1|new_d7|new_w1|new_m1|1min|10min|all
 (react=복귀사용자수, react_rate=복귀율%; 1min=1분이상청취자수(절대값), 10min=10분이상청취자수(절대값), real=실청취율(비율); 명시 없으면 all, 기간이 명시되면 _week/_mon suffix 사용)
 (dau_r7=롤링 7일 WAU — 별칭: 롤링WAU, 7일MAU, 최근7일 활성사용자; dau_r30=롤링 30일 MAU — 별칭: 롤링MAU, 30일MAU, 최근30일 활성사용자)
-days: trend intent는 기간 명시 없으면 30, 나머지는 7"""
+days: trend/dual_trend intent는 기간 명시 없으면 30, 나머지는 7
+
+agg_func: ranking intent 전용 — 기간 집계 방식. 기간이 명시됐을 때만 사용, 없으면 null.
+  latest(기본·기간없음)|mean(평균)|median(중간값)|max(최대·최고)|min(최소·최저)|sum(합계·총합)|variance(분산)|stdev(표준편차)
+
+date_range: ranking intent에서 특정 기간이 명시됐을 때 "YYYY/MM/DD~YYYY/MM/DD" 형식으로 반환. 없으면 null.
+  - "4월" → "2026/04/01~2026/04/30"
+  - "지난달" → 전월 1일~말일
+  - "최근 2주" → today 기준 14일 전~어제
+  - 특정 날짜("4월 20일") → date_range 대신 specific_date 사용
+
+extra_fields: ranking intent에서 추가로 표시 요청한 필드명 배열. 없으면 null.
+  지원 필드: guestname|live_yn|dau|wau|mau|dau_1min|dau_10min|deep_rate|churn_rate|react_rate|new|d1_ret|new_m1_ret|habit_rate|engage_rate
+  예: "게스트 필드와 함께" → ["guestname"], "WAU도 같이" → ["wau"]"""
 
 
 def classify_intent(question: str, today: str = None) -> dict:
@@ -930,7 +1014,7 @@ def classify_intent(question: str, today: str = None) -> dict:
         except Exception:
             pass
     try:
-        result = call_claude(INTENT_SYSTEM, prompt, max_tokens=300)
+        result, _ = call_claude(INTENT_SYSTEM, prompt, max_tokens=300)
         result = result.strip()
         if result.startswith("```"):
             parts = result.split("```")
@@ -1143,7 +1227,7 @@ def _extract_full_snapshot(row: dict, date: str) -> dict:
         'weekly_corner': (row.get('weekly_corner') or '').strip(),
         'program_title': (row.get('program_title') or row.get('PGM_NAME') or '').strip(),
         'view_radio_yn': yn(row.get('view_radio_yn')),
-        'live_yn':       yn(row.get('live_yn')),
+        'live_yn':       (row.get('live_yn') or '').strip() or None,  # '생방송'/'녹음' 원문 보존
     }
 
 
@@ -1576,6 +1660,102 @@ def collect_briefing_data(timeline: dict) -> dict:
     }
 
 
+_DOW_ORDER = ['월', '화', '수', '목', '금', '토', '일']
+
+def _build_corner_schedule(timeline: dict) -> dict:
+    """
+    timeline에서 프로그램별 요일별 코너 스케줄 재구성.
+    Returns: {pgm_code: {'월': {'daily': str, 'weekly': str}, '화': {...}, ...}}
+    - 같은 요일에 여러 날짜가 있으면 가장 최신 날짜 데이터를 사용.
+    - daily_corner: 방송일 매일 동일한 코너.
+    - weekly_corner: 해당 요일에만 편성되는 코너.
+    """
+    _CHANNEL_CODES = {'T00', 'F00', 'L00', 'G00', 'P00'}
+    schedule = {}
+    for code, date_rows in timeline.items():
+        if code in _CHANNEL_CODES:
+            continue
+        pgm_sched = {}
+        for date in sorted(date_rows.keys()):  # 오름차순 → 최신이 마지막에 덮어씀
+            row = date_rows[date]
+            dow = _weekday_ko(date)
+            if not dow:
+                continue
+            daily  = (row.get('daily_corner')  or '').strip()
+            weekly = (row.get('weekly_corner') or '').strip()
+            if daily or weekly:
+                pgm_sched[dow] = {'daily': daily, 'weekly': weekly}
+        if pgm_sched:
+            schedule[code] = pgm_sched
+    return schedule
+
+
+def _fmt_stime(raw: str) -> str:
+    """'HHMM' → 'HH:MM'. 그 외 형식은 원문 반환."""
+    s = (raw or '').strip()
+    if len(s) == 4 and s.isdigit():
+        return f"{s[:2]}:{s[2:]}"
+    return s
+
+
+def _calc_date_range(question: str, intent: dict, ref_date: str):
+    """질문 + intent에서 (date_from, date_to) 튜플 계산. 날짜 형식: 'YYYY/MM/DD'."""
+    import re as _re, calendar as _cal
+
+    def _iso(d):
+        return d.replace('/', '-')
+
+    _spec = intent.get('specific_date')
+
+    if _spec:
+        try:
+            _td = datetime.strptime(_iso(_spec), '%Y-%m-%d')
+        except ValueError:
+            return None, None
+        _multi_kws = ('일자별', '날짜별', '요일별', '날짜 별')
+        if any(k in question for k in _multi_kws):
+            _mon = _td - timedelta(days=_td.weekday())
+            _sun = _mon + timedelta(days=6)
+            return _mon.strftime('%Y/%m/%d'), _sun.strftime('%Y/%m/%d')
+        return _spec, _spec
+
+    if not ref_date:
+        return None, None
+
+    try:
+        _now = datetime.strptime(_iso(ref_date), '%Y-%m-%d')
+    except ValueError:
+        return None, None
+
+    if any(k in question for k in ('지난주', '지난 주', '저번주')):
+        # 주 경계는 실제 오늘 날짜 기준 — CSV 마지막 날짜(일요일 등)를 쓰면 월요일에 한 주씩 빠짐
+        _today = datetime.now()
+        _this_mon = _today - timedelta(days=_today.weekday())
+        _last_mon = _this_mon - timedelta(days=7)
+        return _last_mon.strftime('%Y/%m/%d'), (_last_mon + timedelta(days=6)).strftime('%Y/%m/%d')
+
+    if any(k in question for k in ('이번주', '이번 주')):
+        _today = datetime.now()
+        _this_mon = _today - timedelta(days=_today.weekday())
+        return _this_mon.strftime('%Y/%m/%d'), ref_date  # 상한은 마지막 데이터 날짜 유지
+
+    if '지난달' in question:
+        _first_this = _now.replace(day=1)
+        _last_prev  = _first_this - timedelta(days=1)
+        return _last_prev.replace(day=1).strftime('%Y/%m/%d'), _last_prev.strftime('%Y/%m/%d')
+
+    _month_m = _re.search(r'(\d{1,2})월', question)
+    if _month_m:
+        _mn  = int(_month_m.group(1))
+        _yr  = _now.year if _mn <= _now.month else _now.year - 1
+        _ld  = _cal.monthrange(_yr, _mn)[1]
+        return f"{_yr}/{_mn:02d}/01", f"{_yr}/{_mn:02d}/{_ld:02d}"
+
+    # 최근/부터/이전 → intent.days 기간
+    _n = intent.get('days', 7)
+    return (_now - timedelta(days=_n - 1)).strftime('%Y/%m/%d'), ref_date
+
+
 def extract_data(timeline, intent: dict, briefing_data: dict = None, question: str = '') -> dict:
     if not timeline:
         return {'error': 'timeline 없음'}
@@ -1606,6 +1786,173 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
     latest_date = available_dates[-1]
     row = timeline.get(scope, {}).get(latest_date, {})
     data['snapshot'] = _extract_full_snapshot(row, latest_date)
+
+    # guestname 히스토리 — 날짜 범위 게스트 질문 시 프로그램/채널/전체 스코프 모두 지원
+    # guestname 비어있음 = 초대손님 없음 (데이터 누락 아님)
+    _CHANNEL_CODES = {'T00', 'F00', 'L00', 'G00', 'P00'}
+    _guest_kws = ('게스트', '출연', '일자별', '날짜별', '요일별', '날짜 별')
+    _range_kws = ('지난주', '지난 주', '이번주', '이번 주', '최근', '부터', '지난달', '저번주', '이전',
+                  '1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월')
+    _CH_PGM_MAP = {'F00': PGM_F, 'L00': PGM_L, 'T00': PGM_F + PGM_L}
+    # ranking intent + extra_fields에 guestname 포함 시 → 히스토리 불필요 (랭킹 행에 이미 표시됨)
+    _skip_guest_hist = (intent_type == 'ranking' and 'guestname' in (intent.get('extra_fields') or []))
+    # 게스트 질문 + (범위 키워드 OR intent에 specific_date가 설정됨) 시 히스토리 조회
+    if (not _skip_guest_hist
+            and any(k in question for k in _guest_kws)
+            and (any(k in question for k in _range_kws) or intent.get('specific_date'))):
+
+        # ── 날짜 범위 계산 ────────────────────────────────────────────────────
+        _ref_date  = available_dates[-1] if available_dates else None
+        _date_from, _date_to = _calc_date_range(question, intent, _ref_date)
+
+        # ── 날짜 범위로 timeline 필터 ──────────────────────────────────────────
+        def _filter_dates(all_dates):
+            if _date_from and _date_to:
+                return [d for d in sorted(all_dates) if _date_from <= d <= _date_to]
+            return sorted(all_dates)  # 범위 미확정: 전체
+
+        if scope not in _CHANNEL_CODES:
+            # 프로그램 단일 스코프
+            _src_dates = set(timeline.get(scope, {}).keys())
+            _gh_dates = _filter_dates(_src_dates)
+            _guest_hist = []
+            for d in _gh_dates:
+                _gn = (timeline.get(scope, {}).get(d, {}).get('guestname') or '').strip()
+                _guest_hist.append({'date': d, 'guestname': _gn if _gn else None})
+            _gh_range = (_gh_dates[0], _gh_dates[-1]) if _gh_dates else None
+        elif scope in _CH_PGM_MAP:
+            # 채널(F00/L00) 또는 전체(T00)
+            _pgm_list = _CH_PGM_MAP[scope]
+            _src_dates = {d for code in _pgm_list for d in timeline.get(code, {}).keys()}
+            _gh_dates = _filter_dates(_src_dates)
+            _guest_hist = []
+            for d in _gh_dates:
+                _day_entries = []
+                for code in _pgm_list:
+                    _gn = (timeline.get(code, {}).get(d, {}).get('guestname') or '').strip()
+                    if _gn:
+                        _day_entries.append(f"{_pgm_name(code)}: {_gn}")
+                _guest_hist.append({'date': d, 'guestname': ' / '.join(_day_entries) if _day_entries else None})
+            _gh_range = (_gh_dates[0], _gh_dates[-1]) if _gh_dates else None
+        else:
+            _guest_hist = []
+            _gh_range = None
+        # _gh_dates가 있을 때만 저장 — 요청 날짜에 데이터 없으면 빈 섹션 생성하지 않음
+        # (날짜 내 초대손님 없음과 날짜 자체 데이터 없음을 구분)
+        if _gh_dates:
+            data['guestname_history'] = _guest_hist
+            data['guestname_history_range'] = _gh_range
+
+    # live_schedule — 생방송/녹음방송 편성 질문
+    _live_kws = ('생방송', '녹음방송', '녹음 방송')
+    if any(k in question for k in _live_kws):
+        _ref_date  = available_dates[-1] if available_dates else None
+        _ldate_from, _ldate_to = _calc_date_range(question, intent, _ref_date)
+        _CHANNEL_CODES = {'T00', 'F00', 'L00', 'G00', 'P00'}
+        _CH_PGM_MAP    = {'F00': PGM_F, 'L00': PGM_L, 'T00': PGM_F + PGM_L}
+
+        def _lfilter(all_dates):
+            if _ldate_from and _ldate_to:
+                return [d for d in sorted(all_dates) if _ldate_from <= d <= _ldate_to]
+            # 날짜 범위 미확정 → 최신 날짜 하루만 (어제/오늘 맥락)
+            return [_ref_date] if _ref_date else []
+
+        if scope not in _CHANNEL_CODES:
+            # 개별 프로그램: 날짜별 live_yn 수집
+            _src_dates = set(timeline.get(scope, {}).keys())
+            _ldates = _lfilter(_src_dates)
+            _lsched = []
+            for d in _ldates:
+                _ly = (timeline.get(scope, {}).get(d, {}).get('live_yn') or '').strip()
+                _lsched.append({'date': d, 'programs': [
+                    {'code': scope, 'name': _pgm_name(scope), 'live_yn': _ly}
+                ] if _ly else []})
+            data['live_schedule'] = _lsched
+            data['live_schedule_range'] = (_ldates[0], _ldates[-1]) if _ldates else None
+        else:
+            _pgm_list = _CH_PGM_MAP.get(scope, PGM_F + PGM_L)
+            _src_dates = {d for code in _pgm_list for d in timeline.get(code, {}).keys()}
+            _ldates = _lfilter(_src_dates)
+            _lsched = []
+            for d in _ldates:
+                _pgms = []
+                for code in _pgm_list:
+                    _ly = (timeline.get(code, {}).get(d, {}).get('live_yn') or '').strip()
+                    if _ly:
+                        _pgms.append({'code': code, 'name': _pgm_name(code), 'live_yn': _ly})
+                _lsched.append({'date': d, 'programs': _pgms})
+            data['live_schedule'] = _lsched
+            data['live_schedule_range'] = (_ldates[0], _ldates[-1]) if _ldates else None
+
+    # view_radio_schedule — 보는라디오(보라) 편성 질문
+    _vr_kws = ('보라', '보는라디오', '영상라디오', '영상 라디오')
+    if any(k in question for k in _vr_kws):
+        _ref_date  = available_dates[-1] if available_dates else None
+        _vrdate_from, _vrdate_to = _calc_date_range(question, intent, _ref_date)
+        _CHANNEL_CODES = {'T00', 'F00', 'L00', 'G00', 'P00'}
+        _CH_PGM_MAP    = {'F00': PGM_F, 'L00': PGM_L, 'T00': PGM_F + PGM_L}
+
+        def _vrfilter(all_dates):
+            if _vrdate_from and _vrdate_to:
+                return [d for d in sorted(all_dates) if _vrdate_from <= d <= _vrdate_to]
+            return [_ref_date] if _ref_date else []
+
+        if scope not in _CHANNEL_CODES:
+            _src_dates = set(timeline.get(scope, {}).keys())
+            _vrdates   = _vrfilter(_src_dates)
+            _vrsched   = []
+            for d in _vrdates:
+                _vry = (timeline.get(scope, {}).get(d, {}).get('view_radio_yn') or '').strip().upper()
+                _vrsched.append({'date': d, 'programs': [
+                    {'code': scope, 'name': _pgm_name(scope), 'view_radio_yn': _vry}
+                ] if _vry in ('Y', 'N') else []})
+            data['view_radio_schedule'] = _vrsched
+            data['view_radio_schedule_range'] = (_vrdates[0], _vrdates[-1]) if _vrdates else None
+        else:
+            _pgm_list  = _CH_PGM_MAP.get(scope, PGM_F + PGM_L)
+            _src_dates = {d for code in _pgm_list for d in timeline.get(code, {}).keys()}
+            _vrdates   = _vrfilter(_src_dates)
+            _vrsched   = []
+            for d in _vrdates:
+                _pgms = []
+                for code in _pgm_list:
+                    _vry = (timeline.get(code, {}).get(d, {}).get('view_radio_yn') or '').strip().upper()
+                    if _vry in ('Y', 'N'):
+                        _pgms.append({'code': code, 'name': _pgm_name(code), 'view_radio_yn': _vry})
+                _vrsched.append({'date': d, 'programs': _pgms})
+            data['view_radio_schedule'] = _vrsched
+            data['view_radio_schedule_range'] = (_vrdates[0], _vrdates[-1]) if _vrdates else None
+
+    # corner_schedule — 요일별 코너 편성 현황
+    _CHANNEL_CODES_CS = {'T00', 'F00', 'L00', 'G00', 'P00'}
+    _CH_PGM_MAP_CS    = {'F00': PGM_F, 'L00': PGM_L, 'T00': PGM_F + PGM_L}
+    if '코너' in question:
+        _full_sched = _build_corner_schedule(timeline)
+        if scope not in _CHANNEL_CODES_CS:
+            # 개별 프로그램
+            sched = _full_sched.get(scope, {})
+            if sched:
+                data['corner_schedule'] = {
+                    'type': 'program',
+                    'scope': scope,
+                    'scope_name': _pgm_name(scope),
+                    'schedule': sched,  # {요일: {daily, weekly}}
+                }
+        else:
+            # 채널/전체: 소속 프로그램 코너 목록
+            _pgm_list = _CH_PGM_MAP_CS.get(scope, PGM_F + PGM_L)
+            _ch_sched = {code: _full_sched[code]
+                         for code in _pgm_list if code in _full_sched}
+            if _ch_sched:
+                data['corner_schedule'] = {
+                    'type': 'channel',
+                    'scope': scope,
+                    'scope_name': _pgm_name(scope),
+                    'programs': {code: {
+                        'name': _pgm_name(code),
+                        'schedule': sched,
+                    } for code, sched in _ch_sched.items()},
+                }
 
     # trend
     if intent_type in ('trend', 'general', 'health', 'engagement'):
@@ -1654,6 +2001,47 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
         # 러브FM 주말 전용 프로그램 (온톨로지 WeekendOnly: M05/M07/M10/M11)
         _WEEKEND_PGMS = {'M05', 'M07', 'M10', 'M11'}
         _include_weekend = intent.get('include_weekend', False)
+
+        # ── 날짜 범위 / 특정일 / 집계 설정 ────────────────────────────────
+        _rank_date_range    = intent.get('date_range')        # "YYYY/MM/DD~YYYY/MM/DD"
+        _rank_agg_func      = (intent.get('agg_func') or '').lower()
+        _rank_specific_date = intent.get('specific_date')     # "YYYY/MM/DD"
+        _rank_extra_fields  = [f for f in (intent.get('extra_fields') or []) if f]
+
+        if _rank_date_range and '~' in str(_rank_date_range):
+            _dr_from, _dr_to = str(_rank_date_range).split('~', 1)
+            _rank_dates = [d for d in available_dates if _dr_from <= d <= _dr_to]
+        elif _rank_specific_date:
+            _sp = str(_rank_specific_date).replace('-', '/')
+            _rank_dates = [d for d in available_dates if d == _sp] or [latest_date]
+        else:
+            _rank_dates = [latest_date]
+
+        _rank_ref_date = _rank_dates[-1] if _rank_dates else latest_date
+        _AGG_SET = {'mean', 'median', 'max', 'min', 'sum', 'variance', 'stdev'}
+        _use_agg = _rank_agg_func in _AGG_SET and len(_rank_dates) > 1
+
+        # rank_sort_field 미리 계산 (집계 로직에서 활용)
+        _rank_field_map = {
+            'wau': 'wau', 'mau': 'mau', 'dau_r7': 'dau_r7', 'dau_r30': 'dau_r30',
+            '1min': 'dau_1min', '10min': 'dau_10min',
+            '1min_week': 'wau_1min', '10min_week': 'wau_10min',
+            '1min_mon': 'mau_1min', '10min_mon': 'mau_10min',
+            'new': 'new', 'new_week': 'new_week', 'new_mon': 'new_mon',
+            'react': 'react', 'react_week': 'react_week', 'react_mon': 'react_mon',
+            'react_rate': 'react_rate', 'react_rate_week': 'react_rate_week', 'react_rate_mon': 'react_rate_mon',
+            'deep': 'deep_rate', 'churn': 'churn_rate',
+            'engage': 'engage_rate', 'habit': 'habit_rate', 'real': 'real_rate',
+            'deep_week': 'deep_rate_week', 'churn_week': 'churn_rate_week',
+            'engage_week': 'engage_rate_week', 'habit_week': 'habit_rate_week', 'real_week': 'real_rate_week',
+            'deep_mon': 'deep_rate_mon', 'churn_mon': 'churn_rate_mon',
+            'engage_mon': 'engage_rate_mon', 'habit_mon': 'habit_rate_mon', 'real_mon': 'real_rate_mon',
+            'd1': 'd1_ret', 'd7': 'd7_ret', 'w1': 'w1_ret', 'm1': 'm1_ret',
+            'new_d1': 'new_d1_ret', 'new_d7': 'new_d7_ret',
+            'new_w1': 'new_w1_ret', 'new_m1': 'new_m1_ret',
+        }
+        rank_sort_field = _rank_field_map.get(metric, 'dau')
+
         rows = []
         for code, date_rows in timeline.items():
             if code in exclude:
@@ -1669,7 +2057,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
             # 러브FM 순위 기본 동작: 주말 프로그램 제외 (명시적 요청 시 포함)
             if _rank_channel == 'L00' and not _include_weekend and code in _WEEKEND_PGMS:
                 continue
-            row = date_rows.get(latest_date)
+            row = date_rows.get(_rank_ref_date)
             if not row:
                 continue
             dau = _i(row.get('dau'))
@@ -1682,6 +2070,8 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
             fn = _fn
             rows.append({
                 'code': code, 'name': _pgm_name(code, row=row),
+                'live_yn': (row.get('live_yn') or '').strip() or None,
+                'view_radio_yn': (row.get('view_radio_yn') or '').strip().upper() or None,
                 # DAU / 롤링
                 'dau': dau,
                 'dau_r7': _i(row.get('dau_r7')) or None,
@@ -1782,41 +2172,63 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
                 'new_d7_ret_diff': fn(row.get('new_d7_ret_diff')),
                 'new_w1_ret_diff': fn(row.get('new_w1_ret_diff')),
                 'new_m1_ret_diff': fn(row.get('new_m1_ret_diff')),
+                # 편성 메타 (extra_fields 요청 시 출력)
+                'guestname': (row.get('guestname') or '').strip() or None,
+                'live_yn_v': (row.get('live_yn') or '').strip() or None,
             })
-        _rank_field_map = {
-            # 절대 청취자 수
-            'wau': 'wau', 'mau': 'mau', 'dau_r7': 'dau_r7', 'dau_r30': 'dau_r30',
-            '1min': 'dau_1min', '10min': 'dau_10min',
-            '1min_week': 'wau_1min', '10min_week': 'wau_10min',
-            '1min_mon': 'mau_1min', '10min_mon': 'mau_10min',
-            # 신규/복귀 — 기간별
-            'new': 'new', 'new_week': 'new_week', 'new_mon': 'new_mon',
-            'react': 'react', 'react_week': 'react_week', 'react_mon': 'react_mon',
-            'react_rate': 'react_rate', 'react_rate_week': 'react_rate_week', 'react_rate_mon': 'react_rate_mon',
-            # 비율 지표 — 일간
-            'deep': 'deep_rate', 'churn': 'churn_rate',
-            'engage': 'engage_rate', 'habit': 'habit_rate', 'real': 'real_rate',
-            # 비율 지표 — 주간
-            'deep_week': 'deep_rate_week', 'churn_week': 'churn_rate_week',
-            'engage_week': 'engage_rate_week', 'habit_week': 'habit_rate_week', 'real_week': 'real_rate_week',
-            # 비율 지표 — 월간
-            'deep_mon': 'deep_rate_mon', 'churn_mon': 'churn_rate_mon',
-            'engage_mon': 'engage_rate_mon', 'habit_mon': 'habit_rate_mon', 'real_mon': 'real_rate_mon',
-            # 유지율 — 전체 코호트
-            'd1': 'd1_ret', 'd7': 'd7_ret', 'w1': 'w1_ret', 'm1': 'm1_ret',
-            # 유지율 — 신규 코호트
-            'new_d1': 'new_d1_ret', 'new_d7': 'new_d7_ret',
-            'new_w1': 'new_w1_ret', 'new_m1': 'new_m1_ret',
-        }
-        rank_sort_field = _rank_field_map.get(metric, 'dau')
+        # ── 기간 집계: rank_sort_field 값을 기간 평균/합계 등으로 재계산 ──
+        if _use_agg:
+            import statistics as _stats_mod
+            _agg_dispatch = {
+                'mean':     lambda v: round(_stats_mod.mean(v), 2),
+                'median':   lambda v: round(_stats_mod.median(v), 2),
+                'max':      lambda v: max(v),
+                'min':      lambda v: min(v),
+                'sum':      lambda v: sum(v),
+                'variance': lambda v: round(_stats_mod.variance(v), 4) if len(v) >= 2 else v[0],
+                'stdev':    lambda v: round(_stats_mod.stdev(v), 4) if len(v) >= 2 else 0.0,
+            }
+            _agg_fn = _agg_dispatch.get(_rank_agg_func)
+            if _agg_fn:
+                for r in rows:
+                    _raw_vals = [_fn(timeline.get(r['code'], {}).get(d, {}).get(rank_sort_field))
+                                 for d in _rank_dates]
+                    _raw_vals = [v for v in _raw_vals if v is not None]
+                    if _raw_vals:
+                        r[rank_sort_field] = _agg_fn(_raw_vals)
+
         rows.sort(key=lambda x: (x.get(rank_sort_field) or 0), reverse=True)
         data['ranking'] = rows[:40]
         data['ranking_metric'] = rank_sort_field
-        data['ranking_channel'] = _rank_channel  # None이면 전체
+        data['ranking_channel'] = _rank_channel
         data['ranking_include_weekend'] = _include_weekend
+        data['ranking_agg_func'] = _rank_agg_func if _use_agg else None
+        data['ranking_date_range'] = _rank_date_range if _use_agg else None  # 집계 시에만 표시
+        data['ranking_ref_date'] = _rank_ref_date   # 실제 사용된 날짜 (헤더 표시용)
+        data['ranking_extra_fields'] = _rank_extra_fields
 
     # overview — 편성시간 순 전 지표 현황표
     if intent_type == 'overview':
+        # 프로그램 코드들이 실제로 데이터를 갖는 최신 날짜 계산
+        _PGM_CODES_OV = [c for c in PGM_F + PGM_L if c in timeline]
+        _pgm_dates = sorted(set(
+            d for c in _PGM_CODES_OV for d in timeline[c].keys()
+        ))
+        _pgm_latest = _pgm_dates[-1] if _pgm_dates else latest_date
+
+        # date_type에 따라 실제 조회 날짜 결정
+        if intent.get('specific_date'):
+            _sp = intent['specific_date'].replace('-', '/')
+            _ov_latest = _sp if _sp in _pgm_dates else _pgm_latest
+        else:
+            _ov_latest = _pgm_latest
+        # 해당 날짜에 데이터가 없으면 최신 날짜로 fallback
+        _has_data = any(
+            _ov_latest in timeline.get(c, {}) for c in _PGM_CODES_OV
+        )
+        if not _has_data:
+            _ov_latest = _pgm_latest
+        data['overview_date'] = _ov_latest
         _q_ov = question.lower()
         _is_channel_ov = (
             any(kw in _q_ov for kw in ['전 채널', '채널별', '채널 현황', '채널 비교'])
@@ -1829,7 +2241,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
                 date_rows = timeline.get(ch_code)
                 if not date_rows:
                     continue
-                row = date_rows.get(latest_date)
+                row = date_rows.get(_ov_latest)
                 if not row:
                     continue
                 ch_ov_rows.append({
@@ -1900,7 +2312,7 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
                 date_rows = timeline.get(code)
                 if not date_rows:
                     continue
-                row = date_rows.get(latest_date)
+                row = date_rows.get(_ov_latest)
                 if not row:
                     continue
                 # 채널 결정
@@ -1911,7 +2323,10 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
                     'code': code,
                     'name': _pgm_name(code, row=row),
                     'channel': ch_name,
+                    'airtime': _fmt_stime(row.get('STIME') or row.get('stime') or row.get('airtime') or ''),
                     'is_weekend': is_wknd,
+                    'live_yn': (row.get('live_yn') or '').strip() or None,
+                    'view_radio_yn': (row.get('view_radio_yn') or '').strip().upper() or None,
                     # 볼륨
                     'dau':    _i(row.get('dau')) or None,
                     'wau':    _i(row.get('wau')) or None,
@@ -2018,23 +2433,58 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
                 # trend도 채워서 차트 렌더링 활용
                 data['trend'] = {'metric_field': 'dau', 'days': len(valid_pts), 'data': valid_pts}
 
-    # dual_trend — 동일 채널에서 두 지표 동시 추이
+    # dual_trend — 지표 2~3개 동시 추이 (Claude가 metrics 배열로 반환)
     if intent_type == 'dual_trend':
+        # metric 코드(classifier 출력) → (csv_field, 레이블, 단위)
         _dual_field_map = {
-            'dau': ('dau', 'DAU', '명'), 'wau': ('wau', 'WAU', '명'), 'mau': ('mau', 'MAU', '명'),
-            'dau_r7': ('dau_r7', '롤링 7일 WAU', '명'), 'dau_r30': ('dau_r30', '롤링 30일 MAU', '명'),
-            'new': ('new', '신규(일)', '명'),
-            'react_rate': ('react_rate', '복귀율', '%'), 'churn': ('churn_rate', '이탈률', '%'),
-            'deep': ('deep_rate', '깊은청취율', '%'), 'real': ('real_rate', '실청취율', '%'),
-            'engage': ('engage_rate', '참여율', '%'), 'habit': ('habit_rate', '습관형성률', '%'),
-            'd1_ret': ('d1_ret', 'D1유지율', '%'), 'd7_ret': ('d7_ret', 'D7유지율', '%'),
-            'w1_ret': ('w1_ret', 'W1유지율', '%'), 'm1_ret': ('m1_ret', 'M1유지율', '%'),
-            'new_d1_ret': ('new_d1_ret', '신규D1유지율', '%'), 'new_d7_ret': ('new_d7_ret', '신규D7유지율', '%'),
-            'new_w1_ret': ('new_w1_ret', '신규W1유지율', '%'), 'new_m1_ret': ('new_m1_ret', '신규M1유지율', '%'),
+            # 볼륨 (명)
+            'dau':      ('dau',      'DAU',        '명'),
+            'wau':      ('wau',      'WAU',        '명'),
+            'mau':      ('mau',      'MAU',        '명'),
+            'dau_r7':   ('dau_r7',   '롤링WAU',    '명'),
+            'dau_r30':  ('dau_r30',  '롤링MAU',    '명'),
+            '1min':     ('dau_1min', '1분↑청취',   '명'),
+            '10min':    ('dau_10min','10분↑청취',  '명'),
+            # 신규/복귀 수 (명)
+            'new':          ('new',          '신규(일)', '명'),
+            'new_week':     ('new_week',     '신규(주)', '명'),
+            'new_mon':      ('new_mon',      '신규(월)', '명'),
+            'react':        ('react',        '복귀자(일)','명'),
+            'react_week':   ('react_week',   '복귀자(주)','명'),
+            'react_mon':    ('react_mon',    '복귀자(월)','명'),
+            # 비율 (%)
+            'react_rate':       ('react_rate',       '복귀율',     '%'),
+            'react_rate_week':  ('react_rate_week',  '복귀율(주)', '%'),
+            'react_rate_mon':   ('react_rate_mon',   '복귀율(월)', '%'),
+            'churn':            ('churn_rate',        '이탈률',     '%'),
+            'churn_week':       ('churn_rate_week',   '이탈률(주)', '%'),
+            'churn_mon':        ('churn_rate_mon',    '이탈률(월)', '%'),
+            'deep':             ('deep_rate',         '깊은청취율', '%'),
+            'deep_week':        ('deep_rate_week',    '깊은청취(주)','%'),
+            'deep_mon':         ('deep_rate_mon',     '깊은청취(월)','%'),
+            'real':             ('real_rate',         '실청취율',   '%'),
+            'real_week':        ('real_rate_week',    '실청취(주)', '%'),
+            'real_mon':         ('real_rate_mon',     '실청취(월)', '%'),
+            'engage':           ('engage_rate',       '참여율',     '%'),
+            'engage_week':      ('engage_rate_week',  '참여율(주)', '%'),
+            'engage_mon':       ('engage_rate_mon',   '참여율(월)', '%'),
+            'habit':            ('habit_rate',        '습관형성률', '%'),
+            'habit_week':       ('habit_rate_week',   '습관형성(주)','%'),
+            'habit_mon':        ('habit_rate_mon',    '습관형성(월)','%'),
+            # 유지율 — 전체 코호트 (%)
+            'd1': ('d1_ret', 'D1유지율', '%'),
+            'd7': ('d7_ret', 'D7유지율', '%'),
+            'w1': ('w1_ret', 'W1유지율', '%'),
+            'm1': ('m1_ret', 'M1유지율', '%'),
+            # 유지율 — 신규 코호트 (%)
+            'new_d1': ('new_d1_ret', '신규D1유지율', '%'),
+            'new_d7': ('new_d7_ret', '신규D7유지율', '%'),
+            'new_w1': ('new_w1_ret', '신규W1유지율', '%'),
+            'new_m1': ('new_m1_ret', '신규M1유지율', '%'),
         }
         _dt_series = []
-        _dt_fetch_days = len(available_dates)  # 가용 전체 데이터 반환
-        for m in (intent.get('dual_metrics') or ['dau', 'deep']):
+        _dt_fetch_days = len(available_dates)  # 차트 기간버튼용 전체 데이터
+        for m in (intent.get('metrics') or ['dau', 'deep']):
             mf, label, unit = _dual_field_map.get(m, (m, m.upper(), ''))
             trend_data = get_metric_trend(timeline, scope, mf, days=_dt_fetch_days)
             _dt_series.append({
@@ -2047,9 +2497,29 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
     if intent_type == 'compare_trend':
         _selected = intent.get('compare_channels') or ['F00', 'L00']
         ct_field_map = {
+            # 사용자 수 — 기간별
             'dau': 'dau', 'wau': 'wau', 'mau': 'mau',
-            'deep': 'deep_rate', 'churn': 'churn_rate',
-            'new': 'new', 'react': 'react', 'habit': 'habit_rate', 'all': 'dau',
+            'dau_r7': 'wau', 'dau_r30': 'mau',
+            'new': 'new', 'new_week': 'new_week', 'new_mon': 'new_mon',
+            'react': 'react', 'react_week': 'react_week', 'react_mon': 'react_mon',
+            '1min': 'dau_1min', '10min': 'dau_10min',
+            # 비율 지표 — 일간
+            'churn': 'churn_rate', 'deep': 'deep_rate', 'real': 'real_rate',
+            'engage': 'engage_rate', 'habit': 'habit_rate', 'react_rate': 'react_rate',
+            # 비율 지표 — 주간
+            'churn_week': 'churn_rate_week', 'deep_week': 'deep_rate_week',
+            'real_week': 'real_rate_week', 'engage_week': 'engage_rate_week',
+            'habit_week': 'habit_rate_week', 'react_rate_week': 'react_rate_week',
+            # 비율 지표 — 월간
+            'churn_mon': 'churn_rate_mon', 'deep_mon': 'deep_rate_mon',
+            'real_mon': 'real_rate_mon', 'engage_mon': 'engage_rate_mon',
+            'habit_mon': 'habit_rate_mon', 'react_rate_mon': 'react_rate_mon',
+            # 유지율 — 전체 코호트
+            'd1': 'd1_ret', 'd7': 'd7_ret', 'w1': 'w1_ret', 'm1': 'm1_ret',
+            # 유지율 — 신규 코호트
+            'new_d1': 'new_d1_ret', 'new_d7': 'new_d7_ret',
+            'new_w1': 'new_w1_ret', 'new_m1': 'new_m1_ret',
+            'all': 'dau',
         }
         mf_ct = ct_field_map.get(metric, 'dau')
         _ct_fetch_days = len(available_dates)  # 가용 전체 데이터 반환
@@ -2130,20 +2600,41 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
         data['funnel'] = _build_funnel_dict(_t00_row)
         _ret_kws = ['유지율', 'd1', 'd7', 'w1', 'm1', '코호트', '리텐션', 'retention']
         if any(kw in question.lower() for kw in _ret_kws):
-            _ret_fields = [
-                ('신규D1', 'new_d1_ret'), ('신규D7', 'new_d7_ret'),
-                ('신규W1', 'new_w1_ret'), ('신규M1', 'new_m1_ret'),
-            ]
-            _ret_series = []
-            _ret_fetch_days = len(available_dates)  # 전체 히스토리 — 클라이언트가 기간 슬라이싱
-            for label, field in _ret_fields:
-                trend = get_metric_trend(timeline, scope, field, days=_ret_fetch_days)
-                valid = [(d, v) for d, v in trend if v is not None]
-                if len(valid) >= 3:
-                    _ret_series.append({'label': label, 'field': field, 'data': valid, 'unit': '%'})
-            if _ret_series:
-                data['retention_trend'] = _ret_series
-                data['retention_trend_initial_days'] = 30
+            _q_lower = question.lower()
+            _want_new  = '신규' in _q_lower and '전체' not in _q_lower
+            _want_both = (not _want_new and '전체' not in _q_lower
+                          and not any(m in _q_lower for m in ['new_d1', 'new_d7', 'new_w1', 'new_m1']))
+
+            _ALL_FIELDS = [('D1','d1_ret'),('D7','d7_ret'),('W1','w1_ret'),('M1','m1_ret')]
+            _NEW_FIELDS = [('신규D1','new_d1_ret'),('신규D7','new_d7_ret'),
+                           ('신규W1','new_w1_ret'),('신규M1','new_m1_ret')]
+
+            def _build_ret_series(fields):
+                series = []
+                for label, field in fields:
+                    trend = get_metric_trend(timeline, scope, field, days=len(available_dates))
+                    valid = [(d, v) for d, v in trend if v is not None]
+                    if len(valid) >= 3:
+                        series.append({'label': label, 'field': field, 'data': valid, 'unit': '%'})
+                return series
+
+            if _want_both:
+                _all_series = _build_ret_series(_ALL_FIELDS)
+                _new_series = _build_ret_series(_NEW_FIELDS)
+                if _all_series:
+                    data['retention_trend']     = _all_series
+                    data['retention_trend_new'] = _new_series if _new_series else None
+                    data['retention_want_both'] = bool(_new_series)
+                    data['retention_trend_initial_days'] = 30
+                    data['retention_cohort_type'] = '전체'
+            else:
+                _ret_fields   = _NEW_FIELDS if _want_new else _ALL_FIELDS
+                _cohort_type  = '신규' if _want_new else '전체'
+                _ret_series   = _build_ret_series(_ret_fields)
+                if _ret_series:
+                    data['retention_trend'] = _ret_series
+                    data['retention_trend_initial_days'] = 30
+                    data['retention_cohort_type'] = _cohort_type
 
     # engagement — 깊은청취율 추세 차트도 함께 수집
     if intent_type == 'engagement':
@@ -2383,11 +2874,16 @@ def format_for_claude(data: dict, intent: dict, question: str, timeline: dict = 
                 lines.append(f"    신규: {_fmt_dau(s.get('new_mon'))} ({_fmt_pct(s.get('new_mon_share'))}) MoM {_fmt_arrow(s.get('new_mon_wow'))} | 전월 {_fmt_dau(s.get('new_mon_prev'))}")
                 lines.append(f"    복귀: {_fmt_dau(s.get('react_mon'))} MoM {_fmt_arrow(s.get('react_mon_wow'))}")
 
-        if any(s.get(k) for k in ('airtime', 'guestname', 'daily_corner', 'weekly_corner', 'program_title')):
+        if any(s.get(k) for k in ('airtime', 'guestname', 'daily_corner', 'weekly_corner', 'program_title', 'live_yn', 'view_radio_yn')):
             lines.append(f"  [편성 메타]")
             if s.get('airtime'):
                 lines.append(f"    방송시간: {s['airtime']}")
-            if s.get('guestname'):
+            if s.get('live_yn'):
+                lines.append(f"    생방송여부: {s['live_yn']}")
+            if s.get('view_radio_yn') in ('Y', 'N'):
+                lines.append(f"    보라편성: {'있음(Y)' if s['view_radio_yn'] == 'Y' else '없음(N)'}")
+            if not data.get('guestname_history') and s.get('guestname'):
+                # 날짜 범위 히스토리가 없을 때만 단일 어제 게스트 표시
                 lines.append(f"    어제({s['date']}) 게스트: {s['guestname']}")
             if s.get('daily_corner'):
                 lines.append(f"    일간 코너: {s['daily_corner']}")
@@ -2398,10 +2894,113 @@ def format_for_claude(data: dict, intent: dict, question: str, timeline: dict = 
 
         lines.append('')
 
+    # guestname_history — 스냅샷 루프 외부에서 독립 섹션으로 출력 (채널/전체 스코프 포함)
+    # guestname=None인 날짜 = 초대손님 없음 (데이터 누락 아님)
+    if 'guestname_history' in data:
+        _gh = data['guestname_history']
+        _ghr = data.get('guestname_history_range')
+        _rng_str = f"{_ghr[0]}~{_ghr[1]}" if _ghr else ''
+        lines.append(f"[게스트 출연 현황{' (' + _rng_str + ')' if _rng_str else ''}]")
+        lines.append("※ guestname 비어있음 = 해당일 초대손님 없음 (데이터 누락 아님)")
+        for _ge in _gh:
+            _dow = _weekday_ko(_ge['date'])
+            _dlabel = f"{_ge['date']}({_dow})" if _dow else _ge['date']
+            if _ge['guestname']:
+                lines.append(f"  {_dlabel}: {_ge['guestname']}")
+            else:
+                lines.append(f"  {_dlabel}: 초대손님 없음")
+        lines.append('')
+
+    # live_schedule — 날짜별 생방송/녹음방송 편성 현황
+    if data.get('live_schedule'):
+        _ls = data['live_schedule']
+        _lsr = data.get('live_schedule_range')
+        _lrng = f"{_lsr[0]}~{_lsr[1]}" if _lsr and _lsr[0] != _lsr[1] else (_lsr[0] if _lsr else '')
+        lines.append(f"[생방송 편성 현황{' (' + _lrng + ')' if _lrng else ''}]")
+        lines.append("※ live_yn 비어있음 = 집계 데이터 없음 (집계 주기 미도래 등)")
+        for _le in _ls:
+            _dow = _weekday_ko(_le['date'])
+            _dlabel = f"{_le['date']}({_dow})" if _dow else _le['date']
+            if _le['programs']:
+                _live_pgms  = [p['name'] for p in _le['programs'] if p['live_yn'] == '생방송']
+                _rec_pgms   = [p['name'] for p in _le['programs'] if p['live_yn'] == '녹음']
+                _parts = []
+                if _live_pgms:
+                    _parts.append(f"생방송({len(_live_pgms)}): {', '.join(_live_pgms)}")
+                if _rec_pgms:
+                    _parts.append(f"녹음({len(_rec_pgms)}): {', '.join(_rec_pgms)}")
+                lines.append(f"  {_dlabel}: {' | '.join(_parts)}")
+            else:
+                lines.append(f"  {_dlabel}: 집계 데이터 없음")
+        lines.append('')
+
+    # view_radio_schedule — 보라(보는라디오) 편성 현황
+    if data.get('view_radio_schedule'):
+        _vs  = data['view_radio_schedule']
+        _vsr = data.get('view_radio_schedule_range')
+        _vrng = f"{_vsr[0]}~{_vsr[1]}" if _vsr and _vsr[0] != _vsr[1] else (_vsr[0] if _vsr else '')
+        lines.append(f"[보라(보는라디오) 편성 현황{' (' + _vrng + ')' if _vrng else ''}]")
+        lines.append("※ view_radio_yn: Y=보라편성있음, N=보라편성없음, 비어있음=집계데이터없음")
+        for _ve in _vs:
+            _dow = _weekday_ko(_ve['date'])
+            _dlabel = f"{_ve['date']}({_dow})" if _dow else _ve['date']
+            if _ve['programs']:
+                _y_pgms = [p['name'] for p in _ve['programs'] if p['view_radio_yn'] == 'Y']
+                _n_pgms = [p['name'] for p in _ve['programs'] if p['view_radio_yn'] == 'N']
+                _parts  = []
+                if _y_pgms:
+                    _parts.append(f"편성({len(_y_pgms)}): {', '.join(_y_pgms)}")
+                if _n_pgms:
+                    _parts.append(f"미편성({len(_n_pgms)}): {', '.join(_n_pgms)}")
+                lines.append(f"  {_dlabel}: {' | '.join(_parts)}")
+            else:
+                lines.append(f"  {_dlabel}: 집계 데이터 없음")
+        lines.append('')
+
+    # corner_schedule — 요일별 코너 편성 현황
+    if data.get('corner_schedule'):
+        _cs = data['corner_schedule']
+        if _cs['type'] == 'program':
+            _cs_name  = _cs['scope_name']
+            _cs_sched = _cs['schedule']  # {요일: {daily, weekly}}
+            lines.append(f"[{_cs_name} 코너 편성 현황 (최근 방송 기준)]")
+            lines.append("※ 매일코너=방송일 공통, 주간코너=해당 요일 특정 코너")
+            for dow in _DOW_ORDER:
+                if dow not in _cs_sched:
+                    continue
+                _d = _cs_sched[dow]
+                lines.append(f"  {dow}요일:")
+                if _d.get('daily'):
+                    lines.append(f"    매일코너: {_d['daily']}")
+                if _d.get('weekly'):
+                    lines.append(f"    주간코너: {_d['weekly']}")
+            lines.append('')
+        else:
+            # channel scope
+            _cs_name = _cs['scope_name']
+            lines.append(f"[{_cs_name} 프로그램 코너 편성 현황 (최근 방송 기준)]")
+            lines.append("※ 매일코너=방송일 공통, 주간코너=해당 요일 특정 코너")
+            for code, pgm_info in _cs['programs'].items():
+                lines.append(f"  [{pgm_info['name']}]")
+                for dow in _DOW_ORDER:
+                    if dow not in pgm_info['schedule']:
+                        continue
+                    _d = pgm_info['schedule'][dow]
+                    _parts_str = []
+                    if _d.get('daily'):
+                        _parts_str.append(f"매일: {_d['daily']}")
+                    if _d.get('weekly'):
+                        _parts_str.append(f"주간: {_d['weekly']}")
+                    if _parts_str:
+                        lines.append(f"    {dow}: {' / '.join(_parts_str)}")
+            lines.append('')
+
     if 'trend' in data:
         t = data['trend']
-        lines.append(f"[최근 {t['days']}일 시계열 — {t['metric_field']}]")
-        for date, value in t['data']:
+        _ctx_days = intent.get('days', 30)
+        _ctx_data = t['data'][-_ctx_days:]  # Claude 컨텍스트는 요청 기간만 (차트는 전체 유지)
+        lines.append(f"[최근 {len(_ctx_data)}일 시계열 — {t['metric_field']}]")
+        for date, value in _ctx_data:
             dow = _weekday_ko(date)
             prefix = f"  {date}({dow})" if dow else f"  {date}"
             if value is not None:
@@ -2416,6 +3015,9 @@ def format_for_claude(data: dict, intent: dict, question: str, timeline: dict = 
         _rm_label_map = {
             'dau': 'DAU', 'wau': 'WAU', 'mau': 'MAU',
             'dau_r7': '롤링WAU', 'dau_r30': '롤링MAU',
+            'dau_1min': '1분↑청취', 'dau_10min': '10분↑청취',
+            'wau_1min': '1분↑청취(주)', 'wau_10min': '10분↑청취(주)',
+            'mau_1min': '1분↑청취(월)', 'mau_10min': '10분↑청취(월)',
             'new': '신규(일)', 'new_week': '신규(주)', 'new_mon': '신규(월)',
             'react': '복귀(일)', 'react_week': '복귀(주)', 'react_mon': '복귀(월)',
             'react_rate': '복귀율(일)', 'react_rate_week': '복귀율(주)', 'react_rate_mon': '복귀율(월)',
@@ -2434,20 +3036,63 @@ def format_for_claude(data: dict, intent: dict, question: str, timeline: dict = 
         _rch = data.get('ranking_channel')
         _rch_name = _pgm_name(_rch, default='') if _rch else ''
         _rch_prefix = f"{_rch_name} " if _rch_name else ""
-        lines.append(f"[최신일 {_rch_prefix}프로그램 순위 TOP 10 ({_rm_label} 기준)]")
+        _ragg     = data.get('ranking_agg_func') or ''
+        _rdr      = data.get('ranking_date_range') or ''   # 집계 시에만 설정됨
+        _rref     = data.get('ranking_ref_date') or data.get('date_max') or ''
+        _rexf     = data.get('ranking_extra_fields') or []
+        _agg_ko   = {'mean': '평균', 'median': '중간값', 'max': '최대', 'min': '최소',
+                     'sum': '합계', 'variance': '분산', 'stdev': '표준편차'}.get(_ragg, '')
+        if _ragg and _rdr:
+            # 집계 기간 랭킹: "(2026/04/01~2026/04/30) [평균]"
+            _period_label = f" ({_rdr}) [{_agg_ko}]"
+        elif _rref and _rref != data.get('date_max'):
+            # 특정일 지정이지만 실제 사용 날짜가 다를 때: 실제 날짜만 표시
+            _period_label = f" ({_rref})"
+        elif _rref:
+            _period_label = f" ({_rref})"
+        else:
+            _period_label = " (최신일)"
+        lines.append(f"[{_rch_prefix}프로그램 순위 TOP 10{_period_label} — {_rm_label} 기준]")
+
+        # 정렬 기준 카테고리별 보조 필드
+        _rm_is_vol  = _rm in ('dau', 'wau', 'mau', 'dau_r7', 'dau_r30',
+                               'dau_1min', 'dau_10min', 'wau_1min', 'wau_10min', 'mau_1min', 'mau_10min')
+        _rm_is_new  = _rm.startswith('new') and not _rm.endswith('_ret')
+        _rm_is_react_cnt = _rm in ('react', 'react_week', 'react_mon')
+        _wow_field_map = {
+            'new': 'new_wow', 'new_week': 'new_week_wow', 'new_mon': 'new_mon_wow',
+            'react': 'react_wow', 'react_week': 'react_week_wow', 'react_mon': 'react_mon_wow',
+        }
         for i, r in enumerate(data['ranking'], 1):
             _sort_val = r.get(_rm)
-            if _is_rate:
-                _sort_str = _fmt_pct(_sort_val)
-            else:
-                _sort_str = _fmt_dau(_sort_val)
-            _extra = ''
+            _sort_str = _fmt_pct(_sort_val) if _is_rate else _fmt_dau(_sort_val)
+            _aux = []
             if _rm != 'dau':
-                _extra = f" | DAU {_fmt_dau(r['dau'])}"
-            lines.append(
-                f"  {i}위 {r['name']}: {_rm_label} {_sort_str}{_extra} | "
-                f"깊은청취 {_fmt_pct(r.get('deep_rate'))} | DAU WoW {_fmt_arrow(r.get('dau_wow'))}"
-            )
+                _aux.append(f"DAU {_fmt_dau(r.get('dau'))}")
+            if _rm_is_vol:
+                _aux.append(f"깊은청취 {_fmt_pct(r.get('deep_rate'))}")
+            elif _rm_is_new:
+                _aux.append(f"신규WoW {_fmt_arrow(r.get(_wow_field_map.get(_rm, 'new_wow')))}")
+            elif _rm_is_react_cnt:
+                _aux.append(f"복귀WoW {_fmt_arrow(r.get(_wow_field_map.get(_rm, 'react_wow')))}")
+            _aux.append(f"DAU WoW {_fmt_arrow(r.get('dau_wow'))}")
+            # extra_fields
+            _ef_parts = []
+            for ef in _rexf:
+                _ef_val = r.get(ef)
+                if ef == 'guestname' and r.get('guestname'):
+                    _ef_parts.append(f"게스트: {r['guestname']}")
+                elif ef == 'live_yn' and r.get('live_yn_v'):
+                    _ef_parts.append(f"편성: {'생방' if r['live_yn_v'].upper() == 'Y' else '녹음'}")
+                elif _ef_val is not None and _ef_val != '' and ef not in ('guestname', 'live_yn'):
+                    _ef_lbl = _rm_label_map.get(ef, ef.upper())
+                    _ef_str_v = _fmt_pct(_ef_val) if (ef.endswith('_rate') or ef.endswith('_ret')) else _fmt_dau(_ef_val)
+                    if ef != _rm:
+                        _ef_parts.append(f"{_ef_lbl} {_ef_str_v}")
+            _line = f"  {i}위 {r['name']}: {_rm_label} {_sort_str} | {' | '.join(_aux)}"
+            if _ef_parts:
+                _line += f" || {' | '.join(_ef_parts)}"
+            lines.append(_line)
         lines.append('')
 
     if data.get('overview'):
@@ -2659,7 +3304,7 @@ _INTENT_TOKENS = {
     'snapshot': 700, 'trend': 800, 'compare': 800, 'compare_trend': 800, 'dual_trend': 800,
     'ranking': 600, 'overview': 700, 'health': 900,
     'funnel': 1000, 'engagement': 1000, 'growth': 900,
-    'anomaly': 800, 'report': 1500, 'general': 700,
+    'anomaly': 800, 'report': 1500, 'general': 1500,
 }
 
 
@@ -2682,7 +3327,7 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
     elif available_dates and (
         '어제' in question or intent.get('date_type') == 'yesterday'
     ):
-        # Claude 날짜 계산 무시 — "어제"는 항상 date_max(최신데이터)로 고정
+        # "어제"는 항상 타임라인 최신 날짜(= 어제 데이터)로 고정
         intent['specific_date'] = available_dates[-1]
         intent['date_type'] = 'specific'
     # 주말 프로그램 포함 여부 (러브FM 한정)
@@ -2694,6 +3339,36 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
         intent['intent'] = 'overview'
     # compare_trend 감지: 채널 2개 이상 언급 + 추이/추세 키워드 (또는 vs)
     _HAS_TREND_KW = any(kw in question for kw in ('추이', '추세', '트렌드', '변화'))
+    # 질문에 명시된 지표 키워드 → metric 코드 매핑 (channel compare_trend·pgm_group_trend 공용)
+    _PGM_METRIC_KW = {
+        'dau':        ('DAU', 'dau'),
+        'wau':        ('WAU', 'wau'),
+        'mau':        ('MAU', 'mau'),
+        'new':        ('신규 사용자', '신규자', '신규유입'),
+        'churn':      ('이탈률', '이탈율'),
+        'react_rate': ('복귀율',),
+        'react':      ('복귀 사용자', '복귀자', '복귀유입'),
+        'deep':       ('깊은청취율', '깊은청취'),
+        'real':       ('실청취율', '실청취'),
+        'engage':     ('참여율',),
+        'habit':      ('습관형성률', '습관형성'),
+        'd1':         ('D1유지율', 'D1유지'),
+        'd7':         ('D7유지율', 'D7유지'),
+        'w1':         ('W1유지율', 'W1유지'),
+        'm1':         ('M1유지율', 'M1유지'),
+    }
+    # 기간 한정어(주간/월간)가 있으면 베이스 metric을 _week/_mon으로 업그레이드하는 헬퍼
+    _PERIOD_UPGRADABLE = {'dau', 'new', 'react', 'churn', 'real', 'deep', 'engage', 'habit', 'react_rate'}
+
+    def _apply_period_suffix(intent_dict, q):
+        """질문에 주간/월간 한정어가 있으면 metric suffix를 자동 적용한다."""
+        base = intent_dict.get('metric', '')
+        if base not in _PERIOD_UPGRADABLE:
+            return
+        if any(k in q for k in ('주간', '주별', '이번주', '지난주', '이 주')):
+            intent_dict['metric'] = f"{base}_week"
+        elif any(k in q for k in ('월간', '월별', '이번달', '지난달', '이 달')):
+            intent_dict['metric'] = f"{base}_mon"
     _CH_DETECT = {
         'F00': ('파워FM', '파워fm', '파워 fm', 'powerfm'),
         'L00': ('러브FM', '러브fm', '러브 fm', 'lovefm'),
@@ -2706,6 +3381,11 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
         intent['intent'] = 'compare_trend'
         intent['compare_channels'] = _ct_channels
         intent['days'] = 30  # 추이 쿼리는 항상 30일 기준
+        for _mk, _mks in _PGM_METRIC_KW.items():
+            if any(k in question for k in _mks):
+                intent['metric'] = _mk
+                break
+        _apply_period_suffix(intent, question)
     # pgm_group_trend 감지: 특정 채널 내 전체 프로그램 추이 요청
     # "파워FM 전체 프로그램 이탈율 추세" → compare_trend with F01~F13
     _PGM_GROUP_MAP = {
@@ -2717,13 +3397,6 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
     _PGM_GROUP_SCOPE_KW = ('전체 프로그램', '프로그램 전체', '모든 프로그램', '속한 전체',
                            '에 속한', '소속 프로그램', '프로그램들의', '프로그램 각각',
                            '프로그램별', '개별 프로그램')
-    _PGM_METRIC_KW = {
-        'churn': ('이탈률', '이탈율'),
-        'deep':  ('깊은청취율', '깊은청취'),
-        'real':  ('실청취율', '실청취'),
-        'dau':   ('DAU', 'dau'),
-        'habit': ('습관형성률', '습관형성'),
-    }
     if (intent.get('intent') not in ('compare_trend',)
             and _HAS_TREND_KW
             and any(kw in question for kw in _PGM_GROUP_SCOPE_KW)):
@@ -2738,34 +3411,10 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
                     if any(k in question for k in _mks):
                         intent['metric'] = _mk
                         break
+                _apply_period_suffix(intent, question)
                 break
-    # dual_trend 감지: 동일 채널에서 2개 이상 지표 언급 + 추이 키워드 + 연결어
-    if intent.get('intent') not in ('compare_trend',):
-        _DUAL_METRIC_KW = {
-            'dau':        ('DAU', 'dau', '일간 사용자'),
-            'wau':        ('WAU', 'wau'),
-            'mau':        ('MAU', 'mau'),
-            'dau_r7':     ('롤링 7일 WAU', '롤링WAU', '7일롤링', 'R7', 'r7', '7일 롤링', '7일롤링DAU', '7일WAU', '7일MAU', '최근7일 활성사용자'),
-            'dau_r30':    ('롤링 30일 MAU', '롤링MAU', '30일롤링', 'R30', 'r30', '30일 롤링', '30일롤링DAU', '30일MAU', '최근30일 활성사용자'),
-            'new':        ('신규 사용자', '신규자', '신규수'),
-            'react_rate': ('복귀율',),
-            'churn':      ('이탈률', '이탈율'),
-            'deep':       ('깊은청취율', '깊은청취'),
-            'real':       ('실청취율', '실청취'),
-            'engage':     ('참여율',),
-            'habit':      ('습관형성률', '습관형성'),
-            'd1_ret':     ('D1유지율', 'D1 유지율', 'D1유지', 'D1'),
-            'd7_ret':     ('D7유지율', 'D7 유지율', 'D7유지', 'D7'),
-            'w1_ret':     ('W1유지율', 'W1 유지율', 'W1유지', 'W1'),
-            'm1_ret':     ('M1유지율', 'M1 유지율', 'M1유지', 'M1'),
-        }
-        _DUAL_CONNECT = ('와 ', '과 ', '랑 ', '와', '과', '+', '함께', '같이', '동시에')
-        _dual_metrics = [m for m, kws in _DUAL_METRIC_KW.items() if any(kw in question for kw in kws)]
-        if (_HAS_TREND_KW and len(_dual_metrics) >= 2
-                and any(kw in question for kw in _DUAL_CONNECT)):
-            intent['intent'] = 'dual_trend'
-            intent['dual_metrics'] = _dual_metrics[:3]
-            intent['days'] = 30  # 추이 쿼리는 항상 30일 기준
+    # dual_trend: Claude가 intent='dual_trend'와 metrics 배열을 직접 반환
+    # (키워드 후처리 제거 — Claude가 자연어에서 지표를 추출)
     if verbose:
         print(f"  -> {intent.get('summary')}: intent={intent.get('intent')}, "
               f"scope={intent.get('scope')}, days={intent.get('days')}", flush=True)
@@ -2917,11 +3566,23 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
             " 실청취율·깊은청취율·이탈률로 근거를 보완하세요."
             " 마크다운 테이블 없이 서술형으로 작성하세요."
         )
-    full_system = QUERY_SYSTEM_PROMPT + date_system + intent_note + _load_rules()
+    _static_system  = QUERY_SYSTEM_PROMPT + _load_rules()
+    _chart_note = (
+        "\n\n[차트·테이블 중복 금지] UI에 차트 또는 테이블이 자동 표시됩니다."
+        " 동일한 수치를 텍스트 표·목록·수치 나열로 중복 제시하지 마세요."
+    ) if _has_chart else ''
+    _dynamic_system = date_system + intent_note + _chart_note
+    full_system = (_static_system, _dynamic_system)
     if _return_context:
-        return full_system, context, max_tokens, chart_data
-    answer_text = call_claude(full_system, context, max_tokens=max_tokens)
-    return {"answer": answer_text, "chart_data": chart_data}
+        return _static_system + _dynamic_system, context, max_tokens, chart_data
+    _model = HAIKU_MODEL if _it in _HAIKU_INTENTS else CLAUDE_MODEL
+    answer_text, usage = call_claude(full_system, context, max_tokens=max_tokens, model=_model)
+    return {
+        "answer": answer_text,
+        "chart_data": chart_data,
+        "input_tokens":  usage.get("input_tokens"),
+        "output_tokens": usage.get("output_tokens"),
+    }
 
 
 # ── CLI ───────────────────────────────────────────────────

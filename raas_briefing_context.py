@@ -24,221 +24,6 @@ def _get_adapter():
         return None
 
 
-def _build_period_focus(period: str, kpi_data: dict) -> str:
-    """기간(일/주/월)별 핵심 지표 포커스 텍스트 생성."""
-    s1 = kpi_data.get("s1_executive", {}) or {}
-    s2 = kpi_data.get("s2_funnel",    {}) or {}
-    s3 = kpi_data.get("s3_engagement",{}) or {}
-
-    def _f(v, d="—"):
-        return v if v is not None else d
-
-    if period == "week":
-        lines = [
-            "[기간 포커스: 주간(WAU)]",
-            f"분석 기준: 7일 롤링 활성 사용자(WAU) 중심으로 작성",
-            f"WAU {_f(s1.get('dau_week'),0):,}명 (WoW {_f(s1.get('dau_week_wow'),0):+.1f}%)"
-            if isinstance(s1.get('dau_week'), (int, float)) else
-            f"WAU {_f(s1.get('dau_week'))} (WoW {_f(s1.get('dau_week_wow'))}%)",
-            f"주간 신규 {_f(s2.get('new_user_week'),'—')} | 이탈률 {_f(s2.get('churn_week'),'—')}% | 복귀율 {_f(s2.get('react_week'),'—')}%",
-            f"W1 유지율 {_f(s2.get('w1_ret'),'—')}% (전주 대비 {_f(s2.get('new_w1_ret_diff'),'—')}pp)",
-            f"주간 깊은청취율 {_f(s3.get('deep_rate_week'),'—')}% | 참여율 {_f(s3.get('engage_week'),'—')}%",
-            "→ 01 핵심지표는 WAU 기준으로 작성. 일간 DAU 수치 사용 금지.",
-        ]
-    elif period == "mon":
-        lines = [
-            "[기간 포커스: 월간(MAU)]",
-            f"분석 기준: 30일 롤링 활성 사용자(MAU) 중심으로 작성",
-            f"MAU {_f(s1.get('dau_mon'),0):,}명 (MoM {_f(s1.get('dau_mon_wow'),0):+.1f}%)"
-            if isinstance(s1.get('dau_mon'), (int, float)) else
-            f"MAU {_f(s1.get('dau_mon'))} (MoM {_f(s1.get('dau_mon_wow'))}%)",
-            f"월간 신규 {_f(s2.get('new_user_mon'),'—')} | 이탈률 {_f(s2.get('churn_mon'),'—')}% | 복귀율 {_f(s2.get('react_mon'),'—')}%",
-            f"M1 유지율 {_f(s2.get('m1_ret'),'—')}% (전월 대비 {_f(s2.get('new_m1_ret_diff'),'—')}pp)",
-            f"월간 깊은청취율 {_f(s3.get('deep_rate_mon'),'—')}% | 참여율 {_f(s3.get('engage_mon'),'—')}%",
-            "→ 01 핵심지표는 MAU 기준으로 작성. 일간/주간 수치 사용 금지.",
-        ]
-    else:  # day
-        lines = [
-            "[기간 포커스: 일간(DAU)]",
-            f"분석 기준: 일간 활성 사용자(DAU) 중심으로 작성",
-            f"DAU {_f(s1.get('dau'),0):,}명 (WoW {_f(s1.get('dau_wow'),0):+.1f}%)"
-            if isinstance(s1.get('dau'), (int, float)) else
-            f"DAU {_f(s1.get('dau'))} (WoW {_f(s1.get('dau_wow'))}%)",
-            f"D1 유지율 {_f(s2.get('d1_ret'),'—')}% | D7 유지율 {_f(s2.get('d7_ret'),'—')}%",
-            f"일간 이탈률 {_f(s2.get('churn_rate'),'—')}% | 복귀율 {_f(s2.get('react_rate'),'—')}%",
-            f"깊은청취율 {_f(s3.get('deep_rate'),'—')}%",
-            "→ 01 핵심지표는 DAU 기준으로 작성.",
-        ]
-
-    return "\n".join(lines)
-
-
-def build_briefing_context(claude_context: str, kpi_data: dict, target_date: str,
-                           period: str = "day") -> str:
-    """기존 claude_context에 온톨로지 정보 추가.
-
-    Args:
-        claude_context: briefing_engine.collect_all()["claude_context"]
-        kpi_data:       briefing_engine.collect_all() 전체 반환값
-        target_date:    "YYYY-MM-DD" 형식 날짜
-        period:         "day" | "week" | "mon"
-    Returns:
-        enriched_context: claude_context + 기간 포커스 + DayType 정보 + 주목 프로그램 + 추세
-    """
-    adapter = _get_adapter()
-    if adapter is None:
-        return claude_context
-
-    sections = []
-
-    # 0. 기간 포커스 (일/주/월)
-    try:
-        sections.append(_build_period_focus(period, kpi_data))
-    except Exception as e:
-        logger.warning(f"기간 포커스 생성 실패: {e}")
-
-    # 1. DayType 정보 + 패턴 지침 (오늘 + 전일 + 주중 공휴일)
-    try:
-        from datetime import datetime as _dt, timedelta as _td
-
-        daytype_info = adapter.get_daytype_comparison(target_date)
-
-        # 전일 DayType (일간 전일 대비 급변 해석용)
-        try:
-            prev_date = (_dt.strptime(target_date, "%Y-%m-%d") - _td(days=1)).strftime("%Y-%m-%d")
-            prev_info = adapter.get_daytype_comparison(prev_date)
-        except Exception:
-            prev_info = {}
-
-        # 최근 7일 공휴일 목록 (주간 WAU 해석용)
-        week_holidays = []
-        try:
-            base = _dt.strptime(target_date, "%Y-%m-%d")
-            for i in range(1, 8):
-                d = (base - _td(days=i)).strftime("%Y-%m-%d")
-                di = adapter.get_daytype_comparison(d)
-                if di and di.get("day_type") == "공휴일" and di.get("holiday_name"):
-                    week_holidays.append(f"{d[5:]} {di['holiday_name']}")  # MM-DD 이름
-        except Exception:
-            pass
-
-        if daytype_info:
-            dt      = daytype_info.get("day_type", "")
-            weekday = daytype_info.get("day_of_week", "")
-            holiday = daytype_info.get("holiday_name", "")
-
-            lines = ["[DayType 정보]", daytype_info.get("comparison_text", "")]
-
-            if dt == "주말":
-                lines.append(f"⚠️ 오늘({weekday}) 주말 패턴: 평일 대비 DAU 30~50% 낮음이 정상.")
-                lines.append(f"→ 급락 언급 시 '오늘({weekday}, 주말) 패턴으로 정상 감소' 문구로 명시할 것.")
-                lines.append("→ WoW는 전주 동일 요일(주말) 기준만 사용.")
-                lines.append("→ 05 액션: '주말 정상 패턴 — 다음 평일 추이 모니터링'")
-
-            elif dt == "공휴일":
-                name = holiday or "공휴일"
-                lines.append(f"⚠️ 오늘({weekday}) 공휴일({name}) 패턴: 청취 감소는 자연 현상.")
-                lines.append(f"→ 급락 언급 시 반드시 '공휴일({name}) 영향'으로 공휴일명까지 명시할 것.")
-                lines.append(f"→ 05 액션: '공휴일({name}) 패턴 — 다음 평일 회복 모니터링'")
-
-            else:
-                lines.append(f"→ 오늘은 {weekday}(평일). 전주 동일 요일 대비 WoW 사용.")
-
-            # 전일 DayType — 오늘 일간 급증 원인 판단용
-            if prev_info:
-                prev_dt      = prev_info.get("day_type", "")
-                prev_weekday = prev_info.get("day_of_week", "")
-                prev_holiday = prev_info.get("holiday_name", "")
-                if prev_dt == "주말":
-                    lines.append(
-                        f"→ 전일({prev_date[5:]}, {prev_weekday})은 주말 —"
-                        f" 일간 DAU 급증이 있다면 주말→평일 반등 정상 패턴으로 명시할 것."
-                    )
-                elif prev_dt == "공휴일":
-                    pname = prev_holiday or "공휴일"
-                    lines.append(
-                        f"→ 전일({prev_date[5:]}, {prev_weekday})은 공휴일({pname}) —"
-                        f" 일간 DAU 급증이 있다면 '공휴일({pname}) 다음 날 반등 패턴'으로 명시할 것."
-                    )
-
-            # 주중 공휴일 — 주간(WAU) 감소 원인 판단용
-            if week_holidays:
-                joined = ", ".join(week_holidays)
-                lines.append(
-                    f"→ 최근 7일 내 법정 공휴일: {joined} —"
-                    f" 주간(WAU) 급락 언급 시 해당 공휴일명까지 명시할 것."
-                )
-
-            sections.append("\n".join(lines))
-    except Exception as e:
-        logger.warning(f"DayType 조회 실패: {e}")
-
-    # 2. 주목할 프로그램 선정 + 게스트 효과
-    try:
-        all_kpi = kpi_data.get("s5_rankings", {}).get("all_program_kpi", {})
-        if all_kpi:
-            notable = adapter.select_notable_programs(all_kpi, max_count=2)
-            if notable:
-                notable_lines = ["[주목할 프로그램 후보]"]
-                for prog in notable:
-                    line = (
-                        f"- {prog['code']} {prog['label']}: "
-                        f"DAU {prog['dau']:,}명, WoW {prog['wow_pct']:+.1f}%"
-                    )
-                    notable_lines.append(line)
-                    if prog.get("host"):
-                        notable_lines.append(f"  진행자: {prog['host']}")
-
-                    # WoW ±10% 이상이면 게스트 효과도 조회
-                    if abs(prog["wow_pct"]) >= 10:
-                        try:
-                            top_guests = adapter.find_top_guests(
-                                prog["code"], days=30, top_n=3
-                            )
-                            if top_guests:
-                                notable_lines.append("  최근 게스트 효과:")
-                                for g in top_guests:
-                                    notable_lines.append(
-                                        f"    {g['name']} ({g['appearances']}회): "
-                                        f"{g['effect_pct']:+.1f}%"
-                                    )
-                        except Exception as e:
-                            logger.debug(f"게스트 효과 조회 실패 ({prog['code']}): {e}")
-
-                sections.append("\n".join(notable_lines))
-    except Exception as e:
-        logger.warning(f"주목 프로그램 선정 실패: {e}")
-
-    # 3. 연속 추세 감지 (T00 DAU 기준)
-    try:
-        timeline = kpi_data.get("_timeline", {})
-        t00_data = timeline.get("T00", {})
-        t00_dates = sorted(t00_data.keys())[-7:]
-
-        if len(t00_dates) >= 3:
-            dau_values = [
-                t00_data[d].get("dau_today") for d in t00_dates
-            ]
-            dau_values = [v for v in dau_values if v is not None]
-
-            if len(dau_values) >= 3:
-                trend = adapter.detect_consecutive_trend(dau_values)
-                if trend.get("consecutive_days", 0) >= 3:
-                    arrow = "▲" if trend["direction"] == "up" else "▼"
-                    sections.append(
-                        f"[연속 추세 감지]\n"
-                        f"- 전체 DAU: {trend['consecutive_days']}일 연속 {arrow} "
-                        f"({trend['total_change_pct']:+.1f}%)"
-                    )
-    except Exception as e:
-        logger.warning(f"연속 추세 감지 실패: {e}")
-
-    if not sections:
-        return claude_context
-
-    onto_block = "\n\n".join(sections)
-    return f"{claude_context}\n\n{onto_block}"
-
 
 def build_query_context(question: str, claude_context: str,
                         intent: dict = None, data: dict = None) -> str:
@@ -260,6 +45,17 @@ def build_query_context(question: str, claude_context: str,
     data   = data   or {}
     intent_type = intent.get("intent", "general")
     sections = []
+
+    # ── 0. 지표 정의 — 분석·인사이트 intent에만 주입 ──────────────
+    # ranking·trend 계열은 지표 정의 없이도 충분하므로 생략해 토큰 절감
+    _SKIP_METRIC_DEF = {'ranking', 'trend', 'compare_trend', 'dual_trend'}
+    if intent_type not in _SKIP_METRIC_DEF:
+        try:
+            metric_def_block = adapter.get_metric_definitions_block()
+            if metric_def_block:
+                sections.append(metric_def_block)
+        except Exception as e:
+            logger.debug(f"지표 정의 블록 생성 실패: {e}")
 
     # ── A. 프로그램·인물 메타 + 게스트 효과 ─────────────────────
     matched_programs = []
@@ -405,8 +201,7 @@ def build_query_context(question: str, claude_context: str,
             except Exception as e:
                 logger.debug(f"위험 프로그램 블록 생성 실패: {e}")
 
-    if not sections:
-        return claude_context
-
     onto_block = "\n\n".join(sections)
+    if not onto_block.strip():
+        return claude_context
     return f"{claude_context}\n\n{onto_block}"

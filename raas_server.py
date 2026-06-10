@@ -33,7 +33,8 @@ load_dotenv()
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 from raas_history_db import (init_db, save_query, get_history, get_popular,
-                             resolve_user_name, set_ip_user, delete_ip_user, get_all_ip_users)
+                             resolve_user_name, set_ip_user, delete_ip_user, get_all_ip_users,
+                             save_feedback, get_all_history)
 from raas_prompts import QUERY_SYSTEM_PROMPT
 from raas_briefing_context import build_query_context
 
@@ -68,11 +69,70 @@ def cache_set(key, data):
     with _cache_lock:
         _cache[key] = {"data": data, "ts": datetime.now()}
 
+def _supplement_timeline_from_csv(timeline: dict) -> None:
+    """Splunk 룩업에 없는 필드를 로컬 CSV로 보완 (react_week, react_rate_week 등).
+    날짜가 일치하는 행은 직접 보완하고, 로컬 CSV의 마지막 날짜 이후 Splunk 행은
+    마지막 로컬 행 값을 근사치로 사용 (weekly 집계 등 느리게 변하는 지표 대상)."""
+    _base = os.path.dirname(os.path.abspath(__file__))
+    _candidates = [
+        os.path.join(_base, 'data', 'raas_kpi_latest.csv'),
+        os.path.join(_base, 'raas_kpi_latest.csv'),
+    ]
+    local_path = next((p for p in _candidates if os.path.exists(p)), None)
+    if not local_path:
+        return
+    try:
+        import pandas as pd
+        df = pd.read_csv(local_path, dtype=str, keep_default_na=False)
+        # code → {date → row} mapping
+        local_by_code: dict = {}
+        for r in df.to_dict(orient='records'):
+            code = r.get('PGM_CODE')
+            date = r.get('DATE')
+            if code and date:
+                local_by_code.setdefault(code, {})[date] = r
+        # 1) 날짜 일치 행 직접 보완 ('0' 도 미계산으로 간주)
+        def _missing(v): return not v or v in ('0', '0.0', '.0')
+        for code, date_map in local_by_code.items():
+            if code not in timeline:
+                continue
+            for date, local_row in date_map.items():
+                if date not in timeline[code]:
+                    continue
+                splunk_row = timeline[code][date]
+                for k, v in local_row.items():
+                    if v and _missing(splunk_row.get(k, '')):
+                        splunk_row[k] = v
+        # 2) 로컬 CSV 마지막 날짜 이후 Splunk 행 → 마지막 로컬 행 값으로 보완
+        # '0' 도 "미계산" 으로 간주하여 덮어쓴다 (weekly/monthly 집계는 0이면 미계산)
+        _FORWARD_FIELDS = {
+            'react_week', 'react_week_prev', 'react_week_chg', 'react_week_share',
+            'react_rate_week', 'react_rate_week_prev', 'react_rate_week_diff',
+            'react_mon', 'react_mon_prev', 'react_mon_chg', 'react_mon_share',
+            'react_rate_mon', 'react_rate_mon_prev', 'react_rate_mon_diff',
+        }
+        for code, date_map in local_by_code.items():
+            if code not in timeline:
+                continue
+            last_local_date = max(date_map.keys())
+            last_local_row = date_map[last_local_date]
+            for d, splunk_row in timeline[code].items():
+                if d <= last_local_date:
+                    continue
+                for k in _FORWARD_FIELDS:
+                    v = last_local_row.get(k, '')
+                    if v and _missing(splunk_row.get(k, '')):
+                        splunk_row[k] = v
+    except Exception as e:
+        print(f"  [supplement] local CSV merge failed: {e}")
+
 def get_cached_timeline():
     cached = cache_get("timeline")
     if cached:
         return cached
     timeline, source = QE._load_timeline(splunk_search)
+    if source == 'splunk':
+        _supplement_timeline_from_csv(timeline)
     cache_set("timeline", timeline)
     cache_set("timeline_source", source)
     return timeline
@@ -109,21 +169,32 @@ def splunk_search(spl: str) -> list:
     except Exception as e:
         raise Exception(f"Splunk 오류: {e}")
 
-def call_claude(system: str, user: str) -> str:
+_CACHE_HEADERS = {
+    "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "anthropic-beta": "prompt-caching-2024-07-31",
+    "x-api-key": ANTHROPIC_API_KEY,
+}
+
+def _system_block(system: str) -> list:
+    """시스템 프롬프트를 캐시 가능한 content block 배열로 변환."""
+    return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+
+def call_claude(system: str, user: str) -> tuple:
+    """(answer_text, usage_dict) 반환."""
     payload = json.dumps({
         "model": CLAUDE_MODEL, "max_tokens": 1500,
-        "system": system,
+        "system": _system_block(system),
         "messages": [{"role": "user", "content": user}]
     }).encode()
     for attempt in range(3):
         try:
             req = urllib.request.Request(
                 "https://api.anthropic.com/v1/messages", data=payload,
-                headers={"Content-Type": "application/json",
-                         "anthropic-version": "2023-06-01",
-                         "x-api-key": ANTHROPIC_API_KEY})
+                headers=_CACHE_HEADERS)
             with urllib.request.urlopen(req, timeout=60) as resp:
-                return json.loads(resp.read())["content"][0]["text"]
+                body = json.loads(resp.read())
+                return body["content"][0]["text"], body.get("usage", {})
         except urllib.error.HTTPError as e:
             if e.code == 529:
                 print(f"  ⚠️ Claude API 529 (과부하) — 3초 후 재시도 ({attempt + 1}/3)")
@@ -136,18 +207,17 @@ def call_claude(system: str, user: str) -> str:
     raise Exception("Claude API 일시 과부하. 잠시 후 다시 시도해 주세요.")
 
 def call_claude_stream(system: str, user: str, max_tokens: int = 1000):
-    """Claude API 스트리밍 — text 청크를 yield."""
+    """Claude API 스트리밍 — text 청크를 yield, 마지막에 usage dict를 yield."""
     payload = json.dumps({
         "model": CLAUDE_MODEL, "max_tokens": max_tokens,
         "stream": True,
-        "system": system,
+        "system": _system_block(system),
         "messages": [{"role": "user", "content": user}]
     }).encode()
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages", data=payload,
-        headers={"Content-Type": "application/json",
-                 "anthropic-version": "2023-06-01",
-                 "x-api-key": ANTHROPIC_API_KEY})
+        headers=_CACHE_HEADERS)
+    input_tokens = output_tokens = cache_creation_tokens = cache_read_tokens = None
     with urllib.request.urlopen(req, timeout=90) as resp:
         for raw in resp:
             line = raw.decode("utf-8").rstrip("\n\r")
@@ -158,12 +228,26 @@ def call_claude_stream(system: str, user: str, max_tokens: int = 1000):
                 break
             try:
                 ev = json.loads(chunk)
-                if ev.get("type") == "content_block_delta":
+                etype = ev.get("type")
+                if etype == "message_start":
+                    u = ev.get("message", {}).get("usage", {})
+                    input_tokens          = u.get("input_tokens")
+                    cache_creation_tokens = u.get("cache_creation_input_tokens")
+                    cache_read_tokens     = u.get("cache_read_input_tokens")
+                elif etype == "content_block_delta":
                     text = ev.get("delta", {}).get("text", "")
                     if text:
                         yield text
+                elif etype == "message_delta":
+                    output_tokens = ev.get("usage", {}).get("output_tokens")
             except json.JSONDecodeError:
                 pass
+    yield {"_usage": {
+        "input_tokens":          input_tokens,
+        "output_tokens":         output_tokens,
+        "cache_creation_tokens": cache_creation_tokens,
+        "cache_read_tokens":     cache_read_tokens,
+    }}
 
 # HTML 파일 경로 (서버와 같은 폴더)
 HTML_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.html")
@@ -331,6 +415,19 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path.startswith("/api/query/history/all"):
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                limit  = int(params.get("limit", 50))
+                offset = int(params.get("offset", 0))
+                days   = int(params.get("days", 0))
+                result = get_all_history(limit=limit, offset=offset, days=days)
+                self.send_json({"ok": True, **result})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path.startswith("/api/query/history"):
             try:
                 params = {}
@@ -463,6 +560,18 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path == "/api/query/feedback":
+            try:
+                query_id = body.get("id")
+                feedback = body.get("feedback")
+                if query_id is None or feedback not in (1, -1):
+                    self.send_json({"ok": False, "error": "id와 feedback(1/-1) 필요"}, 400)
+                    return
+                ok = save_feedback(int(query_id), int(feedback))
+                self.send_json({"ok": ok})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/query/stream":
             try:
                 question    = body.get("question", "")
@@ -502,12 +611,20 @@ class RAASHandler(BaseHTTPRequestHandler):
 
                 sse({"type": "meta", "chart_data": chart_data})
                 full_text = []
+                usage = {}
                 for chunk in call_claude_stream(sys_prompt, ctx, max_tokens=max_tok):
-                    full_text.append(chunk)
-                    sse({"type": "token", "text": chunk})
+                    if isinstance(chunk, dict) and "_usage" in chunk:
+                        usage = chunk["_usage"]
+                    else:
+                        full_text.append(chunk)
+                        sse({"type": "token", "text": chunk})
                 answer = "".join(full_text)
                 query_id = save_query(user_id, question, answer, chart_data=chart_data,
-                                      ip=ip, user_name=user_name)
+                                      ip=ip, user_name=user_name,
+                                      input_tokens=usage.get("input_tokens"),
+                                      output_tokens=usage.get("output_tokens"),
+                                      cache_creation_tokens=usage.get("cache_creation_tokens"),
+                                      cache_read_tokens=usage.get("cache_read_tokens"))
                 sse({"type": "done", "query_id": query_id})
                 self.close_connection = True  # SSE 완료 후 연결 명시적 종료
             except Exception as e:
@@ -533,25 +650,31 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
                     return
 
+                in_tok = out_tok = None
                 if QUERY_ENGINE_AVAILABLE:
                     timeline = get_cached_timeline()
                     result = QE.query_with_timeline(
                         question, timeline,
                         target_date=target_date,
                     )
-                    answer = result["answer"]
+                    answer     = result["answer"]
                     chart_data = result.get("chart_data")
+                    in_tok     = result.get("input_tokens")
+                    out_tok    = result.get("output_tokens")
                 else:
                     # QE 로드 실패 시 간단 fallback
                     enriched_context = build_query_context(question, context)
-                    answer = call_claude(
+                    answer, usage = call_claude(
                         QUERY_SYSTEM_PROMPT,
                         f"데이터:\n{enriched_context}\n\n질문: {question}"
                     )
                     chart_data = None
+                    in_tok  = usage.get("input_tokens")
+                    out_tok = usage.get("output_tokens")
 
                 query_id = save_query(user_id, question, answer, chart_data=chart_data,
-                                      ip=ip, user_name=user_name)
+                                      ip=ip, user_name=user_name,
+                                      input_tokens=in_tok, output_tokens=out_tok)
                 self.send_json({"ok": True, "answer": answer,
                                 "query_id": query_id, "chart_data": chart_data})
             except Exception as e:

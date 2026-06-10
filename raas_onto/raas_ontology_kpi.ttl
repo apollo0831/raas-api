@@ -443,26 +443,36 @@ raas:DAU a raas:Metric ;
     raas:dictionarySection "B. user_size" .
 
 raas:DAU_Day a raas:MetricVariant ;
+    rdfs:label "DAU"@ko ;
+    rdfs:comment "일간 활성사용자수"@ko ;
     raas:ofMetric raas:DAU ;
     raas:granularity raas:Day ;
     raas:fieldName "dau" .
 
 raas:DAU_Week a raas:MetricVariant ;
+    rdfs:label "WAU"@ko ;
+    rdfs:comment "주간 활성사용자수"@ko ;
     raas:ofMetric raas:DAU ;
     raas:granularity raas:Week ;
     raas:fieldName "wau" .
 
 raas:DAU_Month a raas:MetricVariant ;
+    rdfs:label "MAU"@ko ;
+    rdfs:comment "월간 활성사용자수"@ko ;
     raas:ofMetric raas:DAU ;
     raas:granularity raas:Month ;
     raas:fieldName "mau" .
 
 raas:DAU_R7 a raas:MetricVariant ;
+    rdfs:label "롤링WAU"@ko ;
+    rdfs:comment "최근 7일간 활성사용자수"@ko ;
     raas:ofMetric raas:DAU ;
     raas:granularity raas:Rolling7Day ;
     raas:fieldName "dau_r7" .
 
 raas:DAU_R30 a raas:MetricVariant ;
+    rdfs:label "롤링MAU"@ko ;
+    rdfs:comment "최근 30일간 활성사용자수"@ko ;
     raas:ofMetric raas:DAU ;
     raas:granularity raas:Rolling30Day ;
     raas:fieldName "dau_r30" .
@@ -521,11 +531,11 @@ raas:DAU_10min_Month a raas:MetricVariant ;
 # ─── 4.2 그룹 B: 사용자 유입/이탈 ────────────────────────────────────────────
 
 raas:NewUser a raas:Metric ;
-    rdfs:label "신규 유입 사용자 수"@ko ;
+    rdfs:label "신규 사용자"@ko ;
     raas:altLabel "신규유저"@ko, "신규"@ko ;
     raas:unit "명" ;
     raas:hasMeasureType raas:Count ;
-    raas:definition "처음 접속한 사용자 수"@ko ;
+    raas:definition "고릴라 앱 또는 해당 채널·프로그램에 첫 진입한 사용자 수"@ko ;
     raas:dictionarySection "C. user_growth" .
 
 raas:NewUser_Day a raas:MetricVariant ;
@@ -545,11 +555,11 @@ raas:NewUser_Month a raas:MetricVariant ;
 
 
 raas:ReactivatedUser a raas:Metric ;
-    rdfs:label "복귀 사용자 수"@ko ;
+    rdfs:label "복귀 사용자"@ko ;
     raas:altLabel "복귀자"@ko, "재활성"@ko ;
     raas:unit "명" ;
     raas:hasMeasureType raas:Count ;
-    raas:definition "휴면 후 다시 접속한 사용자 수"@ko ;
+    raas:definition "현재 기간 활성, 직전 기간 비활성, 그 이전 기간 활성 이력이 있는 사용자 수 (휴면 후 재진입)"@ko ;
     raas:dictionarySection "C. user_growth" .
 
 raas:ReactivatedUser_Day a raas:MetricVariant ;
@@ -573,7 +583,8 @@ raas:ChurnRate a raas:Metric ;
     raas:altLabel "Churn Rate"@en, "이탈"@ko ;
     raas:unit "%" ;
     raas:hasMeasureType raas:Percentage ;
-    raas:definition "일정 기간 미접속 사용자의 비율"@ko ;
+    raas:definition "직전 기간 활성사용자 대비 이탈 비율"@ko ;
+    raas:formula "이탈사용자 / 직전 기간 활성사용자 × 100" ;
     raas:dictionarySection "D. user_quality" .
 
 raas:ChurnRate_Day a raas:MetricVariant ;
@@ -597,7 +608,8 @@ raas:ReactRate a raas:Metric ;
     raas:altLabel "복귀 비율"@ko ;
     raas:unit "%" ;
     raas:hasMeasureType raas:Percentage ;
-    raas:definition "휴면 사용자 중 복귀한 비율"@ko ;
+    raas:definition "이번 기간 휴면풀 대비 복귀 비율"@ko ;
+    raas:formula "복귀사용자 / 이번 기간 휴면풀 × 100" ;
     raas:dictionarySection "D. user_quality" .
 
 raas:ReactRate_Day a raas:MetricVariant ;
@@ -649,7 +661,7 @@ raas:EngageRate a raas:Metric ;
     raas:altLabel "Engagement Rate"@en ;
     raas:unit "%" ;
     raas:hasMeasureType raas:Percentage ;
-    raas:definition "메뉴 클릭/공유 등 적극 행동 비율"@ko ;
+    raas:definition "공감로그작성, 방송공유, 검색 등 적극 행동 사용자 비율"@ko ;
     raas:dictionarySection "D. user_quality" .
 
 raas:EngageRate_Day a raas:MetricVariant ;
@@ -673,7 +685,7 @@ raas:HabitRate a raas:Metric ;
     raas:altLabel "Habit Formation Rate"@en, "습관형성"@ko ;
     raas:unit "%" ;
     raas:hasMeasureType raas:Percentage ;
-    raas:definition "일정 빈도 이상 청취 비율"@ko ;
+    raas:definition "신규 사용자 첫 7일 내 3일 이상 청취 비율"@ko ;
     raas:dictionarySection "E. user_habit" .
 
 raas:HabitRate_Day a raas:MetricVariant ;
@@ -699,7 +711,8 @@ raas:RealListenRate a raas:Metric ;
     raas:altLabel "Real Listen Rate"@en, "실청취"@ko ;
     raas:unit "%" ;
     raas:hasMeasureType raas:Percentage ;
-    raas:definition "추정 노출 대비 실제 청취 비율"@ko ;
+    raas:definition "활성사용자 중 실제 청취(1분 이상) 비율"@ko ;
+    raas:formula "1분 이상 청취자 / 활성사용자 × 100" ;
     raas:dictionarySection "D. user_quality" .
 
 raas:RealListenRate_Day a raas:MetricVariant ;
@@ -752,24 +765,32 @@ raas:RetentionRate a raas:Metric ;
 
 # ── 전체 코호트 ──
 raas:RetentionRate_D1_All a raas:MetricVariant ;
+    rdfs:label "전체코호트 D1유지율"@ko ;
+    rdfs:comment "전체 코호트가 1일 후 재방문 비율(%)"@ko ;
     raas:ofMetric raas:RetentionRate ;
     raas:hasWindow raas:Window_D1 ;
     raas:hasCohort raas:Cohort_All ;
     raas:fieldName "d1_ret" .
 
 raas:RetentionRate_D7_All a raas:MetricVariant ;
+    rdfs:label "전체코호트 D7유지율"@ko ;
+    rdfs:comment "전체 코호트가 7일 후 재방문 비율(%)"@ko ;
     raas:ofMetric raas:RetentionRate ;
     raas:hasWindow raas:Window_D7 ;
     raas:hasCohort raas:Cohort_All ;
     raas:fieldName "d7_ret" .
 
 raas:RetentionRate_W1_All a raas:MetricVariant ;
+    rdfs:label "전체코호트 W1유지율"@ko ;
+    rdfs:comment "전체 코호트가 1주 후 재방문 비율(%)"@ko ;
     raas:ofMetric raas:RetentionRate ;
     raas:hasWindow raas:Window_W1 ;
     raas:hasCohort raas:Cohort_All ;
     raas:fieldName "w1_ret" .
 
 raas:RetentionRate_M1_All a raas:MetricVariant ;
+    rdfs:label "전체코호트 M1유지율"@ko ;
+    rdfs:comment "전체 코호트가 1개월 후 재방문 비율(%)"@ko ;
     raas:ofMetric raas:RetentionRate ;
     raas:hasWindow raas:Window_M1 ;
     raas:hasCohort raas:Cohort_All ;
@@ -777,24 +798,32 @@ raas:RetentionRate_M1_All a raas:MetricVariant ;
 
 # ── 신규 사용자 코호트 ──
 raas:RetentionRate_D1_NewUser a raas:MetricVariant ;
+    rdfs:label "신규사용자 D1유지율"@ko ;
+    rdfs:comment "신규사용자가 1일 후 재방문 비율(%)"@ko ;
     raas:ofMetric raas:RetentionRate ;
     raas:hasWindow raas:Window_D1 ;
     raas:hasCohort raas:Cohort_NewUser ;
     raas:fieldName "new_d1_ret" .
 
 raas:RetentionRate_D7_NewUser a raas:MetricVariant ;
+    rdfs:label "신규사용자 D7유지율"@ko ;
+    rdfs:comment "신규사용자가 7일 후 재방문 비율(%)"@ko ;
     raas:ofMetric raas:RetentionRate ;
     raas:hasWindow raas:Window_D7 ;
     raas:hasCohort raas:Cohort_NewUser ;
     raas:fieldName "new_d7_ret" .
 
 raas:RetentionRate_W1_NewUser a raas:MetricVariant ;
+    rdfs:label "신규사용자 W1유지율"@ko ;
+    rdfs:comment "신규사용자가 1주 후 재방문 비율(%)"@ko ;
     raas:ofMetric raas:RetentionRate ;
     raas:hasWindow raas:Window_W1 ;
     raas:hasCohort raas:Cohort_NewUser ;
     raas:fieldName "new_w1_ret" .
 
 raas:RetentionRate_M1_NewUser a raas:MetricVariant ;
+    rdfs:label "신규사용자 M1유지율"@ko ;
+    rdfs:comment "신규사용자가 1개월 후 재방문 비율(%)"@ko ;
     raas:ofMetric raas:RetentionRate ;
     raas:hasWindow raas:Window_M1 ;
     raas:hasCohort raas:Cohort_NewUser ;

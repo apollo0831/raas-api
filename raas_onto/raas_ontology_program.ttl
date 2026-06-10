@@ -350,5 +350,47 @@ raas:channelNature a owl:DatatypeProperty ;
 
 
 # =============================================================================
+# 코너 편성 스키마 (Phase 2-C-3)
+# 방송 코너는 1주 단위로 순환하며, 매일코너(daily)와 주간코너(weekly)로 구분.
+# 각 코너는 특정 "부(ProgramSegment)"에 배치.
+# 인스턴스는 raas_kpi_latest.csv 파싱으로 런타임에 생성 (온톨로지는 스키마만 정의).
+# =============================================================================
+
+raas:CornerEntry a owl:Class ;
+    rdfs:label "코너 편성 항목"@ko ;
+    rdfs:comment "프로그램의 특정 요일·부에 편성된 코너 1건."@ko .
+
+raas:hasCornerEntry a owl:ObjectProperty ;
+    rdfs:domain raas:Program ;
+    rdfs:range raas:CornerEntry ;
+    rdfs:label "코너 편성 항목"@ko ;
+    rdfs:comment "프로그램이 가진 요일·부별 코너 편성 항목."@ko .
+
+raas:cornerLabel a owl:DatatypeProperty ;
+    rdfs:domain raas:CornerEntry ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "코너명"@ko ;
+    rdfs:comment "코너 이름. 예: '사연과 신청곡', '유치봉짝'."@ko .
+
+raas:cornerFrequency a owl:DatatypeProperty ;
+    rdfs:domain raas:CornerEntry ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "편성 주기"@ko ;
+    rdfs:comment "'daily'(방송일 매일) 또는 'weekly'(특정 요일)."@ko .
+
+raas:cornerDayOfWeek a owl:DatatypeProperty ;
+    rdfs:domain raas:CornerEntry ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "편성 요일"@ko ;
+    rdfs:comment "cornerFrequency='weekly'일 때 사용. 값: 월·화·수·목·금·토·일."@ko .
+
+raas:cornerSegment a owl:DatatypeProperty ;
+    rdfs:domain raas:CornerEntry ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "편성 부(部)"@ko ;
+    rdfs:comment "코너가 배치된 부 번호. 예: '1', '2', '1~2', '3~4'. 명시 없으면 비워둠."@ko .
+
+
+# =============================================================================
 # 끝
 # =============================================================================
