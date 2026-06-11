@@ -127,6 +127,17 @@ def build_query_context(question: str, claude_context: str,
 
         sections.append("\n".join(onto_lines))
 
+    # ── A-2. 게스트 데이터 해석 규칙 (게스트 관련 질의에만 주입) ────
+    _guest_kws = ['게스트', '초대손님', '손님', 'guestname', '게스트명', '출연']
+    if any(kw in question for kw in _guest_kws):
+        sections.append(
+            "[게스트 데이터 해석]\n"
+            "- guestname 필드가 비어있으면 해당 날짜에 초대손님이 없었던 것임"
+            " — '데이터가 없다', '정보가 제공되지 않았다' 등의 표현 금지\n"
+            "- 채널(파워FM 등)이나 전체 단위의 guestname은 항상 비어있음"
+            " — 게스트 질문 시 컨텍스트에 프로그램별로 합산된 [게스트 출연 현황] 섹션이 제공됨"
+        )
+
     # ── B. DayType 컨텍스트 (공휴일·주말 패턴 해석 오류 방지) ────
     raw_date = data.get("date_max") or data.get("date_min")
     if raw_date:

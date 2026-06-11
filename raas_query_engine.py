@@ -40,6 +40,9 @@ def _load_rules() -> str:
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 HAIKU_MODEL       = os.getenv("HAIKU_MODEL",  "claude-haiku-4-5-20251001")
+# [실험] 규칙 기반 차트(build_chart_data)가 없을 때 Claude가 차트 스펙을 생성하는 폴백.
+# 끄려면 환경변수 CHART_FALLBACK=0
+CHART_FALLBACK_ENABLED = os.getenv("CHART_FALLBACK", "1") != "0"
 
 # 단순 조회 intent — Haiku로 처리 (ranking·trend 계열은 Claude가 1~2줄만 작성)
 _HAIKU_INTENTS = {'ranking', 'trend', 'compare_trend', 'dual_trend', 'overview'}
@@ -629,17 +632,6 @@ def build_chart_data(data: dict, intent: dict, question: str):
                 'source':  f"snapshot:{_ov_date_label}",
             }
 
-        # compare → comparison (채널별 DAU)
-        if intent_type == 'compare' and data.get('compare'):
-            items = [{"label": c['name'], "value": c['dau']}
-                     for c in data['compare'] if c.get('dau')]
-            items.sort(key=lambda x: x['value'], reverse=True)
-            return build_chart_comparison(
-                title="채널별 DAU 비교",
-                metric="DAU", unit="명",
-                date=date_max, items=items,
-                source=f"snapshot:{date_max}"
-            )
 
         # ranking → table (TOP10, 전 지표 포함)
         if intent_type == 'ranking' and data.get('ranking'):
@@ -931,6 +923,166 @@ def call_claude(system, user: str, max_tokens: int = 1000, model: str = None) ->
     with urllib.request.urlopen(req, timeout=30) as r:
         body = json.loads(r.read())
         return body["content"][0]["text"], body.get("usage", {})
+
+
+# ── Claude 차트 폴백 (실험) ────────────────────────────────
+# 규칙 기반 build_chart_data()가 차트를 못 만든 질의에 한해, Claude가 context의
+# 실제 수치만으로 차트 스펙을 생성한다. 프론트 렌더러(_buildChartHTML)가 이미
+# 지원하는 timeseries / timeseries_multi / comparison 3종만 허용.
+_CHART_TOOL = {
+    "name": "render_chart",
+    "description": (
+        "[데이터]에 차트로 보여줄 가치가 있을 때만 호출한다. "
+        "[데이터]에 실제로 등장한 숫자만 사용하고 값을 절대 지어내지 않는다. "
+        "timeseries=단일 지표 시간 추이, "
+        "timeseries_multi=같은 단위 지표/대상 2개 이상의 동시 추이, "
+        "comparison=항목 간 단일 시점 막대 비교."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "type": {"type": "string", "enum": ["timeseries", "timeseries_multi", "comparison"]},
+            "title": {"type": "string", "description": "차트 제목(한국어)"},
+            "unit": {"type": "string", "enum": ["명", "%"],
+                     "description": "값 단위 — 사람 수는 '명', 비율은 '%' (comparison은 생략 가능)"},
+            "points": {
+                "type": "array",
+                "description": "type=timeseries 전용. 시간순 데이터 포인트(2개 이상).",
+                "items": {"type": "object",
+                          "properties": {"date": {"type": "string"}, "value": {"type": "number"}},
+                          "required": ["date", "value"]},
+            },
+            "series": {
+                "type": "array",
+                "description": "type=timeseries_multi 전용. 시리즈 2개 이상, 각 시리즈 포인트 2개 이상.",
+                "items": {"type": "object",
+                          "properties": {
+                              "label": {"type": "string"},
+                              "points": {"type": "array",
+                                         "items": {"type": "object",
+                                                   "properties": {"date": {"type": "string"},
+                                                                  "value": {"type": "number"}},
+                                                   "required": ["date", "value"]}},
+                          },
+                          "required": ["label", "points"]},
+            },
+            "items": {
+                "type": "array",
+                "description": "type=comparison 전용. 비교 항목 2개 이상.",
+                "items": {"type": "object",
+                          "properties": {"label": {"type": "string"}, "value": {"type": "number"}},
+                          "required": ["label", "value"]},
+            },
+        },
+        "required": ["type", "title"],
+    },
+}
+
+_CHART_FALLBACK_SYSTEM = (
+    "너는 RAAS 데이터 시각화 보조다. 반드시 render_chart 툴을 호출해야 한다.\n"
+    "- 시계열(날짜별 변화): type=timeseries 또는 timeseries_multi\n"
+    "- 단일 시점 항목 비교(채널별·지표별): type=comparison\n"
+    "차트로 쓸 수치가 없으면 items=[] 또는 points=[]로 호출한다.\n"
+    "값은 반드시 [데이터]에 등장한 숫자만 사용하고 추정·생성하지 않는다."
+)
+
+
+def _normalize_fallback_chart(spec):
+    """Claude가 생성한 차트 스펙을 검증·정제. 부적합하면 None."""
+    if not isinstance(spec, dict):
+        return None
+    ctype = spec.get("type")
+    title = spec.get("title") or "데이터 차트"
+    _unit_raw = spec.get("unit")
+    if _unit_raw in ("명", "%"):
+        unit = _unit_raw
+    elif any(kw in title for kw in ("율", "률", "비율", "점유")):
+        unit = "%"
+    else:
+        unit = "명"
+
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    def _clean_points(pts):
+        out = []
+        for p in (pts or []):
+            if not isinstance(p, dict):
+                continue
+            v, d = _num(p.get("value")), p.get("date")
+            if v is None or not d:
+                continue
+            out.append({"date": str(d), "value": v})
+        return out
+
+    if ctype == "timeseries":
+        pts = _clean_points(spec.get("points"))
+        if len(pts) < 2:
+            return None
+        return {"type": "timeseries", "title": title, "unit": unit,
+                "points": pts, "source": "AI 생성 차트"}
+
+    if ctype == "timeseries_multi":
+        series = []
+        for s in (spec.get("series") or []):
+            if not isinstance(s, dict):
+                continue
+            pts = _clean_points(s.get("points"))
+            if len(pts) < 2:
+                continue
+            series.append({"label": str(s.get("label") or "?"), "points": pts})
+        if len(series) < 2:
+            return None
+        return {"type": "timeseries_multi", "title": title, "unit": unit,
+                "series": series, "source": "AI 생성 차트"}
+
+    if ctype == "comparison":
+        items = []
+        for it in (spec.get("items") or []):
+            if not isinstance(it, dict):
+                continue
+            v = _num(it.get("value"))
+            if v is None:
+                continue
+            items.append({"label": str(it.get("label") or "?"), "value": v})
+        if len(items) < 2:
+            return None
+        return {"type": "comparison", "title": title, "unit": unit,
+                "items": items, "source": "AI 생성 차트"}
+
+    return None
+
+
+def claude_chart_fallback(question: str, context: str, intent: dict = None):
+    """규칙 기반 차트가 없을 때 Claude가 context의 실제 수치로 차트 스펙 생성.
+    차트가 부적절하거나 어떤 오류든 발생하면 None (답변 흐름을 절대 막지 않음)."""
+    if not ANTHROPIC_API_KEY or not context:
+        return None
+    try:
+        payload = json.dumps({
+            "model": HAIKU_MODEL,
+            "max_tokens": 2000,
+            "system": _CHART_FALLBACK_SYSTEM,
+            "tools": [_CHART_TOOL],
+            "tool_choice": {"type": "any"},
+            "messages": [{"role": "user",
+                          "content": f"[질문]\n{question}\n\n[데이터]\n{context}"}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages", data=payload,
+            headers=_CACHE_HEADERS)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            body = json.loads(r.read())
+        for block in body.get("content", []):
+            if block.get("type") == "tool_use" and block.get("name") == "render_chart":
+                return _normalize_fallback_chart(block.get("input"))
+    except Exception as e:
+        print(f"[WARN] claude_chart_fallback 실패: {e}", flush=True)
+        return None
+    return None
 
 
 # ── 의도 분류 ──────────────────────────────────────────────
@@ -2399,11 +2551,14 @@ def extract_data(timeline, intent: dict, briefing_data: dict = None, question: s
                     continue
                 ch_rows.append({
                     'code': ch, 'name': _pgm_name(ch, row=row),
-                    'dau': _i(row.get('dau')),
-                    'dau_wow': _fn(row.get('dau_chg')),
-                    'real_rate': _fn(row.get('real_rate')),
-                    'deep_rate': _fn(row.get('deep_rate')),
-                    'churn_rate': _fn(row.get('churn_rate')),
+                    'dau':         _i(row.get('dau')),
+                    'dau_wow':     _fn(row.get('dau_chg')),
+                    'real_rate':   _fn(row.get('real_rate')),
+                    'deep_rate':   _fn(row.get('deep_rate')),
+                    'engage_rate': _fn(row.get('engage_rate')),
+                    'churn_rate':  _fn(row.get('churn_rate')),
+                    'react_rate':  _fn(row.get('react_rate')),
+                    'habit_rate':  _fn(row.get('habit_rate')),
                 })
             data['compare'] = ch_rows
         else:
@@ -3110,12 +3265,14 @@ def format_for_claude(data: dict, intent: dict, question: str, timeline: dict = 
     if data.get('compare'):
         lines.append("[채널별 비교]")
         for c in data['compare']:
-            lines.append(
-                f"  {c['name']}: DAU {_fmt_dau(c['dau'])} ({_fmt_arrow(c['dau_wow'])}) | "
-                f"실청취율 {_fmt_pct(c.get('real_rate'))} | "
-                f"깊은청취 {_fmt_pct(c.get('deep_rate'))} | "
-                f"이탈률 {_fmt_pct(c.get('churn_rate'))}"
-            )
+            _parts = [f"DAU {_fmt_dau(c['dau'])} ({_fmt_arrow(c['dau_wow'])})"]
+            if c.get('real_rate')   is not None: _parts.append(f"실청취율 {_fmt_pct(c['real_rate'])}")
+            if c.get('deep_rate')   is not None: _parts.append(f"깊은청취율 {_fmt_pct(c['deep_rate'])}")
+            if c.get('engage_rate') is not None: _parts.append(f"참여율 {_fmt_pct(c['engage_rate'])}")
+            if c.get('churn_rate')  is not None: _parts.append(f"이탈율 {_fmt_pct(c['churn_rate'])}")
+            if c.get('react_rate')  is not None: _parts.append(f"복귀율 {_fmt_pct(c['react_rate'])}")
+            if c.get('habit_rate')  is not None: _parts.append(f"습관형성률 {_fmt_pct(c['habit_rate'])}")
+            lines.append(f"  {c['name']}: " + " | ".join(_parts))
         lines.append('')
 
     if data.get('dual_trend'):
@@ -3337,6 +3494,15 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
                     '지표 한눈', '한눈에 보', 'dau와 wau', 'wau와 mau', 'dau·wau', 'wau·mau')
     if any(kw in question for kw in _OVERVIEW_KW):
         intent['intent'] = 'overview'
+    # compare 강제 감지 — "채널별 X 어디가 제일?" 같은 채널 간 비교 질의를 ranking으로 오분류하는 경우 보정
+    _CH_CMP_KW  = ('채널별', '채널 간', '채널 비교', '채널끼리')
+    _PGM_IN_CH  = ('프로그램', '순위', 'top', '상위', '하위')
+    if (any(kw in question for kw in _CH_CMP_KW)
+            and not any(kw in question.lower() for kw in _PGM_IN_CH)
+            and intent.get('intent') not in ('compare', 'compare_trend', 'overview')):
+        intent['intent'] = 'compare'
+        if intent.get('scope') not in ('T00', 'F00', 'L00', 'G00', 'P00'):
+            intent['scope'] = 'T00'
     # compare_trend 감지: 채널 2개 이상 언급 + 추이/추세 키워드 (또는 vs)
     _HAS_TREND_KW = any(kw in question for kw in ('추이', '추세', '트렌드', '변화'))
     # 질문에 명시된 지표 키워드 → metric 코드 매핑 (channel compare_trend·pgm_group_trend 공용)
@@ -3444,6 +3610,9 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
     ) if today_str and date_max else ''
     # 차트 먼저 빌드 — intent_note를 chart 가용 여부에 따라 조정하기 위해
     chart_data = build_chart_data(data, intent, question)
+    # [실험] 규칙 기반 차트가 없으면 Claude가 context 수치로 차트를 생성 (롤백: CHART_FALLBACK=0)
+    if chart_data is None and CHART_FALLBACK_ENABLED:
+        chart_data = claude_chart_fallback(question, context, intent)
     _has_chart = chart_data is not None
     _chart_type = chart_data.get('type', '') if _has_chart else ''
 
@@ -3568,8 +3737,14 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
         )
     _static_system  = QUERY_SYSTEM_PROMPT + _load_rules()
     _chart_note = (
-        "\n\n[차트·테이블 중복 금지] UI에 차트 또는 테이블이 자동 표시됩니다."
-        " 동일한 수치를 텍스트 표·목록·수치 나열로 중복 제시하지 마세요."
+        "\n\n[차트 데이터 텍스트 중복 — 절대 금지]\n"
+        "이 응답에는 UI 차트/테이블이 자동 렌더링됩니다.\n"
+        "아래 형식으로 동일 수치를 다시 출력하는 것은 절대 금지입니다:\n"
+        "- 마크다운 표 (| 컬럼 | 값 | 형식)\n"
+        "- 항목별 수치 목록 (채널명: X%, 채널명: Y% 형식)\n"
+        "- 순위 나열 (1위 XX, 2위 YY 형식)\n"
+        "차트에 이미 표시되는 수치를 텍스트로 반복하면 사용자 화면에 동일 정보가 두 번 나타납니다.\n"
+        "수치 없이 인사이트(해석·원인·시사점)만 1~3문장으로 작성하세요."
     ) if _has_chart else ''
     _dynamic_system = date_system + intent_note + _chart_note
     full_system = (_static_system, _dynamic_system)

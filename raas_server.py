@@ -33,8 +33,13 @@ load_dotenv()
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 from raas_history_db import (init_db, save_query, get_history, get_popular,
-                             resolve_user_name, set_ip_user, delete_ip_user, get_all_ip_users,
+                             set_ip_user, delete_ip_user, get_all_ip_users,
                              save_feedback, get_all_history)
+from raas_auth import (register_user, authenticate, create_session,
+                       resolve_session, destroy_session,
+                       get_pending_users, list_users, approve_user, reject_user,
+                       bootstrap_admins, ALLOWED_ROLES,
+                       update_profile, change_password)
 from raas_prompts import QUERY_SYSTEM_PROMPT
 from raas_briefing_context import build_query_context
 
@@ -263,6 +268,29 @@ class RAASHandler(BaseHTTPRequestHandler):
             return forwarded.split(",")[0].strip()
         return self.client_address[0]
 
+    def _get_session_token(self) -> str:
+        """Authorization: Bearer <token> 헤더에서 토큰만 추출. 없으면 ''."""
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            return auth[7:].strip()
+        return ""
+
+    def _get_session_user(self):
+        """현재 세션 사용자 dict. 토큰 무효/만료/미승인이면 None."""
+        return resolve_session(self._get_session_token())
+
+    def _require_admin(self):
+        """관리자 검증. 관리자 아니면 401/403 응답 후 None 리턴.
+        호출 측은 None이면 즉시 return."""
+        user = self._get_session_user()
+        if not user:
+            self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+            return None
+        if not user.get("is_admin"):
+            self.send_json({"ok": False, "error": "관리자 권한이 필요합니다."}, 403)
+            return None
+        return user
+
     def send_json(self, data, status=200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -284,7 +312,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-User-Id")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-User-Id, Authorization")
         self.end_headers()
 
     def do_GET(self):
@@ -430,17 +458,16 @@ class RAASHandler(BaseHTTPRequestHandler):
 
         elif self.path.startswith("/api/query/history"):
             try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                    return
                 params = {}
                 if "?" in self.path:
                     params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
-                user_id = (self.headers.get("X-User-Id")
-                           or params.get("user_id", "").strip())
-                if not user_id:
-                    self.send_json({"ok": False, "error": "user_id required"}, 400)
-                    return
                 limit = int(params.get("limit", 20))
-                items = get_history(user_id=user_id, limit=limit)
-                self.send_json({"ok": True, "user_id": user_id, "items": items})
+                items = get_history(user_id=str(user["id"]), limit=limit)
+                self.send_json({"ok": True, "user_id": user["id"], "items": items})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
@@ -523,9 +550,59 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
         elif self.path == "/api/ip-users":
+            if not self._require_admin():
+                return
             try:
                 items = get_all_ip_users()
                 self.send_json({"ok": True, "your_ip": self._get_client_ip(), "items": items})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/me":
+            # 세션 토큰 → 현재 사용자. 없으면 ok=False (401 아님 — 게이트는 클라이언트가 판단)
+            user = self._get_session_user()
+            if user:
+                self.send_json({"ok": True, "user": user})
+            else:
+                self.send_json({"ok": False, "error": "세션 없음"}, 401)
+
+        elif self.path == "/api/admin/users":
+            admin = self._require_admin()
+            if not admin:
+                return
+            try:
+                self.send_json({
+                    "ok": True,
+                    "pending": get_pending_users(),
+                    "all":     list_users(),
+                })
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/programs":
+            # 관심 프로그램 멀티셀렉트용 — 채널별 그룹화
+            try:
+                from raas_onto import get_adapter
+                progs = get_adapter().get_all_programs()
+                # 채널별 그룹 (F00·L00·G00·P00). channel 없는 항목은 'misc'로.
+                grouped = {}
+                for p in progs:
+                    ch       = (p.get('channel') or {})
+                    ch_code  = ch.get('code') or 'misc'
+                    ch_label = ch.get('label') or '기타'
+                    g = grouped.setdefault(ch_code, {'code': ch_code, 'label': ch_label, 'programs': []})
+                    g['programs'].append({
+                        'code':  p.get('code'),
+                        'label': p.get('label') or p.get('code'),
+                        'time':  (p.get('time_slot') or {}).get('start') or '',
+                    })
+                # 채널 순서 보정 (F00, L00, G00, P00, misc)
+                _order = ['F00', 'L00', 'G00', 'P00', 'misc']
+                channels = [grouped[c] for c in _order if c in grouped]
+                # 각 채널 내 프로그램은 방송 시작시간 순
+                for g in channels:
+                    g['programs'].sort(key=lambda x: (x['time'] or '99:99', x['code']))
+                self.send_json({"ok": True, "channels": channels})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
@@ -540,7 +617,121 @@ class RAASHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
 
+        if self.path == "/api/register":
+            try:
+                result = register_user(
+                    login_id=body.get("login_id", ""),
+                    pw=body.get("password", ""),
+                    name=body.get("name", ""),
+                    role=body.get("role", ""),
+                )
+                if not result.get("ok"):
+                    self.send_json(result, 400)
+                    return
+                # pending이면 로그인 안내. approved(부트스트랩)면 즉시 세션 발급.
+                if result.get("status") == "approved":
+                    token = create_session(result["user_id"])
+                    self.send_json({"ok": True, "status": "approved",
+                                    "token": token, "user_id": result["user_id"],
+                                    "is_admin": result.get("is_admin", False)})
+                else:
+                    self.send_json({"ok": True, "status": "pending",
+                                    "user_id": result["user_id"]})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+            return
+
+        elif self.path == "/api/login":
+            try:
+                login_id = body.get("login_id", "").strip()
+                pw       = body.get("password", "")
+                if not login_id or not pw:
+                    self.send_json({"ok": False, "error": "login_id·password 필수"}, 400)
+                    return
+                user = authenticate(login_id, pw)
+                if not user:
+                    self.send_json({"ok": False, "error": "아이디 또는 비밀번호가 올바르지 않습니다."}, 401)
+                    return
+                if user["status"] != "approved":
+                    self.send_json({"ok": False, "error": "승인 대기 중",
+                                    "status": user["status"]}, 403)
+                    return
+                token = create_session(user["id"])
+                # user dict는 authenticate()가 my_programs 포함해서 반환
+                self.send_json({"ok": True, "token": token, "user": user})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+            return
+
+        elif self.path == "/api/logout":
+            try:
+                destroy_session(self._get_session_token())
+                self.send_json({"ok": True})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+            return
+
+        elif self.path == "/api/me/update":
+            user = self._get_session_user()
+            if not user:
+                self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                return
+            try:
+                result = update_profile(
+                    user_id     = user['id'],
+                    name        = body.get('name'),
+                    role        = body.get('role'),
+                    my_programs = body.get('my_programs'),
+                )
+                if not result.get('ok'):
+                    self.send_json(result, 400)
+                    return
+                self.send_json(result)
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+            return
+
+        elif self.path == "/api/me/password":
+            user = self._get_session_user()
+            if not user:
+                self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                return
+            try:
+                result = change_password(
+                    user_id = user['id'],
+                    old_pw  = body.get('old_password', ''),
+                    new_pw  = body.get('new_password', ''),
+                )
+                self.send_json(result, 200 if result.get('ok') else 400)
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+            return
+
+        elif self.path == "/api/admin/approve":
+            admin = self._require_admin()
+            if not admin:
+                return
+            try:
+                action = body.get("action", "approve")
+                uid    = int(body.get("user_id", 0))
+                if not uid:
+                    self.send_json({"ok": False, "error": "user_id 필수"}, 400)
+                    return
+                if action == "approve":
+                    ok = approve_user(uid, admin["id"])
+                elif action == "reject":
+                    ok = reject_user(uid)
+                else:
+                    self.send_json({"ok": False, "error": "action은 approve|reject"}, 400)
+                    return
+                self.send_json({"ok": ok, "user_id": uid, "action": action})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+            return
+
         if self.path == "/api/ip-users":
+            if not self._require_admin():
+                return
             try:
                 action = body.get("action", "set")
                 ip     = body.get("ip", "").strip()
@@ -574,12 +765,16 @@ class RAASHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/api/query/stream":
             try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                    return
                 question    = body.get("question", "")
                 target_date = body.get("date", None)
-                user_id     = (self.headers.get("X-User-Id")
-                               or body.get("user_id", "anonymous") or "anonymous")
+                user_id     = str(user["id"])
+                user_name   = user["name"]
+                user_role   = user["role"]
                 ip          = self._get_client_ip()
-                user_name   = resolve_user_name(ip)
 
                 if not question:
                     self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
@@ -620,7 +815,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                         sse({"type": "token", "text": chunk})
                 answer = "".join(full_text)
                 query_id = save_query(user_id, question, answer, chart_data=chart_data,
-                                      ip=ip, user_name=user_name,
+                                      ip=ip, user_name=user_name, user_role=user_role,
                                       input_tokens=usage.get("input_tokens"),
                                       output_tokens=usage.get("output_tokens"),
                                       cache_creation_tokens=usage.get("cache_creation_tokens"),
@@ -638,13 +833,17 @@ class RAASHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/api/query":
             try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                    return
                 question    = body.get("question", "")
                 context     = body.get("context", "")
                 target_date = body.get("date", None)
-                user_id     = (self.headers.get("X-User-Id")
-                               or body.get("user_id", "anonymous") or "anonymous")
+                user_id     = str(user["id"])
+                user_name   = user["name"]
+                user_role   = user["role"]
                 ip          = self._get_client_ip()
-                user_name   = resolve_user_name(ip)
 
                 if not question:
                     self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
@@ -673,7 +872,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     out_tok = usage.get("output_tokens")
 
                 query_id = save_query(user_id, question, answer, chart_data=chart_data,
-                                      ip=ip, user_name=user_name,
+                                      ip=ip, user_name=user_name, user_role=user_role,
                                       input_tokens=in_tok, output_tokens=out_tok)
                 self.send_json({"ok": True, "answer": answer,
                                 "query_id": query_id, "chart_data": chart_data})
@@ -683,6 +882,7 @@ class RAASHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     init_db()
+    bootstrap_admins()  # .env ADMIN_LOGIN_IDS 기반 관리자 자동 승격
     server = ThreadingHTTPServer(("0.0.0.0", PORT), RAASHandler)
     server.daemon_threads = True
     print(f"RAAS Local Server started: http://localhost:{PORT}  (Ctrl+C to quit)")

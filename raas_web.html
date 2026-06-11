@@ -271,6 +271,162 @@ body{
 .hm-pg-btn:disabled{opacity:.4;cursor:not-allowed}
 .hist-empty-msg{padding:40px;text-align:center;color:var(--dim);font-size:var(--fs-md)}
 
+/* ── AUTH GATE (로그인 / 가입) ── */
+.auth-gate{
+  position:fixed;inset:0;z-index:900;
+  background:var(--bg0);
+  display:none;align-items:center;justify-content:center;
+  padding:24px;overflow-y:auto;
+}
+.auth-gate.open{display:flex}
+.auth-card{
+  width:100%;max-width:440px;
+  background:var(--bg1);border:1px solid var(--line2);border-radius:14px;
+  padding:32px 28px;
+  display:flex;flex-direction:column;gap:18px;
+}
+.auth-brand{font-size:var(--fs-2xl);font-weight:700;color:var(--accent);letter-spacing:.5px}
+.auth-sub{font-size:var(--fs-sm);color:var(--sub);margin-top:-12px}
+.auth-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.auth-tab{
+  flex:1;padding:10px 0;background:transparent;border:none;border-bottom:2px solid transparent;
+  color:var(--sub);font-size:var(--fs-md);font-family:var(--sans);cursor:pointer;
+  transition:all .15s;
+}
+.auth-tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.auth-form{display:flex;flex-direction:column;gap:12px}
+.auth-form.hidden{display:none}
+.auth-field{display:flex;flex-direction:column;gap:5px}
+.auth-label{font-size:var(--fs-xs);color:var(--sub);font-weight:500}
+.auth-input,.auth-select{
+  padding:9px 12px;border-radius:8px;
+  border:1px solid var(--line2);background:var(--bg2);
+  color:var(--text);font-size:var(--fs-md);font-family:var(--sans);outline:none;
+}
+.auth-input:focus,.auth-select:focus{border-color:var(--accent)}
+.auth-submit{
+  margin-top:6px;padding:11px 16px;border-radius:8px;border:none;
+  background:var(--accent);color:#fff;font-size:var(--fs-md);font-weight:600;
+  font-family:var(--sans);cursor:pointer;transition:opacity .12s;
+}
+.auth-submit:hover{opacity:.9}
+.auth-submit:disabled{opacity:.5;cursor:not-allowed}
+.auth-msg{
+  font-size:var(--fs-sm);padding:9px 12px;border-radius:7px;
+  background:rgba(242,107,107,.1);color:var(--red);border:1px solid rgba(242,107,107,.25);
+}
+.auth-msg.info{background:rgba(79,142,247,.1);color:var(--accent);border-color:rgba(79,142,247,.25)}
+.auth-msg.success{background:rgba(52,199,138,.1);color:var(--green);border-color:rgba(52,199,138,.25)}
+.auth-msg.hidden{display:none}
+
+/* 사이드바 푸터 (사용자 정보 + 로그아웃) */
+.sidebar-user{
+  padding:12px 14px;border-top:1px solid var(--line);
+  display:flex;flex-direction:column;gap:8px;flex-shrink:0;
+}
+.sidebar-user-info{display:flex;flex-direction:column;gap:2px}
+.sidebar-user-name{font-size:var(--fs-md);color:var(--text);font-weight:600}
+.sidebar-user-meta{font-size:var(--fs-xs);color:var(--sub)}
+.sidebar-user-actions{display:flex;gap:6px}
+.sidebar-user-btn{
+  flex:1;padding:6px 10px;border-radius:6px;
+  border:1px solid var(--line2);background:transparent;color:var(--sub);
+  font-size:var(--fs-xs);font-family:var(--sans);cursor:pointer;transition:all .12s;
+}
+.sidebar-user-btn:hover{background:var(--bg3);color:var(--text)}
+.sidebar-user-btn.admin{color:var(--accent);border-color:rgba(79,142,247,.4)}
+.sidebar-user-btn.admin:hover{background:var(--accent-soft)}
+
+/* 관리자 모달 — hist-modal 재사용하되 콘텐츠 전용 스타일 */
+.adm-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.adm-table th,.adm-table td{
+  padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);
+}
+.adm-table th{color:var(--sub);font-weight:600;background:var(--bg2)}
+.adm-table tr:hover td{background:var(--bg2)}
+.adm-badge{
+  display:inline-block;padding:2px 8px;border-radius:4px;
+  font-size:var(--fs-xs);font-weight:600;
+}
+.adm-badge.pending{background:rgba(245,166,35,.15);color:var(--yellow)}
+.adm-badge.approved{background:rgba(52,199,138,.15);color:var(--green)}
+.adm-badge.rejected{background:rgba(242,107,107,.15);color:var(--red)}
+.adm-action-btn{
+  padding:5px 10px;border-radius:6px;border:1px solid var(--line2);
+  background:transparent;color:var(--sub);
+  font-size:var(--fs-xs);font-family:var(--sans);cursor:pointer;margin-right:4px;
+  transition:all .12s;
+}
+.adm-action-btn.approve{color:var(--green);border-color:rgba(52,199,138,.4)}
+.adm-action-btn.approve:hover{background:rgba(52,199,138,.1)}
+.adm-action-btn.reject{color:var(--red);border-color:rgba(242,107,107,.4)}
+.adm-action-btn.reject:hover{background:rgba(242,107,107,.1)}
+.adm-section-title{
+  padding:11px 18px;font-size:var(--fs-md);font-weight:600;color:var(--text);
+  background:var(--bg2);border-bottom:1px solid var(--line);
+}
+
+/* ── PROFILE MODAL (내 정보) ── */
+.pf-body{padding:18px}
+.pf-section{margin-bottom:22px}
+.pf-section-title{
+  font-size:var(--fs-sm);font-weight:600;color:var(--sub);
+  text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;
+}
+.pf-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:10px 14px;
+}
+.pf-grid .pf-field.full{grid-column:1 / -1}
+.pf-field{display:flex;flex-direction:column;gap:5px}
+.pf-label{font-size:var(--fs-xs);color:var(--sub);font-weight:500}
+.pf-input,.pf-select{
+  padding:9px 12px;border-radius:8px;
+  border:1px solid var(--line2);background:var(--bg2);
+  color:var(--text);font-size:var(--fs-md);font-family:var(--sans);outline:none;
+}
+.pf-input:focus,.pf-select:focus{border-color:var(--accent)}
+.pf-input:read-only{background:var(--bg3);color:var(--sub);cursor:not-allowed}
+.pf-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+.pf-btn{
+  padding:9px 18px;border-radius:8px;font-size:var(--fs-md);font-weight:600;
+  font-family:var(--sans);cursor:pointer;border:1px solid var(--line2);
+  background:transparent;color:var(--text);transition:all .12s;
+}
+.pf-btn:hover{background:var(--bg3)}
+.pf-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pf-btn.primary:hover{opacity:.9}
+.pf-msg{
+  margin-top:10px;padding:9px 12px;border-radius:7px;
+  font-size:var(--fs-sm);
+  background:rgba(242,107,107,.1);color:var(--red);border:1px solid rgba(242,107,107,.25);
+}
+.pf-msg.success{background:rgba(52,199,138,.1);color:var(--green);border-color:rgba(52,199,138,.25)}
+.pf-msg.hidden{display:none}
+
+/* 관심 프로그램 — 채널별 그룹 + 칩 토글 */
+.pf-ch-group{margin-bottom:14px}
+.pf-ch-header{
+  font-size:var(--fs-sm);font-weight:600;color:var(--text);
+  padding-bottom:6px;margin-bottom:8px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;
+}
+.pf-ch-count{font-size:var(--fs-xs);color:var(--dim);font-weight:400}
+.pf-chips{display:flex;flex-wrap:wrap;gap:6px}
+.pf-chip{
+  padding:6px 12px;border-radius:16px;
+  border:1px solid var(--line2);background:var(--bg2);
+  color:var(--sub);font-size:var(--fs-sm);font-family:var(--sans);
+  cursor:pointer;transition:all .12s;user-select:none;
+}
+.pf-chip:hover{border-color:var(--accent);color:var(--text)}
+.pf-chip.selected{
+  background:var(--accent-soft);color:var(--accent);
+  border-color:rgba(79,142,247,.5);font-weight:600;
+}
+.pf-chip-time{font-size:var(--fs-xs);color:var(--dim);margin-left:4px}
+.pf-chip.selected .pf-chip-time{color:var(--accent);opacity:.7}
+.pf-empty-progs{padding:20px;text-align:center;color:var(--dim);font-size:var(--fs-sm)}
+
 /* ── MAIN CHAT ── */
 .chat-main{
   flex:1;height:100%;display:flex;flex-direction:column;
@@ -528,6 +684,61 @@ body{
 </head>
 <body>
 
+<!-- ── AUTH GATE (로그인/가입) ── -->
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <div class="auth-brand">RAAS</div>
+    <div class="auth-sub">Radio Analytics — SBS 고릴라 라디오 데이터 어시스턴트</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="authTabLogin" onclick="setAuthTab('login')">로그인</button>
+      <button class="auth-tab" id="authTabReg" onclick="setAuthTab('register')">가입</button>
+    </div>
+    <!-- 로그인 폼 -->
+    <form class="auth-form" id="authLoginForm" onsubmit="return doLogin(event)">
+      <div class="auth-field">
+        <label class="auth-label">아이디</label>
+        <input class="auth-input" name="login_id" autocomplete="username" required>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">비밀번호</label>
+        <input class="auth-input" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="auth-msg hidden" id="authLoginMsg"></div>
+      <button class="auth-submit" type="submit">로그인</button>
+    </form>
+    <!-- 가입 폼 -->
+    <form class="auth-form hidden" id="authRegForm" onsubmit="return doRegister(event)">
+      <div class="auth-field">
+        <label class="auth-label">아이디 (영문/숫자)</label>
+        <input class="auth-input" name="login_id" autocomplete="username" required>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">비밀번호 (4자 이상)</label>
+        <input class="auth-input" name="password" type="password" autocomplete="new-password" required minlength="4">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">이름</label>
+        <input class="auth-input" name="name" autocomplete="name" required>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">직무</label>
+        <select class="auth-select" name="role" required>
+          <option value="">선택…</option>
+          <option>제작</option>
+          <option>편성</option>
+          <option>마케팅</option>
+          <option>플랫폼전략</option>
+          <option>데이터</option>
+          <option>CP</option>
+          <option>총괄관리</option>
+        </select>
+      </div>
+      <div class="auth-msg hidden" id="authRegMsg"></div>
+      <button class="auth-submit" type="submit">가입 요청</button>
+    </form>
+  </div>
+</div>
+
 <!-- ── SIDEBAR BACKDROP ── -->
 <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
@@ -547,6 +758,10 @@ body{
   <button class="btn-history" onclick="openHistModal()">
     <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     이력 보기
+  </button>
+  <button class="btn-history" onclick="openProfileModal()">
+    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    내 정보
   </button>
   <div class="sidebar-scroll">
     <div class="sidebar-section">빠른 질의</div>
@@ -618,17 +833,387 @@ body{
   <div class="kpi-scroll" id="kpiScroll">
     <div class="kpi-loading" id="kpiLoading">KPI 데이터 로드 중…</div>
   </div>
+  <!-- 사용자 정보 + 로그아웃 (로그인 시에만 표시) -->
+  <div class="sidebar-user" id="sidebarUser" style="display:none">
+    <div class="sidebar-user-info">
+      <div class="sidebar-user-name" id="suName">—</div>
+      <div class="sidebar-user-meta" id="suMeta">—</div>
+    </div>
+    <div class="sidebar-user-actions">
+      <button class="sidebar-user-btn admin" id="suAdminBtn"
+              style="display:none" onclick="openAdminModal()">승인 관리</button>
+      <button class="sidebar-user-btn" onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
 </aside>
 
 <script>
 // ────────────────────────────────────────────────
 // CONFIG
 // ────────────────────────────────────────────────
-const RAAS_USER_ID = (() => {
-  let id = localStorage.getItem('raas_uid');
-  if (!id) { id = 'u_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('raas_uid', id); }
-  return id;
-})();
+// ── 세션 토큰 / 현재 사용자 ──
+let RAAS_TOKEN = localStorage.getItem('raas_token') || '';
+let RAAS_USER  = null;  // {id, login_id, name, role, status, is_admin, my_programs}
+
+function _authHeaders() {
+  return RAAS_TOKEN ? { 'Authorization': 'Bearer ' + RAAS_TOKEN } : {};
+}
+
+// 401 응답 시 토큰 클리어하고 게이트로 복귀
+async function _authedFetch(url, options) {
+  options = options || {};
+  options.headers = Object.assign({}, options.headers || {}, _authHeaders());
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    RAAS_TOKEN = '';
+    RAAS_USER  = null;
+    localStorage.removeItem('raas_token');
+    _showAuthGate();
+  }
+  return res;
+}
+
+// ── 인증 게이트 UI 제어 ──
+function _showAuthGate()  { document.getElementById('authGate').classList.add('open'); }
+function _hideAuthGate()  { document.getElementById('authGate').classList.remove('open'); }
+
+function setAuthTab(tab) {
+  document.getElementById('authTabLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('authTabReg').classList.toggle('active',   tab === 'register');
+  document.getElementById('authLoginForm').classList.toggle('hidden', tab !== 'login');
+  document.getElementById('authRegForm').classList.toggle('hidden',   tab !== 'register');
+  document.getElementById('authLoginMsg').classList.add('hidden');
+  document.getElementById('authRegMsg').classList.add('hidden');
+}
+
+function _showAuthMsg(formId, text, kind) {
+  const el = document.getElementById(formId);
+  el.textContent = text;
+  el.className = 'auth-msg ' + (kind || '');
+}
+
+async function doLogin(ev) {
+  ev.preventDefault();
+  const form = ev.target;
+  const body = {
+    login_id: form.login_id.value.trim(),
+    password: form.password.value,
+  };
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      _showAuthMsg('authLoginMsg', data.error || '로그인 실패', '');
+      return false;
+    }
+    RAAS_TOKEN = data.token;
+    RAAS_USER  = data.user;
+    localStorage.setItem('raas_token', RAAS_TOKEN);
+    _hideAuthGate();
+    _renderSidebarUser();
+    refreshHistory();
+  } catch (e) {
+    _showAuthMsg('authLoginMsg', '네트워크 오류: ' + e.message, '');
+  } finally {
+    btn.disabled = false;
+  }
+  return false;
+}
+
+async function doRegister(ev) {
+  ev.preventDefault();
+  const form = ev.target;
+  const body = {
+    login_id: form.login_id.value.trim(),
+    password: form.password.value,
+    name:     form.name.value.trim(),
+    role:     form.role.value,
+  };
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      _showAuthMsg('authRegMsg', data.error || '가입 실패', '');
+      return false;
+    }
+    if (data.status === 'approved') {
+      // 부트스트랩 관리자 — 즉시 로그인
+      RAAS_TOKEN = data.token;
+      localStorage.setItem('raas_token', RAAS_TOKEN);
+      const meRes = await _authedFetch('/api/me');
+      const me = await meRes.json();
+      if (me.ok) {
+        RAAS_USER = me.user;
+        _hideAuthGate();
+        _renderSidebarUser();
+        refreshHistory();
+      }
+    } else {
+      _showAuthMsg('authRegMsg',
+        '가입 요청이 접수되었습니다. 관리자 승인 후 로그인하실 수 있습니다.', 'success');
+      form.reset();
+      setTimeout(() => setAuthTab('login'), 1500);
+    }
+  } catch (e) {
+    _showAuthMsg('authRegMsg', '네트워크 오류: ' + e.message, '');
+  } finally {
+    btn.disabled = false;
+  }
+  return false;
+}
+
+async function doLogout() {
+  try {
+    await _authedFetch('/api/logout', { method: 'POST' });
+  } catch (_) {}
+  RAAS_TOKEN = '';
+  RAAS_USER  = null;
+  localStorage.removeItem('raas_token');
+  document.getElementById('sidebarUser').style.display = 'none';
+  document.getElementById('historyList').innerHTML =
+    '<div class="history-empty">아직 질의 내역이 없습니다.</div>';
+  _showAuthGate();
+  setAuthTab('login');
+}
+
+function _renderSidebarUser() {
+  if (!RAAS_USER) return;
+  document.getElementById('suName').textContent = RAAS_USER.name;
+  document.getElementById('suMeta').textContent = RAAS_USER.role || '';
+  document.getElementById('sidebarUser').style.display = 'flex';
+  document.getElementById('suAdminBtn').style.display =
+    RAAS_USER.is_admin ? 'inline-block' : 'none';
+}
+
+// 앱 부팅 시 호출 — 토큰이 있으면 /api/me로 복원, 없으면 게이트 표시
+async function _bootAuth() {
+  if (!RAAS_TOKEN) { _showAuthGate(); return false; }
+  try {
+    const res = await fetch('/api/me', { headers: _authHeaders() });
+    if (!res.ok) throw new Error('token invalid');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'no session');
+    RAAS_USER = data.user;
+    _renderSidebarUser();
+    return true;
+  } catch (_) {
+    RAAS_TOKEN = '';
+    localStorage.removeItem('raas_token');
+    _showAuthGate();
+    return false;
+  }
+}
+
+// ── 관리자 모달 ──
+function openAdminModal() {
+  document.getElementById('adminModal').classList.add('open');
+  _loadAdminUsers();
+}
+function closeAdminModal() {
+  document.getElementById('adminModal').classList.remove('open');
+}
+
+async function _loadAdminUsers() {
+  const body = document.getElementById('adminModalBody');
+  body.innerHTML = '<div class="hist-empty-msg">로드 중…</div>';
+  try {
+    const res = await _authedFetch('/api/admin/users');
+    if (!res.ok) {
+      body.innerHTML = '<div class="hist-empty-msg" style="color:var(--red)">권한 없음 또는 오류</div>';
+      return;
+    }
+    const data = await res.json();
+    if (!data.ok) {
+      body.innerHTML = `<div class="hist-empty-msg" style="color:var(--red)">${escapeHtml(data.error||'오류')}</div>`;
+      return;
+    }
+    body.innerHTML = _renderAdminUsers(data.pending, data.all);
+  } catch (e) {
+    body.innerHTML = `<div class="hist-empty-msg" style="color:var(--red)">네트워크 오류: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function _renderAdminUsers(pending, all) {
+  const _row = (u, showActions) => `
+    <tr>
+      <td>${escapeHtml(u.login_id)}</td>
+      <td>${escapeHtml(u.name)}</td>
+      <td>${escapeHtml(u.role)}</td>
+      <td><span class="adm-badge ${u.status||'pending'}">${u.status||'pending'}</span></td>
+      <td style="font-size:var(--fs-xs);color:var(--dim)">${escapeHtml(u.created_at||'')}</td>
+      <td>${showActions ? `
+        <button class="adm-action-btn approve" onclick="approveUser(${u.id})">승인</button>
+        <button class="adm-action-btn reject"  onclick="rejectUser(${u.id})">거절</button>
+      ` : ''}</td>
+    </tr>`;
+  const pendingHtml = pending.length ? `
+    <div class="adm-section-title">승인 대기 (${pending.length})</div>
+    <table class="adm-table">
+      <thead><tr><th>ID</th><th>이름</th><th>직무</th><th>상태</th><th>가입일</th><th>처리</th></tr></thead>
+      <tbody>${pending.map(u => _row(u, true)).join('')}</tbody>
+    </table>` : '<div class="adm-section-title">승인 대기 (0)</div><div class="hist-empty-msg">대기 중인 사용자가 없습니다.</div>';
+  const allHtml = `
+    <div class="adm-section-title">전체 사용자 (${all.length})</div>
+    <table class="adm-table">
+      <thead><tr><th>ID</th><th>이름</th><th>직무</th><th>상태</th><th>가입일</th><th></th></tr></thead>
+      <tbody>${all.map(u => _row(u, false)).join('')}</tbody>
+    </table>`;
+  return pendingHtml + allHtml;
+}
+
+async function approveUser(uid) {
+  await _adminAction(uid, 'approve');
+}
+async function rejectUser(uid) {
+  if (!confirm('이 사용자를 거절하시겠습니까? 활성 세션도 무효화됩니다.')) return;
+  await _adminAction(uid, 'reject');
+}
+async function _adminAction(uid, action) {
+  try {
+    const res = await _authedFetch('/api/admin/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: uid, action }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error || '실패'); return; }
+    _loadAdminUsers();
+  } catch (e) {
+    alert('네트워크 오류: ' + e.message);
+  }
+}
+
+// ── 프로필 모달 ──
+let _PROGRAMS_CACHE = null;  // [{code,label,programs:[{code,label,time}]}]
+
+async function openProfileModal() {
+  if (!RAAS_USER) return;
+  document.getElementById('profileModal').classList.add('open');
+  // 폼에 현재 값 채우기
+  document.getElementById('pfLoginId').value = RAAS_USER.login_id || '';
+  document.getElementById('pfName').value    = RAAS_USER.name || '';
+  document.getElementById('pfRole').value    = RAAS_USER.role || '';
+  document.getElementById('pfMsg').className = 'pf-msg hidden';
+  document.getElementById('pwMsg').className = 'pf-msg hidden';
+  document.getElementById('pwForm').reset();
+  await _loadProgramsForProfile();
+}
+
+function closeProfileModal() {
+  document.getElementById('profileModal').classList.remove('open');
+}
+
+async function _loadProgramsForProfile() {
+  const host = document.getElementById('pfPrograms');
+  try {
+    if (!_PROGRAMS_CACHE) {
+      const res = await _authedFetch('/api/programs');
+      const data = await res.json();
+      if (!data.ok) {
+        host.innerHTML = `<div class="pf-empty-progs" style="color:var(--red)">${escapeHtml(data.error||'프로그램 로드 실패')}</div>`;
+        return;
+      }
+      _PROGRAMS_CACHE = data.channels;
+    }
+    const selected = new Set(RAAS_USER.my_programs || []);
+    host.innerHTML = _PROGRAMS_CACHE.map(ch => {
+      const chips = ch.programs.map(p => {
+        const sel = selected.has(p.code) ? ' selected' : '';
+        const time = p.time ? `<span class="pf-chip-time">${escapeHtml(p.time)}</span>` : '';
+        return `<button type="button" class="pf-chip${sel}" data-code="${escapeHtml(p.code)}"
+                        onclick="_toggleChip(this)">${escapeHtml(p.label)}${time}</button>`;
+      }).join('');
+      return `
+        <div class="pf-ch-group">
+          <div class="pf-ch-header">${escapeHtml(ch.label)}
+            <span class="pf-ch-count">(${ch.programs.length}개)</span></div>
+          <div class="pf-chips">${chips || '<span style="color:var(--dim);font-size:var(--fs-sm)">프로그램 없음</span>'}</div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    host.innerHTML = `<div class="pf-empty-progs" style="color:var(--red)">네트워크 오류: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function _toggleChip(btn) { btn.classList.toggle('selected'); }
+
+function _collectSelectedPrograms() {
+  return Array.from(document.querySelectorAll('#pfPrograms .pf-chip.selected'))
+    .map(el => el.dataset.code);
+}
+
+async function saveProfile(ev) {
+  ev.preventDefault();
+  const msg = document.getElementById('pfMsg');
+  const payload = {
+    name:        document.getElementById('pfName').value.trim(),
+    role:        document.getElementById('pfRole').value,
+    my_programs: _collectSelectedPrograms(),
+  };
+  try {
+    const res = await _authedFetch('/api/me/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      msg.textContent = data.error || '저장 실패';
+      msg.className = 'pf-msg';
+      return false;
+    }
+    RAAS_USER = data.user;
+    _renderSidebarUser();
+    msg.textContent = '저장되었습니다.';
+    msg.className = 'pf-msg success';
+  } catch (e) {
+    msg.textContent = '네트워크 오류: ' + e.message;
+    msg.className = 'pf-msg';
+  }
+  return false;
+}
+
+async function changePw(ev) {
+  ev.preventDefault();
+  const msg = document.getElementById('pwMsg');
+  const form = ev.target;
+  const payload = {
+    old_password: form.old_password.value,
+    new_password: form.new_password.value,
+  };
+  try {
+    const res = await _authedFetch('/api/me/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      msg.textContent = data.error || '변경 실패';
+      msg.className = 'pf-msg';
+      return false;
+    }
+    msg.textContent = '비밀번호가 변경되었습니다.';
+    msg.className = 'pf-msg success';
+    form.reset();
+  } catch (e) {
+    msg.textContent = '네트워크 오류: ' + e.message;
+    msg.className = 'pf-msg';
+  }
+  return false;
+}
 
 const QUICK_QUERIES = [
   'RAAS에는 어떤 지표들이 있나',
@@ -1368,9 +1953,9 @@ async function submitQuery(question) {
   const msgBody = document.getElementById(aiId).querySelector('.msg-body');
 
   try {
-    const res = await fetch('/api/query/stream', {
+    const res = await _authedFetch('/api/query/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-User-Id': RAAS_USER_ID },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1584,8 +2169,12 @@ function _onHistoryClick(i) {
 
 async function refreshHistory() {
   const list = document.getElementById('historyList');
+  if (!RAAS_TOKEN) {
+    list.innerHTML = '<div class="history-empty">로그인 후 이용 가능</div>';
+    return;
+  }
   try {
-    const res = await fetch('/api/query/history?limit=50', { headers: { 'X-User-Id': RAAS_USER_ID } });
+    const res = await _authedFetch('/api/query/history?limit=50');
     const data = await res.json();
     if (!data.items?.length) {
       list.innerHTML = '<div class="history-empty">아직 질의 내역이 없습니다.</div>';
@@ -1870,14 +2459,110 @@ document.getElementById('btnTheme').addEventListener('click', function(){
 // INIT
 // ────────────────────────────────────────────────
 _cleanQCache();
-_checkDataVersion();  // 데이터 버전 확인 → 갱신 시 캐시 자동 무효화
 _initWelcomeChips();
 _initSidebarQueries();
-loadKpiPanel();
-refreshHistory();
+
+// 인증 게이트 — 토큰 복원 후 성공 시만 KPI/이력 로드
+(async () => {
+  const authed = await _bootAuth();
+  if (authed) {
+    _checkDataVersion();
+    loadKpiPanel();
+    refreshHistory();
+  }
+})();
 </script>
 
 <!-- ── HISTORY MODAL ── -->
+<!-- ── PROFILE MODAL (내 정보) ── -->
+<div class="hist-modal" id="profileModal">
+  <div class="hist-modal-inner">
+    <div class="hist-modal-hd">
+      <span class="hist-modal-title">내 정보</span>
+      <button class="btn-icon" onclick="closeProfileModal()" title="닫기" style="margin-left:auto">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="hist-modal-body">
+      <form class="pf-body" id="profileForm" onsubmit="return saveProfile(event)">
+        <div class="pf-section">
+          <div class="pf-section-title">기본 정보</div>
+          <div class="pf-grid">
+            <div class="pf-field">
+              <label class="pf-label">아이디</label>
+              <input class="pf-input" id="pfLoginId" readonly>
+            </div>
+            <div class="pf-field">
+              <label class="pf-label">이름</label>
+              <input class="pf-input" id="pfName" required>
+            </div>
+            <div class="pf-field">
+              <label class="pf-label">직무</label>
+              <select class="pf-select" id="pfRole" required>
+                <option>제작</option>
+                <option>편성</option>
+                <option>마케팅</option>
+                <option>플랫폼전략</option>
+                <option>데이터</option>
+                <option>CP</option>
+                <option>총괄관리</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="pf-section">
+          <div class="pf-section-title">내(관심) 프로그램 <span style="color:var(--dim);font-weight:400">— 클릭해서 선택/해제</span></div>
+          <div id="pfPrograms"><div class="pf-empty-progs">프로그램 목록 로드 중…</div></div>
+        </div>
+        <div class="pf-msg hidden" id="pfMsg"></div>
+        <div class="pf-actions">
+          <button type="button" class="pf-btn" onclick="closeProfileModal()">취소</button>
+          <button type="submit" class="pf-btn primary">저장</button>
+        </div>
+      </form>
+
+      <div class="pf-body" style="border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
+        <div class="pf-section-title">비밀번호 변경</div>
+        <form id="pwForm" onsubmit="return changePw(event)">
+          <div class="pf-grid">
+            <div class="pf-field">
+              <label class="pf-label">현재 비밀번호</label>
+              <input class="pf-input" type="password" name="old_password" autocomplete="current-password">
+            </div>
+            <div class="pf-field">
+              <label class="pf-label">새 비밀번호 (4자 이상)</label>
+              <input class="pf-input" type="password" name="new_password" minlength="4" autocomplete="new-password">
+            </div>
+          </div>
+          <div class="pf-msg hidden" id="pwMsg"></div>
+          <div class="pf-actions">
+            <button type="submit" class="pf-btn primary">비밀번호 변경</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADMIN MODAL (승인 관리) ── -->
+<div class="hist-modal" id="adminModal">
+  <div class="hist-modal-inner">
+    <div class="hist-modal-hd">
+      <span class="hist-modal-title">사용자 승인 관리</span>
+      <button class="btn-icon" onclick="closeAdminModal()" title="닫기" style="margin-left:auto">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="hist-modal-body" id="adminModalBody">
+      <div class="hist-empty-msg">로드 중...</div>
+    </div>
+  </div>
+</div>
+
 <div class="hist-modal" id="histModal">
   <div class="hist-modal-inner">
     <div class="hist-modal-hd">

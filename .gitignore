@@ -16,6 +16,8 @@ server.log
 server_err.log
 server_test.log
 server_test_err.log
+server_*.log
+server_*.txt
 
 # 백업 파일
 *.bak

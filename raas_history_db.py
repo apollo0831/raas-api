@@ -48,6 +48,46 @@ def init_db():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # ── 계정 / 세션 (Part 2: 사용자 관리) ───────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                login_id     TEXT    UNIQUE NOT NULL,
+                pw_hash      TEXT    NOT NULL,
+                pw_salt      TEXT    NOT NULL,
+                name         TEXT    NOT NULL,
+                role         TEXT    NOT NULL,
+                title        TEXT,
+                status       TEXT    DEFAULT 'pending',
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                approved_at  TIMESTAMP,
+                approved_by  INTEGER
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token       TEXT PRIMARY KEY,
+                user_id     INTEGER NOT NULL,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at  TIMESTAMP
+            )
+        """)
+        # query_history에 user_role 추가 (직무별 인기 질문 집계용)
+        try:
+            conn.execute("ALTER TABLE query_history ADD COLUMN user_role TEXT")
+        except Exception:
+            pass
+        # users에 관심 프로그램 추가 (JSON 배열로 저장: ["F06","L03",...])
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN my_programs TEXT")
+        except Exception:
+            pass
+        # users에 시스템 관리자 권한 플래그 (role과 무관, ADMIN_LOGIN_IDS로만 부여)
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_user_created "
             "ON query_history (user_id, created_at DESC)"
@@ -55,6 +95,14 @@ def init_db():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_created "
             "ON query_history (created_at DESC)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_user "
+            "ON sessions (user_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_status "
+            "ON users (status)"
         )
 
 
@@ -110,6 +158,7 @@ def get_all_ip_users() -> list:
 def save_query(user_id: str, question: str, answer: str,
                chart_data: Optional[dict] = None,
                ip: str = None, user_name: str = None,
+               user_role: str = None,
                input_tokens: int = None, output_tokens: int = None,
                cache_creation_tokens: int = None, cache_read_tokens: int = None) -> int:
     """질의 1건 DB 저장. JSONL 로그도 함께 기록."""
@@ -117,10 +166,10 @@ def save_query(user_id: str, question: str, answer: str,
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO query_history "
-            "(user_id, question, answer, chart_data, ip, user_name, "
+            "(user_id, question, answer, chart_data, ip, user_name, user_role, "
             " input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (user_id, question, answer, chart_json, ip, user_name,
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, question, answer, chart_json, ip, user_name, user_role,
              input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens)
         )
         row_id = cur.lastrowid

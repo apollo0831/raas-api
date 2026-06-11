@@ -376,7 +376,11 @@ class OntologyAdapter:
                 ("raas:RetentionRate_M1_NewUser", None),
             ]),
         ]
-        lines = ["[지표 정의]"]
+        lines = [
+            "[지표 체계 및 정의]",
+            "- 지표 소개 시 반드시 아래 4개 범주로 분류하여 답변할 것: 사용자 규모 / 사용자 흐름(유입·이탈) / 청취 품질 / 유지율",
+            "- 실청취자 = 1분이상 청취한 사용자 (dau_1min 필드) — '실청취자 수', '1분이상 청취자 수', 'dau_1min'은 동일한 값",
+        ]
         for group_name, items in GROUPS:
             lines.append(f"\n{group_name}")
             for variant_iri, metric_iri in items:
