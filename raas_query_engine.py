@@ -3449,9 +3449,9 @@ def query_with_timeline(question: str, timeline: dict,
 def query_with_timeline_stream(question: str, timeline: dict,
                                target_date: str = None,
                                briefing_data: dict = None):
-    """스트리밍용 — (system, context, max_tokens, chart_data) 반환. Claude 호출 없음."""
+    """스트리밍용 — (system, context, max_tokens, chart_data, facts) 반환. Claude 호출 없음."""
     if not timeline:
-        return None, None, None, None
+        return None, None, None, None, None
     return _answer(question, timeline, target_date, verbose=False,
                    briefing_data=briefing_data, _return_context=True)
 
@@ -3463,6 +3463,26 @@ _INTENT_TOKENS = {
     'funnel': 1000, 'engagement': 1000, 'growth': 900,
     'anomaly': 800, 'report': 1500, 'general': 1500,
 }
+
+
+def _build_facts(intent: dict) -> dict:
+    """classify_intent + _answer 후처리가 끝난 intent dict → 저장용 fact dict.
+    값이 'all'/'general'/'T00' 같은 기본값이어도 그대로 보존 (통계상 의미 있음).
+    추가 API 호출 없음 — 이미 실행된 의도 분류 결과 재사용."""
+    _it = intent.get('intent') or 'general'
+    _sc = intent.get('scope')  or 'T00'
+    _mt = intent.get('metric') or 'all'
+    _metrics = intent.get('metrics')   # list (trend/dual_trend) or None
+    if _metrics and not isinstance(_metrics, list):
+        _metrics = None
+    return {
+        'intent':        _it,
+        'scope':         _sc,
+        'scope_keyword': intent.get('scope_keyword') or None,
+        'metric':        _mt,
+        'metrics':       _metrics,
+        'topic_key':     f"{_it}:{_sc}:{_mt}",
+    }
 
 
 def _answer(question, timeline, target_date, verbose, briefing_data=None, _return_context=False):
@@ -3587,7 +3607,12 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
 
     data = extract_data(timeline, intent, briefing_data=briefing_data, question=question)
     if 'error' in data:
-        return {"answer": f"데이터 추출 실패: {data['error']}", "chart_data": None}
+        # 호출자 시그니처에 맞춰 반환 — 스트리밍이면 5튜플, 일반이면 dict
+        _err_facts = _build_facts(intent)
+        if _return_context:
+            return None, None, None, None, _err_facts
+        return {"answer": f"데이터 추출 실패: {data['error']}",
+                "chart_data": None, "facts": _err_facts}
 
     # 전체 목록 요청 감지 ("전체", "전부", "모두", "다 보여줘" 등)
     _SHOW_ALL_KW = ('전체', '전부', '모두', '다 보여', '전 프로그램', '리스트 전체')
@@ -3748,8 +3773,10 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
     ) if _has_chart else ''
     _dynamic_system = date_system + intent_note + _chart_note
     full_system = (_static_system, _dynamic_system)
+    # 질의 노드화 facts — 이미 실행된 intent 후처리 결과 재사용 (API 호출 0)
+    facts = _build_facts(intent)
     if _return_context:
-        return _static_system + _dynamic_system, context, max_tokens, chart_data
+        return _static_system + _dynamic_system, context, max_tokens, chart_data, facts
     _model = HAIKU_MODEL if _it in _HAIKU_INTENTS else CLAUDE_MODEL
     answer_text, usage = call_claude(full_system, context, max_tokens=max_tokens, model=_model)
     return {
@@ -3757,6 +3784,7 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
         "chart_data": chart_data,
         "input_tokens":  usage.get("input_tokens"),
         "output_tokens": usage.get("output_tokens"),
+        "facts": facts,
     }
 
 

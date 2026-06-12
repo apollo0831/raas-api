@@ -40,6 +40,11 @@ from raas_auth import (register_user, authenticate, create_session,
                        get_pending_users, list_users, approve_user, reject_user,
                        bootstrap_admins, ALLOWED_ROLES,
                        update_profile, change_password)
+from raas_onboarding import list_active_profiles, build_suggestions
+from raas_querymap import (stats_overview, stats_by_role,
+                           stats_by_user, stats_topics,
+                           stats_role_metric_matrix,
+                           build_graph, interest_map)
 from raas_prompts import QUERY_SYSTEM_PROMPT
 from raas_briefing_context import build_query_context
 
@@ -144,6 +149,23 @@ def get_cached_timeline():
 
 def get_timeline_source() -> str:
     return cache_get("timeline_source") or "unknown"
+
+
+def get_cached_anomalies() -> list:
+    """s7_anomalies['alerts']만 별도 캐시 (5분 TTL).
+    /api/briefing과 /api/suggestions가 같은 결과를 공유 — 중복 계산 방지."""
+    cached = cache_get("anomalies")
+    if cached is not None:
+        return cached
+    try:
+        tl = get_cached_timeline()
+        brief = QE.collect_briefing_data(tl)
+        alerts = (brief.get('s7_anomalies') or {}).get('alerts', []) or []
+    except Exception as e:
+        print(f"[anomalies] 캐시 빌드 실패: {e}", flush=True)
+        alerts = []
+    cache_set("anomalies", alerts)
+    return alerts
 # ──────────────────────────────────────────────────────────
 
 def splunk_auth():
@@ -290,6 +312,17 @@ class RAASHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "error": "관리자 권한이 필요합니다."}, 403)
             return None
         return user
+
+    def _require_stats_viewer(self):
+        """통계 열람 권한 — is_admin OR role in {'총괄관리','데이터'}."""
+        user = self._get_session_user()
+        if not user:
+            self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+            return None
+        if user.get("is_admin") or user.get("role") in ("총괄관리", "데이터"):
+            return user
+        self.send_json({"ok": False, "error": "통계 열람 권한이 없습니다."}, 403)
+        return None
 
     def send_json(self, data, status=200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -566,6 +599,23 @@ class RAASHandler(BaseHTTPRequestHandler):
             else:
                 self.send_json({"ok": False, "error": "세션 없음"}, 401)
 
+        elif self.path.startswith("/api/my/interest-map"):
+            # 본인 관심 맵 — 모든 로그인 사용자, 본인 데이터만
+            user = self._get_session_user()
+            if not user:
+                self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                return
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                days = int(params.get("days", 30))
+                # user_id는 항상 세션에서 — 위조 불가능
+                self.send_json({"ok": True,
+                                "data": interest_map(user["id"], days=days)})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/admin/users":
             admin = self._require_admin()
             if not admin:
@@ -576,6 +626,39 @@ class RAASHandler(BaseHTTPRequestHandler):
                     "pending": get_pending_users(),
                     "all":     list_users(),
                 })
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path.startswith("/api/admin/stats/"):
+            # 통계 열람 — is_admin OR role in {'총괄관리','데이터'}
+            viewer = self._require_stats_viewer()
+            if not viewer:
+                return
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                days  = int(params.get("days", 30))
+                limit = int(params.get("limit", 50))
+                sub = self.path.split("?", 1)[0].replace("/api/admin/stats/", "")
+                if   sub == "overview":
+                    self.send_json({"ok": True, "data": stats_overview(days=days)})
+                elif sub == "by-role":
+                    self.send_json({"ok": True, "data": stats_by_role(days=days)})
+                elif sub == "by-user":
+                    self.send_json({"ok": True,
+                                    "data": stats_by_user(days=days, limit=limit),
+                                    "me": viewer.get("id")})
+                elif sub == "topics":
+                    self.send_json({"ok": True, "data": stats_topics(days=days, limit=limit)})
+                elif sub == "heatmap":
+                    dim = params.get("dimension", "metric")
+                    self.send_json({"ok": True,
+                                    "data": stats_role_metric_matrix(days=days, dimension=dim, top_n=10)})
+                elif sub == "graph":
+                    self.send_json({"ok": True, "data": build_graph(days=days)})
+                else:
+                    self.send_json({"ok": False, "error": "지원하지 않는 통계 종류"}, 404)
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
@@ -605,6 +688,28 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": True, "channels": channels})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/profiles":
+            # 가입/프로필 드롭다운용 — active=true만. 인증 불필요.
+            try:
+                self.send_json({"ok": True, "profiles": list_active_profiles()})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/suggestions":
+            # 직무 기반 추천 칩 — 세션 토큰의 role/user_id로 build. 미인증이어도 graceful.
+            # 개인화(gap·peer·similar)는 build_suggestions가 user_id로 recommend_for_user를 호출.
+            try:
+                user = self._get_session_user()
+                role = (user or {}).get("role")
+                uid  = (user or {}).get("id")
+                anomalies = get_cached_anomalies()
+                chips = build_suggestions(role, anomalies, N=6, user_id=uid)
+                self.send_json({"ok": True, "role": role, "chips": chips})
+            except Exception as e:
+                # 어떤 오류든 빈 칩으로 graceful — 채팅 흐름 보호
+                print(f"[suggestions] 실패: {e}", flush=True)
+                self.send_json({"ok": True, "role": None, "chips": []})
 
         elif self.path == "/api/status":
             self.send_json({"ok": True, "server": "RAAS",
@@ -784,12 +889,13 @@ class RAASHandler(BaseHTTPRequestHandler):
                     return
 
                 timeline = get_cached_timeline()
-                sys_prompt, ctx, max_tok, chart_data = QE.query_with_timeline_stream(
+                sys_prompt, ctx, max_tok, chart_data, facts = QE.query_with_timeline_stream(
                     question, timeline, target_date=target_date
                 )
                 if sys_prompt is None:
                     self.send_json({"ok": False, "error": "데이터를 사용할 수 없습니다."}, 500)
                     return
+                facts = facts or {}
 
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -819,7 +925,13 @@ class RAASHandler(BaseHTTPRequestHandler):
                                       input_tokens=usage.get("input_tokens"),
                                       output_tokens=usage.get("output_tokens"),
                                       cache_creation_tokens=usage.get("cache_creation_tokens"),
-                                      cache_read_tokens=usage.get("cache_read_tokens"))
+                                      cache_read_tokens=usage.get("cache_read_tokens"),
+                                      intent=facts.get("intent"),
+                                      scope=facts.get("scope"),
+                                      scope_keyword=facts.get("scope_keyword"),
+                                      metric=facts.get("metric"),
+                                      metrics=facts.get("metrics"),
+                                      topic_key=facts.get("topic_key"))
                 sse({"type": "done", "query_id": query_id})
                 self.close_connection = True  # SSE 완료 후 연결 명시적 종료
             except Exception as e:
@@ -850,6 +962,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     return
 
                 in_tok = out_tok = None
+                facts = {}
                 if QUERY_ENGINE_AVAILABLE:
                     timeline = get_cached_timeline()
                     result = QE.query_with_timeline(
@@ -860,8 +973,9 @@ class RAASHandler(BaseHTTPRequestHandler):
                     chart_data = result.get("chart_data")
                     in_tok     = result.get("input_tokens")
                     out_tok    = result.get("output_tokens")
+                    facts      = result.get("facts") or {}
                 else:
-                    # QE 로드 실패 시 간단 fallback
+                    # QE 로드 실패 시 간단 fallback — facts 없이 graceful 저장
                     enriched_context = build_query_context(question, context)
                     answer, usage = call_claude(
                         QUERY_SYSTEM_PROMPT,
@@ -873,7 +987,13 @@ class RAASHandler(BaseHTTPRequestHandler):
 
                 query_id = save_query(user_id, question, answer, chart_data=chart_data,
                                       ip=ip, user_name=user_name, user_role=user_role,
-                                      input_tokens=in_tok, output_tokens=out_tok)
+                                      input_tokens=in_tok, output_tokens=out_tok,
+                                      intent=facts.get("intent"),
+                                      scope=facts.get("scope"),
+                                      scope_keyword=facts.get("scope_keyword"),
+                                      metric=facts.get("metric"),
+                                      metrics=facts.get("metrics"),
+                                      topic_key=facts.get("topic_key"))
                 self.send_json({"ok": True, "answer": answer,
                                 "query_id": query_id, "chart_data": chart_data})
             except Exception as e:

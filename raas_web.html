@@ -366,6 +366,203 @@ body{
   background:var(--bg2);border-bottom:1px solid var(--line);
 }
 
+/* ── STATS MODAL (질의맵) ── */
+.stm-toolbar{
+  padding:11px 18px;background:var(--bg2);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+}
+.stm-tabs{display:flex;gap:4px;flex:1}
+.stm-tab{
+  padding:6px 14px;border-radius:6px;
+  border:1px solid var(--line2);background:transparent;
+  color:var(--sub);font-size:var(--fs-sm);font-family:var(--sans);cursor:pointer;
+  transition:all .12s;
+}
+.stm-tab.active{background:var(--accent-soft);color:var(--accent);border-color:rgba(79,142,247,.5)}
+.stm-tab:hover:not(.active){background:var(--bg3);color:var(--text)}
+.stm-period{display:flex;gap:4px}
+.stm-period-btn{
+  padding:5px 11px;border-radius:6px;
+  border:1px solid var(--line2);background:transparent;
+  color:var(--sub);font-size:var(--fs-xs);font-family:var(--sans);cursor:pointer;
+}
+.stm-period-btn.active{background:var(--bg4);color:var(--text);border-color:var(--bg5)}
+
+.stm-body{padding:18px;min-height:240px}
+.stm-empty{padding:40px 20px;text-align:center;color:var(--dim);font-size:var(--fs-md);line-height:1.7}
+
+/* KPI 카드 */
+.stm-kpi-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;
+}
+.stm-kpi{
+  background:var(--bg2);border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px;display:flex;flex-direction:column;gap:4px;
+}
+.stm-kpi-label{font-size:var(--fs-xs);color:var(--sub);font-weight:500}
+.stm-kpi-value{font-size:var(--fs-xl);color:var(--text);font-weight:700;font-family:var(--mono)}
+.stm-kpi-sub{font-size:var(--fs-xs);color:var(--dim)}
+@media (max-width: 720px){.stm-kpi-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* 미니 막대 차트 (bar) */
+.stm-section{margin-top:18px}
+.stm-section-title{
+  font-size:var(--fs-md);font-weight:600;color:var(--text);
+  margin-bottom:10px;display:flex;align-items:center;gap:8px;
+}
+.stm-section-sub{font-size:var(--fs-xs);color:var(--dim);font-weight:400}
+.stm-bar-list{display:flex;flex-direction:column;gap:6px}
+.stm-bar-row{display:flex;align-items:center;gap:10px;font-size:var(--fs-sm)}
+.stm-bar-label{
+  flex-shrink:0;width:140px;color:var(--text2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.stm-bar-track{
+  flex:1;height:18px;background:var(--bg2);border-radius:5px;
+  position:relative;overflow:hidden;
+}
+.stm-bar-fill{
+  height:100%;background:linear-gradient(90deg, var(--accent), var(--purple));
+  border-radius:5px;transition:width .2s;
+}
+.stm-bar-count{flex-shrink:0;width:50px;text-align:right;color:var(--sub);font-family:var(--mono)}
+
+/* 일별 추이 스파크라인 */
+.stm-spark{
+  display:flex;align-items:flex-end;gap:2px;height:50px;
+  margin:8px 0 14px;padding:4px 0;
+}
+.stm-spark-bar{
+  flex:1;background:var(--accent-soft);border-radius:2px 2px 0 0;
+  min-height:2px;transition:background .12s;
+}
+.stm-spark-bar:hover{background:var(--accent)}
+
+/* 테이블 (관리자 테이블 재활용) */
+.stm-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.stm-table th,.stm-table td{
+  padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);
+}
+.stm-table th{color:var(--sub);font-weight:600;background:var(--bg2);position:sticky;top:0}
+.stm-table tr:hover td{background:var(--bg2)}
+.stm-table tr.me td{background:rgba(79,142,247,.08)}
+.stm-table tr.me:hover td{background:rgba(79,142,247,.14)}
+.stm-table .stm-tag{
+  display:inline-block;padding:2px 7px;border-radius:4px;
+  font-size:var(--fs-xs);background:var(--bg3);color:var(--sub);
+  font-family:var(--mono);
+}
+.stm-table .stm-num{font-family:var(--mono);text-align:right;color:var(--text2)}
+
+/* 히트맵 */
+.stm-heat-toolbar{display:flex;gap:6px;margin-bottom:10px;align-items:center}
+.stm-heat-toolbar .label{font-size:var(--fs-sm);color:var(--sub);margin-right:6px}
+.stm-heat-toolbar button{
+  padding:5px 11px;border-radius:6px;
+  border:1px solid var(--line2);background:transparent;
+  color:var(--sub);font-size:var(--fs-xs);font-family:var(--sans);cursor:pointer;
+}
+.stm-heat-toolbar button.active{background:var(--bg4);color:var(--text);border-color:var(--bg5)}
+
+.stm-heat-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.stm-heat{
+  display:grid;font-size:var(--fs-xs);font-family:var(--mono);
+  background:var(--bg2);
+}
+.stm-heat-cell{
+  padding:8px 6px;text-align:center;border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);min-width:60px;color:var(--text2);
+  transition:background .12s;
+}
+.stm-heat-cell.head{
+  background:var(--bg3);color:var(--sub);font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.stm-heat-cell.row-head{
+  background:var(--bg3);color:var(--text);font-weight:600;text-align:left;
+  padding-left:10px;font-family:var(--sans);
+}
+.stm-heat-cell.total{background:var(--bg3);color:var(--sub);font-weight:600}
+.stm-heat-cell.data{cursor:default}
+.stm-heat-cell.data.zero{color:var(--dim)}
+.stm-heat-cell.data:hover{outline:2px solid var(--accent);outline-offset:-2px}
+.stm-heat-legend{
+  display:flex;align-items:center;gap:8px;margin-top:10px;
+  font-size:var(--fs-xs);color:var(--sub);
+}
+.stm-heat-legend-bar{
+  flex:0 0 160px;height:10px;border-radius:4px;
+  background:linear-gradient(90deg, rgba(79,142,247,0.05), var(--accent));
+}
+
+/* 관계 그래프 */
+.stm-graph-wrap{display:flex;gap:14px;align-items:flex-start}
+.stm-graph-canvas{
+  flex:1;min-height:480px;background:var(--bg2);
+  border:1px solid var(--line);border-radius:8px;overflow:hidden;
+  position:relative;
+}
+.stm-graph-svg{display:block;width:100%;height:480px;cursor:grab}
+.stm-graph-svg:active{cursor:grabbing}
+.stm-graph-side{
+  flex:0 0 240px;background:var(--bg2);border:1px solid var(--line);
+  border-radius:8px;padding:14px;font-size:var(--fs-sm);
+  max-height:480px;overflow-y:auto;
+}
+.stm-graph-side h4{margin:0 0 6px;font-size:var(--fs-md);color:var(--text)}
+.stm-graph-side .meta{color:var(--sub);font-size:var(--fs-xs);margin-bottom:10px}
+.stm-graph-side .row{display:flex;justify-content:space-between;padding:3px 0;color:var(--text2)}
+.stm-graph-side .row .k{color:var(--sub)}
+.stm-graph-legend{
+  display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:var(--fs-xs);
+  color:var(--sub);
+}
+.stm-graph-legend .lg{display:inline-flex;align-items:center;gap:5px}
+.stm-graph-legend .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+.stm-graph-node-label{
+  font-size:11px;font-family:var(--sans);pointer-events:none;
+  fill:var(--text);user-select:none;
+}
+.stm-graph-empty{
+  padding:80px 20px;text-align:center;color:var(--dim);font-size:var(--fs-md);line-height:1.7;
+}
+@media (max-width: 880px){.stm-graph-wrap{flex-direction:column}.stm-graph-side{flex:initial;width:100%;max-height:200px}}
+
+/* 내 관심 맵 (profileModal 내부 섹션) */
+.im-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
+@media (max-width: 720px){.im-grid{grid-template-columns:1fr}}
+.im-block{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.im-block-title{font-size:var(--fs-xs);color:var(--sub);font-weight:600;margin-bottom:8px}
+.im-bar-row{display:flex;align-items:center;gap:8px;font-size:var(--fs-sm);margin-bottom:5px}
+.im-bar-label{flex:0 0 90px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.im-bar-track{flex:1;height:14px;background:var(--bg1);border-radius:4px;overflow:hidden}
+.im-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:4px}
+.im-bar-count{flex:0 0 36px;text-align:right;color:var(--sub);font-family:var(--mono);font-size:var(--fs-xs)}
+.im-empty{color:var(--dim);font-size:var(--fs-sm);text-align:center;padding:14px}
+.im-blind-list{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.im-blind-item{
+  display:flex;align-items:flex-start;gap:8px;padding:8px 10px;
+  background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.25);
+  border-radius:6px;font-size:var(--fs-sm);color:var(--text2);line-height:1.4;
+}
+.im-blind-icon{flex-shrink:0;font-size:13px;line-height:1.5}
+.im-blind-text{flex:1}
+.im-blind-reason{font-size:var(--fs-xs);color:var(--sub);margin-top:2px}
+.im-peer{
+  margin-top:14px;padding:12px 14px;
+  background:rgba(79,142,247,.06);border:1px solid rgba(79,142,247,.25);
+  border-radius:8px;font-size:var(--fs-sm);color:var(--text2);
+}
+.im-peer-row{display:flex;justify-content:space-between;padding:3px 0}
+.im-peer-row .k{color:var(--sub)}
+.im-summary{display:flex;gap:10px;margin-bottom:12px}
+.im-summary .kpi{
+  flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+  padding:10px 12px;display:flex;flex-direction:column;gap:2px;
+}
+.im-summary .kpi .label{font-size:var(--fs-xs);color:var(--sub)}
+.im-summary .kpi .val{font-size:var(--fs-xl);color:var(--text);font-weight:700;font-family:var(--mono)}
+
 /* ── PROFILE MODAL (내 정보) ── */
 .pf-body{padding:18px}
 .pf-section{margin-bottom:22px}
@@ -403,28 +600,7 @@ body{
 .pf-msg.success{background:rgba(52,199,138,.1);color:var(--green);border-color:rgba(52,199,138,.25)}
 .pf-msg.hidden{display:none}
 
-/* 관심 프로그램 — 채널별 그룹 + 칩 토글 */
-.pf-ch-group{margin-bottom:14px}
-.pf-ch-header{
-  font-size:var(--fs-sm);font-weight:600;color:var(--text);
-  padding-bottom:6px;margin-bottom:8px;border-bottom:1px solid var(--line);
-  display:flex;align-items:center;gap:8px;
-}
-.pf-ch-count{font-size:var(--fs-xs);color:var(--dim);font-weight:400}
-.pf-chips{display:flex;flex-wrap:wrap;gap:6px}
-.pf-chip{
-  padding:6px 12px;border-radius:16px;
-  border:1px solid var(--line2);background:var(--bg2);
-  color:var(--sub);font-size:var(--fs-sm);font-family:var(--sans);
-  cursor:pointer;transition:all .12s;user-select:none;
-}
-.pf-chip:hover{border-color:var(--accent);color:var(--text)}
-.pf-chip.selected{
-  background:var(--accent-soft);color:var(--accent);
-  border-color:rgba(79,142,247,.5);font-weight:600;
-}
-.pf-chip-time{font-size:var(--fs-xs);color:var(--dim);margin-left:4px}
-.pf-chip.selected .pf-chip-time{color:var(--accent);opacity:.7}
+/* 관심 프로그램 — 단일 선택 드롭다운 */
 .pf-empty-progs{padding:20px;text-align:center;color:var(--dim);font-size:var(--fs-sm)}
 
 /* ── MAIN CHAT ── */
@@ -471,7 +647,48 @@ body{
   line-height:1.3;
 }
 .welcome-sub{font-size:var(--fs-md);color:var(--sub);max-width:min(640px,88%);line-height:1.8;word-break:keep-all}
-.welcome-chips{display:none}
+.welcome-chips{
+  display:flex;flex-wrap:wrap;justify-content:center;
+  gap:8px;max-width:min(720px,92%);margin-top:6px;
+}
+.welcome-chips.hidden{display:none}
+.welcome-chips:empty{display:none}
+.sgst-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 14px;border-radius:18px;
+  border:1px solid var(--line2);background:var(--bg2);color:var(--text2);
+  font-size:var(--fs-sm);font-family:var(--sans);
+  cursor:pointer;transition:all .12s;
+  max-width:min(420px,94vw);text-align:left;line-height:1.4;
+}
+.sgst-chip:hover{background:var(--bg3);border-color:var(--accent);color:var(--text)}
+/* 이상신호 칩 — 시각 강조 */
+.sgst-chip.anomaly{
+  background:rgba(242,107,107,.08);border-color:rgba(242,107,107,.35);
+  color:var(--text);font-weight:500;
+}
+.sgst-chip.anomaly:hover{background:rgba(242,107,107,.16);border-color:var(--red)}
+.sgst-chip.anomaly.yellow{
+  background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.35);
+}
+.sgst-chip.anomaly.yellow:hover{background:rgba(245,166,35,.16);border-color:var(--yellow)}
+/* 갭(개인화) — 부드러운 보라 톤 */
+.sgst-chip.gap{
+  background:rgba(167,139,250,.07);border-color:rgba(167,139,250,.3);
+}
+.sgst-chip.gap:hover{background:rgba(167,139,250,.14);border-color:var(--purple)}
+/* peer — 부드러운 그린 톤 */
+.sgst-chip.peer{
+  background:rgba(52,199,138,.06);border-color:rgba(52,199,138,.28);
+}
+.sgst-chip.peer:hover{background:rgba(52,199,138,.12);border-color:var(--green)}
+/* similar — 부드러운 액센트 톤 */
+.sgst-chip.similar{
+  background:rgba(79,142,247,.05);border-color:rgba(79,142,247,.28);
+}
+.sgst-chip.similar:hover{background:rgba(79,142,247,.12);border-color:var(--accent)}
+.sgst-chip-icon{flex-shrink:0;opacity:.8}
+.sgst-chip-text{flex:1;white-space:normal;word-break:keep-all}
 
 /* Messages */
 .msg{display:flex;gap:12px;padding:14px 0}
@@ -722,15 +939,8 @@ body{
       </div>
       <div class="auth-field">
         <label class="auth-label">직무</label>
-        <select class="auth-select" name="role" required>
-          <option value="">선택…</option>
-          <option>제작</option>
-          <option>편성</option>
-          <option>마케팅</option>
-          <option>플랫폼전략</option>
-          <option>데이터</option>
-          <option>CP</option>
-          <option>총괄관리</option>
+        <select class="auth-select" name="role" id="authRegRole" required>
+          <option value="">로드 중…</option>
         </select>
       </div>
       <div class="auth-msg hidden" id="authRegMsg"></div>
@@ -795,6 +1005,7 @@ body{
       <div class="welcome" id="welcomeScreen">
         <div class="welcome-logo">안녕하세요 👋</div>
         <div class="welcome-sub">SBS 고릴라 라디오의 청취 데이터를 자연어로 질의하세요. 지표, 트렌드, 프로그램 분석을 AI가 답합니다.</div>
+        <div class="welcome-chips" id="suggestChips"></div>
       </div>
     </div>
   </div>
@@ -842,6 +1053,8 @@ body{
     <div class="sidebar-user-actions">
       <button class="sidebar-user-btn admin" id="suAdminBtn"
               style="display:none" onclick="openAdminModal()">승인 관리</button>
+      <button class="sidebar-user-btn admin" id="suStatsBtn"
+              style="display:none" onclick="openStatsModal()">질의맵</button>
       <button class="sidebar-user-btn" onclick="doLogout()">로그아웃</button>
     </div>
   </div>
@@ -918,6 +1131,7 @@ async function doLogin(ev) {
     _hideAuthGate();
     _renderSidebarUser();
     refreshHistory();
+    loadSuggestions();
   } catch (e) {
     _showAuthMsg('authLoginMsg', '네트워크 오류: ' + e.message, '');
   } finally {
@@ -959,6 +1173,7 @@ async function doRegister(ev) {
         _hideAuthGate();
         _renderSidebarUser();
         refreshHistory();
+        loadSuggestions();
       }
     } else {
       _showAuthMsg('authRegMsg',
@@ -984,6 +1199,8 @@ async function doLogout() {
   document.getElementById('sidebarUser').style.display = 'none';
   document.getElementById('historyList').innerHTML =
     '<div class="history-empty">아직 질의 내역이 없습니다.</div>';
+  const sc = document.getElementById('suggestChips');
+  if (sc) sc.innerHTML = '';
   _showAuthGate();
   setAuthTab('login');
 }
@@ -995,6 +1212,11 @@ function _renderSidebarUser() {
   document.getElementById('sidebarUser').style.display = 'flex';
   document.getElementById('suAdminBtn').style.display =
     RAAS_USER.is_admin ? 'inline-block' : 'none';
+  // 질의맵: is_admin OR role in (총괄관리, 데이터)
+  const statsAllowed = RAAS_USER.is_admin
+    || ['총괄관리','데이터'].includes(RAAS_USER.role);
+  document.getElementById('suStatsBtn').style.display =
+    statsAllowed ? 'inline-block' : 'none';
 }
 
 // 앱 부팅 시 호출 — 토큰이 있으면 /api/me로 복원, 없으면 게이트 표시
@@ -1095,20 +1317,677 @@ async function _adminAction(uid, action) {
   }
 }
 
+// ── 질의맵 / 통계 ──────────────────────────────────────────
+let _STM = { tab: 'overview', days: 30, me: null };
+
+function openStatsModal() {
+  document.getElementById('statsModal').classList.add('open');
+  _loadStmTab();
+}
+function closeStatsModal() {
+  document.getElementById('statsModal').classList.remove('open');
+}
+function setStmTab(tab) {
+  _STM.tab = tab;
+  document.querySelectorAll('#statsModal .stm-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  _loadStmTab();
+}
+function setStmPeriod(days) {
+  _STM.days = days;
+  document.querySelectorAll('#statsModal .stm-period-btn').forEach(b => {
+    b.classList.toggle('active', String(b.dataset.d) === String(days));
+  });
+  _loadStmTab();
+}
+
+async function _loadStmTab() {
+  const body = document.getElementById('stmBody');
+  body.innerHTML = '<div class="stm-empty">로드 중…</div>';
+  let path = ({
+    'overview': '/api/admin/stats/overview',
+    'by-role':  '/api/admin/stats/by-role',
+    'by-user':  '/api/admin/stats/by-user',
+    'topics':   '/api/admin/stats/topics',
+    'heatmap':  '/api/admin/stats/heatmap',
+    'graph':    '/api/admin/stats/graph',
+  })[_STM.tab];
+  // 히트맵 차원 (기본 metric, 토글로 scope)
+  if (_STM.tab === 'heatmap') {
+    _STM.dim = _STM.dim || 'metric';
+    path += `&dimension=${_STM.dim}`;
+  }
+  try {
+    const res = await _authedFetch(`${path}?days=${_STM.days}&limit=50`);
+    if (res.status === 403) {
+      body.innerHTML = `<div class="stm-empty" style="color:var(--red)">통계 열람 권한이 없습니다.</div>`;
+      return;
+    }
+    if (!res.ok) {
+      body.innerHTML = `<div class="stm-empty" style="color:var(--red)">서버 오류 (${res.status})</div>`;
+      return;
+    }
+    const json = await res.json();
+    if (!json.ok) {
+      body.innerHTML = `<div class="stm-empty" style="color:var(--red)">${escapeHtml(json.error || '오류')}</div>`;
+      return;
+    }
+    if (json.me !== undefined) _STM.me = json.me;
+    const render = ({
+      'overview': _renderStmOverview,
+      'by-role':  _renderStmByRole,
+      'by-user':  _renderStmByUser,
+      'topics':   _renderStmTopics,
+      'heatmap':  _renderStmHeatmap,
+      'graph':    _renderStmGraph,
+    })[_STM.tab];
+    body.innerHTML = render(json.data);
+  } catch (e) {
+    body.innerHTML = `<div class="stm-empty" style="color:var(--red)">네트워크 오류: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function _fmtN(n) { return (n||0).toLocaleString(); }
+function _fmtDate(s) { return s ? s.slice(0,16).replace('T',' ') : '—'; }
+
+// 전체 요약 탭
+function _renderStmOverview(d) {
+  if (!d || d.total === 0) {
+    return `<div class="stm-empty">최근 ${_STM.days||'전체'}일 질의가 없습니다.<br>새 질의가 누적되면 통계가 표시됩니다.</div>`;
+  }
+  const fb = d.feedback || {};
+  const fbTotal = (fb.positive||0) + (fb.negative||0);
+  const fbRate = fbTotal ? Math.round(fb.positive / fbTotal * 100) : null;
+  const spark = _renderSparkline(d.daily_series);
+  const period = _STM.days === 0 ? '전체' : `최근 ${_STM.days}일`;
+  return `
+    <div class="stm-kpi-grid">
+      <div class="stm-kpi"><div class="stm-kpi-label">총 질문수</div>
+        <div class="stm-kpi-value">${_fmtN(d.total)}</div>
+        <div class="stm-kpi-sub">fact 보유 ${_fmtN(d.fact_total)}건</div></div>
+      <div class="stm-kpi"><div class="stm-kpi-label">활성 사용자</div>
+        <div class="stm-kpi-value">${_fmtN(d.active_users)}</div>
+        <div class="stm-kpi-sub">${period}</div></div>
+      <div class="stm-kpi"><div class="stm-kpi-label">총 토큰</div>
+        <div class="stm-kpi-value">${_fmtN((d.tokens?.input_sum||0)+(d.tokens?.output_sum||0))}</div>
+        <div class="stm-kpi-sub">in ${_fmtN(d.tokens?.input_sum)} / out ${_fmtN(d.tokens?.output_sum)}</div></div>
+      <div class="stm-kpi"><div class="stm-kpi-label">평균 토큰/질의</div>
+        <div class="stm-kpi-value">${_fmtN(Math.round((d.tokens?.input_avg||0)+(d.tokens?.output_avg||0)))}</div>
+        <div class="stm-kpi-sub">${fbRate !== null ? `👍 ${fbRate}% (${fb.positive}/${fbTotal})` : '피드백 없음'}</div></div>
+    </div>
+    <div class="stm-section">
+      <div class="stm-section-title">일별 질의 추이 <span class="stm-section-sub">${period}</span></div>
+      ${spark}
+    </div>`;
+}
+
+function _renderSparkline(series) {
+  if (!series || !series.length) return `<div class="stm-empty">기간 내 데이터 없음</div>`;
+  const max = Math.max(...series.map(s => s.count || 0), 1);
+  const bars = series.map(s => {
+    const h = Math.round((s.count||0) / max * 100);
+    return `<div class="stm-spark-bar" style="height:${h}%" title="${escapeHtml(s.date)}: ${s.count}건"></div>`;
+  }).join('');
+  return `<div class="stm-spark">${bars}</div>`;
+}
+
+// 직무별 탭
+function _renderStmByRole(rows) {
+  if (!rows || !rows.length) {
+    return `<div class="stm-empty">직무 정보가 있는 질의가 없습니다.<br>로그인된 사용자가 질의를 누적하면 표시됩니다.</div>`;
+  }
+  const max = Math.max(...rows.map(r => r.queries || 0), 1);
+  const bars = rows.map(r => `
+    <div class="stm-bar-row">
+      <div class="stm-bar-label">${escapeHtml(r.role || '—')}</div>
+      <div class="stm-bar-track"><div class="stm-bar-fill" style="width:${(r.queries/max*100).toFixed(1)}%"></div></div>
+      <div class="stm-bar-count">${_fmtN(r.queries)}</div>
+    </div>`).join('');
+  const tbody = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.role || '—')}</td>
+      <td class="stm-num">${_fmtN(r.queries)}</td>
+      <td class="stm-num">${_fmtN(r.users)}</td>
+      <td><span class="stm-tag">${escapeHtml(r.top_intent||'—')}</span></td>
+      <td><span class="stm-tag">${escapeHtml(r.top_metric||'—')}</span></td>
+      <td><span class="stm-tag">${escapeHtml(r.top_scope||'—')}</span></td>
+      <td class="stm-num">${_fmtN(Math.round((r.avg_input_tokens||0)+(r.avg_output_tokens||0)))}</td>
+    </tr>`).join('');
+  return `
+    <div class="stm-section">
+      <div class="stm-section-title">직무별 질문 분포</div>
+      <div class="stm-bar-list">${bars}</div>
+    </div>
+    <div class="stm-section">
+      <div class="stm-section-title">직무별 상세</div>
+      <table class="stm-table">
+        <thead><tr><th>직무</th><th>질문수</th><th>사용자</th><th>주 intent</th><th>주 지표</th><th>주 scope</th><th>평균 토큰</th></tr></thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    </div>`;
+}
+
+// 사용자별 탭
+function _renderStmByUser(rows) {
+  if (!rows || !rows.length) {
+    return `<div class="stm-empty">기간 내 사용자 활동이 없습니다.</div>`;
+  }
+  const tbody = rows.map(r => {
+    const isMe = String(r.user_id) === String(_STM.me);
+    const cls = isMe ? ' class="me"' : '';
+    const fb = (r.feedback_pos||0) + (r.feedback_neg||0);
+    return `
+      <tr${cls}>
+        <td>${escapeHtml(r.user_name)}${isMe ? ' <span class="stm-tag">나</span>' : ''}</td>
+        <td>${escapeHtml(r.role || '—')}</td>
+        <td class="stm-num">${_fmtN(r.queries)}</td>
+        <td class="stm-num">${_fmtN((r.tokens_in||0)+(r.tokens_out||0))}</td>
+        <td class="stm-num">${fb ? `👍${r.feedback_pos}/👎${r.feedback_neg}` : '—'}</td>
+        <td><span class="stm-tag">${escapeHtml(r.top_topic || '—')}</span></td>
+        <td style="font-size:var(--fs-xs);color:var(--dim)">${_fmtDate(r.last_active)}</td>
+      </tr>`;
+  }).join('');
+  return `
+    <div class="stm-section">
+      <div class="stm-section-title">사용자별 통계 <span class="stm-section-sub">상위 ${rows.length}명</span></div>
+      <table class="stm-table">
+        <thead><tr><th>이름</th><th>직무</th><th>질문수</th><th>토큰</th><th>피드백</th><th>대표 주제</th><th>마지막 활동</th></tr></thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    </div>`;
+}
+
+// 인기 주제 탭
+function _renderStmTopics(d) {
+  const topics = (d && d.by_topic_key) || [];
+  const qs     = (d && d.by_question)  || [];
+  if (!topics.length && !qs.length) {
+    return `<div class="stm-empty">기간 내 주제 통계가 없습니다.</div>`;
+  }
+  const tBody = topics.map(t => `
+    <tr>
+      <td><span class="stm-tag">${escapeHtml(t.topic_key)}</span></td>
+      <td>${escapeHtml(t.intent||'—')}</td>
+      <td>${escapeHtml(t.scope||'—')}</td>
+      <td>${escapeHtml(t.metric||'—')}</td>
+      <td class="stm-num">${_fmtN(t.count)}</td>
+      <td style="font-size:var(--fs-xs);color:var(--dim)">${_fmtDate(t.last_asked)}</td>
+    </tr>`).join('');
+  const qBody = qs.map(q => `
+    <tr>
+      <td>${escapeHtml(q.question)}</td>
+      <td class="stm-num">${_fmtN(q.count)}</td>
+      <td style="font-size:var(--fs-xs);color:var(--dim)">${_fmtDate(q.last_asked)}</td>
+    </tr>`).join('');
+  return `
+    <div class="stm-section">
+      <div class="stm-section-title">topic_key 빈도 <span class="stm-section-sub">intent:scope:metric 그룹핑</span></div>
+      ${topics.length ? `<table class="stm-table">
+        <thead><tr><th>topic_key</th><th>intent</th><th>scope</th><th>metric</th><th>건수</th><th>마지막</th></tr></thead>
+        <tbody>${tBody}</tbody>
+      </table>` : '<div class="stm-empty">데이터 없음</div>'}
+    </div>
+    <div class="stm-section">
+      <div class="stm-section-title">질문 텍스트 빈도</div>
+      ${qs.length ? `<table class="stm-table">
+        <thead><tr><th>질문</th><th>건수</th><th>마지막</th></tr></thead>
+        <tbody>${qBody}</tbody>
+      </table>` : '<div class="stm-empty">데이터 없음</div>'}
+    </div>`;
+}
+
+// 관계(히트맵) 탭 — 직무 × 지표/scope 빈도 매트릭스
+function setStmHeatDim(dim) {
+  _STM.dim = dim;
+  _loadStmTab();
+}
+
+function _renderStmHeatmap(d) {
+  const dim = (d && d.dimension) || 'metric';
+  const toolbar = `
+    <div class="stm-heat-toolbar">
+      <span class="label">차원:</span>
+      <button class="${dim==='metric'?'active':''}" onclick="setStmHeatDim('metric')">지표</button>
+      <button class="${dim==='scope' ?'active':''}" onclick="setStmHeatDim('scope')">scope</button>
+    </div>`;
+  if (!d || !d.cols || d.cols.length === 0 || d.grand_total === 0) {
+    return toolbar + `<div class="stm-empty">데이터가 누적되면 직무별 관심 분포가 드러납니다.<br>
+      현재 ${dim==='metric'?'지표':'scope'} 정보가 있는 질의가 없습니다.</div>`;
+  }
+  const roles = d.roles, cols = d.cols, cells = d.cells;
+  const max = Math.max(...cells.flat(), 1);
+  // grid-template-columns: 행 라벨 + cols + 행 합계
+  const colCount = cols.length + 2;
+  const gridStyle = `grid-template-columns: minmax(120px, 1.2fr) repeat(${cols.length}, minmax(60px,1fr)) minmax(60px,0.7fr);`;
+  // 헤더 행
+  let html = `<div class="stm-heat" style="${gridStyle}">`;
+  html += `<div class="stm-heat-cell head">직무 \\ ${dim==='metric'?'지표':'scope'}</div>`;
+  for (const c of cols) html += `<div class="stm-heat-cell head" title="${escapeHtml(c)}">${escapeHtml(c)}</div>`;
+  html += `<div class="stm-heat-cell head">합계</div>`;
+  // 데이터 행
+  for (let ri = 0; ri < roles.length; ri++) {
+    html += `<div class="stm-heat-cell row-head">${escapeHtml(roles[ri])}</div>`;
+    for (let ci = 0; ci < cols.length; ci++) {
+      const v = cells[ri][ci] || 0;
+      const opacity = v === 0 ? 0 : Math.min(1, 0.12 + (v / max) * 0.78);
+      const bg = `background:rgba(79,142,247,${opacity.toFixed(2)})`;
+      const tip = `${escapeHtml(roles[ri])} × ${escapeHtml(cols[ci])}: ${v}건`;
+      html += `<div class="stm-heat-cell data${v===0?' zero':''}" style="${bg}" title="${tip}">${v||'·'}</div>`;
+    }
+    html += `<div class="stm-heat-cell total">${d.row_totals[ri]||0}</div>`;
+  }
+  // 열 합계 행
+  html += `<div class="stm-heat-cell total" style="padding-left:10px">합계</div>`;
+  for (const t of d.col_totals) html += `<div class="stm-heat-cell total">${t||0}</div>`;
+  html += `<div class="stm-heat-cell total">${d.grand_total||0}</div>`;
+  html += `</div>`;
+  // 범례
+  const legend = `<div class="stm-heat-legend">
+    <span>적음</span><div class="stm-heat-legend-bar"></div><span>많음 (최댓값 ${max}건)</span>
+  </div>`;
+  return toolbar + `<div class="stm-heat-wrap">${html}</div>` + legend;
+}
+
+// ── 그래프 탭 — 사용자/직무/지표/대상 관계 네트워크 ────────
+// vanilla force simulation (외부 의존성 0)
+const _GRAPH_ROLE_COLORS = {
+  '제작':'#f5a623','편성':'#34c78a','서비스운영':'#a78bfa',
+  'CP':'#dc4d4d','플랫폼전략':'#4f8ef7','데이터':'#1ec9ff',
+  '총괄관리':'#f26b6b','마케팅(광고·협찬)':'#ec4899',
+};
+
+function _graphNodeColor(node) {
+  if (node.type === 'role')   return _GRAPH_ROLE_COLORS[node.label] || '#8b95a5';
+  if (node.type === 'user')   return _GRAPH_ROLE_COLORS[node.role]  || '#8b95a5';
+  if (node.type === 'metric') return 'var(--accent)';
+  if (node.type === 'scope')  return 'var(--green)';
+  return 'var(--sub)';
+}
+
+function _renderStmGraph(d) {
+  if (!d || !d.nodes || d.nodes.length === 0) {
+    return `<div class="stm-graph-empty">사용자 질의 데이터가 누적되면 관계 그래프가 표시됩니다.<br>현재 fact 보유 사용자가 없습니다.</div>`;
+  }
+  const meta = d.meta || {};
+  const html = `
+    <div class="stm-graph-wrap">
+      <div class="stm-graph-canvas" id="graphCanvas">
+        <svg class="stm-graph-svg" id="graphSvg" viewBox="0 0 800 480" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="stm-graph-side" id="graphSide">
+        <h4>관계 그래프</h4>
+        <div class="meta">최근 ${_STM.days || 0}일 · 노드 ${d.nodes.length} · 엣지 ${d.edges.length}</div>
+        <div class="row"><span class="k">사용자</span><span>${meta.n_users||0}</span></div>
+        <div class="row"><span class="k">직무</span><span>${meta.n_roles||0}</span></div>
+        <div class="row"><span class="k">지표</span><span>${meta.n_metrics||0}</span></div>
+        <div class="row"><span class="k">대상</span><span>${meta.n_scopes||0}</span></div>
+        <div class="stm-graph-legend">
+          <span class="lg"><span class="dot" style="background:#4f8ef7"></span>지표</span>
+          <span class="lg"><span class="dot" style="background:#34c78a"></span>대상</span>
+          <span class="lg"><span class="dot" style="background:#8b95a5"></span>사용자/직무</span>
+        </div>
+        <div style="margin-top:14px;font-size:var(--fs-xs);color:var(--dim)">노드 드래그 · 휠 줌</div>
+      </div>
+    </div>`;
+  // SVG 렌더는 다음 tick에 (DOM 삽입 후)
+  setTimeout(() => _layoutAndRenderGraph(d), 0);
+  return html;
+}
+
+function _layoutAndRenderGraph(data) {
+  const svg = document.getElementById('graphSvg');
+  if (!svg) return;
+  const side = document.getElementById('graphSide');
+  const W = 800, H = 480;
+
+  // 노드/엣지 사본 + 위치 초기화 (원형 분산)
+  const nodes = data.nodes.map((n, i) => {
+    const angle = (i / data.nodes.length) * Math.PI * 2;
+    const r = 150 + Math.random() * 60;
+    return { ...n,
+      x: W/2 + Math.cos(angle) * r,
+      y: H/2 + Math.sin(angle) * r,
+      vx: 0, vy: 0,
+      pinned: false,
+      r: _graphNodeRadius(n),
+    };
+  });
+  const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const edges = data.edges
+    .map(e => ({ ...e, s: nodeById[e.source], t: nodeById[e.target] }))
+    .filter(e => e.s && e.t);
+
+  // ── force simulation (~150 iter, Euler) ──
+  const REPULSION = 1400;   // 노드 간 척력 상수
+  const SPRING    = 0.04;   // 엣지 스프링
+  const REST      = 80;     // 엣지 기본 길이
+  const GRAVITY   = 0.012;  // 중앙 끌림
+  const DAMPING   = 0.82;
+  for (let iter = 0; iter < 150; iter++) {
+    // 척력
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i+1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d2 = dx*dx + dy*dy;
+        if (d2 < 1) { dx = Math.random()-0.5; dy = Math.random()-0.5; d2 = 1; }
+        const f = REPULSION / d2;
+        const d = Math.sqrt(d2);
+        const fx = (dx/d) * f, fy = (dy/d) * f;
+        a.vx -= fx; a.vy -= fy;
+        b.vx += fx; b.vy += fy;
+      }
+    }
+    // 인력 (엣지 스프링)
+    for (const e of edges) {
+      const a = e.s, b = e.t;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d  = Math.sqrt(dx*dx + dy*dy) || 1;
+      const rest = REST + (e.type === 'similar' ? 40 : 0);
+      const f  = SPRING * (d - rest) * (1 + Math.log(1 + (e.weight || 1)) * 0.15);
+      const fx = (dx/d) * f, fy = (dy/d) * f;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    }
+    // 중력 (캔버스 중앙으로)
+    for (const n of nodes) {
+      n.vx += (W/2 - n.x) * GRAVITY;
+      n.vy += (H/2 - n.y) * GRAVITY;
+    }
+    // 업데이트 + 댐핑
+    for (const n of nodes) {
+      if (n.pinned) continue;
+      n.vx *= DAMPING; n.vy *= DAMPING;
+      n.x += n.vx; n.y += n.vy;
+      // 화면 안에 가두기
+      n.x = Math.max(20, Math.min(W-20, n.x));
+      n.y = Math.max(20, Math.min(H-20, n.y));
+    }
+  }
+
+  // ── SVG 그리기 ──
+  let s = '';
+  // edges 먼저
+  for (const e of edges) {
+    const w = Math.min(4, 0.8 + Math.log(1 + (e.weight || 1)));
+    const op = e.type === 'similar' ? 0.35 : e.type === 'co_query' ? 0.55 : e.type === 'membership' ? 0.25 : 0.45;
+    const stroke = e.type === 'similar' ? '#a78bfa'
+                 : e.type === 'co_query' ? '#1ec9ff'
+                 : e.type === 'membership' ? '#8b95a5'
+                 : '#4f8ef7';
+    const dash = e.type === 'similar' ? ' stroke-dasharray="3 3"' : '';
+    s += `<line x1="${e.s.x.toFixed(1)}" y1="${e.s.y.toFixed(1)}" x2="${e.t.x.toFixed(1)}" y2="${e.t.y.toFixed(1)}" stroke="${stroke}" stroke-width="${w}" stroke-opacity="${op}"${dash}/>`;
+  }
+  // nodes
+  for (const n of nodes) {
+    const c = _graphNodeColor(n);
+    const r = n.r;
+    let shape = '';
+    if (n.type === 'user') {
+      shape = `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${r}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
+    } else if (n.type === 'role') {
+      // 육각형
+      shape = _hexagonSVG(n.x, n.y, r, c, '#13181f', 2);
+    } else if (n.type === 'metric') {
+      // 사각형
+      shape = `<rect x="${(n.x-r).toFixed(1)}" y="${(n.y-r).toFixed(1)}" width="${(r*2).toFixed(1)}" height="${(r*2).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2" rx="3"/>`;
+    } else if (n.type === 'scope') {
+      // 다이아몬드 (회전 사각형)
+      shape = `<polygon points="${n.x},${n.y-r} ${n.x+r},${n.y} ${n.x},${n.y+r} ${n.x-r},${n.y}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
+    }
+    s += `<g class="gnode" data-id="${escapeHtml(n.id)}" style="cursor:pointer">${shape}<text class="stm-graph-node-label" x="${n.x.toFixed(1)}" y="${(n.y + r + 12).toFixed(1)}" text-anchor="middle">${escapeHtml(n.label.length > 14 ? n.label.slice(0,13)+'…' : n.label)}</text></g>`;
+  }
+  svg.innerHTML = s;
+
+  // ── 인터랙션: 클릭 → 사이드 패널 상세, 드래그 → 위치 조정, 휠 → 줌 ──
+  const _nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+  let viewBox = [0, 0, W, H];
+  let dragging = null, panStart = null;
+
+  function _svgPoint(ev) {
+    const r = svg.getBoundingClientRect();
+    const x = (ev.clientX - r.left) / r.width  * viewBox[2] + viewBox[0];
+    const y = (ev.clientY - r.top)  / r.height * viewBox[3] + viewBox[1];
+    return { x, y };
+  }
+
+  svg.addEventListener('mousedown', ev => {
+    const target = ev.target.closest('.gnode');
+    const p = _svgPoint(ev);
+    if (target) {
+      dragging = _nodeMap[target.dataset.id];
+      dragging.pinned = true;
+      _showNodeDetail(dragging, nodes, edges);
+    } else {
+      panStart = { x: ev.clientX, y: ev.clientY, vb: [...viewBox] };
+    }
+  });
+  window.addEventListener('mousemove', ev => {
+    if (dragging) {
+      const p = _svgPoint(ev);
+      dragging.x = p.x; dragging.y = p.y;
+      _redrawGraphPositions(svg, nodes, edges);
+    } else if (panStart) {
+      const dx = (ev.clientX - panStart.x) * viewBox[2] / svg.getBoundingClientRect().width;
+      const dy = (ev.clientY - panStart.y) * viewBox[3] / svg.getBoundingClientRect().height;
+      viewBox[0] = panStart.vb[0] - dx;
+      viewBox[1] = panStart.vb[1] - dy;
+      svg.setAttribute('viewBox', viewBox.join(' '));
+    }
+  });
+  window.addEventListener('mouseup', () => {
+    if (dragging) dragging.pinned = false;
+    dragging = null; panStart = null;
+  });
+  svg.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const factor = ev.deltaY > 0 ? 1.15 : 1 / 1.15;
+    const p = _svgPoint(ev);
+    viewBox[0] = p.x - (p.x - viewBox[0]) * factor;
+    viewBox[1] = p.y - (p.y - viewBox[1]) * factor;
+    viewBox[2] *= factor; viewBox[3] *= factor;
+    svg.setAttribute('viewBox', viewBox.join(' '));
+  }, { passive: false });
+}
+
+function _graphNodeRadius(n) {
+  const w = n.weight || 1;
+  if (n.type === 'user')   return Math.min(14, 7 + Math.log(1 + w));
+  if (n.type === 'role')   return Math.min(20, 11 + Math.log(1 + w));
+  if (n.type === 'metric') return Math.min(13, 6 + Math.log(1 + w));
+  if (n.type === 'scope')  return Math.min(13, 6 + Math.log(1 + w));
+  return 8;
+}
+
+function _hexagonSVG(cx, cy, r, fill, stroke, sw) {
+  const pts = [];
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 3 * i - Math.PI / 6;
+    pts.push(`${(cx + Math.cos(a) * r).toFixed(1)},${(cy + Math.sin(a) * r).toFixed(1)}`);
+  }
+  return `<polygon points="${pts.join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+}
+
+function _redrawGraphPositions(svg, nodes, edges) {
+  // 엣지·노드 위치만 빠르게 업데이트 (전체 재그리지 않음)
+  const lines = svg.querySelectorAll('line');
+  edges.forEach((e, i) => {
+    const ln = lines[i]; if (!ln) return;
+    ln.setAttribute('x1', e.s.x.toFixed(1)); ln.setAttribute('y1', e.s.y.toFixed(1));
+    ln.setAttribute('x2', e.t.x.toFixed(1)); ln.setAttribute('y2', e.t.y.toFixed(1));
+  });
+  const groups = svg.querySelectorAll('.gnode');
+  nodes.forEach((n, i) => {
+    const g = groups[i]; if (!g) return;
+    const shape = g.firstChild;
+    if (shape.tagName === 'circle') {
+      shape.setAttribute('cx', n.x.toFixed(1));
+      shape.setAttribute('cy', n.y.toFixed(1));
+    } else if (shape.tagName === 'rect') {
+      shape.setAttribute('x', (n.x - n.r).toFixed(1));
+      shape.setAttribute('y', (n.y - n.r).toFixed(1));
+    } else if (shape.tagName === 'polygon' && n.type === 'role') {
+      // 육각형 재계산
+      const pts = [];
+      for (let k = 0; k < 6; k++) {
+        const a = Math.PI/3*k - Math.PI/6;
+        pts.push(`${(n.x + Math.cos(a)*n.r).toFixed(1)},${(n.y + Math.sin(a)*n.r).toFixed(1)}`);
+      }
+      shape.setAttribute('points', pts.join(' '));
+    } else if (shape.tagName === 'polygon') {
+      // 다이아몬드
+      shape.setAttribute('points',
+        `${n.x},${n.y-n.r} ${n.x+n.r},${n.y} ${n.x},${n.y+n.r} ${n.x-n.r},${n.y}`);
+    }
+    const txt = g.querySelector('text');
+    if (txt) { txt.setAttribute('x', n.x.toFixed(1)); txt.setAttribute('y', (n.y + n.r + 12).toFixed(1)); }
+  });
+}
+
+function _showNodeDetail(node, nodes, edges) {
+  const side = document.getElementById('graphSide');
+  if (!side) return;
+  const incident = edges.filter(e => e.s.id === node.id || e.t.id === node.id);
+  const typeKr = {user:'사용자', role:'직무', metric:'지표', scope:'대상'}[node.type] || node.type;
+  let neighborHtml = '';
+  if (incident.length) {
+    const list = incident.map(e => {
+      const other = e.s.id === node.id ? e.t : e.s;
+      const w = e.weight || 1;
+      return `<div class="row"><span class="k">${escapeHtml(other.label)}</span><span>${w}</span></div>`;
+    }).join('');
+    neighborHtml = `<h4 style="margin-top:14px">연결 (${incident.length})</h4>${list}`;
+  }
+  side.innerHTML = `
+    <h4>${escapeHtml(node.label)}</h4>
+    <div class="meta">${typeKr}${node.role ? ' · ' + escapeHtml(node.role) : ''} · 가중치 ${node.weight||0}</div>
+    ${neighborHtml}
+    <div style="margin-top:14px;font-size:var(--fs-xs);color:var(--dim)">노드 드래그 · 휠 줌</div>`;
+}
+
 // ── 프로필 모달 ──
 let _PROGRAMS_CACHE = null;  // [{code,label,programs:[{code,label,time}]}]
 
 async function openProfileModal() {
   if (!RAAS_USER) return;
   document.getElementById('profileModal').classList.add('open');
+  // 직무 드롭다운 동적 채우기 (현재 role 선택)
+  await loadActiveRoles();
+  _renderRoleOptions(document.getElementById('pfRole'), false, RAAS_USER.role);
   // 폼에 현재 값 채우기
   document.getElementById('pfLoginId').value = RAAS_USER.login_id || '';
   document.getElementById('pfName').value    = RAAS_USER.name || '';
-  document.getElementById('pfRole').value    = RAAS_USER.role || '';
   document.getElementById('pfMsg').className = 'pf-msg hidden';
   document.getElementById('pwMsg').className = 'pf-msg hidden';
   document.getElementById('pwForm').reset();
   await _loadProgramsForProfile();
+  loadInterestMap();   // 내 관심 맵 비동기 로드 (실패해도 다른 섹션 영향 X)
+}
+
+async function loadInterestMap() {
+  const host = document.getElementById('pfInterestMap');
+  if (!host) return;
+  host.innerHTML = '<div class="im-empty">로드 중…</div>';
+  try {
+    const res = await _authedFetch('/api/my/interest-map?days=30');
+    if (!res.ok) {
+      host.innerHTML = '<div class="im-empty">정보를 불러올 수 없습니다.</div>';
+      return;
+    }
+    const json = await res.json();
+    if (!json.ok) {
+      host.innerHTML = '<div class="im-empty">정보를 불러올 수 없습니다.</div>';
+      return;
+    }
+    host.innerHTML = _renderInterestMap(json.data);
+  } catch (e) {
+    host.innerHTML = '<div class="im-empty">네트워크 오류</div>';
+  }
+}
+
+function _renderInterestMap(d) {
+  if (!d) return '<div class="im-empty">데이터 없음</div>';
+  const total = d.total_queries || 0;
+
+  // 분포 막대 헬퍼
+  const _bars = (items, key) => {
+    if (!items.length) return '<div class="im-empty">기간 내 데이터 없음</div>';
+    const max = Math.max(...items.map(i => i.count || 0), 1);
+    return items.slice(0, 6).map(i => `
+      <div class="im-bar-row">
+        <div class="im-bar-label" title="${escapeHtml(i[key])}">${escapeHtml(i[key])}</div>
+        <div class="im-bar-track"><div class="im-bar-fill" style="width:${(i.count/max*100).toFixed(1)}%"></div></div>
+        <div class="im-bar-count">${i.count}</div>
+      </div>`).join('');
+  };
+
+  // 사각지대
+  let blindHtml = '';
+  if (d.blind_spots && d.blind_spots.length) {
+    blindHtml = `
+      <div class="im-block" style="grid-column:1 / -1">
+        <div class="im-block-title">사각지대 — ${d.role || '직무'} 직무에서 아직 안 보신 영역</div>
+        <div class="im-blind-list">
+          ${d.blind_spots.map(b => `
+            <div class="im-blind-item" title="${escapeHtml(b.reason||'')}">
+              <span class="im-blind-icon">💡</span>
+              <div class="im-blind-text">${escapeHtml(b.question)}
+                ${b.reason ? `<div class="im-blind-reason">${escapeHtml(b.reason)}</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  // 동료 평균 대비
+  let peerHtml = '';
+  if (d.peer_compare) {
+    const p = d.peer_compare;
+    peerHtml = `
+      <div class="im-peer">
+        <div style="font-weight:600;margin-bottom:6px">동료 평균 대비 — ${d.role} 직무</div>
+        <div class="im-peer-row"><span class="k">같은 직무 동료</span><span>${p.same_role_users}명</span></div>
+        <div class="im-peer-row"><span class="k">내 질문수 / 동료 평균</span>
+          <span>${p.my_queries} / ${p.peer_avg_queries}</span></div>
+        ${p.peer_top_metrics && p.peer_top_metrics.length ? `
+          <div class="im-peer-row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px">
+            <span class="k">동료들이 자주 보는 지표</span>
+            <span>${p.peer_top_metrics.map(m => escapeHtml(m.metric)).join(', ')}</span>
+          </div>` : ''}
+      </div>`;
+  }
+
+  // 빈 상태 (질의 0건)
+  if (total === 0) {
+    return `
+      <div class="im-summary">
+        <div class="kpi"><div class="label">최근 30일 질의</div><div class="val">0</div></div>
+        <div class="kpi"><div class="label">직무</div><div class="val" style="font-size:var(--fs-md);font-family:var(--sans)">${escapeHtml(d.role||'—')}</div></div>
+      </div>
+      <div class="im-empty">아직 질의 이력이 없습니다. 칩 추천을 클릭하거나 질문을 던지면 분포가 누적됩니다.</div>
+      ${blindHtml}
+      ${peerHtml}`;
+  }
+
+  return `
+    <div class="im-summary">
+      <div class="kpi"><div class="label">최근 30일 질의</div><div class="val">${total}</div></div>
+      <div class="kpi"><div class="label">직무</div><div class="val" style="font-size:var(--fs-md);font-family:var(--sans)">${escapeHtml(d.role||'—')}</div></div>
+      <div class="kpi"><div class="label">주요 주제</div><div class="val" style="font-size:var(--fs-sm);font-family:var(--mono)">${(d.top_topics&&d.top_topics[0]&&d.top_topics[0].topic_key)?escapeHtml(d.top_topics[0].topic_key):'—'}</div></div>
+    </div>
+    <div class="im-grid">
+      <div class="im-block">
+        <div class="im-block-title">주로 보는 지표</div>
+        ${_bars(d.by_metric||[], 'metric')}
+      </div>
+      <div class="im-block">
+        <div class="im-block-title">주로 보는 대상</div>
+        ${_bars(d.by_scope||[], 'scope')}
+      </div>
+      ${blindHtml}
+    </div>
+    ${peerHtml}`;
 }
 
 function closeProfileModal() {
@@ -1127,31 +2006,32 @@ async function _loadProgramsForProfile() {
       }
       _PROGRAMS_CACHE = data.channels;
     }
-    const selected = new Set(RAAS_USER.my_programs || []);
-    host.innerHTML = _PROGRAMS_CACHE.map(ch => {
-      const chips = ch.programs.map(p => {
-        const sel = selected.has(p.code) ? ' selected' : '';
-        const time = p.time ? `<span class="pf-chip-time">${escapeHtml(p.time)}</span>` : '';
-        return `<button type="button" class="pf-chip${sel}" data-code="${escapeHtml(p.code)}"
-                        onclick="_toggleChip(this)">${escapeHtml(p.label)}${time}</button>`;
+    // 단일 선택 — RAAS_USER.my_programs 가 배열이지만 첫 번째 값만 사용
+    const myList = RAAS_USER.my_programs || [];
+    const current = myList.length ? myList[0] : '';
+    const groups = _PROGRAMS_CACHE.map(ch => {
+      const opts = ch.programs.map(p => {
+        const sel = (p.code === current) ? ' selected' : '';
+        const time = p.time ? ` · ${p.time}` : '';
+        return `<option value="${escapeHtml(p.code)}"${sel}>${escapeHtml(p.label)}${escapeHtml(time)}</option>`;
       }).join('');
-      return `
-        <div class="pf-ch-group">
-          <div class="pf-ch-header">${escapeHtml(ch.label)}
-            <span class="pf-ch-count">(${ch.programs.length}개)</span></div>
-          <div class="pf-chips">${chips || '<span style="color:var(--dim);font-size:var(--fs-sm)">프로그램 없음</span>'}</div>
-        </div>`;
+      return `<optgroup label="${escapeHtml(ch.label)}">${opts}</optgroup>`;
     }).join('');
+    host.innerHTML = `
+      <select class="pf-select" id="pfMyProgram">
+        <option value=""${current ? '' : ' selected'}>선택 없음</option>
+        ${groups}
+      </select>`;
   } catch (e) {
     host.innerHTML = `<div class="pf-empty-progs" style="color:var(--red)">네트워크 오류: ${escapeHtml(e.message)}</div>`;
   }
 }
 
-function _toggleChip(btn) { btn.classList.toggle('selected'); }
-
 function _collectSelectedPrograms() {
-  return Array.from(document.querySelectorAll('#pfPrograms .pf-chip.selected'))
-    .map(el => el.dataset.code);
+  // 단일 선택 — 값 없으면 빈 배열, 있으면 [code]
+  const sel = document.getElementById('pfMyProgram');
+  const v = sel ? sel.value : '';
+  return v ? [v] : [];
 }
 
 async function saveProfile(ev) {
@@ -2113,14 +2993,102 @@ document.getElementById('btnNewChat').addEventListener('click', () => {
     <div class="welcome" id="welcomeScreen">
       <div class="welcome-logo">안녕하세요 👋</div>
       <div class="welcome-sub">SBS 고릴라 라디오의 청취 데이터를 자연어로 질의하세요. 지표, 트렌드, 프로그램 분석을 AI가 답합니다.</div>
+      <div class="welcome-chips" id="suggestChips"></div>
     </div>`;
   _msgCount = 0;
+  loadSuggestions();
 });
 
 // ────────────────────────────────────────────────
-// QUICK QUERIES & WELCOME CHIPS
+// QUICK QUERIES & WELCOME CHIPS (직무 기반 추천 칩)
 // ────────────────────────────────────────────────
-function _initWelcomeChips() { /* welcome chips removed */ }
+function _initWelcomeChips() { /* 보팅 시점엔 RAAS_TOKEN 가능 — _bootAuth 직후 loadSuggestions가 별도 호출 */ }
+
+// 직무 기반 추천 칩 — /api/suggestions 호출 후 welcomeScreen에 렌더
+async function loadSuggestions() {
+  const host = document.getElementById('suggestChips');
+  if (!host) return;
+  try {
+    const res = await _authedFetch('/api/suggestions');
+    if (!res.ok) { host.innerHTML = ''; return; }
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.chips) || data.chips.length === 0) {
+      host.innerHTML = ''; return;
+    }
+    host.innerHTML = data.chips.map(c => _renderChipHTML(c)).join('');
+  } catch (_) {
+    host.innerHTML = '';
+  }
+}
+
+function _renderChipHTML(c) {
+  const src = c.source || 'profile';
+  // 소스별 클래스·아이콘
+  let cls = 'sgst-chip';
+  let icon = '';
+  if (src === 'anomaly') {
+    cls += ' anomaly' + (c.level === 'yellow' ? ' yellow' : '');
+    icon = c.level === 'red'
+      ? `<span class="sgst-chip-icon">🔴</span>`
+      : `<span class="sgst-chip-icon">🟡</span>`;
+  } else if (src === 'gap' || src === 'gap-metric') {
+    cls += ' gap';
+    icon = `<span class="sgst-chip-icon" aria-label="추천">💡</span>`;
+  } else if (src === 'peer') {
+    cls += ' peer';
+    icon = `<span class="sgst-chip-icon" aria-label="동료">👥</span>`;
+  } else if (src === 'similar') {
+    cls += ' similar';
+    icon = `<span class="sgst-chip-icon" aria-label="유사">✦</span>`;
+  } else {
+    icon = `<svg class="sgst-chip-icon" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`;
+  }
+  const safe = escapeHtml(c.question || '');
+  const tip  = c.reason ? ` title="${escapeHtml(c.reason)}"` : '';
+  return `<button class="${cls}" onclick="_onSuggestChip(this)" data-q="${safe}"${tip}>${icon}<span class="sgst-chip-text">${safe}</span></button>`;
+}
+
+function _onSuggestChip(btn) {
+  const q = btn.dataset.q;
+  if (q) submitQuery(q);
+}
+
+// 직무 드롭다운 동적 렌더 (가입 + 프로필) — /api/profiles에서 active=true만 로드
+let _ROLES_CACHE = null;
+async function loadActiveRoles() {
+  if (_ROLES_CACHE) return _ROLES_CACHE;
+  try {
+    const res = await fetch('/api/profiles');
+    if (!res.ok) throw new Error('profiles HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.profiles)) throw new Error('bad shape');
+    _ROLES_CACHE = data.profiles;
+  } catch (e) {
+    console.warn('[profiles] load failed, using static fallback:', e.message);
+    // graceful 폴백 — ALLOWED_ROLES와 동일 (8종)
+    _ROLES_CACHE = ['제작','편성','서비스운영','CP','플랫폼전략',
+                    '데이터','총괄관리','마케팅(광고·협찬)']
+      .map(r => ({ role: r }));
+  }
+  return _ROLES_CACHE;
+}
+
+function _renderRoleOptions(selectEl, withEmpty, selected) {
+  if (!selectEl || !_ROLES_CACHE) return;
+  const opts = [];
+  if (withEmpty) opts.push('<option value="">선택…</option>');
+  for (const p of _ROLES_CACHE) {
+    const sel = (selected && p.role === selected) ? ' selected' : '';
+    opts.push(`<option${sel}>${escapeHtml(p.role)}</option>`);
+  }
+  selectEl.innerHTML = opts.join('');
+}
+
+async function _populateRoleDropdowns() {
+  await loadActiveRoles();
+  _renderRoleOptions(document.getElementById('authRegRole'), true);
+  // 프로필 모달은 openProfileModal에서 매번 새로 채움
+}
 
 function _initSidebarQueries() {
   const el = document.getElementById('quickQueries');
@@ -2461,14 +3429,16 @@ document.getElementById('btnTheme').addEventListener('click', function(){
 _cleanQCache();
 _initWelcomeChips();
 _initSidebarQueries();
+_populateRoleDropdowns();   // 가입 폼 드롭다운 즉시 채움 (인증 불필요)
 
-// 인증 게이트 — 토큰 복원 후 성공 시만 KPI/이력 로드
+// 인증 게이트 — 토큰 복원 후 성공 시만 KPI/이력/추천 칩 로드
 (async () => {
   const authed = await _bootAuth();
   if (authed) {
     _checkDataVersion();
     loadKpiPanel();
     refreshHistory();
+    loadSuggestions();   // 직무 기반 추천 칩
   }
 })();
 </script>
@@ -2501,13 +3471,7 @@ _initSidebarQueries();
             <div class="pf-field">
               <label class="pf-label">직무</label>
               <select class="pf-select" id="pfRole" required>
-                <option>제작</option>
-                <option>편성</option>
-                <option>마케팅</option>
-                <option>플랫폼전략</option>
-                <option>데이터</option>
-                <option>CP</option>
-                <option>총괄관리</option>
+                <option value="">로드 중…</option>
               </select>
             </div>
           </div>
@@ -2515,6 +3479,10 @@ _initSidebarQueries();
         <div class="pf-section">
           <div class="pf-section-title">내(관심) 프로그램 <span style="color:var(--dim);font-weight:400">— 클릭해서 선택/해제</span></div>
           <div id="pfPrograms"><div class="pf-empty-progs">프로그램 목록 로드 중…</div></div>
+        </div>
+        <div class="pf-section">
+          <div class="pf-section-title">내 관심 맵 <span style="color:var(--dim);font-weight:400">— 최근 30일 질의 기반</span></div>
+          <div id="pfInterestMap"><div class="im-empty">로드 중…</div></div>
         </div>
         <div class="pf-msg hidden" id="pfMsg"></div>
         <div class="pf-actions">
@@ -2559,6 +3527,38 @@ _initSidebarQueries();
     </div>
     <div class="hist-modal-body" id="adminModalBody">
       <div class="hist-empty-msg">로드 중...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── STATS MODAL (질의맵) ── -->
+<div class="hist-modal" id="statsModal">
+  <div class="hist-modal-inner">
+    <div class="hist-modal-hd">
+      <span class="hist-modal-title">질의맵 · 통계</span>
+      <button class="btn-icon" onclick="closeStatsModal()" title="닫기" style="margin-left:auto">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="stm-toolbar">
+      <div class="stm-tabs">
+        <button class="stm-tab active" data-tab="overview" onclick="setStmTab('overview')">전체</button>
+        <button class="stm-tab" data-tab="by-role" onclick="setStmTab('by-role')">직무별</button>
+        <button class="stm-tab" data-tab="by-user" onclick="setStmTab('by-user')">사용자별</button>
+        <button class="stm-tab" data-tab="topics" onclick="setStmTab('topics')">인기 주제</button>
+        <button class="stm-tab" data-tab="heatmap" onclick="setStmTab('heatmap')">관계</button>
+        <button class="stm-tab" data-tab="graph" onclick="setStmTab('graph')">그래프</button>
+      </div>
+      <div class="stm-period">
+        <button class="stm-period-btn" data-d="7" onclick="setStmPeriod(7)">7일</button>
+        <button class="stm-period-btn active" data-d="30" onclick="setStmPeriod(30)">30일</button>
+        <button class="stm-period-btn" data-d="0" onclick="setStmPeriod(0)">전체</button>
+      </div>
+    </div>
+    <div class="hist-modal-body">
+      <div class="stm-body" id="stmBody"><div class="stm-empty">로드 중…</div></div>
     </div>
   </div>
 </div>

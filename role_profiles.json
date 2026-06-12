@@ -1,0 +1,135 @@
+{
+  "_meta": {
+    "version": 1,
+    "description": "직무별 온보딩 프로파일 시드. active=true만 가입/프로필 드롭다운에 노출. role 키는 users.role 저장값과 정확히 일치해야 함.",
+    "field_wildcard": "alert_match.fields에 '*' 포함 시 모든 이상신호 필드 매칭"
+  },
+  "제작": {
+    "active": true,
+    "team": "제작PD",
+    "jtbd": "내 프로그램이 잘 되나, 뭐가 청취를 끌어올리나",
+    "metrics": ["DAU", "깊은청취율", "게스트/선곡 효과"],
+    "default_scope": "개별 프로그램",
+    "templates": [
+      "어제 깊은청취율이 가장 높은 프로그램은?",
+      "최근 깊은청취율이 떨어진 프로그램 있어?",
+      "게스트가 청취에 준 영향 보여줘"
+    ],
+    "alert_match": {
+      "categories": ["program"],
+      "fields": ["deep_rate_diff", "dau_chg", "engage_rate_diff", "churn_rate"]
+    }
+  },
+  "편성": {
+    "active": true,
+    "team": "편성PD",
+    "jtbd": "시간대 흐름·선후 프로그램으로 편성 최적화",
+    "metrics": ["시간대 DAU", "이탈률", "채널 흐름"],
+    "default_scope": "채널·시간대",
+    "templates": [
+      "시간대별 DAU 흐름 보여줘",
+      "어제 이탈률 높은 프로그램은?",
+      "채널 DAU 최근 추이"
+    ],
+    "alert_match": {
+      "categories": ["channel", "program"],
+      "fields": ["dau_chg", "churn_rate", "real_rate_diff"]
+    }
+  },
+  "서비스운영": {
+    "active": true,
+    "team": "고릴라 개발·운영팀",
+    "jtbd": "앱 전체 신규·복귀를 늘리고 유지시키기",
+    "metrics": ["신규/복귀", "유지율(코호트)", "습관형성률"],
+    "default_scope": "전사·앱",
+    "templates": [
+      "최근 신규·복귀 사용자 추이",
+      "D1·D7 유지율 어때?",
+      "습관형성률 최근 변화"
+    ],
+    "alert_match": {
+      "categories": ["platform"],
+      "fields": ["new_chg", "habit_rate", "d1_ret_diff", "d7_ret_diff", "churn_rate"]
+    }
+  },
+  "CP": {
+    "active": true,
+    "team": "책임프로듀서",
+    "jtbd": "내가 책임지는 프로그램군 건강도·리스크",
+    "metrics": ["프로그램군 종합", "리스크 프로그램", "WoW"],
+    "default_scope": "프로그램군",
+    "templates": [
+      "위험한 프로그램 있어?",
+      "채널 종합 건강도 요약",
+      "프로그램별 WoW 변화"
+    ],
+    "alert_match": {
+      "categories": ["program", "channel"],
+      "fields": ["dau_chg", "churn_rate", "deep_rate_diff"]
+    }
+  },
+  "플랫폼전략": {
+    "active": true,
+    "team": "플랫폼전략",
+    "jtbd": "플랫폼이 장기 성장하나, 어디 투자하나",
+    "metrics": ["MAU", "장기 리텐션", "성장"],
+    "default_scope": "전사",
+    "templates": [
+      "MAU 최근 트렌드",
+      "장기 리텐션 어때?",
+      "전사 성장 지표 요약"
+    ],
+    "alert_match": {
+      "categories": ["platform"],
+      "fields": ["mau_chg", "m1_ret_diff", "w1_ret_diff"]
+    }
+  },
+  "총괄관리": {
+    "active": true,
+    "team": "라디오국장·제작본부장",
+    "jtbd": "라디오국 전반 건강한가, 개입할 일 없나",
+    "metrics": ["전 직무 요약", "이상신호", "운영"],
+    "default_scope": "전사",
+    "templates": [
+      "오늘 이상 알림 있어?",
+      "라디오국 핵심 지표 요약",
+      "이번주 가장 주의할 지표"
+    ],
+    "alert_match": {
+      "categories": ["platform", "channel", "program"],
+      "fields": ["*"]
+    }
+  },
+  "데이터": {
+    "active": true,
+    "team": "데이터팀",
+    "jtbd": "숫자 맞나, 다른 팀이 뭘 묻나, 깊게 파보기",
+    "metrics": ["전 지표", "교차분석", "검증"],
+    "default_scope": "횡단·자유",
+    "templates": [
+      "전 지표 현황표 보여줘",
+      "채널별 핵심 지표 비교",
+      "최근 질의 트렌드 요약"
+    ],
+    "alert_match": {
+      "categories": ["platform", "channel", "program"],
+      "fields": ["*"]
+    }
+  },
+  "마케팅(광고·협찬)": {
+    "active": true,
+    "team": "마케팅팀",
+    "jtbd": "광고 인벤토리·협찬 가치를 뒷받침할 청취 규모·매체력 파악",
+    "metrics": ["DAU/MAU(도달)", "시간대별 청취자", "프로그램별 청취자 규모"],
+    "default_scope": "채널·프로그램·시간대",
+    "templates": [
+      "프로그램별 청취자 규모 TOP",
+      "시간대별 청취 규모 보여줘",
+      "채널별 도달(DAU/MAU) 비교"
+    ],
+    "alert_match": {
+      "categories": ["program", "channel"],
+      "fields": ["dau", "mau", "dau_1min", "dau_10min"]
+    }
+  }
+}
