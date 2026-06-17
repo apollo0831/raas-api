@@ -1,0 +1,468 @@
+{
+  "schema_version": "v1",
+  "role": "PD_PROGRAM",
+  "role_name_ko": "제작PD",
+  "updated": "2026-06-17",
+  "source_documents": [
+    "docs/interviews/interview_result.md (제작PD 섹션)",
+    "docs/interviews/01_pd_program.md",
+    "docs/interviews/RAAS_직무별_대화형_스토리라인.md §3-1",
+    "docs/interviews/_persona_storylines.md §3.1"
+  ],
+
+  "persona_summary": {
+    "viewpoint": "본인 담당 프로그램 한 개, 코너 단위 분해",
+    "cycle": ["일(중요 프로그램)", "주(WoW — 코너·청취자 일상 단위)"],
+    "biggest_pain": "무슨 지표 봐야 할지 모름 + 지표 의미 모름 + 모바일 미지원 + 보고/공유 자료 제작 어려움",
+    "biggest_value_unlock": "직전 회차 결과 + 코너 분해 + 인접 비교 + 1클릭 공유(작가/진행자/CP)",
+    "role_in_information_flow": "정보 흐름의 시작점 — 단, '혼자만 인식하고 넘어가는 경우 대부분' (사일로 위험)"
+  },
+
+  "ontology": {
+    "hasPrimaryKPI": [
+      {
+        "id": "program_dau_yesterday",
+        "name": "직전 회차 활성사용자",
+        "unit": "명",
+        "priority": 1,
+        "data_source": "raas_kpi_latest.csv:dau"
+      },
+      {
+        "id": "program_dau_vs_weekday_avg",
+        "name": "직전 회차 vs 동일 요일 평균",
+        "unit": "%",
+        "priority": 1,
+        "data_source": "raas_kpi_latest.csv 기반 계산 (요일 평균은 신규 계산 필요)"
+      },
+      {
+        "id": "program_emotion_log_count",
+        "name": "프로그램별 공감로그/문자 건수",
+        "unit": "건",
+        "priority": 2,
+        "data_source": "Splunk (RAAS 미적재)",
+        "_blocked": true,
+        "_note": "인터뷰: '특별이 문자가 많이 오거나 공감로그가 많은 날에만 얼마나 많이 왔는지 궁금함'"
+      },
+      {
+        "id": "corner_dau_share",
+        "name": "코너별 활성사용자 분배",
+        "unit": "명·%",
+        "priority": 2,
+        "data_source": "코너 단위 데이터 (RAAS·Splunk 모두 미보유)",
+        "_blocked": true,
+        "_note": "인터뷰: '코너 단위 분해 욕구 크다' ◎"
+      }
+    ],
+    "isExplainedBy": {
+      "program_dau_vs_weekday_avg": [
+        "corner_dau_share",
+        "special_guest_event",
+        "emotion_log_count",
+        "music_selection_response",
+        "adjacent_program_dau",
+        "weekday_baseline"
+      ],
+      "corner_dau_share": [
+        "guest_per_corner",
+        "music_selection_per_corner",
+        "topic_per_corner"
+      ]
+    },
+    "prefersComparison": [
+      {
+        "id": "same_weekday_avg",
+        "name": "동일 요일 평균 대비",
+        "priority": 1,
+        "_note": "인터뷰: '대게는 요일에 따른 매일이 비슷' → 요일 평균이 자연스러운 기준선"
+      },
+      {
+        "id": "wow",
+        "name": "전주 동요일 대비",
+        "priority": 1,
+        "_note": "인터뷰: '주 단위로 코너가 움직이고 청취자 일상도 주단위로 돌아감' ◎"
+      },
+      {
+        "id": "adjacent_program",
+        "name": "인접 시간대 프로그램과 비교",
+        "priority": 2,
+        "_note": "인터뷰: '인접 시간대 프로그램과 영향을 많이 주고 받는 것을 알고 있으나 비교 지표 거의 제공되지 않음'"
+      },
+      {
+        "id": "before_after_corner_change",
+        "name": "코너 개편 전후 비교",
+        "priority": 2
+      }
+    ],
+    "outputsTo": [
+      {
+        "id": "writer_host_share_kakao",
+        "name": "작가·진행자 카톡 공유",
+        "priority": 1,
+        "format": "text+image",
+        "_note": "인터뷰: '작가 및 진행자와의 공유 욕구 ◎'"
+      },
+      {
+        "id": "cp_one_pager",
+        "name": "CP 보고용 한 장",
+        "priority": 1,
+        "format": "PPT|PDF",
+        "_note": "인터뷰: 'CP 보고. 구두 보고 위주이며 중요한 사안 일때는 그래프나 보고서를 작성을 분석 담당자에게 의뢰'"
+      },
+      {
+        "id": "graph_excel_download",
+        "name": "그래프·데이터 엑셀 다운로드",
+        "priority": 2,
+        "format": "XLSX",
+        "_note": "인터뷰: '그래프나 데이터 엑셀 다운로드 등의 기능이 없다'"
+      },
+      {
+        "id": "png_save_mobile",
+        "name": "PNG 이미지 저장 (모바일 공유용)",
+        "priority": 2,
+        "format": "PNG",
+        "_note": "인터뷰: '스플렁크는 노트북이나 PC로 봐야해서 접근하기 쉽지 않다' → 모바일 친화 필수"
+      }
+    ]
+  },
+
+  "entry": {
+    "greeting_template": "{user_name} PD님 안녕하세요.",
+    "first_question": "**{program_name}** 어제 방송에서 눈에 띄는 변화가 있었어요. 먼저 보시겠어요?",
+    "default_chips": [
+      {
+        "label": "직전 회차 보기",
+        "intent": "show_last_episode",
+        "next_slot": "1_anchor"
+      },
+      {
+        "label": "이번 주 흐름(WoW)",
+        "intent": "show_weekly_pattern",
+        "next_slot": "3_context"
+      },
+      {
+        "label": "어제 그냥 평소였나요?",
+        "intent": "show_routine_check",
+        "next_slot": "1_anchor"
+      }
+    ]
+  },
+
+  "slots": {
+    "1_anchor": {
+      "name": "직전 회차 등락 + 공감로그/문자 특이성",
+      "purpose": "PD가 가장 먼저 알고 싶은 것 — 직전 방송이 평소와 달랐는지. 인터뷰: '특별이 문자가 많이 오거나 공감로그가 많은 날에만 궁금'",
+      "data_requirements": [
+        {
+          "field": "program_dau_yesterday",
+          "source": "raas_kpi_latest.csv:dau",
+          "available": true
+        },
+        {
+          "field": "weekday_avg_dau",
+          "source": "raas_kpi_latest.csv 기반 동일 요일 4주 평균 계산",
+          "available": true,
+          "_note": "계산 로직 추가 필요"
+        },
+        {
+          "field": "emotion_log_count_yesterday",
+          "source": "Splunk → RAAS 적재 필요",
+          "available": false,
+          "blocks_quality": "high"
+        }
+      ],
+      "answer_template": "**{program_name}** 직전 회차({last_episode_date}, {weekday}요일) 결과입니다.\n\n- 활성사용자: **{curr_dau:,}명** (동일 요일 평균 {weekday_avg_dau:,} 대비 **{vs_weekday_pct:+.1f}%**)\n- 공감로그/문자: **{emotion_log_count}건** (평소 {emotion_log_avg}건 대비 **{vs_emotion_pct:+.1f}%**)\n\n{interpretation_one_line}",
+      "fallback_answer_template": "**{program_name}** 직전 회차({last_episode_date} {weekday}요일) 결과입니다.\n\n- 활성사용자: **{curr_dau:,}명** (동일 요일 4주 평균 대비 **{vs_weekday_pct:+.1f}%**)\n- 신규 사용자 변화율: {new_user_change_pct:+.1f}%\n\n공감로그/문자 데이터는 아직 RAAS에 적재되지 않아 평소 대비 특이성(문자/공감 급증)은 확인이 어렵습니다. 코너 단위 분해는 적재 완료 후 즉시 가능합니다.",
+      "chips_next": [
+        {
+          "label": "코너별로 쪼개 보기",
+          "intent": "decompose_by_corner",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "게스트 있었던 날인가요?",
+          "intent": "check_guest_event",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "선곡 반응은?",
+          "intent": "check_music_response",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "전주 같은 회차와 비교",
+          "intent": "show_wow",
+          "next_slot": "3_context"
+        }
+      ]
+    },
+
+    "2_cause": {
+      "name": "코너·게스트·선곡 분해 (원인 단서)",
+      "purpose": "PD의 ◎ 시그널인 코너 단위 분해 욕구 대응. 인터뷰: '코너 개편이 있는 경우 이전과 비교해서 반응이 달라졌는지'",
+      "data_requirements": [
+        {
+          "field": "corner_dau_share",
+          "source": "코너 단위 데이터 적재 필요",
+          "available": false,
+          "blocks_quality": "high"
+        },
+        {
+          "field": "special_guest_event_metadata",
+          "source": "별도 적재 필요 (게스트 캘린더)",
+          "available": false,
+          "blocks_quality": "high"
+        },
+        {
+          "field": "music_selection_log",
+          "source": "Splunk → RAAS 적재 필요",
+          "available": false,
+          "blocks_quality": "medium"
+        }
+      ],
+      "answer_template": "**{program_name}** 직전 회차 코너 단위 분해:\n\n| 코너 | 활성사용자 | 평소 대비 |\n|---|---|---|\n{corner_breakdown_rows}\n\n변화가 큰 구간: **{peak_corner}** 시점\n→ 추정 원인: {peak_cause_reason}",
+      "fallback_answer_template": "**{program_name}**의 코너 단위 분해 데이터가 아직 적재되지 않았습니다.\n\n현재 활용 가능:\n- 시간대별 활성사용자 추이 (Splunk → RAAS 적재 진행 중)\n- 신규 사용자 변화 {new_user_change_pct:+.1f}%\n\n코너 단위 분해는 Phase 1 ① 적재 작업이 끝나는 대로 즉시 가능합니다.",
+      "chips_next": [
+        {
+          "label": "전주 같은 회차랑 비교",
+          "intent": "compare_wow_same_episode",
+          "next_slot": "3_context"
+        },
+        {
+          "label": "인접 시간대 어땠어?",
+          "intent": "compare_adjacent",
+          "next_slot": "3_context"
+        },
+        {
+          "label": "최근 개편 효과 보기",
+          "intent": "show_corner_change_effect",
+          "next_slot": "4_loop"
+        }
+      ]
+    },
+
+    "3_context": {
+      "name": "WoW + 인접 시간대 비교 (맥락)",
+      "purpose": "주 단위 패턴 + 인접 영향 — 인터뷰: '비슷한 시간대의 다른 프로그램과 비교해서 내 프로그램이 어떤 상태에 있는지 알고 싶음' ◎",
+      "data_requirements": [
+        {
+          "field": "wow_pattern",
+          "source": "raas_kpi_latest.csv:dau_week, dau_week_wow",
+          "available": true
+        },
+        {
+          "field": "adjacent_program_dau",
+          "source": "raas_kpi_latest.csv + 편성 인접 매핑",
+          "available": false,
+          "_note": "프로그램별 인접 시간대 매핑 메타데이터 필요"
+        }
+      ],
+      "answer_template": "**주 단위로 보면:**\n- 이번 주 누적 활성사용자: {dau_week:,}명 (전주 대비 {dau_week_wow_pct:+.1f}%)\n- 청취자 일상 패턴: {weekly_pattern_summary}\n\n**인접 시간대 비교:**\n| | 우리 ({program_name}) | 앞 ({prev_program}) | 뒤 ({next_program}) |\n|---|---|---|---|\n| 활성사용자 | {our_dau:,} | {prev_dau:,} | {next_dau:,} |\n| WoW | {our_wow:+.1f}% | {prev_wow:+.1f}% | {next_wow:+.1f}% |\n\n→ 우리 프로그램은 **{relative_position}** 위치",
+      "fallback_answer_template": "**주 단위로 보면:**\n- 이번 주 누적 활성사용자: {dau_week:,}명 (전주 대비 {dau_week_wow_pct:+.1f}%)\n\n인접 시간대 매핑 메타데이터가 아직 등록되지 않아 인접 비교는 표시되지 않습니다.",
+      "chips_next": [
+        {
+          "label": "우리 프로그램 강점이 뭐야?",
+          "intent": "show_strengths",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "최근 개편 이후 변화는?",
+          "intent": "show_corner_change_effect",
+          "next_slot": "4_loop"
+        },
+        {
+          "label": "이대로 정리해서 보고",
+          "intent": "goto_closing",
+          "next_slot": "5_closing"
+        }
+      ]
+    },
+
+    "4_loop": {
+      "name": "코너 개편 사후효과 (폐쇄루프 복원)",
+      "purpose": "인터뷰: '코너 개편이 있는 경우 이전과 비교해서 반응이 달라졌는지, 사용자 이탈과 유입이 이전과 비교해서 어떤한지 알고 싶은 욕구가 큼'",
+      "data_requirements": [
+        {
+          "field": "corner_change_event_metadata",
+          "source": "별도 적재 필요 (코너 개편 일자·내용)",
+          "available": false,
+          "blocks_quality": "high"
+        },
+        {
+          "field": "new_user_churn_before_after",
+          "source": "raas_kpi_latest.csv:new_user, churn_rate (개편 일자 기준 분리)",
+          "available": true,
+          "_note": "개편 메타데이터만 있으면 즉시 계산 가능"
+        }
+      ],
+      "answer_template": "**{program_name}**의 최근 코너 개편({change_date}, {change_summary}) 이후 변화:\n\n- 개편 전 {n}주 평균 활성사용자: {before_dau:,}명\n- 개편 후 {n}주 평균 활성사용자: {after_dau:,}명 ({change_pct:+.1f}%)\n- 신규 유입: {new_user_change_pct:+.1f}% / 이탈률: {churn_change_pp:+.1f}pp\n\n→ {interpretation}",
+      "fallback_answer_template": "코너 개편 이벤트 메타데이터가 아직 적재되지 않았습니다 (개편 일자·내용 타임라인).\n\n해당 데이터가 등록되면 사용자 이탈과 유입 변화가 자동 계산됩니다. PD님께서 직접 개편 이력을 입력하시는 것도 가능합니다. (Phase 1 ① 진행 중)",
+      "chips_next": [
+        {
+          "label": "원인까지 다시 보기",
+          "intent": "back_to_cause",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "정리해서 마무리",
+          "intent": "goto_closing",
+          "next_slot": "5_closing"
+        }
+      ]
+    },
+
+    "5_closing": {
+      "name": "마무리 + 작가·진행자·CP 공유",
+      "purpose": "사일로 해소 — 인터뷰: '혼자만 인식하고 넘어가는 경우가 대부분'. outputsTo 4종 모두 1클릭",
+      "data_requirements": [],
+      "answer_template": "**오늘 {user_name} PD님께서 아실 핵심 3가지**\n\n1. 직전 회차 등락: **{vs_weekday_pct:+.1f}%** (요일 평균 대비)\n2. 주목할 코너/구간: **{peak_corner}** ({peak_cause_summary})\n3. 인접 시간대 비교: 우리는 **{relative_position}** 위치\n\n어디로 공유하시겠어요?",
+      "chips_next": [
+        {
+          "label": "작가·진행자에게 카톡 공유",
+          "intent": "share_writer_host",
+          "output_format_id": "writer_host_share_kakao",
+          "next_slot": "_end"
+        },
+        {
+          "label": "CP 보고용 한 장 만들기",
+          "intent": "export_cp_one_pager",
+          "output_format_id": "cp_one_pager",
+          "next_slot": "_end"
+        },
+        {
+          "label": "그래프 엑셀로 받기",
+          "intent": "download_excel",
+          "output_format_id": "graph_excel_download",
+          "next_slot": "_end"
+        },
+        {
+          "label": "PNG로 저장 (모바일 공유)",
+          "intent": "save_png",
+          "output_format_id": "png_save_mobile",
+          "next_slot": "_end"
+        }
+      ]
+    }
+  },
+
+  "data_dependencies": {
+    "available_now_can_run": [
+      "1_anchor 슬롯의 KPI 부분 (요일 평균 계산 로직만 추가)",
+      "3_context의 WoW 부분",
+      "5_closing 슬롯 (구조적 답변)"
+    ],
+    "partial_with_fallback": [
+      "1_anchor (공감로그 없으면 활성사용자만으로 fallback)",
+      "2_cause (코너·게스트·선곡 미적재 시 신규 사용자 변화만 제시)",
+      "3_context (인접 매핑 없으면 우리 프로그램만 표시)",
+      "4_loop (개편 메타데이터 없으면 PD가 직접 입력 권유)"
+    ],
+    "ingest_blocking_high_priority": [
+      {
+        "field": "공감로그/문자 건수 (프로그램별 일간)",
+        "source": "Splunk",
+        "blocks_slots": ["1_anchor", "2_cause"],
+        "story_impact": "PD가 가장 궁금해하는 '문자/공감로그 많은 날' 알림 — 앵커의 차별성",
+        "ingest_priority": 1,
+        "_note": "CP의 2_cause와 공유 — 1순위 적재 우선순위 강화"
+      },
+      {
+        "field": "코너 단위 활성사용자",
+        "source": "현재 RAAS·Splunk 모두 미보유 — 신규 측정 필요",
+        "blocks_slots": ["1_anchor", "2_cause"],
+        "story_impact": "PD의 ◎ 시그널 '코너 단위 분해' 직접 충족 — 가장 큰 가치 잠금해제",
+        "ingest_priority": 1
+      },
+      {
+        "field": "특별 게스트/이벤트 캘린더 (프로그램별)",
+        "source": "별도 메타데이터 적재",
+        "blocks_slots": ["2_cause"],
+        "story_impact": "원인 후보 1번 — CP와 공유",
+        "ingest_priority": 1
+      }
+    ],
+    "ingest_blocking_medium_priority": [
+      {
+        "field": "선곡 데이터 (Splunk)",
+        "source": "Splunk → RAAS",
+        "blocks_slots": ["2_cause"],
+        "story_impact": "PD 인터뷰 '게스트나 선곡 분석 등이 부족한 것도 아쉬운 점'",
+        "ingest_priority": 2
+      },
+      {
+        "field": "프로그램→인접 시간대 매핑",
+        "source": "편성 메타데이터",
+        "blocks_slots": ["3_context"],
+        "story_impact": "PD의 ◎ 시그널 '비슷한 시간대 다른 프로그램과 비교' 충족 — CP와 공유",
+        "ingest_priority": 2
+      },
+      {
+        "field": "코너 개편 이벤트 메타데이터",
+        "source": "PD 직접 입력 또는 별도 적재",
+        "blocks_slots": ["4_loop"],
+        "story_impact": "폐쇄루프 — '코너 개편이 있는 경우 이전과 비교'",
+        "ingest_priority": 2
+      },
+      {
+        "field": "프로그램→작가·진행자 매핑",
+        "source": "user_profile 또는 메타데이터",
+        "blocks_slots": ["5_closing"],
+        "story_impact": "작가·진행자 카톡 공유 자동화",
+        "ingest_priority": 3
+      }
+    ]
+  },
+
+  "expected_user_flows": [
+    {
+      "name": "happy_path_routine_check",
+      "description": "평소 출근 후 일상 점검",
+      "sequence": ["entry", "1_anchor", "5_closing"],
+      "estimated_duration_min": 2,
+      "_note": "어제가 평소였으면 빠르게 닫고 카톡 공유"
+    },
+    {
+      "name": "happy_path_special_episode",
+      "description": "공감로그/문자 많은 날, 게스트 출연 등 특별 회차",
+      "sequence": ["entry", "1_anchor", "2_cause", "3_context", "5_closing"],
+      "estimated_duration_min": 4
+    },
+    {
+      "name": "happy_path_corner_revision",
+      "description": "최근 코너 개편 후 효과 확인",
+      "sequence": ["entry", "1_anchor", "4_loop", "2_cause", "5_closing"],
+      "estimated_duration_min": 5
+    },
+    {
+      "name": "phase1_partial",
+      "description": "Phase 1 ① 적재 부분 완료 (KPI + 요일 평균만)",
+      "sequence": ["entry", "1_anchor", "3_context (WoW만)", "5_closing"],
+      "estimated_duration_min": 2,
+      "_note": "공감로그·코너 단위 없이도 동작 — PoC 가치 증명 가능"
+    }
+  ],
+
+  "instrumentation": {
+    "posthog_events": [
+      {
+        "event": "storyline_entry",
+        "properties": ["role", "first_question_id", "default_chips"]
+      },
+      {
+        "event": "storyline_chip_click",
+        "properties": ["role", "slot_from", "slot_to", "chip_label", "chip_intent"]
+      },
+      {
+        "event": "storyline_slot_view",
+        "properties": ["role", "slot_id", "slot_name", "fallback_used"]
+      },
+      {
+        "event": "storyline_export",
+        "properties": ["role", "output_format_id", "slots_visited"]
+      },
+      {
+        "event": "storyline_complete",
+        "properties": ["role", "slots_visited", "duration_s", "exported"]
+      }
+    ]
+  }
+}

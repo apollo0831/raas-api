@@ -6,6 +6,10 @@
 <meta name="theme-color" id="metaThemeColor" content="#0d1117">
 <meta name="color-scheme" content="dark light">
 <script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.getElementById('metaThemeColor').setAttribute('content',t==='dark'?'#0d1117':'#f0f2f5');}());</script>
+<!-- PostHog stub loader (init은 부팅 시 /api/posthog-config 받은 뒤 호출) -->
+<script>
+!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+</script>
 <title>RAAS — 고릴라 AI 어시스턴트</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -41,6 +45,49 @@
   --fs-lg:  20px;  /* 구 14px */
   --fs-xl:  25px;  /* 구 18px */
   --fs-2xl: 36px;  /* 구 26px */
+
+  /* ── Semantic 컬러 (Tier 2) — docs/RAAS_DESIGN_TOKENS.md §1.2 ── */
+  --color-bg-base:          var(--bg0);
+  --color-bg-elevated:      var(--bg1);
+  --color-bg-elevated-2:    var(--bg2);
+  --color-bg-elevated-3:    var(--bg3);
+  --color-border-subtle:    var(--line);
+  --color-border-strong:    var(--line2);
+  --color-text-primary:     var(--text);
+  --color-text-secondary:   var(--text2);
+  --color-text-tertiary:    var(--sub);
+  --color-text-placeholder: var(--sub);  /* WCAG AA: 4.9:1 (vs --dim 2.1:1) */
+  --color-text-disabled:    var(--dim);  /* disabled는 WCAG §1.4.11 contrast 면제 */
+  --color-interactive:      var(--accent);
+  --color-interactive-soft: var(--accent-soft);
+  --color-success:          var(--green);
+  --color-danger:           var(--red);
+  --color-warning:          var(--yellow);
+  --color-info:             var(--purple);
+
+  /* ── Spacing (§3) — 8의 배수 기반 ── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ── Radius (§4) ── */
+  --rad-sm:   4px;
+  --rad-md:   8px;
+  --rad-lg:   12px;
+  --rad-xl:   16px;
+  --rad-pill: 999px;
+
+  /* ── Motion (§5) ── */
+  --ease-quick:  cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-smooth: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 0.12s;
+  --dur-base: 0.2s;
+  --dur-slow: 0.4s;
 }
 
 [data-theme="light"] {
@@ -62,6 +109,26 @@
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
+
+/* ── 글로벌 포커스 (Track C / RAAS_INTERACTION_STATES.md §2) ── */
+/* 마우스 클릭엔 안 보이고, Tab 키엔 명확히 보이는 포커스 링 */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible{
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+  border-radius: var(--rad-sm);
+}
+/* 마우스 사용자는 outline 안 보임 (focus는 떠도 focus-visible은 안 뜸) */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+[tabindex]:focus:not(:focus-visible){
+  outline: none;
+}
+
 body{
   background:var(--bg0);
   color:var(--text);
@@ -653,6 +720,102 @@ body{
 }
 .welcome-chips.hidden{display:none}
 .welcome-chips:empty{display:none}
+
+/* ── 직무별 대화형 스토리라인 (Phase 2 ④) ── */
+.welcome-storyline-badge{
+  font-size:var(--fs-xs);color:var(--color-text-tertiary);
+  margin-top:8px;letter-spacing:.3px;
+}
+.welcome-storyline-badge .fallback{color:var(--color-warning)}
+.story-slot-meta{
+  display:flex;align-items:center;gap:6px;
+  font-size:var(--fs-xs);color:var(--color-text-tertiary);
+  margin-bottom:4px;
+}
+.story-slot-meta.fallback{color:var(--color-warning)}
+.story-chips-inline{
+  display:flex;flex-wrap:wrap;gap:8px;
+  margin-top:14px;
+}
+.story-chips-inline .sgst-chip{font-size:var(--fs-sm)}
+.story-end-msg{
+  background:rgba(52,199,138,.08);
+  border:1px solid rgba(52,199,138,.3);
+  border-radius:var(--rad-md);
+  padding:14px 16px;
+  display:flex;align-items:flex-start;gap:10px;
+}
+.story-end-msg .icon{font-size:18px;line-height:1}
+table.story-table{
+  border-collapse:collapse;
+  margin:8px 0;
+  font-size:var(--fs-sm);
+  width:100%;
+}
+table.story-table th,
+table.story-table td{
+  border:1px solid var(--color-border-subtle);
+  padding:6px 10px;
+  text-align:left;
+}
+table.story-table th{
+  background:var(--color-bg-elevated-2);
+  font-weight:600;
+}
+
+/* ── 이번 주 브리핑 카드 (Week 1 Day 2 스켈레톤) ── */
+.brief-card{
+  background:var(--bg2);border:1px solid var(--line2);
+  border-radius:12px;padding:18px 22px;
+  margin:18px auto 4px;width:100%;max-width:720px;
+  display:flex;flex-direction:column;gap:14px;
+}
+.brief-card-hd{
+  display:flex;align-items:center;gap:10px;
+  padding-bottom:10px;border-bottom:1px solid var(--line);
+}
+.brief-card-icon{font-size:22px;line-height:1}
+.brief-card-title{font-size:var(--fs-lg);font-weight:600;color:var(--text);flex:1}
+.brief-card-date{font-size:var(--fs-sm);color:var(--sub);font-family:var(--mono)}
+.brief-card-body{display:flex;flex-direction:column;gap:12px}
+.brief-stub-banner{
+  background:rgba(167,139,250,.08);
+  border:1px dashed rgba(167,139,250,.4);
+  border-radius:8px;padding:10px 12px;
+  font-size:var(--fs-sm);color:var(--sub);line-height:1.5;
+}
+.brief-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+}
+@media (max-width:720px){.brief-grid{grid-template-columns:1fr}}
+.brief-stat{
+  background:var(--bg3);border-radius:8px;padding:12px;
+  display:flex;flex-direction:column;gap:4px;
+}
+.brief-stat-label{font-size:var(--fs-xs);color:var(--sub);font-weight:500}
+.brief-stat-value{font-size:var(--fs-xl);color:var(--text);font-weight:700;font-family:var(--mono);line-height:1.1}
+.brief-stat-sub{font-size:var(--fs-xs);color:var(--dim)}
+.brief-stat-sub-dim{color:var(--color-text-disabled)}
+.brief-stat-up{color:var(--color-success);font-weight:500}
+.brief-stat-down{color:var(--color-danger);font-weight:500}
+.brief-card-actions{
+  display:flex;gap:8px;flex-wrap:wrap;
+  padding-top:10px;border-top:1px solid var(--line);
+}
+.brief-action-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 14px;border-radius:8px;
+  border:1px solid var(--line2);background:transparent;
+  color:var(--text2);font-size:var(--fs-sm);font-family:var(--sans);
+  cursor:pointer;transition:all .12s;
+}
+.brief-action-btn:hover{background:var(--bg3);color:var(--text);border-color:var(--accent)}
+.brief-action-btn.primary{
+  background:var(--accent-soft);color:var(--accent);
+  border-color:rgba(79,142,247,.5);font-weight:500;
+}
+.brief-action-btn.primary:hover{background:rgba(79,142,247,.2)}
+.brief-action-btn.ok{color:var(--green);border-color:rgba(52,199,138,.5)}
 .sgst-chip{
   display:inline-flex;align-items:center;gap:6px;
   padding:8px 14px;border-radius:18px;
@@ -729,7 +892,7 @@ body{
   line-height:1.6;resize:none;min-height:72px;max-height:260px;
   outline:none;transition:border-color .15s;display:block;
 }
-.input-box::placeholder{color:var(--dim)}
+.input-box::placeholder{color:var(--color-text-placeholder)}
 .input-box:focus{border-color:rgba(79,142,247,.5)}
 .btn-send{
   position:absolute;right:8px;bottom:8px;
@@ -833,6 +996,41 @@ body{
 .sp-btn.active{background:var(--bg4);color:var(--text);border-color:var(--bg5)}
 .sp-btn:disabled{opacity:.3;cursor:not-allowed}
 .ai-source{font-size:var(--fs-xs);color:var(--dim);margin-top:6px}
+/* AI 차트 선택 근거 — 9종 chart_type 부착된 차트에 표시 */
+.ai-rationale{
+  font-size:var(--fs-xs);color:var(--color-text-tertiary);
+  margin-top:var(--sp-1);font-style:italic;line-height:1.5;
+  padding:var(--sp-1) var(--sp-2);
+  border-left:2px solid var(--color-info);
+  background:rgba(167,139,250,.04);border-radius:var(--rad-sm);
+}
+.ai-chart-wrap{display:block}
+
+/* ECharts 컨테이너 (옵션 2 점진 도입 - D-013) */
+.ai-echarts-container{
+  width:100%;
+  height:380px;
+  background:var(--color-bg-elevated-2);
+  border-radius:var(--rad-md);
+  border:1px solid var(--color-border-subtle);
+  margin:8px 0;
+  padding:8px;
+  box-sizing:border-box;
+  position:relative;
+}
+.ai-echarts-container:not([data-initialized]){
+  background:linear-gradient(90deg,var(--color-bg-elevated-2) 25%,var(--color-bg-elevated-3) 50%,var(--color-bg-elevated-2) 75%);
+  background-size:200% 100%;
+  animation:echartsLoading 1.5s infinite linear;
+}
+@keyframes echartsLoading{
+  0%{background-position:200% 0}
+  100%{background-position:-200% 0}
+}
+.ai-echarts-fallback-note{
+  font-size:var(--fs-xs);color:var(--color-text-tertiary);
+  text-align:center;padding:8px;
+}
 
 /* ranking table */
 .rk-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
@@ -920,7 +1118,7 @@ body{
         <label class="auth-label">비밀번호</label>
         <input class="auth-input" name="password" type="password" autocomplete="current-password" required>
       </div>
-      <div class="auth-msg hidden" id="authLoginMsg"></div>
+      <div class="auth-msg hidden" id="authLoginMsg" role="status" aria-live="polite"></div>
       <button class="auth-submit" type="submit">로그인</button>
     </form>
     <!-- 가입 폼 -->
@@ -943,7 +1141,7 @@ body{
           <option value="">로드 중…</option>
         </select>
       </div>
-      <div class="auth-msg hidden" id="authRegMsg"></div>
+      <div class="auth-msg hidden" id="authRegMsg" role="status" aria-live="polite"></div>
       <button class="auth-submit" type="submit">가입 요청</button>
     </form>
   </div>
@@ -986,14 +1184,14 @@ body{
 <!-- ── MAIN CHAT ── -->
 <main class="chat-main">
   <header class="chat-header">
-    <button class="btn-icon" id="btnToggleSidebar" title="사이드바">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <button class="btn-icon" id="btnToggleSidebar" title="사이드바" aria-label="사이드바 토글">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
         <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
       </svg>
     </button>
     <span class="chat-header-title">고릴라 라디오 데이터 어시스턴트</span>
-    <button class="btn-icon" id="btnToggleKpi" title="KPI 패널">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <button class="btn-icon" id="btnToggleKpi" title="KPI 패널" aria-label="KPI 패널 토글">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
         <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
         <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
       </svg>
@@ -1003,7 +1201,7 @@ body{
   <div class="chat-thread" id="chatThread">
     <div class="thread-inner" id="threadInner">
       <div class="welcome" id="welcomeScreen">
-        <div class="welcome-logo">안녕하세요 👋</div>
+        <h1 class="welcome-logo">안녕하세요 👋</h1>
         <div class="welcome-sub">SBS 고릴라 라디오의 청취 데이터를 자연어로 질의하세요. 지표, 트렌드, 프로그램 분석을 AI가 답합니다.</div>
         <div class="welcome-chips" id="suggestChips"></div>
       </div>
@@ -1014,9 +1212,10 @@ body{
     <div class="input-inner">
       <textarea class="input-box" id="chatInput" rows="2"
         placeholder="질문을 입력하세요."
+        aria-label="질의 입력"
         autocomplete="off" spellcheck="false"></textarea>
-      <button class="btn-send" id="btnSend">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+      <button class="btn-send" id="btnSend" aria-label="전송">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
           <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
         </svg>
       </button>
@@ -1027,16 +1226,16 @@ body{
 
 <!-- ── KPI PANEL ── -->
 <aside class="kpi-panel" id="kpiPanel">
-  <button class="kpi-close-mobile" id="btnCloseKpiMobile" title="닫기">
-    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+  <button class="kpi-close-mobile" id="btnCloseKpiMobile" title="닫기" aria-label="KPI 패널 닫기">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
   </button>
   <div class="kpi-panel-header">
     <span class="kpi-panel-title">실시간 KPI</span>
     <button class="kpi-refresh-btn" id="btnRefreshKpi">새로고침</button>
-    <button class="btn-icon" id="btnCloseKpi">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <button class="btn-icon" id="btnCloseKpi" aria-label="KPI 패널 닫기">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     </button>
@@ -1067,6 +1266,62 @@ body{
 // ── 세션 토큰 / 현재 사용자 ──
 let RAAS_TOKEN = localStorage.getItem('raas_token') || '';
 let RAAS_USER  = null;  // {id, login_id, name, role, status, is_admin, my_programs}
+
+// ── PostHog (4주 PoC 측정) ─────────────────────────────────
+// 5개 이벤트만 명시적으로 측정. RAAS_EVENTS.md 단일 진실 소스 준수.
+const EVT = {
+  VIEW_BRIEFING: 'view_briefing',   // Week 3 브리핑 카드 신설 후 발사
+  ASK_AI:        'ask_ai',          // 챗 전송 시 (source 속성이 D3 신호의 본질)
+  OPEN_CHART:    'open_chart',      // Vega-Lite 도입 후 발사
+  CHART_CLICK:   'chart_click',     // Vega-Lite 도입 후 발사
+  SHARE_VIEW:    'share_view',      // 공유 단추 추가 후 발사
+};
+let _RAAS_PH_READY = false;  // posthog.init 완료 플래그
+
+// 부팅 시 1회 호출 — 서버 설정 받아 PostHog init
+async function _bootPostHog() {
+  try {
+    const res = await fetch('/api/posthog-config');
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (!cfg.ok || !cfg.enabled || !cfg.key || !window.posthog) return;
+    posthog.init(cfg.key, {
+      api_host:    cfg.host || 'https://eu.posthog.com',
+      autocapture: false,                  // 노이즈 차단 — 5개만 명시 측정
+      capture_pageview: false,             // SPA라 수동 관리가 명확
+      capture_pageleave: false,
+      capture_performance: false,          // Web vitals 자동 발사 차단 (D-004)
+      disable_session_recording: true,     // 세션 녹화 차단 — 개인정보·1M 한도 보호 (D-004)
+      persistence: 'localStorage+cookie',
+    });
+    _RAAS_PH_READY = true;
+  } catch (_) { /* graceful: 측정 실패해도 앱 동작 무손실 */ }
+}
+
+// 모든 이벤트는 이 함수를 거친다. enabled=false일 때 no-op.
+function trackEvent(name, props) {
+  if (!_RAAS_PH_READY || !window.posthog) return;
+  try { posthog.capture(name, props || {}); } catch (_) {}
+}
+
+// 로그인/세션복원 시 사용자 식별
+function _phIdentify(user) {
+  if (!_RAAS_PH_READY || !window.posthog || !user) return;
+  try {
+    posthog.identify(user.login_id, {
+      name: user.name,
+      role: user.role,
+      is_admin: !!user.is_admin,
+      my_programs: user.my_programs || [],
+    });
+  } catch (_) {}
+}
+
+// 로그아웃 시 식별 리셋
+function _phReset() {
+  if (!_RAAS_PH_READY || !window.posthog) return;
+  try { posthog.reset(); } catch (_) {}
+}
 
 function _authHeaders() {
   return RAAS_TOKEN ? { 'Authorization': 'Bearer ' + RAAS_TOKEN } : {};
@@ -1113,7 +1368,9 @@ async function doLogin(ev) {
     password: form.password.value,
   };
   const btn = form.querySelector('button[type="submit"]');
+  const origText = btn.textContent;
   btn.disabled = true;
+  btn.textContent = '로그인 중…';
   try {
     const res = await fetch('/api/login', {
       method: 'POST',
@@ -1130,12 +1387,14 @@ async function doLogin(ev) {
     localStorage.setItem('raas_token', RAAS_TOKEN);
     _hideAuthGate();
     _renderSidebarUser();
+    _phIdentify(RAAS_USER);
     refreshHistory();
     loadSuggestions();
   } catch (e) {
     _showAuthMsg('authLoginMsg', '네트워크 오류: ' + e.message, '');
   } finally {
     btn.disabled = false;
+    btn.textContent = origText;
   }
   return false;
 }
@@ -1150,7 +1409,9 @@ async function doRegister(ev) {
     role:     form.role.value,
   };
   const btn = form.querySelector('button[type="submit"]');
+  const origText = btn.textContent;
   btn.disabled = true;
+  btn.textContent = '가입 요청 중…';
   try {
     const res = await fetch('/api/register', {
       method: 'POST',
@@ -1172,6 +1433,7 @@ async function doRegister(ev) {
         RAAS_USER = me.user;
         _hideAuthGate();
         _renderSidebarUser();
+        _phIdentify(RAAS_USER);
         refreshHistory();
         loadSuggestions();
       }
@@ -1185,6 +1447,7 @@ async function doRegister(ev) {
     _showAuthMsg('authRegMsg', '네트워크 오류: ' + e.message, '');
   } finally {
     btn.disabled = false;
+    btn.textContent = origText;
   }
   return false;
 }
@@ -1193,6 +1456,7 @@ async function doLogout() {
   try {
     await _authedFetch('/api/logout', { method: 'POST' });
   } catch (_) {}
+  _phReset();
   RAAS_TOKEN = '';
   RAAS_USER  = null;
   localStorage.removeItem('raas_token');
@@ -2054,10 +2318,17 @@ async function saveProfile(ev) {
       msg.className = 'pf-msg';
       return false;
     }
+    const prevRole = RAAS_USER && RAAS_USER.role;
     RAAS_USER = data.user;
     _renderSidebarUser();
     msg.textContent = '저장되었습니다.';
     msg.className = 'pf-msg success';
+
+    // 직무가 바뀌면 스토리라인을 즉시 새 직무로 재렌더 (Phase 2 ④)
+    const newRole = data.user && data.user.role;
+    if (newRole !== prevRole) {
+      try { _resetStoryline(); } catch (_) {}
+    }
   } catch (e) {
     msg.textContent = '네트워크 오류: ' + e.message;
     msg.className = 'pf-msg';
@@ -2095,7 +2366,10 @@ async function changePw(ev) {
   return false;
 }
 
+// 첫 항목은 특수 처리됨 — _onQuickQuery에서 BRIEFING_QUERY_TEXT 감지 시 카드 임베드
+const BRIEFING_QUERY_TEXT = '이번 주 브리핑 보여줘';
 const QUICK_QUERIES = [
+  BRIEFING_QUERY_TEXT,
   'RAAS에는 어떤 지표들이 있나',
   '어제 MAU는?',
   '이번 주 DAU 추이',
@@ -2383,7 +2657,8 @@ function _renderSparklineSVG(chart) {
   </svg>`;
 }
 
-function renderSparkline(chart) {
+// 기존 SVG 단일 라인 — fallback용으로 보존 (구 renderSparkline)
+function renderSparklineSVG(chart) {
   const id = 'sp'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
   _chartStore[id] = chart;
   const totalPts = chart.points.length;
@@ -2393,6 +2668,15 @@ function renderSparkline(chart) {
     <div class="sp-period-btns">${btnHtml}</div>
     <div class="sp-body">${_renderSparklineSVG(sliced)}</div>
   </div>`;
+}
+
+// 새 renderSparkline — ECharts 컨테이너 (D-013 확장)
+function renderSparkline(chart) {
+  if (!chart || !chart.points || chart.points.length < 2) return '';
+  const id = 'ec_sp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  _ECHARTS_STORE[id] = chart;
+  return `<div class="ai-echarts-container" id="${id}"
+               data-echarts-type="timeseries"></div>`;
 }
 
 function _renderMultiSVG(chart) {
@@ -2454,7 +2738,764 @@ function _renderMultiSVG(chart) {
   </svg>`;
 }
 
-function renderMultiSparkline(chart) {
+// ─── ECharts 점진 도입 (D-013, 옵션 2) ─────────────────────────────
+// timeseries_multi(다중 라인)부터 ECharts로 교체. 기타 차트는 기존 SVG 유지.
+// 네트워크 실패·미지원 시 SVG fallback 자동.
+
+let _ECHARTS_PROMISE = null;
+const _ECHARTS_STORE = {};   // container ID → chart_data
+const ECHARTS_CDN = 'https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js';
+
+function _loadECharts() {
+  if (_ECHARTS_PROMISE) return _ECHARTS_PROMISE;
+  _ECHARTS_PROMISE = new Promise((resolve, reject) => {
+    if (window.echarts) return resolve(window.echarts);
+    const s = document.createElement('script');
+    s.src = ECHARTS_CDN;
+    s.async = true;
+    s.onload = () => resolve(window.echarts);
+    s.onerror = (e) => reject(new Error('ECharts CDN load failed'));
+    document.head.appendChild(s);
+  });
+  return _ECHARTS_PROMISE;
+}
+
+// 테마(라이트/다크) → ECharts 색상 매핑
+function _eChartsThemeColors() {
+  const isDark = (document.documentElement.dataset.theme || 'dark') === 'dark';
+  return isDark ? {
+    text:       '#e8edf3',
+    textSub:    '#8b95a5',
+    bg:         '#1a2130',
+    line:       'rgba(255,255,255,.07)',
+    tooltipBg:  '#13181f',
+    tooltipBorder: 'rgba(255,255,255,.12)',
+    palette: ['#e74c3c','#3498db','#16a085','#f39c12','#9b59b6','#1abc9c','#e67e22','#ecf0f1'],
+  } : {
+    text:       '#111827',
+    textSub:    '#6b7a90',
+    bg:         '#f7f8fa',
+    line:       'rgba(0,0,0,.08)',
+    tooltipBg:  '#ffffff',
+    tooltipBorder: 'rgba(0,0,0,.13)',
+    palette: ['#e74c3c','#2563eb','#0e9384','#d97706','#7c3aed','#0891b2','#c2410c','#475569'],
+  };
+}
+
+// 의도된 기간을 한국어 라벨로 — 차트 subtitle용
+function _formatPeriodLabel(cadence, n) {
+  if (!n || n <= 0) return '';
+  const c = (cadence || '').toLowerCase();
+  if (c === '1m' || c === 'month' || c === '월간') {
+    const months = Math.max(1, Math.round(n / 30));
+    return months >= 12 ? `최근 ${Math.round(months/12)}년` : `최근 ${months}개월`;
+  }
+  if (c === '1w' || c === 'week' || c === '주간') {
+    const weeks = Math.max(1, Math.round(n / 7));
+    return `최근 ${weeks}주`;
+  }
+  // 일간 기본
+  if (n >= 365) return `최근 ${Math.round(n/365)}년`;
+  if (n >= 60)  return `최근 ${Math.round(n/30)}개월`;
+  if (n >= 14)  return `최근 ${Math.round(n/7)}주`;
+  return `최근 ${n}일`;
+}
+
+// chart_data(timeseries 또는 timeseries_multi) → ECharts option
+function _buildEChartsMultiLineOption(chart) {
+  // 단일 라인(chart.points)을 series 1개로 정규화
+  let series = chart.series;
+  if ((!series || !series.length) && Array.isArray(chart.points)) {
+    series = [{
+      label: chart.label || chart.metric || (chart.unit === '%' ? '비율' : '값'),
+      points: chart.points,
+      unit: chart.unit || '',
+      color: chart.color,
+    }];
+  }
+  if (!series || series.length < 1 || !series[0]?.points) return null;
+  const theme = _eChartsThemeColors();
+  const dates = series[0].points.map(p => p.date);
+  const totalPts = dates.length;
+
+  // 의도된 기간 (질의 → 백엔드의 initial_days). 없으면 전체 표시.
+  const intentDays = (typeof chart.initial_days === 'number' && chart.initial_days > 0)
+    ? Math.min(chart.initial_days, totalPts) : totalPts;
+  const useDataZoom = intentDays < totalPts;
+  const startIdx = useDataZoom ? Math.max(0, totalPts - intentDays) : 0;
+  const periodLabel = useDataZoom ? _formatPeriodLabel(chart.cadence, intentDays) : '';
+
+  const units = new Set(series.map(s => s.unit || ''));
+  const sameUnit = units.size === 1;
+  const unit = sameUnit ? (series[0].unit || '') : '';
+  const fmt = v => (v == null || isNaN(v)) ? '—'
+    : (unit === '%' ? Number(v).toFixed(1) + '%' : Number(v).toLocaleString());
+
+  const seriesData = series.map((s, i) => ({
+    name: s.label || `시리즈 ${i + 1}`,
+    type: 'line',
+    data: s.points.map(p => p.value),
+    smooth: false,
+    symbol: 'circle',
+    symbolSize: 5,
+    lineStyle: { width: 2 },
+    itemStyle: { color: s.color || theme.palette[i % theme.palette.length] },
+    emphasis: { focus: 'series' },
+  }));
+
+  const titleBlock = chart.title ? {
+    text: chart.title,
+    subtext: periodLabel,
+    left: 'center',
+    top: 4,
+    textStyle: { color: theme.text, fontSize: 14, fontWeight: 600,
+                 fontFamily: 'DM Sans, Noto Sans KR, sans-serif' },
+    subtextStyle: { color: theme.textSub, fontSize: 11 },
+  } : (periodLabel ? {
+    text: periodLabel,
+    left: 'center',
+    top: 4,
+    textStyle: { color: theme.textSub, fontSize: 12, fontWeight: 400,
+                 fontFamily: 'DM Sans, Noto Sans KR, sans-serif' },
+  } : undefined);
+
+  const titleHeight = chart.title ? (periodLabel ? 60 : 30) : (periodLabel ? 24 : 0);
+  const sliderHeight = useDataZoom ? 36 : 0;
+
+  return {
+    backgroundColor: 'transparent',
+    title: titleBlock,
+    color: theme.palette,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: theme.tooltipBg,
+      borderColor: theme.tooltipBorder,
+      textStyle: { color: theme.text, fontSize: 12 },
+      valueFormatter: fmt,
+      axisPointer: { type: 'line', lineStyle: { color: theme.textSub, type: 'dashed' } },
+    },
+    legend: series.length > 1 ? {
+      top: titleHeight + 4,
+      type: 'scroll',
+      textStyle: { color: theme.textSub, fontSize: 12 },
+      pageTextStyle: { color: theme.textSub },
+      icon: 'circle',
+    } : undefined,
+    grid: {
+      top: titleHeight + (series.length > 1 ? 36 : 12),
+      left: 12,
+      right: 12,
+      bottom: 36 + sliderHeight,
+      containLabel: true,
+    },
+    // 의도된 기간 적용 — 디폴트는 intentDays만 표시, 사용자가 슬라이더/휠로 확장 가능
+    dataZoom: useDataZoom ? [
+      {
+        type: 'slider',
+        startValue: dates[startIdx],
+        endValue: dates[totalPts - 1],
+        height: 20,
+        bottom: 8,
+        borderColor: theme.line,
+        backgroundColor: 'transparent',
+        fillerColor: theme.tooltipBorder,
+        handleStyle: { color: theme.textSub, borderColor: theme.textSub },
+        moveHandleStyle: { color: theme.textSub },
+        textStyle: { color: theme.textSub, fontSize: 10 },
+        labelFormatter: v => typeof v === 'string' ? v : dates[v] || '',
+      },
+      {
+        type: 'inside',
+        startValue: dates[startIdx],
+        endValue: dates[totalPts - 1],
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+      },
+    ] : undefined,
+    xAxis: {
+      type: 'category',
+      data: dates,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: theme.line } },
+      axisLabel: { color: theme.textSub, fontSize: 11, rotate: intentDays > 20 ? 30 : 0 },
+      axisTick: { lineStyle: { color: theme.line } },
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: theme.line, type: 'dashed' } },
+      axisLabel: { color: theme.textSub, fontSize: 11,
+                   formatter: v => unit === '%' ? v.toFixed(0) + '%'
+                     : (Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + '만'
+                       : v.toLocaleString()) },
+    },
+    series: seriesData,
+  };
+}
+
+// chart_data(timeseries_dual) → ECharts option (이중 Y축)
+// 두 시리즈가 같은 단위면 공유 Y축, 다른 단위면 좌/우 독립 Y축으로 자동 분기
+function _buildEChartsDualAxisOption(chart) {
+  const series = chart.series || [];
+  if (series.length < 2 || !series[0]?.points) return null;
+
+  const theme = _eChartsThemeColors();
+  const dates = series[0].points.map(p => p.date);
+  const totalPts = dates.length;
+
+  const units = series.slice(0, 2).map(s => s.unit || '');
+  const sameUnit = units[0] === units[1];
+
+  // 같은 단위 → 공유 Y축 (멀티라인 어댑터 재사용)
+  if (sameUnit) return _buildEChartsMultiLineOption(chart);
+
+  // 의도된 기간
+  const intentDays = (typeof chart.initial_days === 'number' && chart.initial_days > 0)
+    ? Math.min(chart.initial_days, totalPts) : totalPts;
+  const useDataZoom = intentDays < totalPts;
+  const startIdx = useDataZoom ? Math.max(0, totalPts - intentDays) : 0;
+  const periodLabel = useDataZoom ? _formatPeriodLabel(chart.cadence, intentDays) : '';
+
+  // Y축 포맷 (단위별)
+  const fmtAxisUnit = unit => v => unit === '%'
+    ? v.toFixed(0) + '%'
+    : (Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + '만' : v.toLocaleString());
+  const fmtTooltipUnit = unit => v => (v == null || isNaN(v)) ? '—'
+    : (unit === '%' ? Number(v).toFixed(1) + '%' : Number(v).toLocaleString());
+
+  // 시리즈 색상 결정
+  const colors = series.slice(0, 2).map((s, i) => s.color || theme.palette[i % theme.palette.length]);
+
+  // 시리즈 데이터 — yAxisIndex로 좌/우 분기
+  const seriesData = series.slice(0, 2).map((s, i) => ({
+    name: s.label || `시리즈 ${i + 1}`,
+    type: 'line',
+    yAxisIndex: i,
+    data: s.points.map(p => p.value),
+    smooth: false,
+    symbol: 'circle',
+    symbolSize: 5,
+    lineStyle: { width: 2, color: colors[i] },
+    itemStyle: { color: colors[i] },
+    emphasis: { focus: 'series' },
+  }));
+
+  // 이중 Y축
+  const yAxes = series.slice(0, 2).map((s, i) => ({
+    type: 'value',
+    name: s.label + (s.unit ? ` (${s.unit})` : ''),
+    nameTextStyle: { color: colors[i], fontSize: 11, fontWeight: 500 },
+    nameLocation: 'end',
+    nameGap: 12,
+    position: i === 0 ? 'left' : 'right',
+    alignTicks: true,
+    axisLine: { show: true, lineStyle: { color: colors[i] } },
+    axisTick: { show: false },
+    splitLine: i === 0
+      ? { lineStyle: { color: theme.line, type: 'dashed' } }
+      : { show: false },
+    axisLabel: {
+      color: colors[i],
+      fontSize: 11,
+      formatter: fmtAxisUnit(units[i]),
+    },
+  }));
+
+  const titleBlock = chart.title ? {
+    text: chart.title,
+    subtext: periodLabel,
+    left: 'center',
+    top: 4,
+    textStyle: { color: theme.text, fontSize: 14, fontWeight: 600,
+                 fontFamily: 'DM Sans, Noto Sans KR, sans-serif' },
+    subtextStyle: { color: theme.textSub, fontSize: 11 },
+  } : (periodLabel ? {
+    text: periodLabel, left: 'center', top: 4,
+    textStyle: { color: theme.textSub, fontSize: 12 },
+  } : undefined);
+
+  const titleHeight = chart.title ? (periodLabel ? 60 : 30) : (periodLabel ? 24 : 0);
+  const sliderHeight = useDataZoom ? 36 : 0;
+
+  return {
+    backgroundColor: 'transparent',
+    title: titleBlock,
+    color: colors,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: theme.tooltipBg,
+      borderColor: theme.tooltipBorder,
+      textStyle: { color: theme.text, fontSize: 12 },
+      axisPointer: { type: 'line', lineStyle: { color: theme.textSub, type: 'dashed' } },
+      formatter: (params) => {
+        if (!params || !params.length) return '';
+        const date = params[0].axisValueLabel || params[0].name;
+        let html = `<div style="font-weight:600;margin-bottom:4px;">${date}</div>`;
+        params.forEach(p => {
+          const idx = p.seriesIndex;
+          const val = fmtTooltipUnit(units[idx])(p.value);
+          html += `<div style="display:flex;justify-content:space-between;gap:14px;">
+            <span>${p.marker}${p.seriesName}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-weight:500;">${val}</span>
+          </div>`;
+        });
+        return html;
+      },
+    },
+    legend: {
+      top: titleHeight + 4,
+      type: 'scroll',
+      textStyle: { color: theme.textSub, fontSize: 12 },
+      pageTextStyle: { color: theme.textSub },
+      icon: 'circle',
+    },
+    grid: {
+      top: titleHeight + 36,
+      left: 12,
+      right: 12,
+      bottom: 36 + sliderHeight,
+      containLabel: true,
+    },
+    dataZoom: useDataZoom ? [
+      {
+        type: 'slider',
+        startValue: dates[startIdx],
+        endValue: dates[totalPts - 1],
+        height: 20,
+        bottom: 8,
+        borderColor: theme.line,
+        backgroundColor: 'transparent',
+        fillerColor: theme.tooltipBorder,
+        handleStyle: { color: theme.textSub, borderColor: theme.textSub },
+        moveHandleStyle: { color: theme.textSub },
+        textStyle: { color: theme.textSub, fontSize: 10 },
+        labelFormatter: v => typeof v === 'string' ? v : dates[v] || '',
+      },
+      {
+        type: 'inside',
+        startValue: dates[startIdx],
+        endValue: dates[totalPts - 1],
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+      },
+    ] : undefined,
+    xAxis: {
+      type: 'category',
+      data: dates,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: theme.line } },
+      axisLabel: { color: theme.textSub, fontSize: 11, rotate: intentDays > 20 ? 30 : 0 },
+      axisTick: { lineStyle: { color: theme.line } },
+    },
+    yAxis: yAxes,
+    series: seriesData,
+  };
+}
+
+// ─── 9종 chart_type / 내부 type 통합 디스패처 (D-013d) ─────────────
+// AI가 정한 chart_type(line / bar_rank / bar_delta / bar_stacked / bar_diverging
+// / funnel / heatmap / scatter / range_band) 우선, 없으면 내부 type으로 fallback
+function _buildEChartsOption(chart) {
+  if (!chart) return null;
+  const ct = chart.chart_type;
+  const it = chart.type;
+
+  // 1) 9종 chart_type 우선 디스패치
+  if (ct === 'bar_rank')      return _buildEChartsBarOption(chart, 'rank');
+  if (ct === 'bar_delta')     return _buildEChartsBarOption(chart, 'delta');
+  if (ct === 'bar_stacked')   return _buildEChartsStackedBarOption(chart);
+  if (ct === 'bar_diverging') return _buildEChartsDivergingBarOption(chart);
+  if (ct === 'funnel')        return _buildEChartsFunnelOption(chart);
+  if (ct === 'heatmap')       return _buildEChartsHeatmapOption(chart);
+  if (ct === 'scatter')       return _buildEChartsScatterOption(chart);
+  if (ct === 'range_band')    return _buildEChartsRangeBandOption(chart);
+
+  // 2) 내부 type 디스패치
+  if (it === 'timeseries_dual') return _buildEChartsDualAxisOption(chart);
+  if (it === 'comparison')      return _buildEChartsBarOption(chart, 'rank');
+  // timeseries / timeseries_multi / 그 외 (line으로 기본 처리)
+  return _buildEChartsMultiLineOption(chart);
+}
+
+// ─── 막대 (bar_rank / bar_delta / comparison) ──────────────────────
+function _buildEChartsBarOption(chart, kind) {
+  const items = chart.items || [];
+  if (items.length < 1) return null;
+  const theme = _eChartsThemeColors();
+  const isDelta = kind === 'delta';
+  const sorted = (kind === 'rank')
+    ? [...items].sort((a, b) => (b.value || 0) - (a.value || 0))
+    : items;
+  const labels = sorted.map(it => it.label || '');
+  const unit = chart.unit || '';
+  const fmt = v => (v == null || isNaN(v)) ? '—'
+    : (unit === '%' ? Number(v).toFixed(1) + '%' : Number(v).toLocaleString());
+
+  // 색상 — delta는 ± 분기, rank는 팔레트 순환
+  const seriesData = sorted.map((it, i) => ({
+    value: it.value,
+    itemStyle: {
+      color: isDelta
+        ? (it.value >= 0 ? theme.palette[2] : theme.palette[0])
+        : (it.color || theme.palette[i % theme.palette.length]),
+      borderRadius: [4, 4, 0, 0],
+    },
+  }));
+
+  return {
+    backgroundColor: 'transparent',
+    title: chart.title ? {
+      text: chart.title,
+      subtext: chart.date || '',
+      left: 'center', top: 4,
+      textStyle: { color: theme.text, fontSize: 14, fontWeight: 600,
+                   fontFamily: 'DM Sans, Noto Sans KR, sans-serif' },
+      subtextStyle: { color: theme.textSub, fontSize: 11 },
+    } : undefined,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: theme.tooltipBg,
+      borderColor: theme.tooltipBorder,
+      textStyle: { color: theme.text, fontSize: 12 },
+      valueFormatter: fmt,
+      axisPointer: { type: 'shadow' },
+    },
+    grid: { top: chart.title ? 60 : 24, left: 12, right: 12, bottom: 36, containLabel: true },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLine: { lineStyle: { color: theme.line } },
+      axisLabel: { color: theme.textSub, fontSize: 11, interval: 0,
+                   rotate: labels.some(l => (l||'').length > 4) ? 30 : 0 },
+      axisTick: { lineStyle: { color: theme.line } },
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false }, axisTick: { show: false },
+      splitLine: { lineStyle: { color: theme.line, type: 'dashed' } },
+      axisLabel: { color: theme.textSub, fontSize: 11,
+                   formatter: v => unit === '%' ? v.toFixed(0) + '%'
+                     : (Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + '만'
+                       : v.toLocaleString()) },
+    },
+    series: [{
+      type: 'bar',
+      data: seriesData,
+      barMaxWidth: 56,
+      label: {
+        show: labels.length <= 8,
+        position: 'top',
+        color: theme.text,
+        fontSize: 11,
+        fontFamily: 'JetBrains Mono, monospace',
+        formatter: p => fmt(p.value),
+      },
+      emphasis: { focus: 'series' },
+    }],
+  };
+}
+
+// ─── 스택 막대 (bar_stacked) ───────────────────────────────────────
+// chart.series: [{label, points:[{x, value}]}] 또는 categories+series 구조
+function _buildEChartsStackedBarOption(chart) {
+  const series = chart.series || [];
+  if (series.length < 2) return null;
+  const theme = _eChartsThemeColors();
+  const cats = (series[0].points || []).map(p => p.x || p.label || p.date || '');
+  const fmt = v => (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString();
+
+  return {
+    backgroundColor: 'transparent',
+    title: chart.title ? { text: chart.title, left: 'center', top: 4,
+      textStyle: { color: theme.text, fontSize: 14, fontWeight: 600 } } : undefined,
+    color: theme.palette,
+    tooltip: { trigger: 'axis', backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder,
+               textStyle: { color: theme.text }, valueFormatter: fmt,
+               axisPointer: { type: 'shadow' } },
+    legend: { top: chart.title ? 30 : 8, textStyle: { color: theme.textSub }, icon: 'circle' },
+    grid: { top: chart.title ? 70 : 40, left: 12, right: 12, bottom: 36, containLabel: true },
+    xAxis: { type: 'category', data: cats,
+             axisLine: { lineStyle: { color: theme.line } },
+             axisLabel: { color: theme.textSub, fontSize: 11 } },
+    yAxis: { type: 'value',
+             splitLine: { lineStyle: { color: theme.line, type: 'dashed' } },
+             axisLabel: { color: theme.textSub, fontSize: 11 } },
+    series: series.map((s, i) => ({
+      name: s.label || `시리즈 ${i + 1}`,
+      type: 'bar', stack: 'total',
+      data: (s.points || []).map(p => p.value),
+      itemStyle: { color: s.color || theme.palette[i % theme.palette.length] },
+      emphasis: { focus: 'series' },
+    })),
+  };
+}
+
+// ─── 발산 막대 (bar_diverging) ─────────────────────────────────────
+function _buildEChartsDivergingBarOption(chart) {
+  const items = chart.items || [];
+  if (items.length < 1) return null;
+  const theme = _eChartsThemeColors();
+  const labels = items.map(it => it.label || '');
+  const fmt = v => (v == null || isNaN(v)) ? '—'
+    : (Number(v) > 0 ? '+' : '') + Number(v).toLocaleString() + (chart.unit === '%' ? '%' : '');
+  return {
+    backgroundColor: 'transparent',
+    title: chart.title ? { text: chart.title, left: 'center', top: 4,
+      textStyle: { color: theme.text, fontSize: 14, fontWeight: 600 } } : undefined,
+    tooltip: { trigger: 'axis', backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder,
+               textStyle: { color: theme.text }, axisPointer: { type: 'shadow' },
+               valueFormatter: fmt },
+    grid: { top: chart.title ? 50 : 16, left: 80, right: 24, bottom: 32, containLabel: true },
+    xAxis: { type: 'value',
+             splitLine: { lineStyle: { color: theme.line, type: 'dashed' } },
+             axisLabel: { color: theme.textSub, fontSize: 11, formatter: fmt } },
+    yAxis: { type: 'category', data: labels, inverse: true,
+             axisLine: { show: false }, axisTick: { show: false },
+             axisLabel: { color: theme.textSub, fontSize: 11 } },
+    series: [{
+      type: 'bar',
+      data: items.map(it => ({
+        value: it.value,
+        itemStyle: { color: it.value >= 0 ? theme.palette[2] : theme.palette[0],
+                     borderRadius: 4 },
+      })),
+      label: { show: true,
+               position: 'right',
+               color: theme.text, fontSize: 11,
+               fontFamily: 'JetBrains Mono, monospace',
+               formatter: p => fmt(p.value) },
+    }],
+  };
+}
+
+// ─── 퍼널 (funnel) ────────────────────────────────────────────────
+function _buildEChartsFunnelOption(chart) {
+  const items = chart.items || chart.steps || [];
+  if (items.length < 2) return null;
+  const theme = _eChartsThemeColors();
+  const data = items.map((it, i) => ({
+    name: it.label || `단계 ${i + 1}`,
+    value: it.value,
+    itemStyle: { color: it.color || theme.palette[i % theme.palette.length] },
+  }));
+  return {
+    backgroundColor: 'transparent',
+    title: chart.title ? { text: chart.title, left: 'center', top: 4,
+      textStyle: { color: theme.text, fontSize: 14, fontWeight: 600 } } : undefined,
+    tooltip: { backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder,
+               textStyle: { color: theme.text },
+               formatter: '{b}<br>{c}명 ({d}%)' },
+    series: [{
+      type: 'funnel',
+      top: chart.title ? 50 : 16,
+      bottom: 20,
+      width: '70%',
+      data,
+      sort: 'descending',
+      gap: 4,
+      label: { show: true, position: 'inside', color: '#ffffff',
+               fontSize: 12, fontWeight: 600,
+               formatter: '{b}\n{c}' },
+      labelLine: { show: false },
+      itemStyle: { borderColor: theme.bg, borderWidth: 2 },
+    }],
+  };
+}
+
+// ─── 히트맵 (heatmap) ─────────────────────────────────────────────
+// chart.cells: [{x, y, value}], chart.x_categories, chart.y_categories
+function _buildEChartsHeatmapOption(chart) {
+  const cells = chart.cells || [];
+  const xs = chart.x_categories || [...new Set(cells.map(c => c.x))];
+  const ys = chart.y_categories || [...new Set(cells.map(c => c.y))];
+  if (cells.length < 1 || !xs.length || !ys.length) return null;
+  const theme = _eChartsThemeColors();
+  const values = cells.map(c => c.value).filter(v => v != null);
+  const vmin = Math.min(...values), vmax = Math.max(...values);
+  const data = cells.map(c => [xs.indexOf(c.x), ys.indexOf(c.y), c.value]);
+  return {
+    backgroundColor: 'transparent',
+    title: chart.title ? { text: chart.title, left: 'center', top: 4,
+      textStyle: { color: theme.text, fontSize: 14, fontWeight: 600 } } : undefined,
+    tooltip: { position: 'top', backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder,
+               textStyle: { color: theme.text },
+               formatter: p => `${ys[p.value[1]]} / ${xs[p.value[0]]}<br>값: ${p.value[2]}` },
+    grid: { top: chart.title ? 50 : 16, left: 60, right: 60, bottom: 60, containLabel: true },
+    xAxis: { type: 'category', data: xs, splitArea: { show: true },
+             axisLabel: { color: theme.textSub, fontSize: 11 } },
+    yAxis: { type: 'category', data: ys, splitArea: { show: true },
+             axisLabel: { color: theme.textSub, fontSize: 11 } },
+    visualMap: { min: vmin, max: vmax, calculable: true, orient: 'horizontal',
+                 left: 'center', bottom: 8,
+                 textStyle: { color: theme.textSub, fontSize: 11 },
+                 inRange: { color: ['#0d1117', '#3498db', '#e74c3c'] } },
+    series: [{ type: 'heatmap', data,
+               label: { show: false },
+               emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,.4)' } } }],
+  };
+}
+
+// ─── 산점도 (scatter) ─────────────────────────────────────────────
+function _buildEChartsScatterOption(chart) {
+  const points = chart.points || chart.items || [];
+  if (points.length < 1) return null;
+  const theme = _eChartsThemeColors();
+  return {
+    backgroundColor: 'transparent',
+    title: chart.title ? { text: chart.title, left: 'center', top: 4,
+      textStyle: { color: theme.text, fontSize: 14, fontWeight: 600 } } : undefined,
+    color: theme.palette,
+    tooltip: { trigger: 'item', backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder,
+               textStyle: { color: theme.text },
+               formatter: p => `${p.data.label || ''}<br>(${p.data.value[0]}, ${p.data.value[1]})` },
+    grid: { top: chart.title ? 50 : 16, left: 12, right: 12, bottom: 36, containLabel: true },
+    xAxis: { type: 'value', name: chart.x_label || '',
+             axisLine: { lineStyle: { color: theme.line } },
+             axisLabel: { color: theme.textSub, fontSize: 11 },
+             splitLine: { lineStyle: { color: theme.line, type: 'dashed' } } },
+    yAxis: { type: 'value', name: chart.y_label || '',
+             axisLine: { show: false }, axisTick: { show: false },
+             splitLine: { lineStyle: { color: theme.line, type: 'dashed' } },
+             axisLabel: { color: theme.textSub, fontSize: 11 } },
+    series: [{ type: 'scatter',
+               data: points.map((p, i) => ({
+                 value: [p.x ?? p[0], p.y ?? p[1]],
+                 label: p.label || '',
+                 itemStyle: { color: p.color || theme.palette[i % theme.palette.length] },
+               })),
+               symbolSize: 12, emphasis: { focus: 'series' } }],
+  };
+}
+
+// ─── Range Band (선 + 상/하한 영역) ─────────────────────────────
+// chart.points: [{date, value, lower, upper}]
+function _buildEChartsRangeBandOption(chart) {
+  const points = chart.points || [];
+  if (points.length < 2 || points[0].lower == null) {
+    // 단일 라인으로 폴백
+    return _buildEChartsMultiLineOption(chart);
+  }
+  const theme = _eChartsThemeColors();
+  const dates = points.map(p => p.date);
+  const mainColor = chart.color || theme.palette[1];
+  return {
+    backgroundColor: 'transparent',
+    title: chart.title ? { text: chart.title, left: 'center', top: 4,
+      textStyle: { color: theme.text, fontSize: 14, fontWeight: 600 } } : undefined,
+    tooltip: { trigger: 'axis', backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder,
+               textStyle: { color: theme.text } },
+    grid: { top: chart.title ? 50 : 16, left: 12, right: 12, bottom: 36, containLabel: true },
+    xAxis: { type: 'category', data: dates, boundaryGap: false,
+             axisLine: { lineStyle: { color: theme.line } },
+             axisLabel: { color: theme.textSub, fontSize: 11 } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: theme.line, type: 'dashed' } },
+             axisLabel: { color: theme.textSub, fontSize: 11 } },
+    series: [
+      // 하한 (투명) — 상한의 baseline
+      { name: 'lower', type: 'line', data: points.map(p => p.lower),
+        lineStyle: { opacity: 0 }, symbol: 'none', stack: 'band' },
+      // 상-하한 차이 (영역으로 표시)
+      { name: 'range', type: 'line',
+        data: points.map(p => p.upper - p.lower),
+        lineStyle: { opacity: 0 }, symbol: 'none', stack: 'band',
+        areaStyle: { color: mainColor, opacity: 0.15 } },
+      // 실제 값
+      { name: chart.label || '값', type: 'line',
+        data: points.map(p => p.value), smooth: false,
+        lineStyle: { width: 2, color: mainColor },
+        itemStyle: { color: mainColor },
+        symbol: 'circle', symbolSize: 5 },
+    ],
+  };
+}
+
+// 컨테이너에 ECharts 인스턴스 초기화 — 통합 디스패처 사용
+function _initEChartsInstance(el, chart, echarts) {
+  const option = _buildEChartsOption(chart);
+  if (!option) {
+    el.innerHTML = `<div class="ai-echarts-fallback-note">차트 데이터 부족</div>`;
+    return;
+  }
+  el.innerHTML = '';
+  el.dataset.initialized = '1';
+  const inst = echarts.init(el, null, { renderer: 'svg' });
+  inst.setOption(option);
+  // 윈도우 리사이즈 + 컨테이너 리사이즈 모두 대응
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => inst.resize()).observe(el);
+  } else {
+    window.addEventListener('resize', () => inst.resize());
+  }
+  // 테마 변경 감지 — data-theme 변경 시 옵션 재설정
+  el._raasEChartsInst = inst;
+  el._raasEChartsChart = chart;
+}
+
+// IntersectionObserver — 컨테이너가 보이면 ECharts 초기화 (lazy)
+const _ECHARTS_LAZY_OBSERVER = ('IntersectionObserver' in window) ? new IntersectionObserver(
+  (entries, obs) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const el = e.target;
+      if (el.dataset.initialized) { obs.unobserve(el); return; }
+      const chart = _ECHARTS_STORE[el.id];
+      if (!chart) { obs.unobserve(el); return; }
+      _loadECharts().then(echarts => {
+        console.log('[echarts] init', el.id, el.dataset.echartsType);
+        _initEChartsInstance(el, chart, echarts);
+        obs.unobserve(el);
+      }).catch(err => {
+        console.warn('[echarts] CDN 로드 실패 — SVG fallback:', err);
+        el.dataset.initialized = '1';
+        el.classList.remove('ai-echarts-container');
+        if (chart.type === 'timeseries_dual') {
+          el.innerHTML = renderDualSparklineSVG(chart);
+        } else if (chart.type === 'comparison' || Array.isArray(chart.items)) {
+          el.innerHTML = renderBarChartSVG(chart);
+        } else if (Array.isArray(chart.series)) {
+          el.innerHTML = renderMultiSparklineSVG(chart);
+        } else if (Array.isArray(chart.points)) {
+          el.innerHTML = renderSparklineSVG(chart);
+        }
+        obs.unobserve(el);
+      });
+    });
+  }, { rootMargin: '200px' }
+) : null;
+
+function _initEChartsContainers(rootEl) {
+  if (!rootEl) return;
+  rootEl.querySelectorAll('.ai-echarts-container:not([data-initialized])').forEach(el => {
+    if (_ECHARTS_LAZY_OBSERVER) {
+      _ECHARTS_LAZY_OBSERVER.observe(el);
+    } else {
+      // IntersectionObserver 미지원 → 즉시 초기화
+      const chart = _ECHARTS_STORE[el.id];
+      if (chart) {
+        _loadECharts().then(ec => _initEChartsInstance(el, chart, ec))
+                      .catch(() => {
+                        el.classList.remove('ai-echarts-container');
+                        if (chart.type === 'timeseries_dual')                  el.innerHTML = renderDualSparklineSVG(chart);
+                        else if (chart.type === 'comparison' || Array.isArray(chart.items)) el.innerHTML = renderBarChartSVG(chart);
+                        else if (Array.isArray(chart.series))                  el.innerHTML = renderMultiSparklineSVG(chart);
+                        else if (Array.isArray(chart.points))                  el.innerHTML = renderSparklineSVG(chart);
+                      });
+      }
+    }
+  });
+}
+
+// 테마 토글 시 ECharts 인스턴스 옵션 재설정 (통합 디스패처 사용)
+function _refreshEChartsTheme() {
+  document.querySelectorAll('.ai-echarts-container[data-initialized]').forEach(el => {
+    if (!el._raasEChartsInst || !el._raasEChartsChart) return;
+    const opt = _buildEChartsOption(el._raasEChartsChart);
+    if (opt) el._raasEChartsInst.setOption(opt, true);
+  });
+}
+
+// 기존 SVG 렌더러 — fallback용으로 보존 (구 renderMultiSparkline)
+function renderMultiSparklineSVG(chart) {
   const series = chart.series||[];
   if (series.length < 2) return '';
   const id = 'ms'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
@@ -2466,6 +3507,16 @@ function renderMultiSparkline(chart) {
     <div class="sp-period-btns">${btnHtml}</div>
     <div class="sp-body">${_renderMultiSVG(sliced)}</div>
   </div>`;
+}
+
+// 새 renderMultiSparkline — ECharts 컨테이너 생성 (lazy 초기화)
+function renderMultiSparkline(chart) {
+  const series = chart.series || [];
+  if (series.length < 2) return '';
+  const id = 'ec_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  _ECHARTS_STORE[id] = chart;
+  return `<div class="ai-echarts-container" id="${id}"
+               data-echarts-type="timeseries_multi"></div>`;
 }
 
 function _renderDualSVG(chart) {
@@ -2522,7 +3573,8 @@ function _renderDualSVG(chart) {
   </svg>`;
 }
 
-function renderDualSparkline(chart) {
+// 기존 SVG 이중 Y축 — fallback용으로 보존 (구 renderDualSparkline)
+function renderDualSparklineSVG(chart) {
   const series=chart.series||[];
   if (series.length < 2) return '';
   const id='ds'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
@@ -2536,7 +3588,18 @@ function renderDualSparkline(chart) {
   </div>`;
 }
 
-function renderBarChart(chart) {
+// 새 renderDualSparkline — ECharts 컨테이너 (D-013 확장)
+function renderDualSparkline(chart) {
+  if (!chart || !chart.series || chart.series.length < 2) return '';
+  const id = 'ec_du_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  // chart.type을 store에도 보존 (디스패치용)
+  _ECHARTS_STORE[id] = { ...chart, type: 'timeseries_dual' };
+  return `<div class="ai-echarts-container" id="${id}"
+               data-echarts-type="timeseries_dual"></div>`;
+}
+
+// 기존 SVG 막대 — fallback용으로 보존 (구 renderBarChart)
+function renderBarChartSVG(chart) {
   const items=chart.items, maxV=Math.max(...items.map(i=>i.value))||1;
   const colors=['#185fa5','#1d9e75','#d97706','#dc2626','#7c3aed'];
   const bars=items.map((it,idx)=>{
@@ -2551,6 +3614,15 @@ function renderBarChart(chart) {
     <div class="ai-chart-meta"><span>${escapeHtml(chart.title||'')}${chart.date?' · '+chart.date:''}</span><span>자동 시각화</span></div>
     <div style="display:flex;align-items:flex-end;gap:8px;min-height:88px;">${bars}</div>
   </div>`;
+}
+
+// 새 renderBarChart — ECharts 컨테이너 (D-013d 통합 디스패처)
+function renderBarChart(chart) {
+  if (!chart || !chart.items || chart.items.length < 1) return '';
+  const id = 'ec_bar_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  _ECHARTS_STORE[id] = { ...chart, type: 'comparison' };
+  return `<div class="ai-echarts-container" id="${id}"
+               data-echarts-type="comparison"></div>`;
 }
 
 function renderRankingTable(chart) {
@@ -2791,7 +3863,53 @@ function _buildChartHTML(chart) {
   const src = chart.source
     ? `<p class="ai-source">출처: ${escapeHtml(chart.source)}${chart.points?' · '+chart.points.length+'개 포인트':''}${chart.items?' · '+chart.items.length+'개 항목':''}</p>`
     : '';
-  return h + src;
+  // PoC §4: rationale 캡션 (9종 chart_type 있을 때만, 즉 차트 — 테이블은 chart_type 없음)
+  const rationale = (chart.chart_type && chart.rationale)
+    ? `<p class="ai-rationale" title="AI 차트 선택 근거">💡 ${escapeHtml(chart.rationale)}</p>`
+    : '';
+  // chart_type 메타가 있으면 컨테이너로 감싸 open_chart 발사용 데이터 속성 부여
+  if (chart.chart_type) {
+    const chartId = 'chart_' + Math.random().toString(36).slice(2, 10);
+    const inner = h + src + rationale;
+    return `<div class="ai-chart-wrap" data-chart-type="${escapeHtml(chart.chart_type)}"
+                 data-chart-id="${chartId}" data-rationale-visible="1"
+                 data-metric="${escapeHtml(chart.metric || '')}"
+                 data-completeness="${chart.data_completeness ?? ''}">${inner}</div>`;
+  }
+  return h + src + rationale;
+}
+
+// IntersectionObserver — 새로 렌더된 .ai-chart-wrap이 50% 가시되면 open_chart 발사 (인스턴스 1회)
+const _RAAS_CHART_OBSERVER = ('IntersectionObserver' in window) ? new IntersectionObserver(
+  (entries, obs) => {
+    entries.forEach(e => {
+      if (e.isIntersecting && e.intersectionRatio >= 0.5) {
+        const el = e.target;
+        if (el.dataset.opened) return;
+        el.dataset.opened = '1';
+        trackEvent(EVT.OPEN_CHART, {
+          chart_type:        el.dataset.chartType,
+          chart_id:          el.dataset.chartId,
+          metric:            el.dataset.metric || null,
+          data_completeness: el.dataset.completeness ? parseFloat(el.dataset.completeness) : null,
+          source:            'chat_answer',   // 채팅 답변 내 차트 (briefing_card는 향후)
+          rationale_visible: el.dataset.rationaleVisible === '1',
+        });
+        obs.unobserve(el);
+      }
+    });
+  }, { threshold: 0.5 }
+) : null;
+
+function _observeChartsIn(rootEl) {
+  if (!rootEl) return;
+  if (_RAAS_CHART_OBSERVER) {
+    rootEl.querySelectorAll('.ai-chart-wrap:not([data-opened])').forEach(el => {
+      _RAAS_CHART_OBSERVER.observe(el);
+    });
+  }
+  // ECharts 컨테이너 lazy 초기화 (D-013)
+  _initEChartsContainers(rootEl);
 }
 
 function fillAiMsg(id, data) {
@@ -2802,6 +3920,7 @@ function fillAiMsg(id, data) {
     <div class="msg-ai-name">RAAS Assistant</div>
     <div class="msg-ai-text">${renderAiText(answer)}</div>
     ${_buildChartHTML(data?.chart_data)}`;
+  _observeChartsIn(el);
   _scrollBottom();
 }
 
@@ -2821,7 +3940,7 @@ function _scrollBottom() {
 // ────────────────────────────────────────────────
 // SUBMIT QUERY
 // ────────────────────────────────────────────────
-async function submitQuery(question) {
+async function submitQuery(question, source) {
   question = question.trim();
   if (!question) return;
   const input = document.getElementById('chatInput');
@@ -2831,6 +3950,18 @@ async function submitQuery(question) {
   addUserMsg(question);
   const aiId = addAiTyping();
   const msgBody = document.getElementById(aiId).querySelector('.msg-body');
+
+  // PostHog ask_ai 이벤트 — source 핵심 (D3 결정 신호)
+  // source enum: briefing_card | main_input | sidebar_chip | welcome_chip | history_replay
+  trackEvent(EVT.ASK_AI, {
+    source: source || 'main_input',
+    query_text: question,
+    query_length: question.length,
+    briefing_open: !!window._raas_briefing_viewed_at,   // 세션 내 브리핑 본 적 있나
+    seconds_since_briefing: window._raas_briefing_viewed_at
+      ? Math.floor((Date.now() - window._raas_briefing_viewed_at) / 1000)
+      : null,
+  });
 
   try {
     const res = await _authedFetch('/api/query/stream', {
@@ -2868,6 +3999,7 @@ async function submitQuery(question) {
         } else if (ev.type === 'done') {
           const qid = ev.query_id || null;
           msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text">${renderAiText(rawText)}</div>${_buildChartHTML(chartData)}`;
+          _observeChartsIn(msgBody);
           _saveCachedAnswer(question, msgBody.innerHTML);
           if (qid) msgBody.insertAdjacentHTML('beforeend', _buildFeedbackBar(qid));
           refreshHistory();
@@ -2901,10 +4033,10 @@ chatInput.addEventListener('input', () => {
 chatInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    submitQuery(chatInput.value);
+    submitQuery(chatInput.value, 'main_input');
   }
 });
-document.getElementById('btnSend').addEventListener('click', () => submitQuery(chatInput.value));
+document.getElementById('btnSend').addEventListener('click', () => submitQuery(chatInput.value, 'main_input'));
 
 // ────────────────────────────────────────────────
 // SIDEBAR & PANEL TOGGLES
@@ -2991,7 +4123,7 @@ document.getElementById('btnNewChat').addEventListener('click', () => {
   if (isMobile()) closeSidebar();
   document.getElementById('threadInner').innerHTML = `
     <div class="welcome" id="welcomeScreen">
-      <div class="welcome-logo">안녕하세요 👋</div>
+      <h1 class="welcome-logo">안녕하세요 👋</h1>
       <div class="welcome-sub">SBS 고릴라 라디오의 청취 데이터를 자연어로 질의하세요. 지표, 트렌드, 프로그램 분석을 AI가 답합니다.</div>
       <div class="welcome-chips" id="suggestChips"></div>
     </div>`;
@@ -3004,8 +4136,17 @@ document.getElementById('btnNewChat').addEventListener('click', () => {
 // ────────────────────────────────────────────────
 function _initWelcomeChips() { /* 보팅 시점엔 RAAS_TOKEN 가능 — _bootAuth 직후 loadSuggestions가 별도 호출 */ }
 
-// 직무 기반 추천 칩 — /api/suggestions 호출 후 welcomeScreen에 렌더
+// 직무 기반 추천 칩 — Phase 2 ④ 스토리라인 우선, 미지원 직무는 기존 /api/suggestions
 async function loadSuggestions() {
+  // 1) 스토리라인 지원 직무면 storyline UI 렌더 후 종료
+  const used = await _tryLoadStoryline();
+  if (used) return;
+
+  // 2) 미지원 직무 → 기존 추천 칩
+  await _loadLegacySuggestions();
+}
+
+async function _loadLegacySuggestions() {
   const host = document.getElementById('suggestChips');
   if (!host) return;
   try {
@@ -3019,6 +4160,272 @@ async function loadSuggestions() {
   } catch (_) {
     host.innerHTML = '';
   }
+}
+
+// ─── 직무별 대화형 스토리라인 클라이언트 (Phase 2 ④) ───────────────
+window._RAAS_STORYLINE = {
+  role: null,         // 'cp' | 'pd_program' | 'pd_schedule' | null
+  available: false,
+  context: {},        // 직전 advance의 context_out (다음 호출 prev_context로 전달)
+  slot: null,         // 'entry' | '1_anchor' | ...
+  visited: [],        // 방문 슬롯 누적 — export 호출 시 전달
+};
+
+async function _tryLoadStoryline() {
+  try {
+    const r1 = await _authedFetch('/api/storyline/role-detect');
+    if (!r1.ok) return false;
+    const detect = await r1.json();
+    if (!detect.ok || !detect.role) {
+      // 지원 직무 아님 또는 셋업 부족 → legacy로 fallback
+      _RAAS_STORYLINE = { role: null, available: false, context: {}, slot: null };
+      return false;
+    }
+
+    const r2 = await _authedFetch(`/api/storyline/entry?role=${encodeURIComponent(detect.role)}`);
+    if (!r2.ok) return false;
+    const entry = await r2.json();
+    if (!entry.ok) return false;
+
+    _RAAS_STORYLINE = {
+      role: detect.role,
+      available: true,
+      context: entry.user_context || {},
+      slot: 'entry',
+      visited: [],
+    };
+    _renderStorylineWelcome(entry);
+    return true;
+  } catch (e) {
+    console.warn('[storyline] load failed:', e);
+    return false;
+  }
+}
+
+function _renderStorylineWelcome(entry) {
+  const welcome = document.getElementById('welcomeScreen');
+  if (!welcome) return;
+
+  welcome.innerHTML = `
+    <h1 class="welcome-logo">${escapeHtml(entry.greeting || '')}</h1>
+    <div class="welcome-sub">${_renderStorylineText(entry.first_question || '')}</div>
+    <div class="welcome-chips" id="suggestChips">
+      ${(entry.chips || []).map(c => _storylineChipHTML(c, 'entry')).join('')}
+    </div>
+    <div class="welcome-storyline-badge">${escapeHtml(entry.role_name_ko || '')} 스토리라인</div>
+  `;
+}
+
+function _storylineChipHTML(chip, slotFrom) {
+  const label = escapeHtml(chip.label || '');
+  const intent = escapeHtml(chip.intent || '');
+  const slot = escapeHtml(slotFrom || '');
+  return `<button class="sgst-chip" onclick="_onStorylineChip(this)"
+    data-slot="${slot}" data-intent="${intent}" data-label="${label}">${label}</button>`;
+}
+
+// 스토리라인 답변용 텍스트 렌더링 — **bold** + \n→<br> + 간단 markdown table
+function _renderStorylineText(s) {
+  if (!s) return '';
+  // 1) 테이블 추출 (escape 전에 처리해서 | 보존)
+  const tables = [];
+  s = s.replace(
+    /(\|[^\n]+\|\n\|[-:|\s]+\|\n(?:\|[^\n]+\|\n?)+)/g,
+    (match) => {
+      const rows = match.trim().split('\n');
+      const header = rows[0].split('|').slice(1, -1).map(c => c.trim());
+      const body = rows.slice(2).map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+      const thead = '<tr>' + header.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr>';
+      const tbody = body.map(
+        r => '<tr>' + r.map(c => `<td>${_renderStorylineInline(c)}</td>`).join('') + '</tr>'
+      ).join('');
+      tables.push(`<table class="story-table">${thead}${tbody}</table>`);
+      return `TABLE${tables.length - 1}`;
+    }
+  );
+  // 2) 나머지 텍스트 escape + bold + 줄바꿈
+  let out = _renderStorylineInline(s);
+  out = out.replace(/\n/g, '<br>');
+  // 3) 테이블 자리 복구
+  out = out.replace(/TABLE(\d+)(<br>)?/g, (_, idx) => tables[+idx]);
+  return out;
+}
+
+function _renderStorylineInline(s) {
+  return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+}
+
+async function _onStorylineChip(btn) {
+  const slotFrom = btn.dataset.slot || 'entry';
+  const intent   = btn.dataset.intent || '';
+  const label    = btn.dataset.label || '';
+  if (!intent) return;
+
+  // 1) 유저 메시지 버블 — 클릭한 칩 라벨
+  addUserMsg(label);
+
+  // 2) AI 타이핑
+  const aiId = addAiTyping();
+  const msgBody = document.getElementById(aiId).querySelector('.msg-body');
+
+  // 3) PostHog — Phase 4 환류 학습 원천
+  try {
+    trackEvent('storyline_chip_click', {
+      role: _RAAS_STORYLINE.role,
+      slot_from: slotFrom,
+      chip_label: label,
+      chip_intent: intent,
+    });
+  } catch (_) {}
+
+  try {
+    const res = await _authedFetch('/api/storyline/advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: _RAAS_STORYLINE.role,
+        slot_from: slotFrom,
+        chip_intent: intent,
+        prev_context: _RAAS_STORYLINE.context || {},
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '응답 실패');
+
+    if (data.ended) {
+      // _end — 실제 산출물 생성 호출 (POST /api/storyline/export)
+      msgBody.innerHTML = `
+        <div class="msg-ai-name">RAAS Assistant</div>
+        <div class="story-end-msg">
+          <span class="icon">⏳</span>
+          <div>
+            <b>${escapeHtml(data.output_name || data.output_format_id || '산출물')}</b>
+            <div style="margin-top:6px;color:var(--color-text-secondary);font-size:var(--fs-sm)">
+              생성 중…
+            </div>
+          </div>
+        </div>
+      `;
+      _scrollBottom();
+      try {
+        const xr = await _authedFetch('/api/storyline/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role: _RAAS_STORYLINE.role,
+            output_format_id: data.output_format_id,
+            slots_visited: _RAAS_STORYLINE.visited || [],
+            context: _RAAS_STORYLINE.context || {},
+          }),
+        });
+        const xdata = await xr.json();
+        if (!xr.ok || !xdata.ok) throw new Error(xdata.error || '생성 실패');
+
+        const sizeKb = xdata.size ? Math.round(xdata.size / 1024) : null;
+        msgBody.innerHTML = `
+          <div class="msg-ai-name">RAAS Assistant</div>
+          <div class="story-end-msg">
+            <span class="icon">✅</span>
+            <div>
+              <b>${escapeHtml(xdata.filename || '산출물')}</b>
+              ${sizeKb ? `<span style="color:var(--color-text-tertiary);font-size:var(--fs-xs);margin-left:6px;">(${sizeKb} KB)</span>` : ''}
+              <div style="margin-top:6px;color:var(--color-text-secondary);font-size:var(--fs-sm)">
+                ${escapeHtml(xdata.message || '생성 완료')}
+              </div>
+              <div style="margin-top:10px;">
+                <a class="sgst-chip" href="${xdata.download_url}"
+                   download="${escapeHtml(xdata.filename || '')}"
+                   style="text-decoration:none;display:inline-block;">
+                  📥 다운로드
+                </a>
+              </div>
+            </div>
+          </div>
+          <div class="story-chips-inline">
+            <button class="sgst-chip" onclick="_resetStoryline()">처음으로 돌아가기</button>
+          </div>
+        `;
+        try { trackEvent('storyline_complete', {
+          role: _RAAS_STORYLINE.role,
+          output_format_id: data.output_format_id,
+          file_size: xdata.size,
+        }); } catch (_) {}
+      } catch (xe) {
+        msgBody.innerHTML = `
+          <div class="msg-ai-name">RAAS Assistant</div>
+          <div class="story-end-msg" style="background:rgba(242,107,107,.08);border-color:rgba(242,107,107,.3);">
+            <span class="icon">⚠</span>
+            <div>
+              <b>산출물 생성 실패</b>
+              <div style="margin-top:6px;color:var(--color-text-secondary);font-size:var(--fs-sm)">
+                ${escapeHtml(xe.message || '오류')}
+              </div>
+            </div>
+          </div>
+          <div class="story-chips-inline">
+            <button class="sgst-chip" onclick="_resetStoryline()">처음으로 돌아가기</button>
+          </div>
+        `;
+      }
+      _scrollBottom();
+    } else {
+      // 일반 슬롯 — 답변 + 다음 칩
+      _RAAS_STORYLINE.context = data.context_out || _RAAS_STORYLINE.context;
+      _RAAS_STORYLINE.slot    = data.slot;
+      // 방문 슬롯 누적 (export 호출 시 본문 텍스트로 사용)
+      _RAAS_STORYLINE.visited = _RAAS_STORYLINE.visited || [];
+      _RAAS_STORYLINE.visited.push({
+        slot: data.slot,
+        slot_name: data.slot_name,
+        answer: data.answer,
+        fallback_used: data.fallback_used,
+      });
+
+      const slotMetaCls = data.fallback_used ? 'story-slot-meta fallback' : 'story-slot-meta';
+      const slotMetaTxt = data.fallback_used
+        ? `⚠ ${escapeHtml(data.slot_name || data.slot)} · 데이터 부족(fallback)`
+        : `📍 ${escapeHtml(data.slot_name || data.slot)}`;
+
+      msgBody.innerHTML = `
+        <div class="msg-ai-name">RAAS Assistant</div>
+        <div class="${slotMetaCls}">${slotMetaTxt}</div>
+        <div class="msg-ai-text">${_renderStorylineText(data.answer || '')}</div>
+        <div class="story-chips-inline">
+          ${(data.chips_next || []).map(c => _storylineChipHTML(c, data.slot)).join('')}
+        </div>
+      `;
+    }
+    _scrollBottom();
+  } catch (e) {
+    msgBody.innerHTML = `
+      <div class="msg-ai-name">RAAS Assistant</div>
+      <div class="msg-ai-text" style="color:var(--color-danger);">
+        스토리라인 오류: ${escapeHtml(e.message)}
+      </div>
+      <div class="story-chips-inline">
+        <button class="sgst-chip" onclick="_resetStoryline()">처음으로</button>
+      </div>
+    `;
+    _scrollBottom();
+  }
+}
+
+function _resetStoryline() {
+  // 채팅 비우고 welcome 재로드 — 직무 변경 시·_end 후·수동 리셋용
+  const inner = document.getElementById('threadInner');
+  if (inner) {
+    inner.innerHTML = `
+      <div class="welcome" id="welcomeScreen">
+        <h1 class="welcome-logo">불러오는 중…</h1>
+        <div class="welcome-sub"></div>
+        <div class="welcome-chips" id="suggestChips"></div>
+      </div>
+    `;
+  }
+  _msgCount = 0;
+  _RAAS_STORYLINE = { role: null, available: false, context: {}, slot: null, visited: [] };
+  loadSuggestions();
 }
 
 function _renderChipHTML(c) {
@@ -3050,7 +4457,266 @@ function _renderChipHTML(c) {
 
 function _onSuggestChip(btn) {
   const q = btn.dataset.q;
-  if (q) submitQuery(q);
+  if (q) submitQuery(q, 'welcome_chip');
+}
+
+// ── 이번 주 브리핑 카드 (Week 1 Day 2 스켈레톤) ─────────────
+// 측정 인프라 활성화용 — 실제 콘텐츠는 Week 3에 채움.
+// 세션 내 view_briefing 1회만, ask_ai의 briefing_open·seconds_since_briefing 컨텍스트 제공.
+let _RAAS_BRIEFING_FIRED = false;
+
+function _getBriefingMonday() {
+  // 이번 주 월요일을 YYYY-MM-DD로 — briefing_date 속성
+  const d = new Date();
+  const day = d.getDay();                     // 0=일
+  const diff = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function _isFirstVisitToday() {
+  // 오늘 첫 진입인지 (localStorage로 추적, 첫 호출 시 기록)
+  const today = new Date().toISOString().slice(0, 10);
+  const last = localStorage.getItem('raas_last_visit_date');
+  if (last === today) return false;
+  localStorage.setItem('raas_last_visit_date', today);
+  return true;
+}
+
+// ── 수치 포맷 헬퍼 ────────────────────────────────────────
+function _fmtN(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return Math.round(n).toLocaleString();
+}
+function _fmtPctVal(n, digits = 1) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return n.toFixed(digits) + '%';
+}
+function _fmtDelta(n, opts = {}) {
+  // opts.unit: '%' or '%p' or '' (default %)
+  // opts.up_is_good: 양수가 좋은 신호인지 (default true)
+  if (n === null || n === undefined || isNaN(n)) {
+    return { html: '<span class="brief-stat-sub-dim">—</span>', val: null };
+  }
+  const unit = opts.unit ?? '%';
+  const upGood = opts.up_is_good !== false;
+  const sign  = n > 0 ? '+' : '';
+  const arrow = n > 0 ? '▲' : (n < 0 ? '▼' : '·');
+  let colorCls = '';
+  if (n > 0) colorCls = upGood ? 'brief-stat-up' : 'brief-stat-down';
+  else if (n < 0) colorCls = upGood ? 'brief-stat-down' : 'brief-stat-up';
+  return {
+    html: `<span class="${colorCls}">${sign}${n.toFixed(1)}${unit} ${arrow}</span>`,
+    val: n,
+  };
+}
+
+// ── 브리핑 수치 fetch ──────────────────────────────────────
+async function _fetchBriefingNumbers() {
+  try {
+    const res = await _authedFetch('/api/briefing');
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!j.ok || !j.data) return null;
+    const s1 = j.data.s1_executive || {};
+    const s2 = j.data.s2_funnel     || {};
+    const s3 = j.data.s3_engagement || {};
+    return {
+      wau:           s1.wau,
+      wau_wow:       s1.wau_chg,            // % vs 전주
+      deep_week:     s3.deep_rate_week,     // % 주간 평균
+      new_week:      s2.new_week,           // 명 주간 누적
+      new_week_wow:  s2.new_week_wow,       // % vs 전주
+      date_max:      s1.date || j.data.collected_at,
+    };
+  } catch (_) { return null; }
+}
+
+function _renderBriefingCard(containerEl) {
+  if (typeof containerEl === 'string') containerEl = document.getElementById(containerEl);
+  if (!containerEl) return null;
+  const monday = _getBriefingMonday();
+  const uid = Math.random().toString(36).slice(2, 8);
+  // 인스턴스 ID로 다중 호출 허용 (사이드바 클릭마다 새 카드 — 챗 메시지 안에 임베드)
+  const html = `
+    <div class="brief-card" id="bc_${uid}"
+         data-card-type="weekly_review"
+         data-date="${monday}"
+         data-completeness="0.0">
+      <div class="brief-card-hd">
+        <span class="brief-card-icon">📊</span>
+        <div class="brief-card-title">이번 주 브리핑</div>
+        <div class="brief-card-date" data-role="date">${monday} (월)</div>
+      </div>
+      <div class="brief-card-body">
+        <div class="brief-grid">
+          <div class="brief-stat">
+            <div class="brief-stat-label">주간 활성 사용자 (WAU)</div>
+            <div class="brief-stat-value" data-stat="wau">…</div>
+            <div class="brief-stat-sub" data-stat="wau-sub">최근 7일 · 전주 대비 —</div>
+          </div>
+          <div class="brief-stat">
+            <div class="brief-stat-label">깊은청취율</div>
+            <div class="brief-stat-value" data-stat="deep">…</div>
+            <div class="brief-stat-sub" data-stat="deep-sub">주간 평균</div>
+          </div>
+          <div class="brief-stat">
+            <div class="brief-stat-label">신규 사용자</div>
+            <div class="brief-stat-value" data-stat="new">…</div>
+            <div class="brief-stat-sub" data-stat="new-sub">주간 누적 · 전주 대비 —</div>
+          </div>
+        </div>
+      </div>
+      <div class="brief-card-actions">
+        <button class="brief-action-btn primary" onclick="_briefAsk()">💬 이 데이터 물어보기</button>
+        <button class="brief-action-btn" onclick="_briefShare(this)">📤 링크 복사</button>
+        <button class="brief-action-btn" onclick="_briefSavePng(this)">📷 이미지 저장</button>
+      </div>
+    </div>`;
+  containerEl.insertAdjacentHTML('beforeend', html);
+  const card = containerEl.querySelector(`#bc_${uid}`);
+  // 데이터 fetch + 채우기 (비동기) — 도착 후 Observer 부착
+  _fillBriefingCard(card);
+  return card;
+}
+
+async function _fillBriefingCard(cardEl) {
+  if (!cardEl) return;
+  const $ = sel => cardEl.querySelector(sel);
+  const n = await _fetchBriefingNumbers();
+  if (!n) {
+    // 데이터 가져오지 못함 — placeholder를 "—"로 정리하고 Observer만 부착
+    ['wau','deep','new'].forEach(k => {
+      const el = $(`[data-stat="${k}"]`); if (el) el.textContent = '—';
+    });
+    _setupBriefingObserver(cardEl);
+    return;
+  }
+  // 값 채우기
+  $(`[data-stat="wau"]`).textContent  = _fmtN(n.wau);
+  $(`[data-stat="deep"]`).textContent = _fmtPctVal(n.deep_week);
+  $(`[data-stat="new"]`).textContent  = _fmtN(n.new_week);
+  // 변화율
+  const wauD = _fmtDelta(n.wau_wow,      { unit: '%', up_is_good: true });
+  const newD = _fmtDelta(n.new_week_wow, { unit: '%', up_is_good: true });
+  $(`[data-stat="wau-sub"]`).innerHTML = `최근 7일 · 전주 대비 ${wauD.html}`;
+  $(`[data-stat="new-sub"]`).innerHTML = `주간 누적 · 전주 대비 ${newD.html}`;
+  // 기준 날짜
+  if (n.date_max) {
+    $(`[data-role="date"]`).textContent = `${n.date_max.replace(/\//g,'-')} 기준`;
+  }
+  // 데이터 완전성 — 주요 3개 값 기준
+  const have = [n.wau, n.deep_week, n.new_week].filter(v => v !== null && v !== undefined).length;
+  cardEl.dataset.completeness = (have / 3).toFixed(2);
+  // view_briefing 발사 — 정확한 completeness로
+  _setupBriefingObserver(cardEl);
+}
+
+function _setupBriefingObserver(cardEl) {
+  // 페이지 세션당 1회만 view_briefing 발사 (스펙: 한 세션 30분 안 1회만)
+  if (_RAAS_BRIEFING_FIRED || !cardEl) return;
+  if (!('IntersectionObserver' in window)) return;
+  const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach(e => {
+      if (e.isIntersecting && e.intersectionRatio >= 0.5 && !_RAAS_BRIEFING_FIRED) {
+        _RAAS_BRIEFING_FIRED = true;
+        window._raas_briefing_viewed_at = Date.now();
+        trackEvent(EVT.VIEW_BRIEFING, {
+          card_type: cardEl.dataset.cardType,
+          briefing_date: cardEl.dataset.date,
+          chart_count: cardEl.querySelectorAll('.brief-stat').length,
+          data_completeness: parseFloat(cardEl.dataset.completeness),
+          is_first_visit_today: _isFirstVisitToday(),
+        });
+        obs.disconnect();
+      }
+    });
+  }, { threshold: 0.5 });
+  observer.observe(cardEl);
+}
+
+function _briefAsk() {
+  // 브리핑 카드에서 챗으로 진입 — D3 결정 신호의 핵심
+  submitQuery('이번 주 브리핑 요약해줘', 'briefing_card');
+}
+
+function _briefShare(btn) {
+  const card = document.getElementById('briefCard');
+  const url = location.href;
+  try { navigator.clipboard.writeText(url); } catch (_) {}
+  // 시각 피드백
+  if (btn) {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✅ 복사됨';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('ok'); }, 1500);
+  }
+  trackEvent(EVT.SHARE_VIEW, {
+    share_type: 'link',
+    target:     'briefing_card',
+    chart_type: null,
+    briefing_date: card ? card.dataset.date : _getBriefingMonday(),
+  });
+}
+
+// html-to-image lazy CDN 로더 — 첫 PNG 저장 클릭 시에만 로드
+let _RAAS_HTI_LOADING = null;
+function _loadHtmlToImage() {
+  if (window.htmlToImage) return Promise.resolve(window.htmlToImage);
+  if (_RAAS_HTI_LOADING) return _RAAS_HTI_LOADING;
+  _RAAS_HTI_LOADING = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.min.js';
+    s.crossOrigin = 'anonymous';
+    s.onload  = () => resolve(window.htmlToImage);
+    s.onerror = () => reject(new Error('html-to-image 로드 실패'));
+    document.head.appendChild(s);
+  });
+  return _RAAS_HTI_LOADING;
+}
+
+async function _briefSavePng(btn) {
+  const card = document.getElementById('briefCard');
+  if (!card) return;
+  const orig = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ 준비 중…'; }
+  try {
+    const hti = await _loadHtmlToImage();
+    // 캡처 시 배경 토큰 사용 (다크/라이트 모두 정확)
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-bg-elevated-2').trim() || '#1a2130';
+    const dataUrl = await hti.toPng(card, {
+      backgroundColor: bg,
+      pixelRatio: 2,    // Retina 대응
+      cacheBust: true,
+    });
+    // 다운로드 트리거
+    const a = document.createElement('a');
+    const date = card.dataset.date || _getBriefingMonday();
+    a.download = `raas-briefing-${date}.png`;
+    a.href = dataUrl;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // 시각 피드백
+    if (btn) {
+      btn.innerHTML = '✅ 저장됨';
+      btn.classList.add('ok');
+      setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('ok'); btn.disabled = false; }, 1500);
+    }
+    // PostHog share_view 발사
+    trackEvent(EVT.SHARE_VIEW, {
+      share_type: 'png',
+      target:     'briefing_card',
+      chart_type: null,
+      briefing_date: date,
+    });
+  } catch (e) {
+    console.warn('[briefSavePng]', e);
+    if (btn) {
+      btn.innerHTML = '❌ 실패';
+      setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 1500);
+    }
+  }
 }
 
 // 직무 드롭다운 동적 렌더 (가입 + 프로필) — /api/profiles에서 active=true만 로드
@@ -3101,7 +4767,30 @@ function _initSidebarQueries() {
 }
 function _onQuickQuery(i) {
   if (isMobile()) closeSidebar();
-  submitQuery(QUICK_QUERIES[i]);
+  const q = QUICK_QUERIES[i];
+  // 특수 분기: 브리핑 질의는 Claude 호출 없이 카드를 직접 챗에 임베드
+  if (q === BRIEFING_QUERY_TEXT) {
+    _showBriefingInChat();
+    return;
+  }
+  submitQuery(q, 'sidebar_chip');
+}
+
+// 브리핑 카드를 챗 메시지로 표시 (사이드바 질의 클릭 시)
+function _showBriefingInChat() {
+  addUserMsg(BRIEFING_QUERY_TEXT);
+  const id = 'msg-' + (++_msgCount);
+  document.getElementById('threadInner').insertAdjacentHTML('beforeend', `
+    <div class="msg msg-ai" id="${id}">
+      <div class="msg-avatar">R</div>
+      <div class="msg-body">
+        <div class="msg-ai-name">RAAS Assistant</div>
+        <div class="brief-host" data-role="brief-host"></div>
+      </div>
+    </div>`);
+  const host = document.querySelector(`#${id} [data-role="brief-host"]`);
+  _renderBriefingCard(host);
+  _scrollBottom();
 }
 
 // ────────────────────────────────────────────────
@@ -3123,6 +4812,7 @@ function restoreFromCache(question, answerHTML) {
       <div class="msg-avatar">R</div>
       <div class="msg-body">${answerHTML}</div>
     </div>`);
+  _observeChartsIn(ti);
   _scrollBottom();
 }
 
@@ -3132,7 +4822,7 @@ function _onHistoryClick(i) {
   if (isMobile()) closeSidebar();
   const cached = _getCachedAnswer(q);
   if (cached) restoreFromCache(q, cached);
-  else submitQuery(q);
+  else submitQuery(q, 'history_replay');
 }
 
 async function refreshHistory() {
@@ -3308,7 +4998,7 @@ function _toggleHmRow(row) {
 
 function _reuseHistQuery(btn) {
   closeHistModal();
-  submitQuery(btn.dataset.q);
+  submitQuery(btn.dataset.q, 'history_replay');
 }
 
 function _updateHistFooter() {
@@ -3421,6 +5111,8 @@ document.getElementById('btnTheme').addEventListener('click', function(){
   const next = cur === 'dark' ? 'light' : 'dark';
   localStorage.setItem('raas_theme', next);
   _applyTheme(next);
+  // ECharts 인스턴스도 새 테마로 옵션 재설정
+  try { _refreshEChartsTheme(); } catch (_) {}
 });
 
 // ────────────────────────────────────────────────
@@ -3430,6 +5122,7 @@ _cleanQCache();
 _initWelcomeChips();
 _initSidebarQueries();
 _populateRoleDropdowns();   // 가입 폼 드롭다운 즉시 채움 (인증 불필요)
+_bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
 
 // 인증 게이트 — 토큰 복원 후 성공 시만 KPI/이력/추천 칩 로드
 (async () => {
@@ -3439,6 +5132,7 @@ _populateRoleDropdowns();   // 가입 폼 드롭다운 즉시 채움 (인증 불
     loadKpiPanel();
     refreshHistory();
     loadSuggestions();   // 직무 기반 추천 칩
+    _phIdentify(RAAS_USER);  // 세션 복원 사용자 식별
   }
 })();
 </script>

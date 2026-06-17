@@ -1,4 +1,9 @@
-# RAAS 사용자 인터뷰 가이드 v1 (Week 1)
+# RAAS 사용자 인터뷰 가이드 (Week 1) — v1 (마스터)
+
+> **v2 업데이트 (2026-06-15):** 직무별 1페이지 가이드가 [docs/interviews/](interviews/)에 추가되었습니다.
+> 이 마스터 문서는 **목적·원칙·방법론·노트 템플릿**의 단일 출처이고, 실전 인터뷰는 직무별 1페이지를 출력해 사용합니다.
+> - 직무별 1페이지 인덱스: [docs/interviews/README.md](interviews/README.md)
+> - 변경 사유: [docs/decisions.md D-008](decisions.md)
 
 이 문서는 Week 1에 진행할 30분 × 5명 인터뷰의 실행 가이드입니다.
 이 인터뷰의 결과가 **Week 3의 "이번 주 브리핑 카드" 콘텐츠**와 **[docs/RAAS_FLOW.md](docs/RAAS_FLOW.md) 흐름 정의서**의 단일 근거가 됩니다.

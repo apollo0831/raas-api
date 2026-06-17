@@ -41,6 +41,8 @@ from raas_auth import (register_user, authenticate, create_session,
                        bootstrap_admins, ALLOWED_ROLES,
                        update_profile, change_password)
 from raas_onboarding import list_active_profiles, build_suggestions
+import raas_storyline_engine as STORY
+import raas_report_engine as REPORT
 from raas_querymap import (stats_overview, stats_by_role,
                            stats_by_user, stats_topics,
                            stats_role_metric_matrix,
@@ -57,6 +59,9 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL")
 SPLUNK_APP        = os.getenv("SPLUNK_APP")        # ← Splunk 앱 내부 ID
 SPLUNK_TIMEOUT    = int(os.getenv("SPLUNK_TIMEOUT", "10"))  # 초. 미도달 환경에서 빠른 CSV 폴백을 위해 짧게
+# PostHog (4주 PoC 측정) — 공개 키이므로 브라우저 노출 OK
+POSTHOG_KEY       = os.getenv("POSTHOG_KEY", "")
+POSTHOG_HOST      = os.getenv("POSTHOG_HOST", "https://eu.posthog.com")
 # ─────────────────────────────────────────────────────
 
 SSL_CONTEXT = ssl.create_default_context()
@@ -711,6 +716,74 @@ class RAASHandler(BaseHTTPRequestHandler):
                 print(f"[suggestions] 실패: {e}", flush=True)
                 self.send_json({"ok": True, "role": None, "chips": []})
 
+        elif self.path == "/api/posthog-config":
+            # 브라우저에 노출되는 공개 클라이언트 설정. 키 없으면 enabled=false → SDK init 스킵.
+            self.send_json({
+                "ok": True,
+                "enabled": bool(POSTHOG_KEY),
+                "key":     POSTHOG_KEY,
+                "host":    POSTHOG_HOST,
+            })
+
+        elif self.path == "/api/storyline/role-detect":
+            # 현재 로그인 사용자 → 스토리라인 직무 ID + 필요 셋업 안내
+            try:
+                user = self._get_session_user()
+                result = STORY.role_detect(user)
+                result["available_roles"] = STORY.list_available_roles()
+                self.send_json({"ok": True, **result})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path.startswith("/api/storyline/entry"):
+            # 첫 화면 — greeting + first_question + default chips
+            try:
+                params = {}
+                if "?" in self.path:
+                    params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+                user = self._get_session_user()
+                # role: 쿼리 파라미터 우선, 없으면 사용자 role에서 자동 감지
+                role = params.get("role")
+                if not role:
+                    detected = STORY.role_detect(user)
+                    role = detected.get("role")
+                if not role:
+                    self.send_json({"ok": False,
+                                    "error": "role이 지정되지 않았고 사용자에서도 감지 실패",
+                                    "available_roles": STORY.list_available_roles()}, 400)
+                    return
+                # channel override (CP 한정)
+                channel = params.get("channel")
+                engine = STORY.StorylineEngine(role=role, user=user,
+                                               channel_override=channel)
+                self.send_json(engine.entry())
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path.startswith("/api/storyline/exports/"):
+            # 일회용 토큰으로 산출물(PPT/텍스트) 다운로드 (D-014)
+            try:
+                token = self.path.split("/api/storyline/exports/", 1)[1].strip()
+                token = token.split("?", 1)[0].split("#", 1)[0]
+                result = REPORT.fetch_for_download(token)
+                if not result:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body_bytes = result["bytes"]
+                self.send_response(200)
+                self.send_header("Content-Type", result.get("content_type", "application/octet-stream"))
+                self.send_header("Content-Length", str(len(body_bytes)))
+                self.send_header(
+                    "Content-Disposition",
+                    f"attachment; filename*=UTF-8''{urllib.parse.quote(result['filename'])}",
+                )
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body_bytes)
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/status":
             self.send_json({"ok": True, "server": "RAAS",
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
@@ -996,6 +1069,72 @@ class RAASHandler(BaseHTTPRequestHandler):
                                       topic_key=facts.get("topic_key"))
                 self.send_json({"ok": True, "answer": answer,
                                 "query_id": query_id, "chart_data": chart_data})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/storyline/advance":
+            # 칩 클릭 → 다음 슬롯 답변 렌더링
+            try:
+                user = self._get_session_user()
+                role = body.get("role")
+                if not role:
+                    detected = STORY.role_detect(user)
+                    role = detected.get("role")
+                if not role:
+                    self.send_json({"ok": False,
+                                    "error": "role이 필요합니다.",
+                                    "available_roles": STORY.list_available_roles()}, 400)
+                    return
+                slot_from = body.get("slot_from", "entry")
+                chip_intent = body.get("chip_intent")
+                if not chip_intent:
+                    self.send_json({"ok": False,
+                                    "error": "chip_intent가 필요합니다."}, 400)
+                    return
+                channel = body.get("channel")
+                prev_context = body.get("prev_context") or {}
+                engine = STORY.StorylineEngine(role=role, user=user,
+                                               channel_override=channel)
+                result = engine.advance(slot_from, chip_intent,
+                                        prev_context=prev_context)
+                status = 200 if result.get("ok") else 400
+                self.send_json(result, status)
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/storyline/export":
+            # 산출물 생성 — matplotlib(차트 PNG) + python-pptx(PPT 1장) (D-014)
+            try:
+                role = body.get("role")
+                if not role:
+                    user = self._get_session_user()
+                    detected = STORY.role_detect(user)
+                    role = detected.get("role")
+                if not role:
+                    self.send_json({"ok": False, "error": "role이 필요합니다."}, 400)
+                    return
+                output_format_id = body.get("output_format_id", "")
+                slots_visited = body.get("slots_visited") or []
+                context = body.get("context") or {}
+                result = REPORT.build_storyline_export(
+                    role=role,
+                    output_format_id=output_format_id,
+                    slots_visited=slots_visited,
+                    context=context,
+                )
+                if not result.get("ok"):
+                    self.send_json(result, 400)
+                    return
+                token = REPORT.store_for_download(result)
+                self.send_json({
+                    "ok": True,
+                    "filename": result["filename"],
+                    "content_type": result["content_type"],
+                    "kind": result.get("kind"),
+                    "size": len(result["bytes"]),
+                    "download_url": f"/api/storyline/exports/{token}",
+                    "message": f"{result['filename']} 생성 완료",
+                })
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 

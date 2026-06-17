@@ -78,11 +78,18 @@ PostHog의 사용자 식별은 측정 신뢰성의 기반.
 **속성**
 | 키 | 타입 | 예시 | 설명 |
 |----|------|------|------|
-| `source` | enum | `"briefing_card"` / `"main_input"` / `"sidebar_chip"` | 어디서 챗을 시작했는지 ★ D3에 핵심 |
+| `source` | enum | `"briefing_card"` / `"main_input"` / `"sidebar_chip"` / `"welcome_chip"` / `"history_replay"` | 어디서 챗을 시작했는지 ★ D3에 핵심 |
 | `query_text` | string | `"왜 떨어졌어?"` | 질의 원문 (분석용, 향후 마스킹 검토) |
 | `query_length` | int | `7` | 글자 수 |
 | `briefing_open` | bool | `true` | 브리핑 카드가 같은 세션에 노출된 적 있는지 |
 | `seconds_since_briefing` | int | `42` | 브리핑 노출 후 경과 초 (없으면 null) |
+
+**`source` enum 정의:**
+- `briefing_card` — Week 3 신설 브리핑 카드 내부 "이 데이터 물어보기" (D3 신호의 핵심)
+- `main_input` — 화면 하단 메인 입력창 (Enter 또는 btnSend)
+- `sidebar_chip` — 좌측 사이드바 "빠른 질의" 버튼
+- `welcome_chip` — 환영 화면의 직무 맞춤 추천 칩 (Day 2 추가, [decisions.md](decisions.md) D-001 참조)
+- `history_replay` — 좌측 이력 사이드바 또는 이력 모달에서 본인의 과거 질문을 재실행 (Day 2 추가, [decisions.md](decisions.md) D-003 참조)
 
 > **`source`가 D3 결정의 본질.** `briefing_card`에서 발생한 `ask_ai`만이 "브리핑 본 뒤 자연스럽게 챗으로 이어졌나"를 측정함. 다른 곳에서 발사된 챗은 D3 신호에 포함하지 않음.
 

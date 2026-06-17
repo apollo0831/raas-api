@@ -1,0 +1,443 @@
+{
+  "schema_version": "v1",
+  "role": "CP",
+  "role_name_ko": "CP (책임 프로듀서)",
+  "updated": "2026-06-17",
+  "source_documents": [
+    "docs/interviews/interview_result.md (CP 섹션)",
+    "docs/interviews/03_cp.md",
+    "docs/interviews/RAAS_직무별_대화형_스토리라인.md §3-3",
+    "docs/interviews/_persona_storylines.md §3.3"
+  ],
+
+  "persona_summary": {
+    "viewpoint": "본인이 담당하는 1개 채널(파워FM 또는 러브FM)의 모든 프로그램. 시간대(출퇴근>낮>오전>저녁>심야 순)",
+    "cycle": ["일", "주", "분기"],
+    "biggest_pain": "활성사용자 변화는 결과인데 원인 설명이 안 됨 ('설명 못하면 필요없다고 느끼는 정도')",
+    "biggest_value_unlock": "변화 결과 + 추정 원인 + 근거 데이터 3종 세트 + PD 디스패치 메시지 자동화",
+    "role_in_information_flow": "정보 허브 (위/아래/옆 모든 흐름 통과)"
+  },
+
+  "ontology": {
+    "hasPrimaryKPI": [
+      {
+        "id": "program_dau_change_pct",
+        "name": "프로그램별 활성사용자 변화율(WoW)",
+        "unit": "%",
+        "priority": 1,
+        "data_source": "raas_kpi_latest.csv:dau, dau_wow_pct"
+      },
+      {
+        "id": "program_dau_absolute",
+        "name": "프로그램별 활성사용자(절대값)",
+        "unit": "명",
+        "priority": 2,
+        "data_source": "raas_kpi_latest.csv:dau"
+      },
+      {
+        "id": "program_emotion_log_count",
+        "name": "프로그램별 공감로그/문자 건수",
+        "unit": "건",
+        "priority": 3,
+        "data_source": "Splunk (RAAS 미적재)",
+        "_blocked": true
+      }
+    ],
+    "isExplainedBy": {
+      "program_dau_change_pct": [
+        "special_guest_event",
+        "corner_change_event",
+        "emotion_log_volume",
+        "adjacent_program_dau",
+        "weekday_pattern",
+        "weather_external"
+      ],
+      "program_dau_absolute": [
+        "timeslot_baseline",
+        "channel_baseline"
+      ]
+    },
+    "prefersComparison": [
+      {
+        "id": "wow",
+        "name": "전주 동요일 대비",
+        "priority": 1,
+        "_note": "인터뷰: '주간, 월간 단위로 순위가 바뀌는 경우는 극히 드뭄. 이전 기간과 비교해서 변화 크기를 보는 것이 더 현실적'"
+      },
+      {
+        "id": "before_after_change",
+        "name": "개편/이벤트 전후 비교",
+        "priority": 2
+      },
+      {
+        "id": "mom",
+        "name": "전월 대비",
+        "priority": 3
+      },
+      {
+        "id": "quarterly_listening_survey",
+        "name": "분기 청취율 조사 랭킹",
+        "priority": 4,
+        "_note": "분기 청취율 조사에서는 랭킹 중요. 일/주는 변화 크기 중심"
+      }
+    ],
+    "outputsTo": [
+      {
+        "id": "director_one_pager_ppt",
+        "name": "국장 보고용 1장 PPT",
+        "priority": 1,
+        "format": "PPT",
+        "_note": "Phase 3 ⑥ 1순위 구현 대상"
+      },
+      {
+        "id": "pd_dispatch_message",
+        "name": "PD 카톡/메일 디스패치 메시지",
+        "priority": 1,
+        "format": "text"
+      },
+      {
+        "id": "weekly_meeting_free_format",
+        "name": "주간 회의 자유 양식 자료",
+        "priority": 2,
+        "format": "PPT|HWP",
+        "_note": "인터뷰: '주요 내용이 있을 때 주간 회의 자료, 양식은 자유 양식'"
+      },
+      {
+        "id": "business_director_mau_brief",
+        "name": "사업국장 MAU 별도 보고",
+        "priority": 2,
+        "format": "PPT",
+        "_note": "2026-06부터 사업국장 신규 지시 (인터뷰 명시)"
+      }
+    ]
+  },
+
+  "entry": {
+    "greeting_template": "{user_name}님 안녕하세요.",
+    "first_question": "**{channel_name}** 채널에서 **어제 크게 움직인 프로그램**부터 보시겠어요?",
+    "default_chips": [
+      {
+        "label": "크게 움직인 것부터",
+        "intent": "show_biggest_change",
+        "next_slot": "1_anchor"
+      },
+      {
+        "label": "전 기간 대비 변화",
+        "intent": "show_period_comparison",
+        "next_slot": "1_anchor"
+      },
+      {
+        "label": "개편한 프로그램 사후효과",
+        "intent": "show_change_after_revision",
+        "next_slot": "4_loop"
+      }
+    ]
+  },
+
+  "slots": {
+    "1_anchor": {
+      "name": "묶음 + 변화 크기",
+      "purpose": "담당 채널의 프로그램 중 변화 큰 것부터 — 순위가 아닌 변화 크기 중심 (인터뷰: 주간 순위 거의 안 바뀜)",
+      "data_requirements": [
+        {
+          "field": "dau_per_program",
+          "source": "raas_kpi_latest.csv",
+          "available": true
+        },
+        {
+          "field": "dau_wow_pct",
+          "source": "raas_kpi_latest.csv",
+          "available": true
+        },
+        {
+          "field": "cp_program_list",
+          "source": "user_profile (CP가 담당하는 프로그램 목록)",
+          "available": false,
+          "_note": "CP별 담당 프로그램 매핑 메타데이터 필요"
+        }
+      ],
+      "answer_template": "**{channel_name}**의 **{program_count}개 프로그램** 중 **{top_change_program}**이 전주 대비 **{change_pct:+.1f}%** 로 가장 크게 변했습니다.\n\n- {top_change_program}: {prev_dau:,}명 → {curr_dau:,}명 ({change_pct:+.1f}%)\n- {top_2_program}: {top_2_change_pct:+.1f}%\n- {top_3_program}: {top_3_change_pct:+.1f}%\n\n*변화 크기 기준 TOP 3 — 인터뷰에서 '순위는 거의 안 바뀜, 변화 크기가 현실적' 반영*",
+      "fallback_answer_template": "CP→채널 매핑이 아직 등록되지 않았습니다. 프로필에서 담당 채널(파워FM 또는 러브FM)을 선택해주시면 즉시 답해드릴 수 있습니다.",
+      "chips_next": [
+        {
+          "label": "왜 변했어? (원인 보기)",
+          "intent": "explain_change",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "다른 프로그램들도 정리",
+          "intent": "show_all_programs",
+          "next_slot": "1_anchor"
+        },
+        {
+          "label": "최근 개편한 거 효과는?",
+          "intent": "show_change_after_revision",
+          "next_slot": "4_loop"
+        }
+      ]
+    },
+
+    "2_cause": {
+      "name": "원인 설명 (CP의 가장 큰 갈증)",
+      "purpose": "결과가 아닌 '왜'를 설명 — 인터뷰 '설명 못하면 필요없다' 직접 대응. 중립성 위해 데이터 근거 함께 제시 ('설명자 선입견 우려' 인터뷰 명시)",
+      "data_requirements": [
+        {
+          "field": "special_guest_event_metadata",
+          "source": "별도 적재 필요 (특별 게스트/이벤트 캘린더)",
+          "available": false,
+          "blocks_quality": "high"
+        },
+        {
+          "field": "emotion_log_count_per_program",
+          "source": "Splunk → RAAS 적재 필요",
+          "available": false,
+          "blocks_quality": "high"
+        },
+        {
+          "field": "new_user_per_program",
+          "source": "raas_kpi_latest.csv:new_user",
+          "available": true
+        },
+        {
+          "field": "adjacent_program_dau",
+          "source": "raas_kpi_latest.csv (시간대 인접 프로그램)",
+          "available": true,
+          "_note": "인접 프로그램 매핑 메타데이터 필요"
+        }
+      ],
+      "answer_template": "**{top_change_program}** 변화의 추정 원인 후보:\n\n1. **{cause_1_name}** — {cause_1_evidence}\n2. **{cause_2_name}** — {cause_2_evidence}\n\n특히 **{peak_date}**에 가장 큰 변화 ({peak_change_pct:+.1f}%)\n→ 이 날 {peak_event_summary}",
+      "fallback_answer_template": "**{top_change_program}**의 변화 원인을 설명할 데이터가 아직 적재되지 않았습니다:\n- 공감로그/문자 건수 (Splunk → RAAS 적재 진행 중)\n- 특별 게스트/이벤트 캘린더 (별도 적재 필요)\n\n현재 활용 가능한 단서: 신규 사용자 변화 {new_user_change_pct:+.1f}%, 인접 프로그램은 {adjacent_change_pct:+.1f}% 변화로 채널 고유 요인 가능성 {channel_specific_probability}",
+      "chips_next": [
+        {
+          "label": "담당 PD에게 의견 전달",
+          "intent": "draft_pd_dispatch",
+          "next_slot": "3_context"
+        },
+        {
+          "label": "비슷한 시간대 다른 프로그램은?",
+          "intent": "compare_adjacent_programs",
+          "next_slot": "3_context"
+        },
+        {
+          "label": "이전에 비슷한 변화가 있었나?",
+          "intent": "show_historical_similar_change",
+          "next_slot": "4_loop"
+        }
+      ]
+    },
+
+    "3_context": {
+      "name": "PD 디스패치 준비 + 인접 비교",
+      "purpose": "CP의 횡적 역할 — PD에게 전달할 메시지 초안 + 인접 프로그램 맥락. 인터뷰: '담당 PD와 현상의 원인이나 의미에 대해 미팅, 큰 변화 있는 날은 즉각적 의견 교환·전달'",
+      "data_requirements": [
+        {
+          "field": "program_to_pd_mapping",
+          "source": "user_profile",
+          "available": false,
+          "_note": "프로그램별 담당 PD 매핑 필요"
+        },
+        {
+          "field": "adjacent_program_dau",
+          "source": "raas_kpi_latest.csv",
+          "available": true
+        }
+      ],
+      "answer_template": "담당 **{pd_name}** PD와 나눌 포인트 초안입니다:\n\n---\n> {pd_name} PD님, **{top_change_program}** 전주 대비 {change_pct:+.1f}% 변화입니다.\n>\n> 추정 원인: {cause_summary}\n> 인접 시간대({adjacent_program})는 {adjacent_change_pct:+.1f}% 변화 → 우리 프로그램 고유 요인 가능성\n>\n> 다음 회차({next_episode_date}) 점검 포인트:\n> - {watchpoint_1}\n> - {watchpoint_2}\n---\n\n*그대로 보내드릴까요, 아니면 수정하시겠어요?*",
+      "fallback_answer_template": "프로그램별 담당 PD 매핑이 아직 등록되지 않았습니다. 프로필에서 등록 후 자동 디스패치가 가능합니다.",
+      "chips_next": [
+        {
+          "label": "이대로 PD에게 보내기 (카톡)",
+          "intent": "send_pd_dispatch_kakao",
+          "next_slot": "5_closing"
+        },
+        {
+          "label": "수정해서 보내기",
+          "intent": "edit_pd_dispatch",
+          "next_slot": "3_context"
+        },
+        {
+          "label": "다른 프로그램들도 함께 정리",
+          "intent": "expand_to_all_programs",
+          "next_slot": "5_closing"
+        }
+      ]
+    },
+
+    "4_loop": {
+      "name": "개편 A/B (폐쇄루프 복원)",
+      "purpose": "중기 이상 프로그램 청취자 변화 캐치 — 인터뷰 '특별 게스트 출연/이벤트가 있었던 날의 청취자 반응, 개편(중소규모) 이후 전후 비교, 중기 이상 프로그램 청취자의 변화를 캐치' 직접 반영",
+      "data_requirements": [
+        {
+          "field": "program_change_event_metadata",
+          "source": "별도 적재 필요 (개편 일자·내용 타임라인)",
+          "available": false,
+          "blocks_quality": "high"
+        },
+        {
+          "field": "dau_before_after_window",
+          "source": "raas_kpi_latest.csv 기반 계산 가능",
+          "available": true,
+          "_note": "개편 이벤트 메타데이터만 있으면 전후 N주 평균은 계산 가능"
+        }
+      ],
+      "answer_template": "최근 {window_weeks}주 내 개편/이벤트가 있었던 프로그램의 전후 비교:\n\n| 프로그램 | 이벤트 | 전 {n}주 평균 | 후 {n}주 평균 | 변화 |\n|---|---|---|---|---|\n{change_table_rows}\n\n특히 **{notable_program}**: {before_dau:,}명 → {after_dau:,}명 ({change_pct:+.1f}%) — {interpretation}",
+      "fallback_answer_template": "프로그램 개편/이벤트 메타데이터가 아직 적재되지 않았습니다 (개편 일자·내용 타임라인). 데이터 직무에 적재 요청 후 자동 분석이 가능합니다.\n\n현재는 활성사용자 수 추세 그래프만 보여드릴 수 있습니다.",
+      "chips_next": [
+        {
+          "label": "이 결과를 국장 보고서에 넣기",
+          "intent": "add_to_director_report",
+          "next_slot": "5_closing"
+        },
+        {
+          "label": "원인까지 다시 보기",
+          "intent": "back_to_cause",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "더 긴 기간으로 보기",
+          "intent": "extend_window",
+          "next_slot": "4_loop"
+        }
+      ]
+    },
+
+    "5_closing": {
+      "name": "마무리 + 보고/공유 (사일로·수작업 페인 해소)",
+      "purpose": "오늘 핵심 3가지 + 산출물. CP의 outputsTo 4종 모두 1클릭 변환",
+      "data_requirements": [],
+      "answer_template": "**오늘 CP님께서 아실 핵심 3가지**\n\n1. 크게 변한 프로그램: **{top_change_program}** ({change_pct:+.1f}%)\n2. 추정 원인: {cause_summary}\n3. 디스패치 거리: {dispatch_summary}\n\n어떤 산출물이 필요하세요?",
+      "chips_next": [
+        {
+          "label": "국장 보고용 1장 PPT",
+          "intent": "export_director_one_pager",
+          "output_format_id": "director_one_pager_ppt",
+          "next_slot": "_end"
+        },
+        {
+          "label": "주간 회의 자료에 넣기",
+          "intent": "export_weekly_meeting",
+          "output_format_id": "weekly_meeting_free_format",
+          "next_slot": "_end"
+        },
+        {
+          "label": "사업국장 MAU 별도 보고",
+          "intent": "export_business_director_mau",
+          "output_format_id": "business_director_mau_brief",
+          "next_slot": "_end"
+        },
+        {
+          "label": "PD에게 카톡 디스패치",
+          "intent": "send_pd_dispatch_kakao",
+          "output_format_id": "pd_dispatch_message",
+          "next_slot": "_end"
+        }
+      ]
+    }
+  },
+
+  "data_dependencies": {
+    "available_now_can_run": [
+      "1_anchor 슬롯 (CP→채널 매핑만 등록되면 즉시 동작)",
+      "5_closing 슬롯 (구조적 답변)"
+    ],
+    "partial_with_fallback": [
+      "2_cause 슬롯 (공감로그·게스트 데이터 없으면 신규 사용자 변화·인접 비교만으로 fallback)",
+      "3_context 슬롯 (PD 매핑 없으면 디스패치 미작동, 인접 비교는 가능)",
+      "4_loop 슬롯 (개편 이벤트 메타데이터 없으면 추세 그래프만)"
+    ],
+    "ingest_blocking_high_priority": [
+      {
+        "field": "공감로그/문자 건수 (프로그램별 일간)",
+        "source": "Splunk",
+        "blocks_slots": ["2_cause"],
+        "story_impact": "원인 설명 슬롯의 핵심 단서 — CP의 가장 큰 갈증과 직결",
+        "ingest_priority": 1
+      },
+      {
+        "field": "특별 게스트/이벤트 캘린더",
+        "source": "별도 메타데이터 적재",
+        "blocks_slots": ["2_cause", "4_loop"],
+        "story_impact": "원인 후보 1번 — 인터뷰에서 '특별 게스트 출연/이벤트가 있는 날 진단 필수' 명시",
+        "ingest_priority": 1
+      }
+    ],
+    "ingest_blocking_medium_priority": [
+      {
+        "field": "프로그램 개편 일자·내용 타임라인",
+        "source": "별도 메타데이터 적재",
+        "blocks_slots": ["4_loop"],
+        "story_impact": "폐쇄루프 복원 — 인터뷰 '중기 이상 프로그램 변화 캐치' 직접 대응",
+        "ingest_priority": 2
+      },
+      {
+        "field": "CP→채널 매핑 (파워FM CP 또는 러브FM CP)",
+        "source": "user_profile 확장 (raas_users.json 또는 별도 테이블)",
+        "blocks_slots": ["1_anchor", "3_context"],
+        "story_impact": "스토리라인 진입 자체의 전제 — 채널 단위 N개 프로그램 자동 로드",
+        "ingest_priority": 2
+      },
+      {
+        "field": "프로그램→담당 PD 매핑",
+        "source": "user_profile 확장",
+        "blocks_slots": ["3_context"],
+        "story_impact": "PD 디스패치 메시지 자동 생성",
+        "ingest_priority": 2
+      },
+      {
+        "field": "프로그램→인접 시간대 프로그램 매핑",
+        "source": "편성 메타데이터",
+        "blocks_slots": ["2_cause", "3_context"],
+        "story_impact": "인접 비교를 통한 채널 고유 요인 추론",
+        "ingest_priority": 2
+      }
+    ]
+  },
+
+  "expected_user_flows": [
+    {
+      "name": "happy_path_full",
+      "description": "모든 데이터 적재 완료 시의 이상적 흐름",
+      "sequence": ["entry", "1_anchor", "2_cause", "3_context", "5_closing"],
+      "estimated_duration_min": 3
+    },
+    {
+      "name": "happy_path_with_loop",
+      "description": "개편 사후효과 우선 확인",
+      "sequence": ["entry", "1_anchor", "4_loop", "2_cause", "5_closing"],
+      "estimated_duration_min": 4
+    },
+    {
+      "name": "phase1_partial",
+      "description": "Phase 1① 데이터 적재 부분 완료 (KPI만 있음)",
+      "sequence": ["entry", "1_anchor", "2_cause (fallback)", "5_closing"],
+      "estimated_duration_min": 2,
+      "_note": "이 흐름이라도 동작하면 PoC 가치 증명 가능"
+    }
+  ],
+
+  "instrumentation": {
+    "posthog_events": [
+      {
+        "event": "storyline_entry",
+        "properties": ["role", "first_question_id", "default_chips"]
+      },
+      {
+        "event": "storyline_chip_click",
+        "properties": ["role", "slot_from", "slot_to", "chip_label", "chip_intent"]
+      },
+      {
+        "event": "storyline_slot_view",
+        "properties": ["role", "slot_id", "slot_name", "fallback_used"]
+      },
+      {
+        "event": "storyline_export",
+        "properties": ["role", "output_format_id", "slots_visited"]
+      },
+      {
+        "event": "storyline_complete",
+        "properties": ["role", "slots_visited", "duration_s", "exported"]
+      }
+    ],
+    "_note": "Phase 4 ⑦ 온톨로지 환류 학습의 원천 데이터. chip_intent별 클릭 빈도로 isExplainedBy 가중치 업데이트"
+  }
+}

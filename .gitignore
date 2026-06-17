@@ -36,6 +36,7 @@ server_*.txt
 raas_history.db
 *.db
 data/raas_query_log.jsonl
+data/exports/
 
 # macOS
 ._*

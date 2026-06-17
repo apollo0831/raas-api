@@ -1,0 +1,478 @@
+{
+  "schema_version": "v1",
+  "role": "PD_SCHEDULE",
+  "role_name_ko": "편성PD",
+  "updated": "2026-06-17",
+  "source_documents": [
+    "docs/interviews/interview_result.md (편성PD 섹션)",
+    "docs/interviews/02_pd_schedule.md",
+    "docs/interviews/RAAS_직무별_대화형_스토리라인.md §3-2",
+    "docs/interviews/_persona_storylines.md §3.2"
+  ],
+
+  "persona_summary": {
+    "viewpoint": "채널 grid, 시간대 격자 — 채널 전체 또는 한 채널의 시간대 전체",
+    "cycle": ["분기(청취율 조사)", "일/주/월(보조)"],
+    "biggest_pain": "분기 단위 뷰 부재 + 채널 간 지표 정의 불일치 + 결정 근거 약해 미룸 + 비교 자료 반나절 노동",
+    "biggest_value_unlock": "채널 grid + 분기 비교 + 지표 정의 명시 + 청취율조사 요약과 나란히 보기",
+    "role_in_information_flow": "정형 보고 → 국장 → 본부장 라인. 분기 청취율조사 요약표가 단일 진실 원천"
+  },
+
+  "ontology": {
+    "hasPrimaryKPI": [
+      {
+        "id": "timeslot_dau",
+        "name": "시간대별 활성사용자",
+        "unit": "명",
+        "priority": 1,
+        "data_source": "Splunk (RAAS 미적재)",
+        "_blocked": true,
+        "_note": "인터뷰: '시간대별 동시사용자 데이터는 splunk에 데이터 있으나 지금 개발 중인 RAAS에는 아직 없음'"
+      },
+      {
+        "id": "channel_grid_summary",
+        "name": "채널 grid 시간대 격자 요약",
+        "unit": "복합",
+        "priority": 1,
+        "data_source": "시간대별 활성사용자 + 채널 차원",
+        "_blocked": true
+      },
+      {
+        "id": "channel_dau_quarterly",
+        "name": "채널별 활성사용자 분기 추이",
+        "unit": "명",
+        "priority": 1,
+        "data_source": "raas_kpi_latest.csv 기반 분기 집계 (분기 뷰 신규 필요)",
+        "_blocked": true,
+        "_note": "인터뷰: '분기 단위로 보는 화면 없음 (일/주/월만 있음)' — RAAS에 분기 뷰 자체가 부재"
+      },
+      {
+        "id": "new_user_per_timeslot",
+        "name": "시간대별 신규 유입",
+        "unit": "명",
+        "priority": 2,
+        "data_source": "RAAS 일부 보유",
+        "_note": "인터뷰: '신규사용자수의 일자별 변화 — 이 데이터는 AI-RAAS에도 보내고 있음'"
+      }
+    ],
+    "isExplainedBy": {
+      "channel_grid_summary": [
+        "timeslot_audience_demographics",
+        "new_user_per_timeslot",
+        "adjacent_channel_dau",
+        "seasonal_pattern",
+        "quarterly_listening_survey_result"
+      ],
+      "timeslot_dau": [
+        "audience_age_gender",
+        "new_user_inflow",
+        "external_competitor"
+      ]
+    },
+    "prefersComparison": [
+      {
+        "id": "qoq",
+        "name": "전 분기 대비",
+        "priority": 1,
+        "_note": "인터뷰: '청취율 조사 결과 요약표에는 QoQ(전 분기 대비) 항목을 작성'"
+      },
+      {
+        "id": "yoy",
+        "name": "전년 동기 대비",
+        "priority": 1,
+        "_note": "인터뷰 듣고 싶은 신호 ◎ — 장기 추세"
+      },
+      {
+        "id": "channel_to_channel",
+        "name": "타 채널과의 상대 비교",
+        "priority": 2
+      },
+      {
+        "id": "wow_mom",
+        "name": "단기 보조 (WoW/MoM)",
+        "priority": 3,
+        "_note": "분기가 주, 단기는 RAAS에서 모니터링용"
+      }
+    ],
+    "outputsTo": [
+      {
+        "id": "scheduling_meeting_formal_report",
+        "name": "편성 회의 정형 보고서",
+        "priority": 1,
+        "format": "PPT|HWP",
+        "_note": "인터뷰: '편성 담당이 청취율 조사 요약표를 기반으로 정형화된 보고 자료 작성, 국장 보고, 국장이 본부장 보고'"
+      },
+      {
+        "id": "director_summary_table",
+        "name": "국장 보고용 요약표",
+        "priority": 1,
+        "format": "PPT|XLSX"
+      },
+      {
+        "id": "listening_survey_side_by_side",
+        "name": "청취율 조사 요약과 나란히 보기",
+        "priority": 2,
+        "format": "PPT|HTML",
+        "_note": "인터뷰: 'RAAS에 입력한 데이터로 고릴라와 비교 자료 만들고 필요시 조사 업체와 미팅' — 청취율조사·RAAS 통합 뷰"
+      },
+      {
+        "id": "comparison_graph_export",
+        "name": "비교 그래프 (시간대·채널)",
+        "priority": 2,
+        "format": "PNG|XLSX"
+      }
+    ]
+  },
+
+  "entry": {
+    "greeting_template": "{user_name} PD님 안녕하세요. **채널 grid**를 시간대별로 펼쳐 놨습니다.",
+    "first_question": "이번 분기, **흔들린 시간대**부터 보시겠어요?",
+    "default_chips": [
+      {
+        "label": "흔들린 시간대 TOP",
+        "intent": "show_anomaly_timeslots",
+        "next_slot": "1_anchor"
+      },
+      {
+        "label": "지난 분기 대비(QoQ)",
+        "intent": "show_qoq",
+        "next_slot": "3_context"
+      },
+      {
+        "label": "전년 동기 대비(YoY)",
+        "intent": "show_yoy",
+        "next_slot": "3_context"
+      }
+    ]
+  },
+
+  "slots": {
+    "1_anchor": {
+      "name": "채널 grid + 흔들린 시간대",
+      "purpose": "한 화면 grid 시점 — 현재 부재 기능. 인터뷰: '채널 grid를 한 화면에 나타내는 화면이 있지만, 날짜별 주요 KPI 지표 위주로 구성되어 있는게 전부'",
+      "data_requirements": [
+        {
+          "field": "timeslot_dau_per_channel",
+          "source": "Splunk → RAAS 적재 필요 (시간대별 활성사용자)",
+          "available": false,
+          "blocks_quality": "high"
+        },
+        {
+          "field": "anomaly_detection_per_timeslot",
+          "source": "1_anchor 계산 시 신규 로직",
+          "available": false,
+          "_note": "시간대별 활성사용자 적재 후 표준편차/Z-score 기반"
+        }
+      ],
+      "answer_template": "**채널 grid — {quarter} 시간대별 활성사용자**\n\n| 시간대 | 파워FM | 러브FM | 고릴라M | 픽채널 |\n|---|---|---|---|---|\n{channel_grid_rows}\n\n*눈에 띄게 변한 시간대 TOP 3:*\n1. **{anomaly_1}** — {anomaly_1_change_pct:+.1f}% ({anomaly_1_reason_hint})\n2. **{anomaly_2}** — {anomaly_2_change_pct:+.1f}%\n3. **{anomaly_3}** — {anomaly_3_change_pct:+.1f}%",
+      "fallback_answer_template": "시간대별 활성사용자 데이터가 아직 RAAS에 적재되지 않았습니다 (현재 Splunk만 보유).\n\n현재 표시 가능: 채널별 일/주/월 KPI 격자만\n\n| 시간대 | 파워FM | 러브FM | 고릴라M | 픽채널 |\n|---|---|---|---|---|\n{daily_kpi_rows}\n\nPhase 1 ① 적재 작업 완료 시 시간대별 grid가 자동 표시됩니다.",
+      "chips_next": [
+        {
+          "label": "이 시간대 왜 떨어졌어?",
+          "intent": "explain_timeslot_drop",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "지난 분기랑 비교(QoQ)",
+          "intent": "show_qoq",
+          "next_slot": "3_context"
+        },
+        {
+          "label": "전년 동기랑 비교(YoY)",
+          "intent": "show_yoy",
+          "next_slot": "3_context"
+        }
+      ]
+    },
+
+    "2_cause": {
+      "name": "청취층 변화 + 신규 유입 (원인 단서)",
+      "purpose": "인터뷰: '이 시간대 청취층이 어떻게 변했나' → 스플렁크 데이터로 연령대·성별 비중 변화 정량 답변 가능 명시",
+      "data_requirements": [
+        {
+          "field": "demographics_by_timeslot",
+          "source": "Splunk → RAAS 적재 필요 (성별·연령대)",
+          "available": false,
+          "blocks_quality": "high",
+          "_note": "인터뷰 명시 가능 데이터"
+        },
+        {
+          "field": "new_user_per_timeslot",
+          "source": "RAAS 일부 보유",
+          "available": true,
+          "_note": "인터뷰: 'AI-RAAS에도 보내고 있음'"
+        },
+        {
+          "field": "adjacent_channel_same_timeslot",
+          "source": "타 채널 동일 시간대 비교용",
+          "available": false,
+          "_note": "시간대별 활성사용자 적재 후 가능"
+        }
+      ],
+      "answer_template": "**{target_timeslot}** 청취층 변화 분석:\n\n**연령·성별 비중**\n| 세그먼트 | 전 분기 | 이번 분기 | 변화 |\n|---|---|---|---|\n{demographics_rows}\n\n**신규 유입**\n- {target_timeslot} 신규: {new_user:,}명 (전 분기 {prev_new_user:,} 대비 **{new_user_change_pct:+.1f}%**)\n- 가장 신규 유입이 늘어난 시간대: **{top_new_user_timeslot}**\n\n**같은 시간대 타 채널**\n{adjacent_channel_summary}\n\n→ 추정 원인: {cause_summary}",
+      "fallback_answer_template": "**{target_timeslot}** 신규 유입 변화 (분석 가능 부분):\n- 신규: {new_user:,}명 (전 분기 대비 **{new_user_change_pct:+.1f}%**)\n\n연령·성별 비중 변화 데이터는 아직 RAAS에 적재되지 않았습니다. 인터뷰 응답에서 '스플렁크에는 있음'이 확인되어, Phase 1 ① 적재 우선순위 1순위입니다.",
+      "chips_next": [
+        {
+          "label": "지난 분기랑 비교(QoQ)",
+          "intent": "show_qoq",
+          "next_slot": "3_context"
+        },
+        {
+          "label": "전년 동기랑 비교(YoY)",
+          "intent": "show_yoy",
+          "next_slot": "3_context"
+        },
+        {
+          "label": "이 시간대에 새 프로그램 가능할까?",
+          "intent": "hypothesis_check_new_program",
+          "next_slot": "4_loop"
+        }
+      ]
+    },
+
+    "3_context": {
+      "name": "QoQ / YoY 장기 비교 + 지표 정의 정렬",
+      "purpose": "인터뷰 핵심 페인 직접 대응 — '비교하려는데 채널마다 지표 정의가 달라 보기 힘들었음. 지표의 정의가 명확치 뭔지 모르겠다'",
+      "data_requirements": [
+        {
+          "field": "quarterly_kpi_aggregation",
+          "source": "raas_kpi_latest.csv → 분기 집계 신규 로직",
+          "available": false,
+          "blocks_quality": "high",
+          "_note": "분기 뷰 자체가 RAAS에 부재"
+        },
+        {
+          "field": "historical_data_pre_apr_2026",
+          "source": "Splunk 과거 데이터 RAAS 미적재",
+          "available": false,
+          "blocks_quality": "high",
+          "_note": "26년 4월 이전 데이터 미적재 (인터뷰 확인) — YoY 자체 불가능"
+        },
+        {
+          "field": "metric_definitions",
+          "source": "신규 메타데이터 (지표 정의 사전)",
+          "available": false,
+          "_note": "채널별 지표 정의 불일치 해소"
+        }
+      ],
+      "answer_template": "**{target_timeslot} 장기 비교**\n\n| 비교축 | 이번 분기 | 비교 분기 | 변화 |\n|---|---|---|---|\n| QoQ (전 분기) | {curr_q:,} | {prev_q:,} | **{qoq_change_pct:+.1f}%** |\n| YoY (전년 동기) | {curr_q:,} | {prev_year_q:,} | **{yoy_change_pct:+.1f}%** |\n\n**📖 비교 시 사용한 지표 정의:**\n- 활성사용자: {dau_definition}\n- 신규 사용자: {new_user_definition}\n*인터뷰에서 지목된 '채널마다 지표 정의가 다르다' 해소*\n\n→ 추세 해석: {trend_interpretation}",
+      "fallback_answer_template": "분기 단위 뷰가 아직 RAAS에 구축되지 않았고, 26년 4월 이전 과거 데이터도 미적재 상태입니다.\n\n현재 가능한 비교:\n- WoW: {wow_pct:+.1f}% (전주 동요일 대비)\n- MoM: {mom_pct:+.1f}% (전월 대비)\n\nPhase 1 ① 적재 작업의 핵심 — 분기 뷰는 편성PD 스토리라인의 1순위 잠금해제 포인트입니다.",
+      "chips_next": [
+        {
+          "label": "검토 중인 가설 입력하기",
+          "intent": "input_hypothesis",
+          "next_slot": "4_loop"
+        },
+        {
+          "label": "다른 시간대도 같은 패턴인가?",
+          "intent": "expand_to_all_timeslots",
+          "next_slot": "1_anchor"
+        },
+        {
+          "label": "정형 보고서로 마무리",
+          "intent": "goto_closing",
+          "next_slot": "5_closing"
+        }
+      ]
+    },
+
+    "4_loop": {
+      "name": "과거 편성 결정 사후효과 + 가설 검증 (폐쇄루프)",
+      "purpose": "인터뷰: '결정 후 다시 평가 안 함. 지난 보고서는 거의 다시 보지 않음. RAAS에 있는 데이터로 가끔 과거 흐름 분석에 활용' → 폐쇄루프 복원 1순위",
+      "data_requirements": [
+        {
+          "field": "scheduling_decision_metadata",
+          "source": "별도 적재 필요 (과거 편성 결정·시기·내용)",
+          "available": false,
+          "blocks_quality": "high",
+          "_note": "편성PD가 직접 입력하거나 보고서 아카이브에서 추출"
+        },
+        {
+          "field": "hypothesis_check_data",
+          "source": "신규 가설 검증 엔진",
+          "available": false,
+          "_note": "예: '이 시간대에 ○○ 같은 프로그램이 가능한가' — 인터뷰에서 '현재까지 정량적으로 설명하려는 시도 없었음'"
+        }
+      ],
+      "answer_template": "**과거 편성 결정 사후효과**\n\n| 결정 일자 | 변경 내용 | 결정 전 평균 | 결정 후 평균 | 변화 |\n|---|---|---|---|---|\n{decision_outcome_rows}\n\n특히 **{notable_decision}**: {interpretation}\n\n---\n**가설 검증: \"{user_hypothesis}\"**\n{hypothesis_evaluation}\n\n→ 정량 근거: {evidence_summary}",
+      "fallback_answer_template": "과거 편성 결정 메타데이터가 아직 적재되지 않았습니다.\n\n인터뷰 응답에서 '결정 후 재평가 안 함, 지난 보고서는 거의 안 봄'이 확인되었습니다 — 이 부분이 폐쇄루프 복원의 가장 큰 가치 잠금해제 포인트입니다.\n\nPD님께서 직접 과거 편성 결정을 입력하시면 즉시 사후효과 분석이 가능합니다.\n\n[과거 결정 입력하기]",
+      "chips_next": [
+        {
+          "label": "다른 가설도 확인",
+          "intent": "input_another_hypothesis",
+          "next_slot": "4_loop"
+        },
+        {
+          "label": "원인까지 다시 보기",
+          "intent": "back_to_cause",
+          "next_slot": "2_cause"
+        },
+        {
+          "label": "정형 보고서로 마무리",
+          "intent": "goto_closing",
+          "next_slot": "5_closing"
+        }
+      ]
+    },
+
+    "5_closing": {
+      "name": "마무리 + 정형 보고서 (반나절 수작업 해소)",
+      "purpose": "인터뷰 페인 '비교 자료 만드는 데만 반나절' 직접 해소. outputsTo 4종 1클릭",
+      "data_requirements": [],
+      "answer_template": "**오늘 {user_name} PD님께서 아실 핵심 3가지**\n\n1. 흔들린 시간대: **{anomaly_1}** ({anomaly_1_change_pct:+.1f}%)\n2. QoQ 추세: **{qoq_change_pct:+.1f}%** ({trend_summary})\n3. 청취층 변화: {demographics_summary}\n\n어떤 자료로 만드시겠어요?",
+      "chips_next": [
+        {
+          "label": "편성회의 정형 보고서",
+          "intent": "export_scheduling_meeting",
+          "output_format_id": "scheduling_meeting_formal_report",
+          "next_slot": "_end"
+        },
+        {
+          "label": "국장 보고용 요약표",
+          "intent": "export_director_summary",
+          "output_format_id": "director_summary_table",
+          "next_slot": "_end"
+        },
+        {
+          "label": "청취율 조사 요약과 나란히",
+          "intent": "export_side_by_side",
+          "output_format_id": "listening_survey_side_by_side",
+          "next_slot": "_end"
+        },
+        {
+          "label": "비교 그래프만 받기",
+          "intent": "export_graph",
+          "output_format_id": "comparison_graph_export",
+          "next_slot": "_end"
+        }
+      ]
+    }
+  },
+
+  "data_dependencies": {
+    "available_now_can_run": [
+      "1_anchor 일/주/월 KPI 격자 (시간대 차원 없이)",
+      "2_cause 신규 유입 부분 (시간대 차원 없이 채널별 일부)",
+      "3_context WoW/MoM 단기 비교",
+      "5_closing 구조적 답변"
+    ],
+    "partial_with_fallback": [
+      "모든 슬롯 — 시간대 차원 없이 일/주/월 격자만으로 fallback"
+    ],
+    "ingest_blocking_high_priority": [
+      {
+        "field": "시간대별 활성사용자 (채널×시간대)",
+        "source": "Splunk",
+        "blocks_slots": ["1_anchor", "2_cause", "3_context"],
+        "story_impact": "편성PD 스토리라인 전 슬롯의 전제 — 가장 큰 잠금해제 포인트",
+        "ingest_priority": 1,
+        "_note": "운영(08)·CP(03)와 공유 — 1순위 적재 우선순위 강화"
+      },
+      {
+        "field": "인구통계 (성별·연령대, 시간대별)",
+        "source": "Splunk → RAAS",
+        "blocks_slots": ["2_cause"],
+        "story_impact": "원인 설명 — 인터뷰에서 'Splunk에 있음, 정량 답변 가능' 명시",
+        "ingest_priority": 1,
+        "_note": "마케팅(06)과 공유 — 적재 우선순위 강화"
+      },
+      {
+        "field": "26년 4월 이전 과거 데이터",
+        "source": "Splunk → RAAS",
+        "blocks_slots": ["3_context"],
+        "story_impact": "YoY 비교 자체가 불가능 — 분기 1순위 비교축의 핵심 데이터",
+        "ingest_priority": 1
+      },
+      {
+        "field": "분기 단위 집계 뷰",
+        "source": "RAAS 신규 계산 로직",
+        "blocks_slots": ["1_anchor", "3_context"],
+        "story_impact": "현재 RAAS 일/주/월만 → 분기 뷰 자체 부재 (인터뷰 명시)",
+        "ingest_priority": 1
+      }
+    ],
+    "ingest_blocking_medium_priority": [
+      {
+        "field": "채널별 지표 정의 사전",
+        "source": "신규 메타데이터",
+        "blocks_slots": ["3_context"],
+        "story_impact": "인터뷰 핵심 페인 '채널마다 지표 정의가 달라 보기 힘들었음' 해소",
+        "ingest_priority": 2
+      },
+      {
+        "field": "과거 편성 결정 메타데이터",
+        "source": "편성PD 직접 입력 또는 보고서 아카이브 추출",
+        "blocks_slots": ["4_loop"],
+        "story_impact": "폐쇄루프 복원 — '결정 후 재평가 안 함' 직접 해소",
+        "ingest_priority": 2
+      },
+      {
+        "field": "프로그램→인접 시간대 매핑",
+        "source": "편성 메타데이터",
+        "blocks_slots": ["2_cause"],
+        "story_impact": "타 채널 같은 시간대 비교",
+        "ingest_priority": 2,
+        "_note": "제작PD(01)·CP(03)와 공유"
+      },
+      {
+        "field": "청취율 조사 요약표 데이터",
+        "source": "편성팀 청취율 조사 담당 → RAAS 입력 (현재 부분 적재 중)",
+        "blocks_slots": ["5_closing"],
+        "story_impact": "outputsTo의 '청취율 조사 요약과 나란히' 자동 생성",
+        "ingest_priority": 3
+      }
+    ]
+  },
+
+  "expected_user_flows": [
+    {
+      "name": "happy_path_quarterly_review",
+      "description": "분기 청취율조사 시즌 — 가장 중요한 흐름",
+      "sequence": ["entry", "1_anchor", "2_cause", "3_context", "5_closing"],
+      "estimated_duration_min": 5
+    },
+    {
+      "name": "happy_path_hypothesis",
+      "description": "신규 프로그램 가능성 검토",
+      "sequence": ["entry", "1_anchor", "4_loop", "3_context", "5_closing"],
+      "estimated_duration_min": 6
+    },
+    {
+      "name": "phase1_partial_short_term",
+      "description": "Phase 1 ① 미완 — 일/주/월만 표시",
+      "sequence": ["entry", "1_anchor (일/주/월만)", "3_context (WoW/MoM만)", "5_closing"],
+      "estimated_duration_min": 3,
+      "_note": "본격 가치는 시간대 데이터 적재 후"
+    }
+  ],
+
+  "instrumentation": {
+    "posthog_events": [
+      {
+        "event": "storyline_entry",
+        "properties": ["role", "first_question_id", "default_chips"]
+      },
+      {
+        "event": "storyline_chip_click",
+        "properties": ["role", "slot_from", "slot_to", "chip_label", "chip_intent"]
+      },
+      {
+        "event": "storyline_slot_view",
+        "properties": ["role", "slot_id", "slot_name", "fallback_used"]
+      },
+      {
+        "event": "storyline_hypothesis_input",
+        "properties": ["role", "hypothesis_text", "evaluated"]
+      },
+      {
+        "event": "storyline_export",
+        "properties": ["role", "output_format_id", "slots_visited"]
+      },
+      {
+        "event": "storyline_complete",
+        "properties": ["role", "slots_visited", "duration_s", "exported"]
+      }
+    ],
+    "_note": "편성PD는 가설 검증 슬롯이 특수해서 storyline_hypothesis_input 이벤트 추가"
+  }
+}

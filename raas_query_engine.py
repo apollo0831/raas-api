@@ -458,8 +458,84 @@ def build_chart_comparison(title, metric, unit, date, items, source):
     }
 
 
+# ── 차트 타입 9종 (RAAS_EVENTS.md open_chart.chart_type) ──
+# 내부 렌더러 type ↔ 공개 chart_type 매핑 (PoC §4 골격 도입).
+# 표는 차트가 아니므로 chart_type 부여하지 않음 (open_chart 미발사).
+_INTERNAL_TO_PUBLIC_CHART_TYPE = {
+    'timeseries':       'line',
+    'timeseries_multi': 'line',
+    'timeseries_dual':  'line',
+    'comparison':       'bar_rank',
+    'multi_chart':      None,    # 컨테이너 — 내부 각 차트가 자체 chart_type을 가짐
+    # 테이블 종류는 매핑 없음:
+    'table':            None,
+    'ranking_table':    None,
+    'overview_table':   None,
+    # Week 2~4 도입 예정: bar_delta / funnel / heatmap / scatter / bar_stacked / bar_diverging / range_band
+}
+
+# rationale 한 줄 템플릿 — 9종 × 인텐트 맥락
+_RATIONALE_BY_INTENT = {
+    'trend':         '시간에 따른 변화를 보여주려고 라인 차트를 선택했어요',
+    'compare_trend': '여러 대상의 시간 변화를 비교하려고 라인 차트(다중 시리즈)를 선택했어요',
+    'dual_trend':    '단위가 다른 두 지표를 한 화면에 보여주려고 라인 차트(이중 Y축)를 선택했어요',
+    'compare':       '항목 간 한 시점 값을 비교하려고 막대 차트를 선택했어요',
+    'ranking':       '상위 항목을 한눈에 보여주려고 막대 순위 차트를 선택했어요',
+    'snapshot':      '핵심 수치를 한 화면에 정리하려고 이 형식을 선택했어요',
+    'engagement':    '몰입 지표의 흐름을 보려고 라인 차트를 선택했어요',
+    'funnel':        '신규·복귀·이탈 비율을 한눈에 비교하려고 막대 차트를 선택했어요',
+    'growth':        '성장 지표의 상위 항목을 보려고 막대 순위 차트를 선택했어요',
+    'health':        '주요 위험 지표를 항목별로 표시하려고 막대 차트를 선택했어요',
+    'overview':      '여러 지표를 한 표에 비교하려고 표 형식을 선택했어요',
+    'anomaly':       '이상 신호를 시계열 맥락에서 보려고 라인 차트를 선택했어요',
+    'report':        '주요 추이를 한눈에 보여주려고 라인 차트(다중 시리즈)를 선택했어요',
+    'general':       '데이터 형태에 맞춰 이 차트를 선택했어요',
+}
+
+
+def _finalize_chart_data(chart_data, intent: dict):
+    """chart_data에 chart_type(9종) + rationale 메타데이터 부착.
+    기존 type(렌더러 dispatch용)은 유지. multi_chart는 내부 각 차트에 적용."""
+    if not chart_data:
+        return chart_data
+    internal_type = chart_data.get('type')
+    intent_name = intent.get('intent') if intent else None
+
+    # multi_chart는 컨테이너 — 자식 charts 각각에 재귀 적용
+    if internal_type == 'multi_chart':
+        for c in chart_data.get('charts', []) or []:
+            _finalize_chart_data(c, intent)
+        return chart_data
+
+    pub = _INTERNAL_TO_PUBLIC_CHART_TYPE.get(internal_type)
+    if pub is None:
+        # 테이블 등 — chart_type 메타 안 부착 (open_chart 비대상)
+        return chart_data
+
+    # 기본 매핑 + 더 정확한 분기
+    if internal_type == 'timeseries_dual':
+        chart_type = 'line'   # 라인이되 이중 Y축 — rationale로 구분
+        rationale_key = 'dual_trend'
+    elif internal_type == 'timeseries_multi':
+        chart_type = 'line'
+        rationale_key = intent_name if intent_name == 'compare_trend' else 'compare_trend'
+    elif internal_type == 'comparison':
+        chart_type = 'bar_rank'
+        rationale_key = intent_name or 'compare'
+    else:
+        chart_type = pub
+        rationale_key = intent_name or 'general'
+
+    rationale = _RATIONALE_BY_INTENT.get(rationale_key, _RATIONALE_BY_INTENT['general'])
+
+    chart_data['chart_type'] = chart_type
+    chart_data['rationale']  = rationale
+    return chart_data
+
+
 def build_chart_data(data: dict, intent: dict, question: str):
-    """extract_data 결과 + intent → chart_data dict 또는 None."""
+    """extract_data 결과 + intent → chart_data dict 또는 None.
+    반환 dict에는 내부 type(렌더러 dispatch) + 공개 chart_type(9종) + rationale 부착."""
     try:
         # 게스트 히스토리 질문 + 차트 요청 키워드 없음 → 차트 불필요
         _chart_kws = ('그래프', '차트', '추이', '시각화', '꺾은선')
@@ -3638,6 +3714,9 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
     # [실험] 규칙 기반 차트가 없으면 Claude가 context 수치로 차트를 생성 (롤백: CHART_FALLBACK=0)
     if chart_data is None and CHART_FALLBACK_ENABLED:
         chart_data = claude_chart_fallback(question, context, intent)
+    # 차트 메타데이터 부착 — chart_type(9종) + rationale (PoC §4)
+    if chart_data is not None:
+        chart_data = _finalize_chart_data(chart_data, intent)
     _has_chart = chart_data is not None
     _chart_type = chart_data.get('type', '') if _has_chart else ''
 
