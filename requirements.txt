@@ -1,0 +1,20 @@
+# Claude AI
+anthropic>=0.39.0
+
+# Splunk SDK
+splunk-sdk>=2.0.0
+
+# Google APIs (Gmail 발송용)
+google-auth>=2.30.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.140.0
+
+# Data processing
+pandas>=2.2.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Report engine (PPT 산출물)
+matplotlib>=3.11.0
+python-pptx>=1.0.0
