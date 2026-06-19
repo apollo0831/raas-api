@@ -118,6 +118,162 @@ posthog.init(cfg.key, {
 
 ---
 
+### D-016 — 원인 분석 온톨로지 .ttl로 리팩터 (옵션 A: 프로젝트 컨벤션 일치)
+
+**변경 대상:** `raas_onto/raas_ontology_cause.ttl` (신규) · `raas_storyline_engine.py` · `data/ontologies/` (삭제)
+
+**배경:**
+- 사용자 지적(2026-06-18): 기존 온톨로지(7개 파일, 110KB)가 모두 .ttl인데 cause_analysis만 .json으로 만든 것은 컨벤션 위반
+- 확인 결과: `raas_onto/raas_ontology_kpi.ttl`에 이미 `raas:DAU_Day`, `raas:NewUser_Day`, `raas:ChurnRate_Day`, `raas:RetentionRate_D1_NewUser` 등 47개 메트릭이 정식 `raas:Metric`/`raas:MetricVariant` 클래스로 정의됨 → JSON으로 만든 cause_analysis는 명백한 중복
+- 사용자 결정: 옵션 A (정통 — TTL + rdflib + SPARQL)
+
+**구현:**
+
+1. **신규 TTL** `raas_onto/raas_ontology_cause.ttl` (~200줄):
+   - `owl:imports <http://raas.sbs.co.kr/onto>` — KPI 온톨로지 참조
+   - 신규 클래스: `raas:CauseDecomposition`, `raas:InterpretationRule`, `raas:DataAvailability`, `raas:SplunkIngestHint`
+   - 신규 속성: `raas:usesMetric`, `raas:dataAvailability`, `raas:hasIngestHint`, `raas:hasInterpretationRule`, `raas:purpose`, `raas:formula`, `raas:trigger`, `raas:interpretation`, `raas:splunkSPL`, `raas:metricKey`, `raas:priority`
+   - 4축 인스턴스: `FlowDecomposition`, `CohortDecomposition`, `StickinessDecomposition`, `SegmentDecomposition`
+   - 각 축이 기존 KPI 메트릭 직접 참조 (예: `FlowDecomposition raas:usesMetric raas:NewUser_Day, raas:ReactivatedUser_Day, raas:ChurnRate_Day, raas:DAU_Day`)
+   - 19개 InterpretationRule 인스턴스 (trigger → interpretation 매핑)
+   - 3개 SplunkIngestHint (`Hint_DAUByGender`, `Hint_DAUByAge`, `Hint_DAUByTimeslot`)
+
+2. **엔진 리팩터** (`raas_storyline_engine.py`):
+   - `_load_rdf_graph()` — `raas_onto/raas_ontology_kpi.ttl` + `raas_ontology_cause.ttl` 결합 그래프 캐시 (rdflib 7.6.0)
+   - `_query_decompositions()` — SPARQL로 4축 + ingest hints를 priority 순서로 조회
+   - `_query_interpretation_rules(decomp_local)` — 축별 해석 규칙 매핑 조회
+   - `_flow_trigger(flow)` / `_cohort_trigger(cohort)` — 계산 결과 → 트리거 키 매핑 (해석 규칙 적용용)
+   - `_build_cause_raw_text` — 온톨로지 4축 정의를 그대로 사용, 해석 규칙도 SPARQL에서 가져온 문구를 LLM polish 입력에 포함
+
+3. **JSON 제거:**
+   - `data/ontologies/cause_analysis.json` 삭제
+   - `data/ontologies/` 폴더 삭제
+
+**SPARQL 쿼리 예시:**
+```sparql
+PREFIX raas: <http://raas.sbs.co.kr/onto#>
+SELECT ?ax ?label ?prio ?purpose ?availLabel WHERE {
+    ?ax a raas:CauseDecomposition ;
+        rdfs:label ?label ; raas:priority ?prio ;
+        raas:purpose ?purpose ; raas:dataAvailability ?avail .
+    ?avail rdfs:label ?availLabel .
+    FILTER(LANG(?label) = "ko")
+} ORDER BY ?prio
+```
+
+**검증 결과:**
+- 결합 그래프: 793 triples (KPI 601 + cause 192)
+- 4축 SPARQL 조회: priority 1~4 정상 ✅
+- 세그먼트 ingest hints 3종 정상 추출 ✅
+- 풀 흐름(apollo, 웬디의 영스트리트 +20% 변화) LLM polish 결과:
+  - 4축 모두 한국어 자연 문장 + 해석 규칙 적용
+  - "신규·복귀 유입은 양호하나, 이탈 증가가 DAU 상승폭을 제한..."
+  - 세그먼트 부족 메트릭 3종 + SPL 예시 포함
+- 서버 재시작 후 `/api/storyline/entry` 정상 응답 ✅
+
+**의존성 신규:**
+- rdflib 7.6.0 (`python -m pip install rdflib`)
+
+**사유:**
+- 데이터 직무 인터뷰: "직무-데이터 관계 매핑 시스템 만들고 싶음" → SPARQL이 이 관계 매핑의 자연스러운 표현
+- 기존 KPI 온톨로지의 형식 정의를 재사용 → 메트릭 정의가 단일 source of truth
+- 향후 SPARQL로 "어느 직무가 어떤 메트릭에 의존하는지" 같은 cross-onto 쿼리 가능
+- 빌드 스텝 없이 런타임 직접 rdflib 사용 (옵션 B의 TTL→JSON 변환 빌드 스크립트보다 깔끔)
+
+**영향:**
+- 메트릭 정의 중복 제거 (47개 메트릭이 raas_ontology_kpi.ttl 한 곳에만 정의됨)
+- 새 해석 규칙 추가 시 TTL만 편집 — 엔진 코드 변경 없음
+- 향후 다른 분석 프레임(예: 이상신호 탐지, 보고서 자동 구성)도 같은 패턴 (TTL + SPARQL) 적용 가능
+- rdflib 의존성 1개 추가 (~1.5MB)
+
+**미적용 (다음 사이클):**
+- 다른 직무 컴퓨터들도 TTL 온톨로지 직접 참조하도록 통일 (현재는 코드 내부에 KPI 키 하드코딩)
+- 직무(role) 자체를 RDF 클래스로 모델링: `raas:Role`, `raas:CP a raas:Role` 등 → 직무-데이터 관계를 SPARQL로 조회
+- `raas_ontology_storyline.ttl` 신규 — 스토리라인 5슬롯도 TTL로 표현 (스토리라인 JSON의 ontology 블록 분리)
+- SPARQL 쿼리 캐싱 (현재는 매 호출마다 실행, 4축 + 19규칙 = 23회 쿼리 / cause 호출)
+
+---
+
+### D-015 — CP 담당 채널 선택 UI (옵션 A: 별도 channel 필드)
+
+**변경 대상:** `raas_history_db.py` · `raas_auth.py` · `raas_server.py` · `raas_web.html` · `raas_storyline_engine.py`
+
+**배경:**
+- CP는 파워FM / 러브FM 중 한 채널을 담당. 사용자가 명시 선택할 수 있는 UI 필요
+- 사용자 결정(2026-06-18): 옵션 A — 별도 `channel` 컬럼 + role=CP일 때만 select 노출
+- 옵션 B(my_programs[0]에 채널 코드)·C(role 세분화)는 의미 혼동·시스템 영향 우려로 미채택
+
+**구현 (전 스택):**
+
+1. **DB schema** (`raas_history_db.py`):
+   - `ALTER TABLE users ADD COLUMN channel TEXT` 자동 마이그레이션
+   - 기존 사용자 영향 없음 (NULL 기본값)
+
+2. **Auth 계층** (`raas_auth.py`):
+   - `ALLOWED_CHANNELS = {'파워FM', '러브FM'}` 신설
+   - `_user_dict`가 `channel` 포함하여 반환
+   - `authenticate` / `resolve_session` SELECT에 `u.channel` 추가
+   - `update_profile`에 `channel` 인자 추가:
+     - role=CP가 아닌데 channel 설정 시도 → role 변경 후엔 channel 자동 NULL
+     - 빈 문자열 → NULL 저장
+     - ALLOWED_CHANNELS 외 값 → 거부
+
+3. **API** (`raas_server.py`):
+   - `/api/me/update`에 `channel` 필드 전달
+   - `/api/me`은 `_user_dict` 사용하므로 자동 반환
+
+4. **프론트엔드** (`raas_web.html`):
+   - 프로필 모달에 신규 select `#pfChannel` (파워FM / 러브FM 옵션)
+   - `#pfChannelField`는 직무가 CP일 때만 display:flex
+   - `_pfOnRoleChange()` — role 변경 시 가시성 토글, CP 아니면 값 비움
+   - `openProfileModal()` — RAAS_USER.channel로 초기값 셋팅
+   - `saveProfile()` — CP면 channel 필수 검증, 채널 변경 시 `_resetStoryline()` 호출
+
+5. **엔진** (`raas_storyline_engine.py`):
+   - `_user_context`에서 CP 미설정 시 "파워FM" 기본값 **제거** (사용자 명시 선택 강제)
+   - `entry()`가 CP + channel 미설정이면 setup_required 응답 분기:
+     - first_question을 안내 메시지로 대체
+     - chips는 빈 배열
+     - `setup_action: "open_profile_modal"` 포함
+
+6. **프론트 setup_required 처리** (`_renderStorylineWelcome`):
+   - `entry.setup_required === true`면 칩 대신 **⚙ 내 정보 열기** 버튼 1개 노출
+   - 클릭 시 `openProfileModal()` 호출
+   - 배지 텍스트 "CP (책임 프로듀서) · 셋업 필요"
+
+**검증 결과:**
+- DB 마이그레이션: 기존 apollo 사용자 보존, channel 컬럼 NULL로 추가 ✅
+- `_derive_cp_channel` 우선순위: `user.channel` → `my_programs[0]` prefix → None
+- apollo(my_programs=['F05']) → 채널 자동 도출 '파워FM' ✅
+- 신규CP(my_programs=[], channel=None) → setup_required: True ✅
+- HTTP API: `/api/storyline/entry?role=cp&channel=러브FM` → first_question에 러브FM ✅
+
+**우선순위 매트릭스:**
+| user.channel | my_programs[0] | 결과 |
+|---|---|---|
+| 파워FM | (any) | 파워FM (명시 우선) |
+| 러브FM | (any) | 러브FM |
+| NULL | F01 | 파워FM (자동 도출) |
+| NULL | L05 | 러브FM (자동 도출) |
+| NULL | [] | **setup_required** 발동 |
+
+**사유:**
+- 명시 선택 가능하되 my_programs 기반 자동 도출 fallback 유지 → 신규 사용자도 빠른 진입
+- 사용자가 채널 변경 즉시 스토리라인 재렌더 → 채널별 차이 즉시 체감 가능
+- DB에 별도 컬럼이라 다른 직무(편성PD 등)도 차후 채널 기반 확장 가능
+
+**영향:**
+- 프로필 모달에 새 select 1개 추가 (CP 선택 시만 표시 → UI 부담 없음)
+- 기존 사용자 데이터 100% 보존
+- 엔진 행동: my_programs 없으면 더 이상 기본값 "파워FM" 자동 사용 X → 사용자가 의도 표명해야 함
+
+**미적용 (다음 사이클):**
+- 편성PD에 채널 선택 적용 (역시 채널 단위 그리드를 보므로 동일 패턴 가능)
+- 채널 → 프로그램 매핑 자동화 (CP가 채널 선택 시 my_programs 빈 상태면 채널 프로그램 전체 자동 채움)
+- 다른 직무들도 자기에게 의미있는 셋업이 누락되면 setup_required 패턴 적용
+
+---
+
 ### D-014 — Phase 3 ⑥ 산출물 변환: matplotlib + python-pptx 서버 측 렌더링
 
 **변경 대상:** 신규 `raas_report_engine.py` + `raas_server.py` 2개 라우트 + `raas_web.html` `_end` 핸들러

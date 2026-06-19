@@ -733,6 +733,15 @@ body{
   margin-bottom:4px;
 }
 .story-slot-meta.fallback{color:var(--color-warning)}
+/* [mini] 마커 — 시선 안 뺏는 작은 안내 (예: 데이터 안정화 중 등) */
+.story-mini-note{
+  display:inline-block;
+  font-size:var(--fs-xs);
+  color:var(--color-text-tertiary);
+  opacity:0.75;
+  margin-top:2px;
+  letter-spacing:-.1px;
+}
 .story-chips-inline{
   display:flex;flex-wrap:wrap;gap:8px;
   margin-top:14px;
@@ -2142,11 +2151,28 @@ async function openProfileModal() {
   // 폼에 현재 값 채우기
   document.getElementById('pfLoginId').value = RAAS_USER.login_id || '';
   document.getElementById('pfName').value    = RAAS_USER.name || '';
+  // CP 채널 초기값 + 가시성 (D-015 옵션 A)
+  const chSel = document.getElementById('pfChannel');
+  if (chSel) chSel.value = RAAS_USER.channel || '';
+  _pfOnRoleChange();
   document.getElementById('pfMsg').className = 'pf-msg hidden';
   document.getElementById('pwMsg').className = 'pf-msg hidden';
   document.getElementById('pwForm').reset();
   await _loadProgramsForProfile();
   loadInterestMap();   // 내 관심 맵 비동기 로드 (실패해도 다른 섹션 영향 X)
+}
+
+// 직무 변경 시 CP 전용 채널 select 가시성 토글 (D-015 옵션 A)
+function _pfOnRoleChange() {
+  const role = document.getElementById('pfRole')?.value || '';
+  const field = document.getElementById('pfChannelField');
+  if (!field) return;
+  field.style.display = (role === 'CP') ? 'flex' : 'none';
+  // CP가 아니면 값도 비움
+  if (role !== 'CP') {
+    const ch = document.getElementById('pfChannel');
+    if (ch) ch.value = '';
+  }
 }
 
 async function loadInterestMap() {
@@ -2301,10 +2327,19 @@ function _collectSelectedPrograms() {
 async function saveProfile(ev) {
   ev.preventDefault();
   const msg = document.getElementById('pfMsg');
+  const roleVal = document.getElementById('pfRole').value;
+  const channelVal = document.getElementById('pfChannel')?.value || '';
+  // CP 선택 시 채널 필수
+  if (roleVal === 'CP' && !channelVal) {
+    msg.textContent = '담당 채널(파워FM 또는 러브FM)을 선택해 주세요.';
+    msg.className = 'pf-msg';
+    return false;
+  }
   const payload = {
     name:        document.getElementById('pfName').value.trim(),
-    role:        document.getElementById('pfRole').value,
+    role:        roleVal,
     my_programs: _collectSelectedPrograms(),
+    channel:     channelVal,
   };
   try {
     const res = await _authedFetch('/api/me/update', {
@@ -2319,14 +2354,16 @@ async function saveProfile(ev) {
       return false;
     }
     const prevRole = RAAS_USER && RAAS_USER.role;
+    const prevChannel = RAAS_USER && RAAS_USER.channel;
     RAAS_USER = data.user;
     _renderSidebarUser();
     msg.textContent = '저장되었습니다.';
     msg.className = 'pf-msg success';
 
-    // 직무가 바뀌면 스토리라인을 즉시 새 직무로 재렌더 (Phase 2 ④)
+    // 직무 또는 채널이 바뀌면 스토리라인을 즉시 재렌더
     const newRole = data.user && data.user.role;
-    if (newRole !== prevRole) {
+    const newChannel = data.user && data.user.channel;
+    if (newRole !== prevRole || newChannel !== prevChannel) {
       try { _resetStoryline(); } catch (_) {}
     }
   } catch (e) {
@@ -2375,7 +2412,7 @@ const QUICK_QUERIES = [
   '이번 주 DAU 추이',
   '파워FM vs 러브FM 주간 신규유입 추이 비교',
   '프로그램별 DAU 순위',
-  '철파엠 유지율 현황',
+  '채널 전체 프로그램 스캔',
   '지난주 컬투쇼 게스트 일자별로',
   '어제 프로그램별로 생방송/보라 편성정보 알려줘',
   '컬투쇼 코너 편성 알려줘',
@@ -2922,6 +2959,7 @@ function _buildEChartsMultiLineOption(chart) {
     },
     yAxis: {
       type: 'value',
+      scale: true,
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: { lineStyle: { color: theme.line, type: 'dashed' } },
@@ -2984,6 +3022,7 @@ function _buildEChartsDualAxisOption(chart) {
   // 이중 Y축
   const yAxes = series.slice(0, 2).map((s, i) => ({
     type: 'value',
+    scale: true,
     name: s.label + (s.unit ? ` (${s.unit})` : ''),
     nameTextStyle: { color: colors[i], fontSize: 11, fontWeight: 500 },
     nameLocation: 'end',
@@ -3967,7 +4006,12 @@ async function submitQuery(question, source) {
     const res = await _authedFetch('/api/query/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({
+        question,
+        // 스토리라인 라우터 컨텍스트 — 1_anchor_more에서 프로그램명 단독 입력 시 자동 라우팅
+        storyline_slot: (_RAAS_STORYLINE && _RAAS_STORYLINE.slot) || null,
+        storyline_context: (_RAAS_STORYLINE && _RAAS_STORYLINE.context) || {},
+      }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -3998,6 +4042,34 @@ async function submitQuery(question, source) {
           _scrollBottom();
         } else if (ev.type === 'done') {
           const qid = ev.query_id || null;
+          // 스토리라인 라우팅 응답 — 칩 클릭과 동일 구조로 렌더
+          if (ev.routed_via_storyline) {
+            _RAAS_STORYLINE.role    = 'CP';
+            _RAAS_STORYLINE.slot    = ev.slot;
+            _RAAS_STORYLINE.context = ev.context_out || {};
+            _RAAS_STORYLINE.visited = _RAAS_STORYLINE.visited || [];
+            _RAAS_STORYLINE.visited.push({
+              slot: ev.slot, slot_name: ev.slot_name, answer: rawText,
+            });
+            const slotMetaTxt = ev.routing_badge
+              ? `${escapeHtml(ev.routing_badge)} · ${escapeHtml(ev.slot_name || ev.slot)}`
+              : `📍 ${escapeHtml(ev.slot_name || ev.slot)}`;
+            const chipsHtml = (ev.chips_next || [])
+              .map(c => _storylineChipHTML(c, ev.slot)).join('');
+            msgBody.innerHTML = `
+              <div class="msg-ai-name">RAAS Assistant</div>
+              <div class="story-slot-meta">${slotMetaTxt}</div>
+              <div class="msg-ai-text">${_renderStorylineText(rawText)}</div>
+              ${_buildChartHTML(chartData)}
+              <div class="story-chips-inline">${chipsHtml}</div>`;
+            _observeChartsIn(msgBody);
+            if (qid) msgBody.insertAdjacentHTML('beforeend', _buildFeedbackBar(qid));
+            _saveCachedAnswer(question, msgBody.innerHTML);
+            refreshHistory();
+            _scrollBottom();
+            streamDone = true;
+            break;
+          }
           msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text">${renderAiText(rawText)}</div>${_buildChartHTML(chartData)}`;
           _observeChartsIn(msgBody);
           _saveCachedAnswer(question, msgBody.innerHTML);
@@ -4169,7 +4241,84 @@ window._RAAS_STORYLINE = {
   context: {},        // 직전 advance의 context_out (다음 호출 prev_context로 전달)
   slot: null,         // 'entry' | '1_anchor' | ...
   visited: [],        // 방문 슬롯 누적 — export 호출 시 전달
+  entry: null,        // 캐시: 첫 화면 entry payload (period 전환 시 재렌더링용)
+  entryPeriod: 'today',  // 'today' | 'last_week' | 'last_month'
 };
+
+// 엔트리 period 라벨 유틸 — data_last_date 기준 지난주 Sun~Sat / 지난달 YYYY년 M월
+function _entryFmtDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function _entryLastWeekRange(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return '';
+  // weekday: 0=Sun, 1=Mon, ..., 6=Sat. 이번 주 월요일까지의 offset
+  const day = d.getDay();
+  const offsetToMon = (day === 0) ? 6 : day - 1;  // 일요일이면 6, 그 외 day-1
+  const thisMon = new Date(d);
+  thisMon.setDate(d.getDate() - offsetToMon);
+  const lastMon = new Date(thisMon); lastMon.setDate(thisMon.getDate() - 7);
+  const lastSun = new Date(thisMon); lastSun.setDate(thisMon.getDate() - 1);
+  return `${_entryFmtDate(lastMon)} ~ ${_entryFmtDate(lastSun)}`;
+}
+function _entryLastMonthLabel(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return '';
+  const last = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  return `${last.getFullYear()}년 ${last.getMonth()+1}월`;
+}
+
+// period 상태 → first_question 텍스트 + 변동폭/변동수치 칩 intent 재구성
+function _entryComputeQuestion(entry, period) {
+  const ctx = _RAAS_STORYLINE.context || {};
+  const channel = ctx.channel_name || '담당 채널';
+  const lastDate = ctx.data_last_date || '';
+  if (period === 'last_week') {
+    const range = _entryLastWeekRange(lastDate);
+    return `**${channel}** 채널에서 **지난주(${range})** 기준 크게 움직인 프로그램부터 보시겠어요?`;
+  }
+  if (period === 'last_month') {
+    const label = _entryLastMonthLabel(lastDate);
+    return `**${channel}** 채널에서 **지난달(${label})** 기준 크게 움직인 프로그램부터 보시겠어요?`;
+  }
+  return entry.first_question || '';
+}
+
+function _entryRemapChips(chips, period) {
+  return (chips || []).map(c => {
+    const cp = Object.assign({}, c);
+    // period 칩: 활성 → ✓, 비활성 → "어제 기준으로"로 교체
+    if (cp.intent === 'set_period_last_week') {
+      if (period === 'last_week') {
+        cp.label = '✓ ' + cp.label;
+      } else if (period === 'last_month') {
+        // 지난달 활성 상태 → 지난주 칩 자리를 "어제 기준으로"로 교체
+        cp.label = '📅 어제 기준으로';
+        cp.intent = 'set_period_today';
+      }
+    }
+    if (cp.intent === 'set_period_last_month') {
+      if (period === 'last_month') {
+        cp.label = '✓ ' + cp.label;
+      } else if (period === 'last_week') {
+        // 지난주 활성 상태 → 지난달 칩 자리를 "어제 기준으로"로 교체
+        cp.label = '📅 어제 기준으로';
+        cp.intent = 'set_period_today';
+      }
+    }
+    // 변동폭/변동수치 → period에 맞는 intent로 매핑
+    if (period === 'last_week') {
+      if (c.intent === 'show_biggest_change_pct') cp.intent = 'show_weekly_top_pct';
+      if (c.intent === 'show_biggest_change_abs') cp.intent = 'show_weekly_top_abs';
+    } else if (period === 'last_month') {
+      if (c.intent === 'show_biggest_change_pct') cp.intent = 'show_monthly_top_pct';
+      if (c.intent === 'show_biggest_change_abs') cp.intent = 'show_monthly_top_abs';
+    }
+    return cp;
+  });
+}
 
 async function _tryLoadStoryline() {
   try {
@@ -4206,11 +4355,30 @@ function _renderStorylineWelcome(entry) {
   const welcome = document.getElementById('welcomeScreen');
   if (!welcome) return;
 
+  // 셋업 필요(예: CP 채널 미설정) — 내 정보 열기 버튼 노출
+  if (entry.setup_required) {
+    const action = entry.setup_action === 'open_profile_modal'
+      ? `<button class="sgst-chip" onclick="openProfileModal()" style="font-size:var(--fs-md);padding:10px 18px;">⚙ 내 정보 열기</button>`
+      : '';
+    welcome.innerHTML = `
+      <h1 class="welcome-logo">${escapeHtml(entry.greeting || '')}</h1>
+      <div class="welcome-sub">${_renderStorylineText(entry.first_question || '')}</div>
+      <div class="welcome-chips" id="suggestChips">${action}</div>
+      <div class="welcome-storyline-badge">${escapeHtml(entry.role_name_ko || '')} · 셋업 필요</div>
+    `;
+    return;
+  }
+
+  // 캐시 + period 적용 렌더링
+  _RAAS_STORYLINE.entry = entry;
+  const period = _RAAS_STORYLINE.entryPeriod || 'today';
+  const firstQ = _entryComputeQuestion(entry, period);
+  const chips  = _entryRemapChips(entry.chips, period);
   welcome.innerHTML = `
     <h1 class="welcome-logo">${escapeHtml(entry.greeting || '')}</h1>
-    <div class="welcome-sub">${_renderStorylineText(entry.first_question || '')}</div>
+    <div class="welcome-sub">${_renderStorylineText(firstQ)}</div>
     <div class="welcome-chips" id="suggestChips">
-      ${(entry.chips || []).map(c => _storylineChipHTML(c, 'entry')).join('')}
+      ${chips.map(c => _storylineChipHTML(c, 'entry')).join('')}
     </div>
     <div class="welcome-storyline-badge">${escapeHtml(entry.role_name_ko || '')} 스토리라인</div>
   `;
@@ -4220,8 +4388,14 @@ function _storylineChipHTML(chip, slotFrom) {
   const label = escapeHtml(chip.label || '');
   const intent = escapeHtml(chip.intent || '');
   const slot = escapeHtml(slotFrom || '');
+  const nextSlot = escapeHtml(chip.next_slot || '');
+  // 동적 칩의 payload (프로그램 코드 등) — prev_context로 병합
+  const payloadAttr = chip.payload
+    ? `data-payload='${JSON.stringify(chip.payload).replace(/'/g, "&#39;")}'`
+    : '';
   return `<button class="sgst-chip" onclick="_onStorylineChip(this)"
-    data-slot="${slot}" data-intent="${intent}" data-label="${label}">${label}</button>`;
+    data-slot="${slot}" data-intent="${intent}" data-label="${label}"
+    data-next-slot="${nextSlot}" ${payloadAttr}>${label}</button>`;
 }
 
 // 스토리라인 답변용 텍스트 렌더링 — **bold** + \n→<br> + 간단 markdown table
@@ -4248,6 +4422,10 @@ function _renderStorylineText(s) {
   out = out.replace(/\n/g, '<br>');
   // 3) 테이블 자리 복구
   out = out.replace(/TABLE(\d+)(<br>)?/g, (_, idx) => tables[+idx]);
+  // 4) [mini]...[/mini] → 작은 연한 글씨 안내 ([]는 escapeHtml에서 그대로 통과)
+  out = out.replace(/\[mini\]([\s\S]+?)\[\/mini\]/g, (_, body) =>
+    `<span class="story-mini-note">${_renderStorylineInline(body.trim())}</span>`
+  );
   return out;
 }
 
@@ -4259,7 +4437,30 @@ async function _onStorylineChip(btn) {
   const slotFrom = btn.dataset.slot || 'entry';
   const intent   = btn.dataset.intent || '';
   const label    = btn.dataset.label || '';
+  const nextSlot = btn.dataset.nextSlot || '';
+  let payload = null;
+  try { payload = JSON.parse((btn.dataset.payload || 'null').replace(/&#39;/g, "'")); }
+  catch (_) { payload = null; }
   if (!intent) return;
+
+  // 동적 "직접 입력" 칩 — 채팅 입력창 포커스만
+  if (intent === 'scan_free_input') {
+    const el = document.getElementById('userInput') || document.querySelector('#chatInput, textarea');
+    if (el) { try { el.focus(); } catch (_) {} }
+    return;
+  }
+
+  // 엔트리 period 칩 — 서버 호출 없이 상태만 갱신 + welcome 재렌더
+  if (intent === 'set_period_last_week' || intent === 'set_period_last_month' || intent === 'set_period_today') {
+    const requested = intent.replace('set_period_', '');
+    const current = _RAAS_STORYLINE.entryPeriod || 'today';
+    // 같은 칩을 다시 누르면 today로 토글
+    _RAAS_STORYLINE.entryPeriod = (current === requested) ? 'today' : requested;
+    if (_RAAS_STORYLINE.entry) {
+      _renderStorylineWelcome(_RAAS_STORYLINE.entry);
+    }
+    return;
+  }
 
   // 1) 유저 메시지 버블 — 클릭한 칩 라벨
   addUserMsg(label);
@@ -4279,6 +4480,8 @@ async function _onStorylineChip(btn) {
   } catch (_) {}
 
   try {
+    // 동적 칩 payload는 prev_context로 병합
+    const mergedCtx = Object.assign({}, _RAAS_STORYLINE.context || {}, payload || {});
     const res = await _authedFetch('/api/storyline/advance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4286,7 +4489,8 @@ async function _onStorylineChip(btn) {
         role: _RAAS_STORYLINE.role,
         slot_from: slotFrom,
         chip_intent: intent,
-        prev_context: _RAAS_STORYLINE.context || {},
+        prev_context: mergedCtx,
+        next_slot_override: nextSlot || undefined,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -4387,14 +4591,21 @@ async function _onStorylineChip(btn) {
         ? `⚠ ${escapeHtml(data.slot_name || data.slot)} · 데이터 부족(fallback)`
         : `📍 ${escapeHtml(data.slot_name || data.slot)}`;
 
+      // chart_data가 있으면 답변 아래에 ECharts 컨테이너 삽입
+      const chartHtml = data.chart_data ? _buildChartHTML(data.chart_data) : '';
+
       msgBody.innerHTML = `
         <div class="msg-ai-name">RAAS Assistant</div>
         <div class="${slotMetaCls}">${slotMetaTxt}</div>
         <div class="msg-ai-text">${_renderStorylineText(data.answer || '')}</div>
+        ${chartHtml}
         <div class="story-chips-inline">
           ${(data.chips_next || []).map(c => _storylineChipHTML(c, data.slot)).join('')}
         </div>
       `;
+      if (chartHtml) {
+        try { _observeChartsIn(msgBody); } catch (_) {}
+      }
     }
     _scrollBottom();
   } catch (e) {
@@ -4765,6 +4976,8 @@ function _initSidebarQueries() {
       ${escapeHtml(q)}</button>`
   ).join('');
 }
+const FULL_SCAN_QUERY_TEXT = '채널 전체 프로그램 스캔';
+
 function _onQuickQuery(i) {
   if (isMobile()) closeSidebar();
   const q = QUICK_QUERIES[i];
@@ -4773,7 +4986,59 @@ function _onQuickQuery(i) {
     _showBriefingInChat();
     return;
   }
+  // 특수 분기: 채널 전체 프로그램 스캔 → 스토리라인 1_anchor_scan 직접 호출
+  if (q === FULL_SCAN_QUERY_TEXT) {
+    _showFullScanInChat();
+    return;
+  }
   submitQuery(q, 'sidebar_chip');
+}
+
+async function _showFullScanInChat() {
+  addUserMsg(FULL_SCAN_QUERY_TEXT);
+  const aiId = addAiTyping();
+  const msgBody = document.getElementById(aiId).querySelector('.msg-body');
+  try {
+    const res = await _authedFetch('/api/storyline/advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: 'CP',
+        slot_from: 'entry',
+        chip_intent: 'show_full_scan',
+        next_slot_override: '1_anchor_scan',
+        prev_context: {},
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '응답 실패');
+    _RAAS_STORYLINE.role    = 'CP';
+    _RAAS_STORYLINE.slot    = data.slot;
+    _RAAS_STORYLINE.context = data.context_out || {};
+    _RAAS_STORYLINE.visited = _RAAS_STORYLINE.visited || [];
+    _RAAS_STORYLINE.visited.push({
+      slot: data.slot, slot_name: data.slot_name, answer: data.answer,
+      fallback_used: data.fallback_used,
+    });
+    const slotMetaCls = data.fallback_used ? 'story-slot-meta fallback' : 'story-slot-meta';
+    const slotMetaTxt = data.fallback_used
+      ? `⚠ ${escapeHtml(data.slot_name || data.slot)} · 데이터 부족(fallback)`
+      : `📍 ${escapeHtml(data.slot_name || data.slot)}`;
+    const chartHtml = data.chart_data ? _buildChartHTML(data.chart_data) : '';
+    msgBody.innerHTML = `
+      <div class="msg-ai-name">RAAS Assistant</div>
+      <div class="${slotMetaCls}">${slotMetaTxt}</div>
+      <div class="msg-ai-text">${_renderStorylineText(data.answer || '')}</div>
+      ${chartHtml}
+      <div class="story-chips-inline">
+        ${(data.chips_next || []).map(c => _storylineChipHTML(c, data.slot)).join('')}
+      </div>`;
+    if (chartHtml) { try { _observeChartsIn(msgBody); } catch (_) {} }
+    _scrollBottom();
+  } catch (e) {
+    fillAiError(aiId, e.message);
+  }
 }
 
 // 브리핑 카드를 챗 메시지로 표시 (사이드바 질의 클릭 시)
@@ -5164,8 +5429,16 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
             </div>
             <div class="pf-field">
               <label class="pf-label">직무</label>
-              <select class="pf-select" id="pfRole" required>
+              <select class="pf-select" id="pfRole" required onchange="_pfOnRoleChange()">
                 <option value="">로드 중…</option>
+              </select>
+            </div>
+            <div class="pf-field" id="pfChannelField" style="display:none">
+              <label class="pf-label">담당 채널 <span style="color:var(--dim);font-weight:400;font-size:var(--fs-xs)">— CP 전용</span></label>
+              <select class="pf-select" id="pfChannel">
+                <option value="">선택해 주세요</option>
+                <option value="파워FM">파워FM</option>
+                <option value="러브FM">러브FM</option>
               </select>
             </div>
           </div>

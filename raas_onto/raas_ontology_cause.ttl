@@ -1,0 +1,365 @@
+# =============================================================================
+# RAAS Cause Analysis Ontology v0.1
+#
+# 활성사용자(DAU/WAU/MAU) 변화의 원인을 다층적으로 분해하는 표준 프레임워크.
+# 직무 무관(role-agnostic). CP·제작PD·편성PD·총괄관리가 같은 4축을 공유.
+#
+# 의존 온톨로지:
+#   raas_ontology_kpi.ttl — raas:DAU_Day, raas:NewUser_Day, raas:ChurnRate_Day 등
+#
+# 사용처:
+#   storyline 5슬롯 중 2_cause (원인 설명) — raas_storyline_engine.py
+#
+# 작성: D-016 (옵션 A — 기존 .ttl 컨벤션 일치)
+# =============================================================================
+
+@prefix raas:  <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+# =============================================================================
+# 0. 온톨로지 자체 메타데이터
+# =============================================================================
+
+<http://raas.sbs.co.kr/onto/cause> a owl:Ontology ;
+    rdfs:label "RAAS 원인 분석 온톨로지"@ko, "RAAS Cause Analysis Ontology"@en ;
+    rdfs:comment "활성사용자 변화의 다층 원인 분해 프레임워크 (직무 무관)"@ko ;
+    owl:imports <http://raas.sbs.co.kr/onto> ;
+    owl:versionInfo "0.1.0-poc" .
+
+
+# =============================================================================
+# 1. 클래스 정의
+# =============================================================================
+
+raas:CauseDecomposition a owl:Class ;
+    rdfs:label "원인 분해 축"@ko ;
+    rdfs:comment "활성사용자 변화를 설명하는 분석 축 (흐름/코호트/Stickiness/세그먼트)"@ko .
+
+raas:InterpretationRule a owl:Class ;
+    rdfs:label "해석 규칙"@ko ;
+    rdfs:comment "데이터 패턴 → 도메인 해석 매핑 (예: '이탈 감소가 주도' → '콘텐츠/UX 개선 가능성')"@ko .
+
+raas:DataAvailability a owl:Class ;
+    rdfs:label "데이터 가용성"@ko ;
+    rdfs:comment "메트릭이 RAAS에 적재됐는지 표시. Available / NeedsIngest 인스턴스"@ko .
+
+raas:SplunkIngestHint a owl:Class ;
+    rdfs:label "Splunk 적재 힌트"@ko ;
+    rdfs:comment "미적재 메트릭을 가져오기 위한 Splunk SPL 예시·인덱스 정보"@ko .
+
+
+# =============================================================================
+# 2. 속성(Property) 정의
+# =============================================================================
+
+raas:usesMetric a owl:ObjectProperty ;
+    rdfs:domain raas:CauseDecomposition ;
+    rdfs:range raas:Metric ;
+    rdfs:label "사용 메트릭"@ko ;
+    rdfs:comment "이 분해 축이 어떤 KPI를 입력으로 사용하는지"@ko .
+
+raas:usesMetricVariant a owl:ObjectProperty ;
+    rdfs:label "사용 메트릭 변종"@ko ;
+    rdfs:comment "분해 축이 일/주/월 등 특정 Granularity를 사용할 때 (raas_ontology_kpi.ttl 기 정의 재사용)"@ko .
+
+raas:dataAvailability a owl:ObjectProperty ;
+    rdfs:domain raas:CauseDecomposition ;
+    rdfs:range raas:DataAvailability .
+
+raas:hasIngestHint a owl:ObjectProperty ;
+    rdfs:domain raas:DataAvailability ;
+    rdfs:range raas:SplunkIngestHint .
+
+raas:hasInterpretationRule a owl:ObjectProperty ;
+    rdfs:domain raas:CauseDecomposition ;
+    rdfs:range raas:InterpretationRule .
+
+raas:purpose a owl:DatatypeProperty ;
+    rdfs:domain raas:CauseDecomposition ;
+    rdfs:range xsd:string ;
+    rdfs:label "축 목적"@ko .
+
+raas:formula a owl:DatatypeProperty ;
+    rdfs:domain raas:CauseDecomposition ;
+    rdfs:range xsd:string ;
+    rdfs:label "수식"@ko .
+
+raas:trigger a owl:DatatypeProperty ;
+    rdfs:domain raas:InterpretationRule ;
+    rdfs:range xsd:string ;
+    rdfs:label "발동 조건"@ko ;
+    rdfs:comment "예: 'churn_decrease', 'd7_drop'"@ko .
+
+raas:interpretation a owl:DatatypeProperty ;
+    rdfs:domain raas:InterpretationRule ;
+    rdfs:range xsd:string ;
+    rdfs:label "해석 문구"@ko .
+
+raas:splunkSPL a owl:DatatypeProperty ;
+    rdfs:domain raas:SplunkIngestHint ;
+    rdfs:range xsd:string ;
+    rdfs:label "Splunk SPL 예시"@ko .
+
+raas:metricKey a owl:DatatypeProperty ;
+    rdfs:domain raas:SplunkIngestHint ;
+    rdfs:range xsd:string ;
+    rdfs:label "외부 노출 메트릭 키"@ko ;
+    rdfs:comment "사용자에게 '이 데이터 적재가 필요합니다' 안내 시 사용"@ko .
+
+raas:priority a owl:DatatypeProperty ;
+    rdfs:domain raas:CauseDecomposition ;
+    rdfs:range xsd:integer ;
+    rdfs:label "분석 우선순위"@ko ;
+    rdfs:comment "1이 가장 먼저 (사용자 흐름 분해), 4가 마지막 (세그먼트)"@ko .
+
+
+# =============================================================================
+# 3. 데이터 가용성 인스턴스
+# =============================================================================
+
+raas:DA_Available a raas:DataAvailability ;
+    rdfs:label "적재 완료"@ko ;
+    rdfs:comment "raas_kpi_latest.csv에 포함된 메트릭"@ko .
+
+raas:DA_NeedsIngest a raas:DataAvailability ;
+    rdfs:label "추가 적재 필요"@ko ;
+    rdfs:comment "Splunk에는 있으나 RAAS에 미적재"@ko .
+
+
+# =============================================================================
+# 4. 4축 원인 분해 인스턴스
+# =============================================================================
+
+# ─── ① 편성 영향 분석 (Programming Impact) ───────────────────────────────────
+# 일 단위 변동의 가장 직접적 원인. 어제 편성 vs 평소 같은 요일 편성 비교.
+# RAAS에 이미 적재된 필드: guestname / daily_corner / weekly_corner / live_yn / view_radio_yn
+
+raas:ProgrammingMeta a owl:Class ;
+    rdfs:label "편성 메타데이터"@ko ;
+    rdfs:comment "회차별 편성 정보(게스트·코너·생방송·보는라디오 등)"@ko .
+
+raas:Guest a raas:ProgrammingMeta ;
+    rdfs:label "게스트"@ko ;
+    raas:dataSource "raas_kpi_latest.csv:guestname" .
+
+raas:DailyCorner a raas:ProgrammingMeta ;
+    rdfs:label "일일 코너"@ko ;
+    raas:dataSource "raas_kpi_latest.csv:daily_corner" .
+
+raas:WeeklyCorner a raas:ProgrammingMeta ;
+    rdfs:label "주간 코너"@ko ;
+    raas:dataSource "raas_kpi_latest.csv:weekly_corner" .
+
+raas:LiveYN a raas:ProgrammingMeta ;
+    rdfs:label "생방송 여부"@ko ;
+    raas:dataSource "raas_kpi_latest.csv:live_yn" .
+
+raas:ViewRadioYN a raas:ProgrammingMeta ;
+    rdfs:label "보는라디오 여부"@ko ;
+    raas:dataSource "raas_kpi_latest.csv:view_radio_yn" .
+
+raas:dataSource a owl:DatatypeProperty ;
+    rdfs:label "데이터 출처"@ko ;
+    rdfs:range xsd:string .
+
+raas:ProgrammingImpactDecomposition a raas:CauseDecomposition ;
+    rdfs:label "편성 영향 분석"@ko ;
+    raas:purpose "어제 편성(게스트·코너·생방송·보는라디오)과 평소 같은 요일을 비교해 일 단위 변동의 직접적 원인 식별. 특별 게스트는 신규 사용자 유입에 큰 영향."@ko ;
+    raas:priority 1 ;
+    raas:usesMetric raas:Guest, raas:DailyCorner, raas:WeeklyCorner,
+                    raas:LiveYN, raas:ViewRadioYN ;
+    raas:dataAvailability raas:DA_Available ;
+    raas:hasInterpretationRule
+        raas:Rule_SpecialGuestEffect,
+        raas:Rule_CornerChange,
+        raas:Rule_LiveToRecorded,
+        raas:Rule_RecordedToLive,
+        raas:Rule_ViewRadioToggle,
+        raas:Rule_NoChange .
+
+raas:Rule_SpecialGuestEffect a raas:InterpretationRule ;
+    raas:trigger "special_guest" ;
+    raas:interpretation "평소 수요일에 출연하지 않던 특별 게스트 구성으로, 신규 사용자 유입에 영향 가능성"@ko .
+
+raas:Rule_CornerChange a raas:InterpretationRule ;
+    raas:trigger "corner_change" ;
+    raas:interpretation "평소 같은 요일과 코너 구성이 다름. 콘텐츠 변경 효과 가능성"@ko .
+
+raas:Rule_LiveToRecorded a raas:InterpretationRule ;
+    raas:trigger "live_to_recorded" ;
+    raas:interpretation "평소 생방송이던 회차가 녹음방송으로 진행됨. 실시간성 약화로 청취층 영향 가능성"@ko .
+
+raas:Rule_RecordedToLive a raas:InterpretationRule ;
+    raas:trigger "recorded_to_live" ;
+    raas:interpretation "평소 녹음방송이던 회차가 생방송으로 진행됨. 실시간 청취 유입 효과 가능성"@ko .
+
+raas:Rule_ViewRadioToggle a raas:InterpretationRule ;
+    raas:trigger "view_radio_toggle" ;
+    raas:interpretation "보는라디오(영상) 편성이 평소와 다름. 영상 시청자층 유입/이탈 가능성"@ko .
+
+raas:Rule_NoChange a raas:InterpretationRule ;
+    raas:trigger "no_change" ;
+    raas:interpretation "편성 구성이 평소 같은 요일과 동일. 편성 외 다른 원인을 살펴봐야 함"@ko .
+
+
+# ─── ② 사용자 흐름 분해 (Flow Decomposition) ─────────────────────────────────
+
+raas:FlowDecomposition a raas:CauseDecomposition ;
+    rdfs:label "사용자 흐름 분해 (직전일 대비)"@ko ;
+    raas:purpose "ΔDAU를 신규·복귀·이탈로 분해해 직전일 대비 변동의 직접적 원인을 본다 (참고용)"@ko ;
+    raas:formula "Δdau ≈ new + react − (dau_prev × churn_rate / 100)" ;
+    raas:priority 2 ;
+    raas:usesMetric raas:NewUser_Day, raas:ReactivatedUser_Day, raas:ChurnRate_Day, raas:DAU_Day ;
+    raas:dataAvailability raas:DA_Available ;
+    raas:hasInterpretationRule
+        raas:Rule_NewDominant,
+        raas:Rule_ReactDominant,
+        raas:Rule_ChurnDecrease,
+        raas:Rule_ChurnIncrease,
+        raas:Rule_NewDecrease,
+        raas:Rule_ReactDecrease .
+
+raas:Rule_NewDominant a raas:InterpretationRule ;
+    raas:trigger "new_dominant" ;
+    raas:interpretation "신규 유입 증가가 주도 — 마케팅·홍보·외부 노출 효과 가능성"@ko .
+
+raas:Rule_ReactDominant a raas:InterpretationRule ;
+    raas:trigger "react_dominant" ;
+    raas:interpretation "복귀 사용자 증가가 주도 — 푸시·이벤트·게스트 효과"@ko .
+
+raas:Rule_ChurnDecrease a raas:InterpretationRule ;
+    raas:trigger "churn_decrease" ;
+    raas:interpretation "이탈 감소가 주도 — 콘텐츠/UX 개선 또는 기술 안정성 향상"@ko .
+
+raas:Rule_ChurnIncrease a raas:InterpretationRule ;
+    raas:trigger "churn_increase" ;
+    raas:interpretation "이탈 증가가 원인 — 콘텐츠 매력도·장애·UX 이슈 점검 필요"@ko .
+
+raas:Rule_NewDecrease a raas:InterpretationRule ;
+    raas:trigger "new_decrease" ;
+    raas:interpretation "신규 유입 감소 — 외부 노출 감소·검색 트렌드 변화"@ko .
+
+raas:Rule_ReactDecrease a raas:InterpretationRule ;
+    raas:trigger "react_decrease" ;
+    raas:interpretation "복귀 감소 — 알림 효과 감소·습관 형성 약화"@ko .
+
+
+# ─── ② 코호트 리텐션 (Cohort Retention) ─────────────────────────────────────
+
+raas:CohortDecomposition a raas:CauseDecomposition ;
+    rdfs:label "코호트 리텐션"@ko ;
+    raas:purpose "신규 사용자가 잘 정착하는가 — 구조적 원인 진단"@ko ;
+    raas:priority 3 ;
+    raas:usesMetric
+        raas:RetentionRate_D1_NewUser,
+        raas:RetentionRate_D7_NewUser,
+        raas:RetentionRate_M1_NewUser ;
+    raas:dataAvailability raas:DA_Available ;
+    raas:hasInterpretationRule
+        raas:Rule_D1Drop,
+        raas:Rule_D7Drop,
+        raas:Rule_M1Drop,
+        raas:Rule_D1Up,
+        raas:Rule_D7Up .
+
+raas:Rule_D1Drop a raas:InterpretationRule ;
+    raas:trigger "d1_drop" ;
+    raas:interpretation "D1 유지율 하락 → 첫 인상·온보딩·콘텐츠 첫 매력 문제"@ko .
+
+raas:Rule_D7Drop a raas:InterpretationRule ;
+    raas:trigger "d7_drop" ;
+    raas:interpretation "D7 유지율 하락 → 1주차 습관 형성 실패 (콘텐츠 일관성·요일별 매력도 점검)"@ko .
+
+raas:Rule_M1Drop a raas:InterpretationRule ;
+    raas:trigger "m1_drop" ;
+    raas:interpretation "M1 유지율 하락 → 장기 매력도 부족 (시즌·트렌드 영향)"@ko .
+
+raas:Rule_D1Up a raas:InterpretationRule ;
+    raas:trigger "d1_up" ;
+    raas:interpretation "D1 유지율 상승 → 신규 유입의 질 개선"@ko .
+
+raas:Rule_D7Up a raas:InterpretationRule ;
+    raas:trigger "d7_up" ;
+    raas:interpretation "D7 유지율 상승 → 습관화 강화"@ko .
+
+
+# ─── ③ Stickiness (DAU/MAU) ──────────────────────────────────────────────
+
+raas:StickinessDecomposition a raas:CauseDecomposition ;
+    rdfs:label "Stickiness — 변화의 '질'"@ko ;
+    raas:purpose "확산형(MAU 증가) vs 집중형(기존 사용자 빈도 증가) 구분"@ko ;
+    raas:formula "stickiness = dau / mau × 100" ;
+    raas:priority 4 ;
+    raas:usesMetric raas:DAU_Day, raas:DAU_Month ;
+    raas:dataAvailability raas:DA_Available ;
+    raas:hasInterpretationRule
+        raas:Rule_StickyUpFlat,
+        raas:Rule_StickyUpUp,
+        raas:Rule_StickyDownUp,
+        raas:Rule_StickyDownDown,
+        raas:Rule_StickyFlat .
+
+raas:Rule_StickyUpFlat a raas:InterpretationRule ;
+    raas:trigger "stickiness_up_mau_flat" ;
+    raas:interpretation "기존 사용자 빈도 증가 — 충성도 강화"@ko .
+
+raas:Rule_StickyUpUp a raas:InterpretationRule ;
+    raas:trigger "stickiness_up_mau_up" ;
+    raas:interpretation "전반적 활성화 — 가장 건강한 변화"@ko .
+
+raas:Rule_StickyDownUp a raas:InterpretationRule ;
+    raas:trigger "stickiness_down_mau_up" ;
+    raas:interpretation "확산형 — 사용자 풀은 커지나 자주 안 옴 (캐주얼 유입)"@ko .
+
+raas:Rule_StickyDownDown a raas:InterpretationRule ;
+    raas:trigger "stickiness_down_mau_down" ;
+    raas:interpretation "전반적 약화 — 즉시 점검 필요"@ko .
+
+raas:Rule_StickyFlat a raas:InterpretationRule ;
+    raas:trigger "stickiness_flat" ;
+    raas:interpretation "유지 — 사용자 행동 패턴 안정"@ko .
+
+
+# ─── ④ 세그먼트 분해 (Segment Decomposition) — 데이터 부족 ──────────────────
+
+raas:SegmentDecomposition a raas:CauseDecomposition ;
+    rdfs:label "세그먼트 분해 — 책임 영역 식별"@ko ;
+    raas:purpose "변화가 어느 사용자 층(성별·연령·시간대)에서 일어났는지 확인"@ko ;
+    raas:priority 5 ;
+    raas:dataAvailability raas:DA_NeedsIngest ;
+    raas:hasIngestHint raas:Hint_DAUByGender, raas:Hint_DAUByAge, raas:Hint_DAUByTimeslot ;
+    raas:hasInterpretationRule
+        raas:Rule_GenderConcentrated,
+        raas:Rule_AgeConcentrated,
+        raas:Rule_TimeslotConcentrated .
+
+raas:Hint_DAUByGender a raas:SplunkIngestHint ;
+    rdfs:label "성별 DAU"@ko ;
+    raas:metricKey "dau_by_gender" ;
+    raas:splunkSPL "index=gorealra_v4 | stats dc(user_id) by gender, DATE" .
+
+raas:Hint_DAUByAge a raas:SplunkIngestHint ;
+    rdfs:label "연령대별 DAU"@ko ;
+    raas:metricKey "dau_by_age" ;
+    raas:splunkSPL "index=gorealra_v4 | stats dc(user_id) by age_band, DATE" .
+
+raas:Hint_DAUByTimeslot a raas:SplunkIngestHint ;
+    rdfs:label "시간대별 DAU"@ko ;
+    raas:metricKey "dau_by_timeslot" ;
+    raas:splunkSPL "index=gorealra_v4 PGM_CODE=F09 | bucket _time span=1h | stats dc(user_id) by _time" ;
+    rdfs:comment "1시간 bucket 집계 권장. 편성PD 인터뷰에서도 동일 부족 보고됨"@ko .
+
+raas:Rule_GenderConcentrated a raas:InterpretationRule ;
+    raas:trigger "gender_concentrated" ;
+    raas:interpretation "특정 성별에 변화 집중 — 콘텐츠 적합도 점검"@ko .
+
+raas:Rule_AgeConcentrated a raas:InterpretationRule ;
+    raas:trigger "age_concentrated" ;
+    raas:interpretation "특정 연령대에 변화 집중 — 게스트·선곡·주제 점검"@ko .
+
+raas:Rule_TimeslotConcentrated a raas:InterpretationRule ;
+    raas:trigger "timeslot_concentrated" ;
+    raas:interpretation "특정 시간대에 변화 집중 — 편성·생활 패턴 변화"@ko .

@@ -114,22 +114,32 @@
 
   "entry": {
     "greeting_template": "{user_name}님 안녕하세요.",
-    "first_question": "**{channel_name}** 채널에서 **어제 크게 움직인 프로그램**부터 보시겠어요?",
+    "first_question": "**{channel_name}** 채널에서 **{data_last_date} 기준 크게 움직인 프로그램**부터 보시겠어요?",
     "default_chips": [
       {
-        "label": "크게 움직인 것부터",
-        "intent": "show_biggest_change",
+        "label": "변동폭 크게 움직인",
+        "intent": "show_biggest_change_pct",
         "next_slot": "1_anchor"
       },
       {
-        "label": "전 기간 대비 변화",
-        "intent": "show_period_comparison",
+        "label": "변동수치 크게 움직인",
+        "intent": "show_biggest_change_abs",
         "next_slot": "1_anchor"
       },
       {
         "label": "개편한 프로그램 사후효과",
         "intent": "show_change_after_revision",
         "next_slot": "4_loop"
+      },
+      {
+        "label": "📅 지난주 기준으로",
+        "intent": "set_period_last_week",
+        "next_slot": "entry"
+      },
+      {
+        "label": "📅 지난달 기준으로",
+        "intent": "set_period_last_month",
+        "next_slot": "entry"
       }
     ]
   },
@@ -156,7 +166,7 @@
           "_note": "CP별 담당 프로그램 매핑 메타데이터 필요"
         }
       ],
-      "answer_template": "**{channel_name}**의 **{program_count}개 프로그램** 중 **{top_change_program}**이 전주 대비 **{change_pct:+.1f}%** 로 가장 크게 변했습니다.\n\n- {top_change_program}: {prev_dau:,}명 → {curr_dau:,}명 ({change_pct:+.1f}%)\n- {top_2_program}: {top_2_change_pct:+.1f}%\n- {top_3_program}: {top_3_change_pct:+.1f}%\n\n*변화 크기 기준 TOP 3 — 인터뷰에서 '순위는 거의 안 바뀜, 변화 크기가 현실적' 반영*",
+      "answer_template": "{data_freshness_warning}{anchor_answer}",
       "fallback_answer_template": "CP→채널 매핑이 아직 등록되지 않았습니다. 프로필에서 담당 채널(파워FM 또는 러브FM)을 선택해주시면 즉시 답해드릴 수 있습니다.",
       "chips_next": [
         {
@@ -165,9 +175,9 @@
           "next_slot": "2_cause"
         },
         {
-          "label": "다른 프로그램들도 정리",
+          "label": "다른 프로그램들도 보기",
           "intent": "show_all_programs",
-          "next_slot": "1_anchor"
+          "next_slot": "1_anchor_more"
         },
         {
           "label": "최근 개편한 거 효과는?",
@@ -175,6 +185,29 @@
           "next_slot": "4_loop"
         }
       ]
+    },
+
+    "1_anchor_scan": {
+      "name": "전체 프로그램 스캔",
+      "purpose": "채널 전 프로그램을 4단면(사용자 규모/흐름/품질/유지율) + 위험 진입 기준으로 한 화면 스캔. 빠른 질의 '채널 전체 프로그램 스캔'으로 진입.",
+      "data_requirements": [
+        { "field": "dau_chg / wau_chg / mau_chg / dau_r7_chg / dau_r30_chg", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "new_chg / react_chg / react_rate_diff / churn_rate_diff", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "real_rate_diff / deep_rate_diff / engage_rate_diff / habit_rate_diff", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "d1/d7/w1/m1_ret_diff (전체·신규 코호트)", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{scan_answer}",
+      "fallback_answer_template": "{scan_answer}"
+    },
+
+    "1_anchor_more": {
+      "name": "다른 프로그램들 — 변화 순위",
+      "purpose": "1_anchor에서 보여준 TOP3를 제외한 나머지 프로그램을 동일 기준(DAU/WAU/MAU)에 따라 변화율 순위로 나열.",
+      "data_requirements": [
+        { "field": "dau/wau/mau 및 변화율", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{more_answer}",
+      "fallback_answer_template": "{more_answer}"
     },
 
     "2_cause": {
@@ -205,8 +238,8 @@
           "_note": "인접 프로그램 매핑 메타데이터 필요"
         }
       ],
-      "answer_template": "**{top_change_program}** 변화의 추정 원인 후보:\n\n1. **{cause_1_name}** — {cause_1_evidence}\n2. **{cause_2_name}** — {cause_2_evidence}\n\n특히 **{peak_date}**에 가장 큰 변화 ({peak_change_pct:+.1f}%)\n→ 이 날 {peak_event_summary}",
-      "fallback_answer_template": "**{top_change_program}**의 변화 원인을 설명할 데이터가 아직 적재되지 않았습니다:\n- 공감로그/문자 건수 (Splunk → RAAS 적재 진행 중)\n- 특별 게스트/이벤트 캘린더 (별도 적재 필요)\n\n현재 활용 가능한 단서: 신규 사용자 변화 {new_user_change_pct:+.1f}%, 인접 프로그램은 {adjacent_change_pct:+.1f}% 변화로 채널 고유 요인 가능성 {channel_specific_probability}",
+      "answer_template": "{cause_explanation}",
+      "fallback_answer_template": "{cause_explanation}",
       "chips_next": [
         {
           "label": "담당 PD에게 의견 전달",
@@ -222,7 +255,47 @@
           "label": "이전에 비슷한 변화가 있었나?",
           "intent": "show_historical_similar_change",
           "next_slot": "4_loop"
+        },
+        {
+          "label": "📅 주간 변화 살펴보기",
+          "intent": "show_weekly_view",
+          "next_slot": "2_cause_weekly"
         }
+      ]
+    },
+
+    "2_cause_weekly": {
+      "name": "주간 원인 분석",
+      "purpose": "WAU(전주 대비) 변화의 원인을 편성 영향 + 사용자 흐름 분해(전주 대비 강력 설명) + 코호트로 분석. WAU 추이 그래프 첨부.",
+      "data_requirements": [
+        { "field": "wau / wau_chg / wau_prev", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "new_week / react_week / churn_rate_week", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "guestname (직전 7일치)", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "이벤트 캘린더", "source": "별도 적재 필요", "available": false }
+      ],
+      "answer_template": "{cause_explanation}",
+      "fallback_answer_template": "{cause_explanation}",
+      "chips_next": [
+        { "label": "담당 PD에게 의견 전달", "intent": "draft_pd_dispatch", "next_slot": "3_context" },
+        { "label": "비슷한 시간대 다른 프로그램은?", "intent": "compare_adjacent_programs", "next_slot": "3_context" },
+        { "label": "이전에 비슷한 변화가 있었나?", "intent": "show_historical_similar_change", "next_slot": "4_loop" },
+        { "label": "📅 월간 변화 살펴보기", "intent": "show_monthly_view", "next_slot": "2_cause_monthly" }
+      ]
+    },
+
+    "2_cause_monthly": {
+      "name": "월간 원인 분석",
+      "purpose": "MAU(전월 대비) 변화의 원인을 월간 편성 영향 + 월간 사용자 흐름 분해 + 월간 코호트로 분석. MAU 추이 그래프 첨부.",
+      "data_requirements": [
+        { "field": "mau / mau_chg / mau_prev", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "new_mon / react_mon / churn_rate_mon", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{cause_explanation}",
+      "fallback_answer_template": "{cause_explanation}",
+      "chips_next": [
+        { "label": "담당 PD에게 의견 전달", "intent": "draft_pd_dispatch", "next_slot": "3_context" },
+        { "label": "비슷한 시간대 다른 프로그램은?", "intent": "compare_adjacent_programs", "next_slot": "3_context" },
+        { "label": "이전에 비슷한 변화가 있었나?", "intent": "show_historical_similar_change", "next_slot": "4_loop" }
       ]
     },
 

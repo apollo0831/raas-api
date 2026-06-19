@@ -94,6 +94,11 @@ def init_db():
             conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
         except Exception:
             pass
+        # users에 담당 채널 (CP 전용, D-015 옵션 A) — '파워FM' / '러브FM' / NULL
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN channel TEXT")
+        except Exception:
+            pass
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_user_created "

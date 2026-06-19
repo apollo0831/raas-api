@@ -284,7 +284,55 @@ raas:D_2026_12_25 a raas:CalendarDay ;
 
 
 # =============================================================================
-# 7. 비즈니스 룰 보완 — DayType 인식 비교 (향후 확장용)
+# 7. BroadcastEvent — SBS 라디오 특별 이벤트
+# =============================================================================
+# 공휴일과 별개로, 청취 패턴에 영향을 줄 수 있는 SBS 자체 방송 이벤트.
+# 예: 고릴라 데이 (앱 개국기념), 가요대전, DJ 생일 파티 등.
+# 분석 시 해당 일자의 비정상 청취 패턴(평소 대비 ±N%)의 설명 변수로 활용.
+
+raas:BroadcastEvent a owl:Class ;
+    rdfs:label "방송 이벤트"@ko ;
+    rdfs:comment "SBS 라디오 자체 특별 이벤트 (개국 기념, 청취자 이벤트, DJ 생일 파티 등)"@ko .
+
+raas:eventDate a owl:DatatypeProperty ;
+    rdfs:domain raas:BroadcastEvent ;
+    rdfs:label "이벤트 날짜 (YYYY-MM-DD)"@ko .
+
+raas:relatedProgram a owl:DatatypeProperty ;
+    rdfs:domain raas:BroadcastEvent ;
+    rdfs:label "관련 프로그램 코드"@ko ;
+    rdfs:comment "이벤트와 연관된 프로그램 (예: F05 = 김영철의 파워FM)"@ko .
+
+raas:eventCampaign a owl:DatatypeProperty ;
+    rdfs:domain raas:BroadcastEvent ;
+    rdfs:label "병행 캠페인"@ko ;
+    rdfs:comment "이벤트와 함께 진행된 사회적 캠페인"@ko .
+
+raas:eventAnniversary a owl:DatatypeProperty ;
+    rdfs:domain raas:BroadcastEvent ;
+    rdfs:label "기념 주년"@ko ;
+    rdfs:comment "N주년 (개국·런칭 N주년 등)"@ko .
+
+raas:eventReferenceImage a owl:DatatypeProperty ;
+    rdfs:domain raas:BroadcastEvent ;
+    rdfs:label "이벤트 참고 이미지"@ko ;
+    rdfs:comment "이벤트 안내 포스터/초대장 등 상대 경로"@ko .
+
+
+# 2026-06-16 고릴라 데이 (앱 런칭 20주년)
+raas:E_2026_06_16_GorillaDay a raas:BroadcastEvent ;
+    rdfs:label "고릴라 데이 (20주년)"@ko ;
+    raas:eventDate "2026-06-16" ;
+    raas:dayOfWeek raas:Tuesday ;
+    raas:relatedProgram "F05" ;
+    raas:eventAnniversary 20 ;
+    raas:eventCampaign "노인학대 예방 캠페인 나비새김"@ko ;
+    raas:eventReferenceImage "data/image/gorilla_day_2026-06-16.png" ;
+    rdfs:comment "랄라의 스무살 생일파티 — 김영철의 파워FM(F05)에서 진행된 고릴라 라디오 앱 런칭 20주년 기념 이벤트. 노인학대 예방 캠페인 '나비새김'과 병행."@ko .
+
+
+# =============================================================================
+# 8. 비즈니스 룰 보완 — DayType 인식 비교 (향후 확장용)
 # =============================================================================
 # 기존 AtRiskProgram 룰의 한계와 개선 방향을 명시.
 # 실제 데이터에 dau_vs_same_dayType 필드가 추가되면 v2 룰을 활성화.

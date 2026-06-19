@@ -42,6 +42,7 @@ from raas_auth import (register_user, authenticate, create_session,
                        update_profile, change_password)
 from raas_onboarding import list_active_profiles, build_suggestions
 import raas_storyline_engine as STORY
+import raas_storyline_router as ROUTER
 import raas_report_engine as REPORT
 from raas_querymap import (stats_overview, stats_by_role,
                            stats_by_user, stats_topics,
@@ -154,6 +155,11 @@ def get_cached_timeline():
 
 def get_timeline_source() -> str:
     return cache_get("timeline_source") or "unknown"
+
+
+# 스토리라인 엔진이 일반 채팅과 동일한 Splunk 파이프라인을 쓰도록 주입
+# (CSV 직접 읽기는 더 이상 사용 X)
+STORY.set_timeline_provider(get_cached_timeline)
 
 
 def get_cached_anomalies() -> list:
@@ -860,6 +866,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     name        = body.get('name'),
                     role        = body.get('role'),
                     my_programs = body.get('my_programs'),
+                    channel     = body.get('channel'),
                 )
                 if not result.get('ok'):
                     self.send_json(result, 400)
@@ -960,6 +967,80 @@ class RAASHandler(BaseHTTPRequestHandler):
                 if not QUERY_ENGINE_AVAILABLE:
                     self.send_json({"ok": False, "error": "Query engine unavailable"}, 500)
                     return
+
+                # 스토리라인 라우터 — 자유 질의에서 '특정 프로그램 원인 분석' 의도가
+                # 분명하면 2_cause 슬롯 답변을 SSE로 한 번에 송출 (칩 클릭과 동일 구조)
+                # 1_anchor_more 흐름이면 'lenient'로 의도 키워드 검사 생략 → 프로그램명만 적어도 라우팅
+                storyline_slot = body.get("storyline_slot")
+                storyline_ctx  = body.get("storyline_context") or {}
+                lenient_route = (storyline_slot == "1_anchor_more")
+                try:
+                    routing = ROUTER.route(question, lenient=lenient_route)
+                except Exception as e:
+                    print(f"[router] route error: {e}")
+                    routing = None
+                if routing:
+                    prog = routing["program"]
+                    # anchor_mode에 따라 2_cause / 2_cause_weekly / 2_cause_monthly 분기
+                    am = (storyline_ctx.get("anchor_mode") or "").lower() if lenient_route else ""
+                    if am.startswith("weekly"):
+                        target_slot = "2_cause_weekly"
+                    elif am.startswith("monthly"):
+                        target_slot = "2_cause_monthly"
+                    else:
+                        target_slot = "2_cause"
+                    prev_context = {
+                        "top_change_program_code": prog["code"],
+                        "top_change_program":      prog["name"],
+                        "channel_name":            prog["channel"],
+                    }
+                    try:
+                        engine = STORY.StorylineEngine(
+                            role="CP", user=user,
+                            channel_override=prog["channel"],
+                        )
+                        result = engine.advance(
+                            routing["slot_from"], routing["chip_intent"],
+                            prev_context=prev_context,
+                            next_slot_override=target_slot,
+                        )
+                    except Exception as e:
+                        print(f"[router] advance error: {e}")
+                        result = None
+                    if result and result.get("ok"):
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                        self.send_header("Cache-Control", "no-cache")
+                        self.send_header("Connection", "keep-alive")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        def sse(data: dict):
+                            self.wfile.write(
+                                ("data: " + json.dumps(data, ensure_ascii=False) + "\n\n").encode("utf-8")
+                            )
+                            self.wfile.flush()
+                        sse({"type": "meta", "chart_data": result.get("chart_data")})
+                        sse({"type": "token", "text": result.get("answer", "")})
+                        qid = save_query(
+                            user_id, question, result.get("answer", ""),
+                            chart_data=result.get("chart_data"),
+                            ip=ip, user_name=user_name, user_role=user_role,
+                            input_tokens=None, output_tokens=None,
+                            intent="storyline_routed",
+                            scope=prog["channel"], scope_keyword=prog["code"],
+                            metric="dau", metrics=None, topic_key="cause_dau")
+                        sse({
+                            "type": "done",
+                            "query_id": qid,
+                            "routed_via_storyline": True,
+                            "routing_badge": "🧭 원인 분석 스토리라인으로 안내",
+                            "slot": result.get("slot"),
+                            "slot_name": result.get("slot_name"),
+                            "chips_next": result.get("chips_next") or [],
+                            "context_out": result.get("context_out"),
+                        })
+                        self.close_connection = True
+                        return
 
                 timeline = get_cached_timeline()
                 sys_prompt, ctx, max_tok, chart_data, facts = QE.query_with_timeline_stream(
@@ -1093,10 +1174,12 @@ class RAASHandler(BaseHTTPRequestHandler):
                     return
                 channel = body.get("channel")
                 prev_context = body.get("prev_context") or {}
+                next_slot_override = body.get("next_slot_override")
                 engine = STORY.StorylineEngine(role=role, user=user,
                                                channel_override=channel)
                 result = engine.advance(slot_from, chip_intent,
-                                        prev_context=prev_context)
+                                        prev_context=prev_context,
+                                        next_slot_override=next_slot_override)
                 status = 200 if result.get("ok") else 400
                 self.send_json(result, status)
             except Exception as e:

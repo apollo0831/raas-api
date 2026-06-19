@@ -58,7 +58,12 @@ def _user_dict(row) -> dict:
         'status':       row['status'] if 'status' in keys else 'approved',
         'is_admin':     bool(row['is_admin']) if 'is_admin' in keys else False,
         'my_programs':  _parse_my_programs(row['my_programs']) if 'my_programs' in keys else [],
+        'channel':      (row['channel'] if 'channel' in keys else None),
     }
+
+
+# CP 채널 옵션 (D-015 옵션 A)
+ALLOWED_CHANNELS = {'파워FM', '러브FM'}
 
 
 # ── 가입 / 로그인 ────────────────────────────────────────────
@@ -111,7 +116,7 @@ def authenticate(login_id: str, pw: str) -> Optional[dict]:
     """ID/PW 검증. status='approved'만 통과. 통과 시 user dict 반환."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id, login_id, pw_hash, pw_salt, name, role, status, my_programs, is_admin "
+            "SELECT id, login_id, pw_hash, pw_salt, name, role, status, my_programs, is_admin, channel "
             "FROM users WHERE login_id = ?",
             (login_id,)
         ).fetchone()
@@ -142,7 +147,7 @@ def resolve_session(token: str) -> Optional[dict]:
         return None
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT u.id, u.login_id, u.name, u.role, u.status, u.my_programs, u.is_admin, s.expires_at "
+            "SELECT u.id, u.login_id, u.name, u.role, u.status, u.my_programs, u.is_admin, u.channel, s.expires_at "
             "FROM sessions s JOIN users u ON s.user_id = u.id "
             "WHERE s.token = ?",
             (token,)
@@ -173,32 +178,48 @@ def destroy_session(token: str) -> None:
 # ── 프로필 수정 / 비밀번호 변경 ───────────────────────────────
 def update_profile(user_id: int, name: Optional[str] = None,
                    role: Optional[str] = None,
-                   my_programs: Optional[List[str]] = None) -> dict:
+                   my_programs: Optional[List[str]] = None,
+                   channel: Optional[str] = None) -> dict:
     """현재 사용자의 프로필 수정. None인 필드는 변경하지 않음.
-    login_id·status·is_admin은 이 경로로 바꾸지 않음."""
+    login_id·status·is_admin은 이 경로로 바꾸지 않음.
+    channel은 CP 직무 전용 — role이 CP가 아니면 자동으로 NULL 처리(혼란 방지)."""
     sets, vals = [], []
     if name is not None:
         n = name.strip()
         if not n:
             return {'ok': False, 'error': '이름은 비울 수 없습니다.'}
         sets.append("name = ?"); vals.append(n)
+    effective_role: Optional[str] = None
     if role is not None:
         r = role.strip()
         if r not in ALLOWED_ROLES:
             return {'ok': False, 'error': f"role은 {sorted(ALLOWED_ROLES)} 중 하나"}
         sets.append("role = ?"); vals.append(r)
+        effective_role = r
     if my_programs is not None:
         if not isinstance(my_programs, list):
             return {'ok': False, 'error': 'my_programs는 배열'}
         sets.append("my_programs = ?")
         vals.append(json.dumps([str(x) for x in my_programs if x], ensure_ascii=False))
+    if channel is not None:
+        ch = (channel or '').strip()
+        if ch == '':
+            sets.append("channel = ?"); vals.append(None)
+        elif ch not in ALLOWED_CHANNELS:
+            return {'ok': False, 'error': f"channel은 {sorted(ALLOWED_CHANNELS)} 중 하나"}
+        else:
+            sets.append("channel = ?"); vals.append(ch)
+    # role이 명시되었는데 CP가 아니라면 channel 무효화 (의미적 정합성)
+    if effective_role is not None and effective_role != 'CP':
+        if not any(s.startswith("channel") for s in sets):
+            sets.append("channel = ?"); vals.append(None)
     if not sets:
         return {'ok': False, 'error': '변경할 필드 없음'}
     vals.append(user_id)
     with get_conn() as conn:
         conn.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = ?", vals)
         row = conn.execute(
-            "SELECT id, login_id, name, role, status, my_programs, is_admin "
+            "SELECT id, login_id, name, role, status, my_programs, is_admin, channel "
             "FROM users WHERE id = ?", (user_id,)
         ).fetchone()
     if not row:
