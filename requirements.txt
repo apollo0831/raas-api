@@ -12,6 +12,9 @@ google-api-python-client>=2.140.0
 # Data processing
 pandas>=2.2.0
 
+# Ontology (스토리라인 원인 분석 — raas_onto/*.ttl 로드)
+rdflib>=7.0.0
+
 # Environment variables
 python-dotenv>=1.0.0
 

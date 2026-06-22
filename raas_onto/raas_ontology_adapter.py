@@ -670,6 +670,9 @@ class OntologyAdapter:
     
     # 게스트 분석 캐시 (옵션 B — 메모리 캐시)
     _guest_cache: Optional[dict] = None
+
+    # 비근무일(공휴일·대체공휴일 등) 날짜 집합 캐시 — 평일 판정용
+    _special_days_cache: Optional[set] = None
     
     def _get_regular_guest_names(self) -> set[str]:
         """온톨로지에 등록된 모든 RegularGuest 이름 (분석 제외용)."""
@@ -1079,6 +1082,35 @@ class OntologyAdapter:
             "holiday_name": None,
             "is_workday": not is_weekend,
         }
+
+    def get_special_day_dates(self) -> set:
+        """캘린더에 등록된 비근무일(공휴일·대체공휴일 등) 날짜 집합 (YYYY-MM-DD), 캐시.
+
+        get_day_type()은 CalendarDay에 등록된 날짜를 모두 is_workday=False로 보므로
+        여기서도 등록된 CalendarDay dateValue를 전부 모은다.
+        """
+        if self._special_days_cache is None:
+            dates = set()
+            try:
+                for cd in self._onto.instances_of("raas:CalendarDay"):
+                    d = self._onto.value_str(self._onto.get_one(cd, "raas:dateValue"))
+                    if d:
+                        dates.add(d.replace("/", "-"))
+            except Exception:
+                pass
+            self._special_days_cache = dates
+        return self._special_days_cache
+
+    def is_workday(self, date_str: str) -> bool:
+        """평일(주말X·공휴일X) 여부. 파싱 실패 시 True(보수적으로 포함)."""
+        norm = (date_str or "").replace("/", "-")
+        try:
+            dt = datetime.strptime(norm, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            return True
+        if dt.weekday() >= 5:
+            return False
+        return norm not in self.get_special_day_dates()
 
     # ─── 3.4 비즈니스 룰 평가 ──────────────────────────────────────────────
 

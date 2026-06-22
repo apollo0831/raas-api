@@ -42,6 +42,7 @@ def init_db():
             ("metric",        "TEXT"),
             ("metrics_json",  "TEXT"),   # list → JSON
             ("topic_key",     "TEXT"),   # f"{intent}:{scope}:{metric}" 그룹핑/인기 집계용
+            ("source",        "TEXT"),   # 'general'(일반 질의) | 'storyline'(스토리라인 칩)
         ]:
             try:
                 conn.execute(f"ALTER TABLE query_history ADD COLUMN {col} {typedef}")
@@ -189,9 +190,10 @@ def save_query(user_id: str, question: str, answer: str,
                # 질의 노드화 ETL (Phase 3-1) — classify_intent + 후처리 결과
                intent: str = None, scope: str = None, scope_keyword: str = None,
                metric: str = None, metrics: Optional[list] = None,
-               topic_key: str = None) -> int:
+               topic_key: str = None, source: str = "general") -> int:
     """질의 1건 DB 저장. JSONL 로그도 함께 기록.
-    intent/scope/metric 등 fact 인자는 모두 optional — None이어도 정상 저장."""
+    intent/scope/metric 등 fact 인자는 모두 optional — None이어도 정상 저장.
+    source: 'general'(일반 질의) | 'storyline'(스토리라인 칩 질의)."""
     chart_json   = json.dumps(chart_data, ensure_ascii=False) if chart_data is not None else None
     metrics_json = json.dumps(metrics,    ensure_ascii=False) if metrics    else None
     with get_conn() as conn:
@@ -199,11 +201,11 @@ def save_query(user_id: str, question: str, answer: str,
             "INSERT INTO query_history "
             "(user_id, question, answer, chart_data, ip, user_name, user_role, "
             " input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, "
-            " intent, scope, scope_keyword, metric, metrics_json, topic_key) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " intent, scope, scope_keyword, metric, metrics_json, topic_key, source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (user_id, question, answer, chart_json, ip, user_name, user_role,
              input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-             intent, scope, scope_keyword, metric, metrics_json, topic_key)
+             intent, scope, scope_keyword, metric, metrics_json, topic_key, source)
         )
         row_id = cur.lastrowid
 
@@ -263,7 +265,7 @@ def get_history(user_id: str, limit: int = 20) -> list:
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT id, question, answer, chart_data, feedback,
-                      input_tokens, output_tokens, created_at
+                      input_tokens, output_tokens, created_at, source
                FROM query_history
                WHERE user_id = ?
                ORDER BY created_at DESC
@@ -280,6 +282,7 @@ def get_history(user_id: str, limit: int = 20) -> list:
             "input_tokens":  r["input_tokens"],
             "output_tokens": r["output_tokens"],
             "created_at":    r["created_at"],
+            "source":        r["source"] or "general",
         }
         for r in rows
     ]
@@ -302,7 +305,7 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0) -> dict:
         total = conn.execute(f"SELECT COUNT(*) FROM query_history {where}", params_count).fetchone()[0]
         rows  = conn.execute(
             f"""SELECT id, user_id, user_name, ip, question, answer, chart_data,
-                       feedback, input_tokens, output_tokens, created_at
+                       feedback, input_tokens, output_tokens, created_at, source
                 FROM query_history {where}
                 ORDER BY created_at DESC
                 LIMIT ? OFFSET ?""",
@@ -323,6 +326,7 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0) -> dict:
                 "input_tokens":  r["input_tokens"],
                 "output_tokens": r["output_tokens"],
                 "created_at":    r["created_at"],
+                "source":        r["source"] or "general",
             }
             for r in rows
         ],

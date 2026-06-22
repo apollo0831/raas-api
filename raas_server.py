@@ -290,6 +290,15 @@ def call_claude_stream(system: str, user: str, max_tokens: int = 1000):
 # HTML 파일 경로 (서버와 같은 폴더)
 HTML_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.html")
 
+
+def _app_version() -> str:
+    """프론트 버전 = raas_web.html 수정시각(mtime). 파일이 바뀌면 값이 바뀐다.
+    홈화면 바로가기가 새 버전을 감지해 자동 새로고침하는 데 사용."""
+    try:
+        return str(int(os.path.getmtime(HTML_FILE)))
+    except OSError:
+        return "0"
+
 class RAASHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {format % args}")
@@ -349,6 +358,11 @@ class RAASHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", len(body))
+        # 캐시 방지 — 모바일 브라우저(특히 ngrok+Safari)의 휴리스틱 캐싱으로
+        # 옛 HTML/JS가 남아 프론트 변경이 반영 안 되는 문제 방지
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(body)
 
@@ -363,9 +377,15 @@ class RAASHandler(BaseHTTPRequestHandler):
         if self.path == "/" or self.path == "/index.html":
             if os.path.exists(HTML_FILE):
                 with open(HTML_FILE, "r", encoding="utf-8") as f:
-                    self.send_html(f.read())
+                    html = f.read()
+                # 현재 버전(파일 mtime)을 HTML에 주입 — 자동 업데이트 감지용
+                html = html.replace("%%APP_VER%%", _app_version())
+                self.send_html(html)
             else:
                 self.send_html("<h2>raas_web.html 파일을 같은 폴더에 두세요</h2>")
+
+        elif self.path == "/api/version":
+            self.send_json({"version": _app_version()})
 
         elif self.path.startswith("/api/timeseries/program/"):
             try:
@@ -1181,6 +1201,55 @@ class RAASHandler(BaseHTTPRequestHandler):
                                         prev_context=prev_context,
                                         next_slot_override=next_slot_override)
                 status = 200 if result.get("ok") else 400
+                # 스토리라인 칩 질의도 히스토리·질의맵에 기록
+                # (질의맵은 intent NOT NULL 행만 집계 → intent=chip_intent로 항상 채움)
+                try:
+                    if (user and result.get("ok") and not result.get("ended")
+                            and result.get("answer")):
+                        ctx_out = result.get("context_out") or {}
+                        ch_name = (channel or ctx_out.get("channel_name")
+                                   or prev_context.get("channel_name"))
+                        _CH_CODE = {"파워FM": "F00", "러브FM": "L00",
+                                    "고릴라M": "G00", "픽채널": "P00"}
+                        slot = result.get("slot")
+                        # intent family 정규화 (pick 칩 등)
+                        intent_norm = chip_intent
+                        for pre in ("revision_pick_", "scan_pick_", "scan_"):
+                            if chip_intent.startswith(pre):
+                                intent_norm = pre.rstrip("_")
+                                break
+                        # 단일 프로그램이 암묵적 주어인 슬롯 → 프로그램 코드 도출
+                        prog_code = None
+                        if slot in ("2_cause", "2_cause_weekly", "2_cause_monthly"):
+                            prog_code = (ctx_out.get("top_change_program_code")
+                                         or prev_context.get("top_change_program_code"))
+                        elif slot == "4_revision_detail":
+                            prog_code = ctx_out.get("revision_code") or (
+                                chip_intent[len("revision_pick_"):]
+                                if chip_intent.startswith("revision_pick_") else None)
+                        elif chip_intent.startswith(("revision_pick_", "scan_pick_")):
+                            prog_code = chip_intent.split("_", 2)[-1]
+                        # scope: 프로그램 주어면 코드, 아니면 채널 코드
+                        scope = prog_code or _CH_CODE.get(ch_name)
+                        chip_label = (body.get("chip_label") or result.get("slot_name")
+                                      or chip_intent or "").strip()
+                        # 프로그램 주어면 질문 앞에 (코드) 접두 — 질의맵 숨은 관계 분석용
+                        logged_q = f"({prog_code}){chip_label}" if prog_code else chip_label
+                        _usage = result.get("usage") or {}
+                        save_query(
+                            str(user["id"]), logged_q, result.get("answer", ""),
+                            chart_data=result.get("chart_data"),
+                            ip=self._get_client_ip(), user_name=user.get("name"),
+                            user_role=role, intent=intent_norm, scope=scope,
+                            scope_keyword=ch_name, topic_key=slot,
+                            input_tokens=_usage.get("input_tokens"),
+                            output_tokens=_usage.get("output_tokens"),
+                            source="storyline",
+                        )
+                        # 프론트 캐시 키 정합 — 저장된 질문 문자열을 응답에 포함
+                        result["logged_question"] = logged_q
+                except Exception as _e:
+                    print(f"[storyline] save_query 실패(무시): {_e}", flush=True)
                 self.send_json(result, status)
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)

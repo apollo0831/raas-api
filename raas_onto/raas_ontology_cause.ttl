@@ -208,9 +208,9 @@ raas:Rule_NoChange a raas:InterpretationRule ;
 # ─── ② 사용자 흐름 분해 (Flow Decomposition) ─────────────────────────────────
 
 raas:FlowDecomposition a raas:CauseDecomposition ;
-    rdfs:label "사용자 흐름 분해 (직전일 대비)"@ko ;
-    raas:purpose "ΔDAU를 신규·복귀·이탈로 분해해 직전일 대비 변동의 직접적 원인을 본다 (참고용)"@ko ;
-    raas:formula "Δdau ≈ new + react − (dau_prev × churn_rate / 100)" ;
+    rdfs:label "사용자 흐름 분해 (전주 동요일 대비)"@ko ;
+    raas:purpose "ΔDAU를 신규·복귀·유지로 분해해 전주 동요일 대비 변동의 구조적 원인을 본다 (정확히 닫힘)"@ko ;
+    raas:formula "ΔDAU = Δnew + Δreact + Δretain (retain = dau − new − react)" ;
     raas:priority 2 ;
     raas:usesMetric raas:NewUser_Day, raas:ReactivatedUser_Day, raas:ChurnRate_Day, raas:DAU_Day ;
     raas:dataAvailability raas:DA_Available ;

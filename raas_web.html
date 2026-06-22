@@ -229,10 +229,18 @@ body{
 .hist-time{font-size:var(--fs-xs);color:var(--dim);white-space:nowrap;flex-shrink:0}
 .history-empty{font-size:var(--fs-sm);color:var(--dim);padding:10px 12px;line-height:1.6}
 .hist-cached{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-right:2px}
+/* 스토리라인 질의 캐시 점 — 일반(파랑)과 구분되는 보라색 */
+.hist-cached.story{background:var(--purple)}
+/* 스토리라인 질의 구분 배지 */
+.hist-src-badge{
+  flex-shrink:0;font-size:10px;line-height:1;font-weight:600;
+  padding:2px 5px;border-radius:4px;
+  color:var(--accent);background:var(--accent-soft);
+}
 
 /* ── HISTORY MODAL BUTTON ── */
 .btn-history{
-  margin:4px 12px 6px;
+  margin:4px 12px 4px;
   display:flex;align-items:center;gap:9px;
   padding:10px 12px;
   background:transparent;border:none;border-radius:8px;
@@ -742,6 +750,17 @@ body{
   margin-top:2px;
   letter-spacing:-.1px;
 }
+/* [hl] 마커 — 분석한 프로그램과 같은 시간대 섹션 헤더 강조 */
+.story-hl-slot{
+  display:inline-block;
+  font-weight:700;
+  color:var(--accent);
+  background:var(--accent-soft);
+  border-left:3px solid var(--accent);
+  padding:2px 8px;
+  border-radius:4px;
+  margin-top:2px;
+}
 .story-chips-inline{
   display:flex;flex-wrap:wrap;gap:8px;
   margin-top:14px;
@@ -913,6 +932,12 @@ table.story-table th{
 .btn-send:hover{background:#6fa3f9}
 .btn-send:active{transform:scale(.93)}
 .btn-send:disabled{background:var(--bg4);cursor:not-allowed}
+/* 답변 생성 중: 윗화살표 → 네모(정지), 빗금 커서 대신 일반 상태 유지 */
+.btn-send .ic-stop{display:none}
+.btn-send.is-generating .ic-arrow{display:none}
+.btn-send.is-generating .ic-stop{display:block}
+.btn-send.is-generating{background:var(--bg4);color:var(--sub);cursor:default}
+.btn-send.is-generating:hover{background:var(--bg4)}
 .input-hint{font-size:var(--fs-xs);color:var(--dim);text-align:center;margin-top:6px}
 
 /* ── KPI PANEL ── */
@@ -1013,7 +1038,23 @@ table.story-table th{
   border-left:2px solid var(--color-info);
   background:rgba(167,139,250,.04);border-radius:var(--rad-sm);
 }
-.ai-chart-wrap{display:block}
+.ai-chart-wrap{display:block;position:relative}
+/* 평일만(주말·공휴일 제외) 토글 버튼 — 차트 우상단 (가장자리에서 살짝 안쪽) */
+.chart-wd-toggle{
+  position:absolute;top:10px;right:12px;z-index:5;
+  font-size:var(--fs-xs);line-height:1;
+  padding:5px 10px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--accent);
+  background:var(--color-bg-elevated-2);color:var(--accent);
+  box-shadow:0 1px 4px rgba(0,0,0,.20);
+  transition:background .12s,color .12s;
+}
+.chart-wd-toggle:hover{background:var(--accent-soft)}
+.chart-wd-toggle.active{background:var(--accent);color:#fff;font-weight:600;border-color:var(--accent)}
+/* 모바일 — 탭 타깃 확대 + 가시성 보장 */
+@media(max-width:600px){
+  .chart-wd-toggle{top:8px;right:10px;padding:7px 12px;font-size:var(--fs-sm)}
+}
 
 /* ECharts 컨테이너 (옵션 2 점진 도입 - D-013) */
 .ai-echarts-container{
@@ -1107,6 +1148,33 @@ table.story-table th{
 </style>
 </head>
 <body>
+<!-- 자동 업데이트 감지 — 홈화면 바로가기(앱)가 새 버전을 스스로 새로고침 -->
+<script>
+  window.__APP_VER__ = "%%APP_VER%%";  // 서버가 현재 버전(mtime)으로 치환
+  // 과거 캐시버스터(?v=...) 잔재가 URL에 남아 있으면 깔끔하게 제거 (새로고침 없이)
+  try {
+    const _u = new URL(location.href);
+    if (_u.searchParams.has('v')) {
+      _u.searchParams.delete('v');
+      history.replaceState(null, '', _u.pathname + (_u.search || '') + _u.hash);
+    }
+  } catch (_) {}
+  async function _checkAppVersion() {
+    try {
+      const r = await fetch('/api/version', { cache: 'no-store' });
+      const { version } = await r.json();
+      if (!version || version === window.__APP_VER__) return;
+      // 같은 버전으로 이미 새로고침했으면 재시도 안 함 (캐시 고착 시 무한루프 방지)
+      if (sessionStorage.getItem('_appReloadedFor') === version) return;
+      sessionStorage.setItem('_appReloadedFor', version);
+      location.reload();  // no-cache 헤더로 새로고침만으로 최신 로드 (URL은 그대로)
+    } catch (_) {}
+  }
+  // 앱 진입 + 백그라운드에서 복귀할 때마다 최신 여부 확인
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) _checkAppVersion(); });
+  window.addEventListener('focus', _checkAppVersion);
+  _checkAppVersion();
+</script>
 
 <!-- ── AUTH GATE (로그인/가입) ── -->
 <div class="auth-gate" id="authGate">
@@ -1224,8 +1292,11 @@ table.story-table th{
         aria-label="질의 입력"
         autocomplete="off" spellcheck="false"></textarea>
       <button class="btn-send" id="btnSend" aria-label="전송">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+        <svg class="ic-arrow" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
           <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+        </svg>
+        <svg class="ic-stop" width="17" height="17" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="3"/>
         </svg>
       </button>
     </div>
@@ -2878,6 +2949,9 @@ function _buildEChartsMultiLineOption(chart) {
     lineStyle: { width: 2 },
     itemStyle: { color: s.color || theme.palette[i % theme.palette.length] },
     emphasis: { focus: 'series' },
+    // 그리기 애니메이션 OFF — 컨테이너가 갓 보이며 init될 때(스토리라인 타자효과 후)
+    // 라인 clip이 0으로 굳어 선이 안 그려지는 모바일 버그 방지
+    animation: false,
   }));
 
   const titleBlock = chart.title ? {
@@ -3017,6 +3091,7 @@ function _buildEChartsDualAxisOption(chart) {
     lineStyle: { width: 2, color: colors[i] },
     itemStyle: { color: colors[i] },
     emphasis: { focus: 'series' },
+    animation: false,  // 그리기 애니메이션 OFF (모바일 라인 미표시 버그 방지)
   }));
 
   // 이중 Y축
@@ -3449,8 +3524,69 @@ function _buildEChartsRangeBandOption(chart) {
 }
 
 // 컨테이너에 ECharts 인스턴스 초기화 — 통합 디스패처 사용
+// 일별 차트에서 주말·공휴일(workday===false) 포인트 제거한 사본 반환 (클라이언트 '평일만')
+function _filterChartWorkdays(chart) {
+  const keep = p => p && p.workday !== false;
+  const title = (chart.title || '') + (/평일만/.test(chart.title || '') ? '' : ' (평일만)');
+  if (Array.isArray(chart.series)) {
+    const series = chart.series.map(s => {
+      const pts = (s.points || []).filter(keep);
+      return pts.length >= 2 ? { ...s, points: pts } : s;
+    });
+    return { ...chart, series, title };
+  }
+  if (Array.isArray(chart.points)) {
+    const points = chart.points.filter(keep);
+    if (points.length < 2) return chart;  // 평일 데이터 부족 → 전체 유지
+    const points_prev = Array.isArray(chart.points_prev)
+      ? chart.points_prev.filter(keep) : chart.points_prev;
+    const vals = points.map(p => p.value).filter(v => v != null);
+    let summary = chart.summary;
+    if (vals.length) {
+      const first = vals[0], latest = vals[vals.length - 1];
+      summary = {
+        min: Math.min(...vals), max: Math.max(...vals),
+        avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10,
+        latest, change_pct: first ? Math.round((latest - first) / first * 1000) / 10 : null,
+      };
+    }
+    return { ...chart, points, points_prev, summary, title };
+  }
+  return chart;
+}
+
+// 현재 토글 상태(el._raasWeekdayOnly)에 맞춰 옵션 재설정 (테마 변경·평일토글 공용)
+function _rerenderChart(el) {
+  const full = el._raasEChartsChartFull;
+  if (!full || !el._raasEChartsInst) return;
+  const view = el._raasWeekdayOnly ? _filterChartWorkdays(full) : full;
+  el._raasEChartsChart = view;
+  const opt = _buildEChartsOption(view);
+  if (opt) el._raasEChartsInst.setOption(opt, true);
+}
+
+// '평일만' 토글 버튼 클릭 — 서버 왕복 없이 즉시 필터/재렌더
+function _toggleChartWorkdays(btn) {
+  const wrap = btn.closest('.ai-chart-wrap');
+  const el = wrap && wrap.querySelector('.ai-echarts-container');
+  if (!el) return;
+  el._raasWeekdayOnly = !el._raasWeekdayOnly;
+  btn.classList.toggle('active', el._raasWeekdayOnly);
+  btn.setAttribute('aria-pressed', el._raasWeekdayOnly ? 'true' : 'false');
+  if (el._raasEChartsInst) {
+    _rerenderChart(el);
+  } else {
+    // 아직 lazy 초기화 전 → store 사본의 기본값을 갱신해 init이 반영하게
+    const c = _ECHARTS_STORE[el.id];
+    if (c) c.weekday_default = el._raasWeekdayOnly;
+  }
+}
+
 function _initEChartsInstance(el, chart, echarts) {
-  const option = _buildEChartsOption(chart);
+  el._raasEChartsChartFull = chart;
+  if (el._raasWeekdayOnly === undefined) el._raasWeekdayOnly = !!chart.weekday_default;
+  const view = el._raasWeekdayOnly ? _filterChartWorkdays(chart) : chart;
+  const option = _buildEChartsOption(view);
   if (!option) {
     el.innerHTML = `<div class="ai-echarts-fallback-note">차트 데이터 부족</div>`;
     return;
@@ -3459,6 +3595,10 @@ function _initEChartsInstance(el, chart, echarts) {
   el.dataset.initialized = '1';
   const inst = echarts.init(el, null, { renderer: 'svg' });
   inst.setOption(option);
+  // 컨테이너가 갓 보이며 init될 때(스토리라인 타자효과 후) 0크기/스테일 clip으로
+  // 라인이 안 그려지는 모바일 버그 방지 — 레이아웃 정착 후 강제 리렌더
+  requestAnimationFrame(() => requestAnimationFrame(() => { try { inst.resize(); } catch (_) {} }));
+  setTimeout(() => { try { inst.resize(); } catch (_) {} }, 250);
   // 윈도우 리사이즈 + 컨테이너 리사이즈 모두 대응
   if (window.ResizeObserver) {
     new ResizeObserver(() => inst.resize()).observe(el);
@@ -3467,7 +3607,7 @@ function _initEChartsInstance(el, chart, echarts) {
   }
   // 테마 변경 감지 — data-theme 변경 시 옵션 재설정
   el._raasEChartsInst = inst;
-  el._raasEChartsChart = chart;
+  el._raasEChartsChart = view;
 }
 
 // IntersectionObserver — 컨테이너가 보이면 ECharts 초기화 (lazy)
@@ -3527,9 +3667,8 @@ function _initEChartsContainers(rootEl) {
 // 테마 토글 시 ECharts 인스턴스 옵션 재설정 (통합 디스패처 사용)
 function _refreshEChartsTheme() {
   document.querySelectorAll('.ai-echarts-container[data-initialized]').forEach(el => {
-    if (!el._raasEChartsInst || !el._raasEChartsChart) return;
-    const opt = _buildEChartsOption(el._raasEChartsChart);
-    if (opt) el._raasEChartsInst.setOption(opt, true);
+    if (!el._raasEChartsInst) return;
+    _rerenderChart(el);  // 현재 평일토글 상태 유지하며 테마 재적용
   });
 }
 
@@ -3906,16 +4045,24 @@ function _buildChartHTML(chart) {
   const rationale = (chart.chart_type && chart.rationale)
     ? `<p class="ai-rationale" title="AI 차트 선택 근거">💡 ${escapeHtml(chart.rationale)}</p>`
     : '';
+  // 일별 차트면 '평일만'(주말·공휴일 제외) 클라이언트 토글 버튼
+  const wdToggle = chart.weekday_toggle
+    ? `<button class="chart-wd-toggle${chart.weekday_default ? ' active' : ''}" type="button"
+               aria-pressed="${chart.weekday_default ? 'true' : 'false'}"
+               title="주말·공휴일을 제외하고 평일만 표시"
+               onclick="_toggleChartWorkdays(this)">평일만</button>`
+    : '';
   // chart_type 메타가 있으면 컨테이너로 감싸 open_chart 발사용 데이터 속성 부여
   if (chart.chart_type) {
     const chartId = 'chart_' + Math.random().toString(36).slice(2, 10);
-    const inner = h + src + rationale;
+    const inner = wdToggle + h + src + rationale;
     return `<div class="ai-chart-wrap" data-chart-type="${escapeHtml(chart.chart_type)}"
                  data-chart-id="${chartId}" data-rationale-visible="1"
                  data-metric="${escapeHtml(chart.metric || '')}"
                  data-completeness="${chart.data_completeness ?? ''}">${inner}</div>`;
   }
-  return h + src + rationale;
+  return wdToggle ? `<div class="ai-chart-wrap">${wdToggle}${h}${src}${rationale}</div>`
+                  : h + src + rationale;
 }
 
 // IntersectionObserver — 새로 렌더된 .ai-chart-wrap이 50% 가시되면 open_chart 발사 (인스턴스 1회)
@@ -3979,13 +4126,28 @@ function _scrollBottom() {
 // ────────────────────────────────────────────────
 // SUBMIT QUERY
 // ────────────────────────────────────────────────
+let _raas_query_inflight = false;   // 이전 질의 응답이 끝날 때까지 다음 질의 차단
+
+// 송신 버튼 상태 토글 + in-flight 플래그. 일반 질의·스토리라인 칩 답변 공통 사용.
+// 답변이 "완전히 끝날 때까지"(스트리밍/타자기 렌더 완료) on 유지.
+function _setQueryGenerating(on) {
+  _raas_query_inflight = on;
+  const btn = document.getElementById('btnSend');
+  if (!btn) return;
+  btn.classList.toggle('is-generating', on);   // 네모(정지)·회색 ↔ 윗화살표
+  btn.setAttribute('aria-label', on ? '생성 중' : '전송');
+}
+
 async function submitQuery(question, source) {
   question = question.trim();
   if (!question) return;
+  // 직전 질의의 답변(스트리밍)이 완전히 끝나기 전에는 새 질의를 막는다.
+  // Enter·전송버튼·칩 등 모든 진입 경로에 동일 적용.
+  if (_raas_query_inflight) return;
+  _setQueryGenerating(true);
   const input = document.getElementById('chatInput');
   input.value = '';
   input.style.height = 'auto';
-  document.getElementById('btnSend').disabled = true;
   addUserMsg(question);
   const aiId = addAiTyping();
   const msgBody = document.getElementById(aiId).querySelector('.msg-body');
@@ -4090,7 +4252,7 @@ async function submitQuery(question, source) {
   } catch (err) {
     fillAiError(aiId, err.message);
   } finally {
-    document.getElementById('btnSend').disabled = false;
+    _setQueryGenerating(false);
   }
 }
 
@@ -4104,6 +4266,9 @@ chatInput.addEventListener('input', () => {
 });
 chatInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
+    // 한글(IME) 조합 중 Enter는 조합 확정용이므로 전송하지 않음.
+    // (조합 확정 시 마지막 글자가 별도 질의로 중복 전송되던 버그 방지)
+    if (e.isComposing || e.keyCode === 229) return;
     e.preventDefault();
     submitQuery(chatInput.value, 'main_input');
   }
@@ -4289,24 +4454,13 @@ function _entryComputeQuestion(entry, period) {
 function _entryRemapChips(chips, period) {
   return (chips || []).map(c => {
     const cp = Object.assign({}, c);
-    // period 칩: 활성 → ✓, 비활성 → "어제 기준으로"로 교체
-    if (cp.intent === 'set_period_last_week') {
-      if (period === 'last_week') {
-        cp.label = '✓ ' + cp.label;
-      } else if (period === 'last_month') {
-        // 지난달 활성 상태 → 지난주 칩 자리를 "어제 기준으로"로 교체
-        cp.label = '📅 어제 기준으로';
-        cp.intent = 'set_period_today';
-      }
+    // period 칩: 활성이면 ✓ 표시만, 비활성 칩은 본래 라벨 유지(다른 기간 칩을 건드리지 않음)
+    // 활성 칩 재클릭 시 today로 토글되는 동작은 onclick 핸들러에서 그대로 처리
+    if (cp.intent === 'set_period_last_week' && period === 'last_week') {
+      cp.label = '✓ ' + cp.label;
     }
-    if (cp.intent === 'set_period_last_month') {
-      if (period === 'last_month') {
-        cp.label = '✓ ' + cp.label;
-      } else if (period === 'last_week') {
-        // 지난주 활성 상태 → 지난달 칩 자리를 "어제 기준으로"로 교체
-        cp.label = '📅 어제 기준으로';
-        cp.intent = 'set_period_today';
-      }
+    if (cp.intent === 'set_period_last_month' && period === 'last_month') {
+      cp.label = '✓ ' + cp.label;
     }
     // 변동폭/변동수치 → period에 맞는 intent로 매핑
     if (period === 'last_week') {
@@ -4426,11 +4580,51 @@ function _renderStorylineText(s) {
   out = out.replace(/\[mini\]([\s\S]+?)\[\/mini\]/g, (_, body) =>
     `<span class="story-mini-note">${_renderStorylineInline(body.trim())}</span>`
   );
+  // 5) [hl]...[/hl] → 강조 섹션 헤더 (분석한 프로그램과 같은 시간대 표시)
+  out = out.replace(/\[hl\]([\s\S]+?)\[\/hl\]/g, (_, body) =>
+    `<span class="story-hl-slot">${_renderStorylineInline(body.trim())}</span>`
+  );
   return out;
 }
 
 function _renderStorylineInline(s) {
   return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+}
+
+// 스토리라인 칩 답변을 일반 질의 스트리밍처럼 한 글자씩 써내려가는 효과로 렌더.
+// 전체 답변(answer)을 점진적으로 잘라 _renderStorylineText(부분)을 반복 호출하고,
+// 본문이 끝나면 차트·다음 칩(tail)을 노출한다.
+function _typewriteStoryline(msgBody, parts) {
+  const { slotMetaCls, slotMetaTxt, answer, chartHtml, chipsHtml, onDone } = parts;
+  msgBody.innerHTML = `
+    <div class="msg-ai-name">RAAS Assistant</div>
+    <div class="${slotMetaCls}">${slotMetaTxt}</div>
+    <div class="msg-ai-text"></div>
+    <div class="sl-tail" style="display:none">
+      ${chartHtml || ''}
+      <div class="story-chips-inline">${chipsHtml || ''}</div>
+    </div>`;
+  const txtEl = msgBody.querySelector('.msg-ai-text');
+  const tail  = msgBody.querySelector('.sl-tail');
+  const full  = answer || '';
+  // 일반 질의(LLM 토큰 스트리밍) 체감과 맞추기 위해 길이와 무관하게 '일정 속도'로 흘린다.
+  // (이전엔 STEP을 길이에 비례시켜, 답변마다 한 번에 쓰는 분량·총 시간이 달라 보였음)
+  const STEP     = 3;    // tick당 글자수 (고정)
+  const INTERVAL = 24;   // ms — STEP/INTERVAL ≈ 125자/초, LLM 스트리밍과 유사한 체감
+  let i = 0;
+  (function tick() {
+    i = Math.min(full.length, i + STEP);
+    txtEl.innerHTML = _renderStorylineText(full.slice(0, i));
+    _scrollBottom();
+    if (i < full.length) {
+      setTimeout(tick, INTERVAL);
+    } else {
+      if (tail) tail.style.display = '';
+      if (chartHtml) { try { _observeChartsIn(msgBody); } catch (_) {} }
+      _scrollBottom();
+      if (typeof onDone === 'function') { try { onDone(); } catch (_) {} }
+    }
+  })();
 }
 
 async function _onStorylineChip(btn) {
@@ -4462,6 +4656,10 @@ async function _onStorylineChip(btn) {
     return;
   }
 
+  // 직전 답변(스트리밍/타자기)이 끝나기 전이면 차단 — 일반 질의와 동일
+  if (_raas_query_inflight) return;
+  _setQueryGenerating(true);
+
   // 1) 유저 메시지 버블 — 클릭한 칩 라벨
   addUserMsg(label);
 
@@ -4489,6 +4687,7 @@ async function _onStorylineChip(btn) {
         role: _RAAS_STORYLINE.role,
         slot_from: slotFrom,
         chip_intent: intent,
+        chip_label: label,
         prev_context: mergedCtx,
         next_slot_override: nextSlot || undefined,
       }),
@@ -4573,6 +4772,7 @@ async function _onStorylineChip(btn) {
         `;
       }
       _scrollBottom();
+      _setQueryGenerating(false);   // export 분기는 타자기 없음 → 즉시 해제
     } else {
       // 일반 슬롯 — 답변 + 다음 칩
       _RAAS_STORYLINE.context = data.context_out || _RAAS_STORYLINE.context;
@@ -4593,19 +4793,19 @@ async function _onStorylineChip(btn) {
 
       // chart_data가 있으면 답변 아래에 ECharts 컨테이너 삽입
       const chartHtml = data.chart_data ? _buildChartHTML(data.chart_data) : '';
+      const chipsHtml = (data.chips_next || [])
+        .map(c => _storylineChipHTML(c, data.slot)).join('');
 
-      msgBody.innerHTML = `
-        <div class="msg-ai-name">RAAS Assistant</div>
-        <div class="${slotMetaCls}">${slotMetaTxt}</div>
-        <div class="msg-ai-text">${_renderStorylineText(data.answer || '')}</div>
-        ${chartHtml}
-        <div class="story-chips-inline">
-          ${(data.chips_next || []).map(c => _storylineChipHTML(c, data.slot)).join('')}
-        </div>
-      `;
-      if (chartHtml) {
-        try { _observeChartsIn(msgBody); } catch (_) {}
-      }
+      // 일반 질의처럼 한 글자씩 써내려가는 효과 (완료 후 차트·칩 노출 + 버튼 해제)
+      _typewriteStoryline(msgBody, {
+        slotMetaCls, slotMetaTxt, answer: data.answer || '', chartHtml, chipsHtml,
+        onDone: () => {
+          _setQueryGenerating(false);
+          // 일반 질의와 동일 기준으로 답변 캐시 — 이력 질문(프로그램코드 접두 포함)과 키 정합
+          try { _saveCachedAnswer(data.logged_question || label, msgBody.innerHTML); } catch (_) {}
+          try { refreshHistory(); } catch (_) {}   // 스토리라인 질의도 이력에 즉시 반영
+        },
+      });
     }
     _scrollBottom();
   } catch (e) {
@@ -4619,6 +4819,7 @@ async function _onStorylineChip(btn) {
       </div>
     `;
     _scrollBottom();
+    _setQueryGenerating(false);
   }
 }
 
@@ -4995,6 +5196,8 @@ function _onQuickQuery(i) {
 }
 
 async function _showFullScanInChat() {
+  if (_raas_query_inflight) return;
+  _setQueryGenerating(true);
   addUserMsg(FULL_SCAN_QUERY_TEXT);
   const aiId = addAiTyping();
   const msgBody = document.getElementById(aiId).querySelector('.msg-body');
@@ -5026,18 +5229,17 @@ async function _showFullScanInChat() {
       ? `⚠ ${escapeHtml(data.slot_name || data.slot)} · 데이터 부족(fallback)`
       : `📍 ${escapeHtml(data.slot_name || data.slot)}`;
     const chartHtml = data.chart_data ? _buildChartHTML(data.chart_data) : '';
-    msgBody.innerHTML = `
-      <div class="msg-ai-name">RAAS Assistant</div>
-      <div class="${slotMetaCls}">${slotMetaTxt}</div>
-      <div class="msg-ai-text">${_renderStorylineText(data.answer || '')}</div>
-      ${chartHtml}
-      <div class="story-chips-inline">
-        ${(data.chips_next || []).map(c => _storylineChipHTML(c, data.slot)).join('')}
-      </div>`;
-    if (chartHtml) { try { _observeChartsIn(msgBody); } catch (_) {} }
+    const chipsHtml = (data.chips_next || [])
+      .map(c => _storylineChipHTML(c, data.slot)).join('');
+    // 일반 질의처럼 한 글자씩 써내려가는 효과 (완료 후 차트·칩 노출 + 버튼 해제)
+    _typewriteStoryline(msgBody, {
+      slotMetaCls, slotMetaTxt, answer: data.answer || '', chartHtml, chipsHtml,
+      onDone: () => _setQueryGenerating(false),
+    });
     _scrollBottom();
   } catch (e) {
     fillAiError(aiId, e.message);
+    _setQueryGenerating(false);
   }
 }
 
@@ -5115,7 +5317,10 @@ async function refreshHistory() {
       const q = it.question;
       const display = q.length > 46 ? q.slice(0, 46) + '…' : q;
       const hasCached = !!_getCachedAnswer(q);
-      const dot = hasCached ? '<span class="hist-cached" title="캐시된 답변"></span>' : '';
+      const isStory = it.source === 'storyline';
+      const dot = hasCached
+        ? `<span class="hist-cached${isStory ? ' story' : ''}" title="${isStory ? '스토리라인 질의 (캐시됨)' : '캐시된 답변'}"></span>`
+        : '';
       return `<div class="history-item" onclick="_onHistoryClick(${i})">
         ${dot}<span class="history-item-q">${escapeHtml(display)}</span>
         <span class="hist-time">${formatRelTime(it.created_at)}</span>
@@ -5240,6 +5445,7 @@ function _renderHistRows(items) {
       <div class="hm-summary">
         <span class="hm-time">${escapeHtml(time)}</span>
         <span class="hm-user">${escapeHtml(user)}</span>
+        ${it.source === 'storyline' ? '<span class="hist-src-badge" title="스토리라인 질의">스토리</span>' : ''}
         <span class="hm-q">${escapeHtml(qShort)}</span>
         ${_fbIcon(it.feedback)}
       </div>

@@ -129,7 +129,7 @@
       {
         "label": "개편한 프로그램 사후효과",
         "intent": "show_change_after_revision",
-        "next_slot": "4_loop"
+        "next_slot": "4_revision"
       },
       {
         "label": "📅 지난주 기준으로",
@@ -182,7 +182,7 @@
         {
           "label": "최근 개편한 거 효과는?",
           "intent": "show_change_after_revision",
-          "next_slot": "4_loop"
+          "next_slot": "4_revision"
         }
       ]
     },
@@ -249,7 +249,7 @@
         {
           "label": "비슷한 시간대 다른 프로그램은?",
           "intent": "compare_adjacent_programs",
-          "next_slot": "3_context"
+          "next_slot": "3_adjacent"
         },
         {
           "label": "이전에 비슷한 변화가 있었나?",
@@ -277,7 +277,7 @@
       "fallback_answer_template": "{cause_explanation}",
       "chips_next": [
         { "label": "담당 PD에게 의견 전달", "intent": "draft_pd_dispatch", "next_slot": "3_context" },
-        { "label": "비슷한 시간대 다른 프로그램은?", "intent": "compare_adjacent_programs", "next_slot": "3_context" },
+        { "label": "비슷한 시간대 다른 프로그램은?", "intent": "compare_adjacent_programs", "next_slot": "3_adjacent" },
         { "label": "이전에 비슷한 변화가 있었나?", "intent": "show_historical_similar_change", "next_slot": "4_loop" },
         { "label": "📅 월간 변화 살펴보기", "intent": "show_monthly_view", "next_slot": "2_cause_monthly" }
       ]
@@ -294,7 +294,23 @@
       "fallback_answer_template": "{cause_explanation}",
       "chips_next": [
         { "label": "담당 PD에게 의견 전달", "intent": "draft_pd_dispatch", "next_slot": "3_context" },
-        { "label": "비슷한 시간대 다른 프로그램은?", "intent": "compare_adjacent_programs", "next_slot": "3_context" },
+        { "label": "비슷한 시간대 다른 프로그램은?", "intent": "compare_adjacent_programs", "next_slot": "3_adjacent" },
+        { "label": "이전에 비슷한 변화가 있었나?", "intent": "show_historical_similar_change", "next_slot": "4_loop" }
+      ]
+    },
+
+    "3_adjacent": {
+      "name": "비슷한 시간대 다른 프로그램",
+      "purpose": "원인 분석 다음 단계 — 같은 채널 프로그램을 시간대(출퇴근/오후/오전/저녁/심야)로 묶어 편성 순으로 보여주며, 변동폭/변동수치 최고·지표 이상치 태그로 점검 우선순위를 함께 제시. '다른 프로그램들도 보기'와 동일 내용, 시간대 그룹 나열.",
+      "data_requirements": [
+        { "field": "dau/wau/mau 및 변화율", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "STIME (편성 시작시간)", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{adjacent_answer}",
+      "fallback_answer_template": "{adjacent_answer}",
+      "chips_next": [
+        { "label": "변화 순위로 보기", "intent": "show_all_programs", "next_slot": "1_anchor_more" },
+        { "label": "담당 PD에게 의견 전달", "intent": "draft_pd_dispatch", "next_slot": "3_context" },
         { "label": "이전에 비슷한 변화가 있었나?", "intent": "show_historical_similar_change", "next_slot": "4_loop" }
       ]
     },
@@ -333,6 +349,34 @@
           "intent": "expand_to_all_programs",
           "next_slot": "5_closing"
         }
+      ]
+    },
+
+    "4_revision": {
+      "name": "개편한 프로그램 사후 효과 (코너 변경 현황)",
+      "purpose": "채널 프로그램의 최근 5주 코너 편성을 날짜별로 비교 — 일일코너 변경(강한 개편 신호)과 주간코너 신설/폐지(같은 요일끼리 주차 비교)를 프로그램별로 정리.",
+      "data_requirements": [
+        { "field": "daily_corner / weekly_corner (날짜별)", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{revision_answer}",
+      "fallback_answer_template": "{revision_answer}",
+      "chips_next": [
+        { "label": "다른 프로그램들도 보기", "intent": "show_all_programs", "next_slot": "1_anchor_more" },
+        { "label": "담당 PD에게 의견 전달", "intent": "draft_pd_dispatch", "next_slot": "3_context" }
+      ]
+    },
+
+    "4_revision_detail": {
+      "name": "개편 프로그램 사후 효과 (개별)",
+      "purpose": "1단계에서 선택한 프로그램의 개편 내용(일일/주간 코너 변경)과 개편 전후 DAU 사후 효과를 분석. DAU 추이 차트 첨부.",
+      "data_requirements": [
+        { "field": "daily_corner / weekly_corner / dau (날짜별)", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{revision_detail_answer}",
+      "fallback_answer_template": "{revision_detail_answer}",
+      "chips_next": [
+        { "label": "개편 목록으로", "intent": "show_change_after_revision", "next_slot": "4_revision" },
+        { "label": "담당 PD에게 의견 전달", "intent": "draft_pd_dispatch", "next_slot": "3_context" }
       ]
     },
 

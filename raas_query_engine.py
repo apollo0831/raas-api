@@ -533,6 +533,55 @@ def _finalize_chart_data(chart_data, intent: dict):
     return chart_data
 
 
+def _is_workday(date_str: str) -> bool:
+    """평일(주말X·공휴일X) 여부. 어댑터(공휴일 캘린더) 우선, 불가 시 주말만 제외."""
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+        if a is not None:
+            return a.is_workday(date_str)
+    except Exception:
+        pass
+    try:
+        return datetime.strptime((date_str or '').replace('/', '-'), '%Y-%m-%d').weekday() < 5
+    except (ValueError, TypeError):
+        return True
+
+
+def _annotate_workdays(chart_data, intent):
+    """**일별** 차트의 각 포인트에 workday(평일 여부) 플래그를 달고 토글을 활성화.
+
+    포인트를 제거하지 않고 플래그만 부착 → 프론트가 '평일만' 토글을 즉시(서버 왕복·
+    LLM 호출 없이) 켜고 끌 수 있다. day_filter=='weekday_only'면 기본 ON으로 표시.
+    주간/월간 차트는 평일 필터가 무의미하므로 건드리지 않는다.
+    """
+    if not chart_data:
+        return chart_data
+    if chart_data.get('cadence') not in ('daily', '1d'):
+        return chart_data
+
+    def _ann(points):
+        for p in (points or []):
+            p['workday'] = _is_workday(p.get('date', ''))
+
+    ctype = chart_data.get('type')
+    touched = False
+    if ctype == 'timeseries':
+        _ann(chart_data.get('points'))
+        _ann(chart_data.get('points_prev'))
+        touched = True
+    elif ctype in ('timeseries_multi', 'timeseries_dual'):
+        for s in chart_data.get('series', []):
+            _ann(s.get('points'))
+        touched = True
+
+    if touched:
+        chart_data['weekday_toggle'] = True
+        if (intent or {}).get('day_filter') == 'weekday_only':
+            chart_data['weekday_default'] = True
+    return chart_data
+
+
 def build_chart_data(data: dict, intent: dict, question: str):
     """extract_data 결과 + intent → chart_data dict 또는 None.
     반환 dict에는 내부 type(렌더러 dispatch) + 공개 chart_type(9종) + rationale 부착."""
@@ -897,8 +946,10 @@ def build_chart_data(data: dict, intent: dict, question: str):
             return None
 
         # general / snapshot: 질문 키워드 기반 fallback
+        # 명시적 '그래프 요청어'만 트리거 — '최근·변화·지난주·이번 주' 같은 일상어는
+        # 그래프 요청이 아니므로 제외(예: "최근에 코너 바뀐거 있나"에 DAU 차트가 붙던 문제).
         q = question.lower()
-        trend_kw   = ["추세", "추이", "변화", "최근", "지난주", "이번 주", "트렌드", "흐름", "그래프", "차트"]
+        trend_kw   = ["추세", "추이", "트렌드", "흐름", "그래프", "차트", "시각화", "꺾은선"]
         compare_kw = ["vs", "비교", "차이", "1위", "top", "순위", "어디가"]
 
         if any(kw in q for kw in trend_kw) and 'trend' in data:
@@ -1176,8 +1227,13 @@ INTENT_SYSTEM = """RAAS 데이터 분석 시스템의 질의 분류기입니다.
   "specific_date": "YYYY/MM/DD 또는 null",
   "days": 7,
   "has_period": false,
+  "day_filter": "all",
   "summary": "질문 한 줄 요약"
 }
+
+day_filter: "all|weekday_only" — 사용자가 '평일만/주중만' 또는 '주말·공휴일 제외'를 요청하면 weekday_only, 아니면 all. (일별 차트에만 적용)
+  - weekday_only 예: "평일만 보여줘", "주말 빼고 그래프", "주말 공휴일 제외하고 추이"
+  - all 예: 그 외 전부 ("평일 대비"는 비교 표현이므로 all)
 
 metrics: trend/dual_trend 전용 — 추이를 볼 지표를 배열로 반환. 다른 intent는 null.
 - trend (단일 지표): ["dau"]
@@ -1233,6 +1289,13 @@ extra_fields: ranking intent에서 추가로 표시 요청한 필드명 배열. 
 
 
 def classify_intent(question: str, today: str = None) -> dict:
+    # 평일만(주말·공휴일 제외) — 결정적 키워드 감지 (LLM 누락 대비)
+    _qn = (question or "").replace(" ", "").replace(",", "")
+    _excl = ("제외" in _qn or "빼고" in _qn or "뺀" in _qn or "없이" in _qn)
+    _kw_weekday_only = (
+        "평일만" in _qn or "주중만" in _qn or
+        (_excl and ("주말" in _qn or "공휴일" in _qn or "휴일" in _qn))
+    )
     prompt = question
     if today:
         try:
@@ -1285,12 +1348,19 @@ def classify_intent(question: str, today: str = None) -> dict:
         intent.setdefault('scope', 'T00')
         intent.setdefault('metric', 'all')
         intent.setdefault('days', 7)
+        # 결정적 키워드 또는 LLM 둘 중 하나라도 평일만이면 weekday_only
+        intent['day_filter'] = (
+            'weekday_only'
+            if (_kw_weekday_only or intent.get('day_filter') == 'weekday_only')
+            else 'all'
+        )
         return intent
     except Exception as e:
         print(f"  [intent error] {e}", file=sys.stderr)
         return {
             'intent': 'general', 'scope': 'T00', 'metric': 'all',
-            'date_type': 'yesterday', 'days': 7, 'summary': question
+            'date_type': 'yesterday', 'days': 7, 'summary': question,
+            'day_filter': 'weekday_only' if _kw_weekday_only else 'all',
         }
 
 
@@ -3561,6 +3631,146 @@ def _build_facts(intent: dict) -> dict:
     }
 
 
+# ── 스키마 기반 동적 컬럼 추출 ──────────────────────────────────────────────
+# 질문을 분석해 raas_kpi_latest.csv의 어떤 속성 컬럼이 필요한지 LLM이 고르고,
+# 실제 CSV에 존재하면 그 컬럼을 집계해 컨텍스트에 첨부한다. 없으면 "없음" 안내.
+_ATTR_SELECT_SYSTEM = """당신은 데이터 질의 분석기입니다.
+사용자 질문이 아래 '속성 컬럼'을 필요로 하는지만 판단합니다. (이 단계는 보조 단계입니다.)
+
+사용 가능한 속성 컬럼 목록 (여기 없는 컬럼은 데이터에 존재하지 않음):
+{schema}
+
+[이미 다른 단계가 처리하므로 절대 잡지 말 것 — group_by/attributes/missing 모두 X]
+- 채널·프로그램·기간·요일 등으로 거르거나 지정하는 것 (예: "파워FM의", "어제", "최근 7일")
+- DAU·WAU·MAU·신규·복귀·이탈률·유지율·청취율 등 표준 지표의 단순 조회/추이/순위/비교
+
+[group_by — 오직 다음일 때만]
+질문이 위 속성 컬럼(생방송/녹음, 보이는라디오, 게스트, 코너 등) **값별로** 지표를 나눠
+비교·분해하려 할 때만 그 속성 컬럼명을 넣고, value_metric에 비교할 지표 컬럼명을 넣음.
+
+[attributes — 오직 다음일 때만]
+질문이 그 속성 값 자체(예: "게스트가 누구", "무슨 코너")를 알고 싶어할 때만 컬럼명을 넣음.
+
+[missing — 오직 다음일 때만]
+질문이 위 목록에도 없고 표준 지표도 아닌 '구체적 데이터 개념'(예: 광고매출, 연령, 성별, 지역,
+앱 푸시)을 요구할 때만 그 개념을 한 구절로 넣음. 단순 필터/지표는 missing이 아님.
+
+위 어디에도 해당 없으면 전부 비웁니다(group_by=null, value_metric=null, attributes=[], missing=null).
+반드시 아래 JSON 한 줄만 출력. 설명 금지.
+{"group_by": "컬럼명|null", "value_metric": "컬럼명|null", "attributes": ["컬럼명"], "missing": "구절|null"}
+
+예시:
+질문: "어제 파워FM DAU 추이" → {"group_by": null, "value_metric": null, "attributes": [], "missing": null}
+질문: "프로그램별 생방송과 녹음 DAU 차이" → {"group_by": "live_yn", "value_metric": "dau", "attributes": [], "missing": null}
+질문: "프로그램별 광고매출 알려줘" → {"group_by": null, "value_metric": null, "attributes": [], "missing": "프로그램별 광고매출"}"""
+
+
+def _select_attribute_columns(question, all_columns):
+    """질문 → 필요한 속성 컬럼 선택. 실제 컬럼 존재 여부로 검증. 관련 없으면 None."""
+    if os.getenv('ATTR_EXTRACT', '1') == '0' or not ANTHROPIC_API_KEY:
+        return None
+    try:
+        from raas_kpi_schema import schema_text, ATTRIBUTE_COLUMNS, GROUPABLE_METRICS
+        sys = _ATTR_SELECT_SYSTEM.replace('{schema}', schema_text())
+        raw, _ = call_claude(sys, question, max_tokens=160, model=HAIKU_MODEL)
+        raw = (raw or '').strip()
+        if '{' not in raw or '}' not in raw:
+            return None
+        sel = json.loads(raw[raw.find('{'): raw.rfind('}') + 1])
+    except Exception:
+        return None
+    valid_attr   = set(ATTRIBUTE_COLUMNS) & set(all_columns)
+    valid_metric = set(GROUPABLE_METRICS) & set(all_columns)
+    gb = sel.get('group_by') if sel.get('group_by') in valid_attr else None
+    vm = sel.get('value_metric') if sel.get('value_metric') in valid_metric else ('dau' if gb else None)
+    attrs   = [c for c in (sel.get('attributes') or []) if c in valid_attr]
+    missing = sel.get('missing') or None
+    if not gb and not attrs and not missing:
+        return None
+    return {'group_by': gb, 'value_metric': vm, 'attributes': attrs, 'missing': missing}
+
+
+def _scope_program_codes(intent, timeline):
+    """intent scope → 분석 대상 프로그램 코드 목록 (채널집계 T00/*00 제외)."""
+    scope = intent.get('scope')
+    if scope == 'F00':
+        base = PGM_F
+    elif scope == 'L00':
+        base = PGM_L
+    elif scope in ('G00', 'P00'):
+        pfx = scope[0]
+        base = [c for c in timeline if c.startswith(pfx) and not c.endswith('00')]
+    elif scope and scope not in ('T00',) and scope in timeline:
+        base = [scope]            # 특정 프로그램 지정
+    else:
+        base = [c for c in timeline if c not in CH and c != 'T00']
+    return [c for c in base if c in timeline]
+
+
+def _attr_to_float(v):
+    try:
+        return float(v) if v not in (None, '', 'None', 'null') else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _build_attribute_context(timeline, intent, sel):
+    """선택된 속성 컬럼을 timeline에서 집계해 컨텍스트 블록 문자열 생성."""
+    from raas_kpi_schema import GROUPABLE_METRICS
+    lines = []
+    codes = _scope_program_codes(intent, timeline)
+    gb = sel.get('group_by')
+    vm = sel.get('value_metric') or 'dau'
+
+    if gb:
+        vm_label = GROUPABLE_METRICS.get(vm, vm)
+        is_rate = ('rate' in vm) or ('ret' in vm)
+        lines.append(f"[프로그램별 {gb} 그룹 {vm_label} 비교 — CSV 실제 집계]")
+        lines.append(f"※ 각 그룹 = 해당 {gb} 값으로 방송된 날들의 {vm_label} 평균 (괄호=일수)")
+        any_row = False
+        for code in codes:
+            groups = {}
+            for _date, row in timeline[code].items():
+                g = (row.get(gb) or '').strip()
+                if not g:
+                    continue
+                val = _attr_to_float(row.get(vm))
+                if val is None:
+                    continue
+                groups.setdefault(g, []).append(val)
+            if not groups:
+                continue
+            avgs = {g: sum(v) / len(v) for g, v in groups.items()}
+            parts = []
+            for g, vals in groups.items():
+                vstr = _fmt_pct(avgs[g]) if is_rate else _fmt_dau(avgs[g])
+                parts.append(f"{g} {vstr}({len(vals)}일)")
+            diff_str = ''
+            if len(avgs) == 2:
+                k = list(avgs)
+                d = avgs[k[0]] - avgs[k[1]]
+                dstr = _fmt_pct(d) if is_rate else _fmt_dau(abs(d))
+                diff_str = f" — {k[0]}-{k[1]} 차이 {'+' if d >= 0 else '-'}{dstr}"
+            lines.append(f"  {_pgm_name(code)}({code}): {' / '.join(parts)}{diff_str}")
+            any_row = True
+        if not any_row:
+            lines.append(f"  (해당 범위 프로그램에 {gb} 값이 채워진 데이터가 없습니다 → 분석 불가.)")
+
+    for attr in sel.get('attributes') or []:
+        lines.append(f"[프로그램별 {attr} (최근값)]")
+        for code in codes:
+            val = ''
+            for d in sorted(timeline[code].keys(), reverse=True):
+                v = (timeline[code][d].get(attr) or '').strip()
+                if v:
+                    val = v
+                    break
+            if val:
+                lines.append(f"  {_pgm_name(code)}({code}): {val}")
+
+    return '\n'.join(lines) if lines else ''
+
+
 def _answer(question, timeline, target_date, verbose, briefing_data=None, _return_context=False):
     if verbose:
         print("  [2/3] 의도 분류 중...", flush=True)
@@ -3699,6 +3909,23 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
         print("  [3/3] 답변 생성 중...", flush=True)
     context = format_for_claude(data, intent, question, timeline=timeline)
     context = build_query_context(question, context, intent=intent, data=data)
+
+    # ── 스키마 기반 동적 컬럼 추출 (질문→필요컬럼→존재시 첨부, 없으면 안내) ──
+    try:
+        _sample_row = next(iter(next(iter(timeline.values())).values()), {})
+        _sel = _select_attribute_columns(question, set(_sample_row.keys()))
+        if _sel:
+            if _sel.get('group_by') or _sel.get('attributes'):
+                _attr_ctx = _build_attribute_context(timeline, intent, _sel)
+                if _attr_ctx:
+                    context += "\n\n" + _attr_ctx
+            if _sel.get('missing'):
+                context += (f"\n\n[데이터 가용성 안내]\n- '{_sel['missing']}'에 해당하는 "
+                            f"컬럼은 raas_kpi_latest.csv에 없습니다. 해당 부분은 "
+                            f"데이터 없음으로 명시하세요.")
+    except Exception:
+        pass
+
     max_tokens = _INTENT_TOKENS.get(intent.get('intent', 'general'), 600)
     date_max = available_dates[-1] if available_dates else ''
     date_system = (
@@ -3712,8 +3939,18 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
     # 차트 먼저 빌드 — intent_note를 chart 가용 여부에 따라 조정하기 위해
     chart_data = build_chart_data(data, intent, question)
     # [실험] 규칙 기반 차트가 없으면 Claude가 context 수치로 차트를 생성 (롤백: CHART_FALLBACK=0)
-    if chart_data is None and CHART_FALLBACK_ENABLED:
+    # 단, 그래프와 무관한 질의(general·snapshot에서 명시적 차트 요청어 없음)엔 폴백을 돌리지
+    # 않는다 — tool_choice="any"라 호출되면 차트를 강제 생성하는 문제 차단.
+    _CHART_REQUEST_KW = ('그래프', '차트', '추이', '추세', '트렌드', '시각화', '꺾은선', '그려')
+    _wants_chart = (
+        intent.get('intent', 'general') not in ('general', 'snapshot')
+        or any(k in question for k in _CHART_REQUEST_KW)
+    )
+    if chart_data is None and CHART_FALLBACK_ENABLED and _wants_chart:
         chart_data = claude_chart_fallback(question, context, intent)
+    # 평일 플래그 주입 + '평일만' 토글 활성화 (일별 차트, 클라이언트사이드 토글용)
+    if chart_data is not None:
+        chart_data = _annotate_workdays(chart_data, intent)
     # 차트 메타데이터 부착 — chart_type(9종) + rationale (PoC §4)
     if chart_data is not None:
         chart_data = _finalize_chart_data(chart_data, intent)
