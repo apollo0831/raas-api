@@ -1,0 +1,268 @@
+{
+  "schema_version": "v2",
+  "role": "CP",
+  "role_name_ko": "CP (책임 프로듀서)",
+  "updated": "2026-06-22",
+  "_schema": "docs/storyline_cp_v2_schema.md — 토글 + 공통 출구 계약",
+  "source_documents": [
+    "docs/storyline_cp_redesign_v2.md",
+    "data/storylines/cp.json (v1 — 본 파일이 대체)",
+    "data/storylines/cp_tobe.json (내비 검증 프로토타입)"
+  ],
+
+  "persona_summary": {
+    "viewpoint": "본인이 담당하는 1개 채널(파워FM 또는 러브FM)의 모든 프로그램. 시간대(출퇴근>낮>오전>저녁>심야 순)",
+    "cycle": ["일", "주", "분기"],
+    "biggest_pain": "활성사용자 변화는 결과인데 원인 설명이 안 됨",
+    "biggest_value_unlock": "변화 결과 + 추정 원인 + 근거 데이터 3종 세트 + PD 디스패치 자동화",
+    "role_in_information_flow": "정보 허브 (위/아래/옆 모든 흐름 통과)"
+  },
+
+  "ontology": {
+    "hasPrimaryKPI": [
+      { "id": "program_dau_change_pct", "name": "프로그램별 활성사용자 변화율(WoW)", "unit": "%", "priority": 1, "data_source": "raas_kpi_latest.csv:dau, dau_wow_pct" },
+      { "id": "program_dau_absolute", "name": "프로그램별 활성사용자(절대값)", "unit": "명", "priority": 2, "data_source": "raas_kpi_latest.csv:dau" }
+    ],
+    "prefersComparison": [
+      { "id": "wow", "name": "전주 동요일 대비", "priority": 1 },
+      { "id": "before_after_change", "name": "개편/이벤트 전후 비교", "priority": 2 },
+      { "id": "mom", "name": "전월 대비", "priority": 3 }
+    ],
+    "outputsTo": [
+      { "id": "director_one_pager_ppt", "name": "국장 보고용 1장 PPT", "priority": 1, "format": "PPT" },
+      { "id": "pd_dispatch_message", "name": "PD 카톡/메일 디스패치 메시지", "priority": 1, "format": "text" },
+      { "id": "weekly_meeting_free_format", "name": "주간 회의 자유 양식 자료", "priority": 2, "format": "PPT|HWP" },
+      { "id": "business_director_mau_brief", "name": "사업국장 MAU 별도 보고", "priority": 2, "format": "PPT" }
+    ]
+  },
+
+  "common_exits": {
+    "share":    { "label": "담당 PD에게 공유",   "intent": "draft_pd_dispatch", "next_slot": "3_context" },
+    "report":   { "label": "국장 보고서에 넣기", "intent": "open_report",       "next_slot": "5_closing" },
+    "anchor":   { "label": "← 다른 프로그램",    "intent": "back_to_anchor",    "next_slot": "1_anchor", "reset_scope": true },
+    "freetext": { "label": "자유질의 입력",      "intent": "freetext",          "next_slot": "__freetext__" }
+  },
+
+  "entry": {
+    "greeting_template": "{user_name}님 안녕하세요.",
+    "first_question": "**{channel_name}** 채널, 무엇부터 보시겠어요?",
+    "priority_rule": {
+      "by": "data_last_weekday",
+      "promote": { "mon": "show_biggest_change_week", "month_start": "show_biggest_change_month" },
+      "_note": "월요일이면 전주(WAU) 칩을, 1일 직후면 전월(MAU) 칩을 최상단으로 승격. 규칙 미스 시 정의 순서."
+    },
+    "default_chips": [
+      { "label": "어제 청취자 변동폭 큰 프로그램",   "intent": "show_biggest_change",       "next_slot": "1_anchor", "set_toggle": { "metric": "scale", "period": "day" } },
+      { "label": "지난주 청취자 변동폭 큰 프로그램", "intent": "show_biggest_change_week",  "next_slot": "1_anchor", "set_toggle": { "metric": "scale", "period": "week" } },
+      { "label": "지난달 청취자 변동폭 큰 프로그램", "intent": "show_biggest_change_month", "next_slot": "1_anchor", "set_toggle": { "metric": "scale", "period": "month" } },
+      { "label": "다른 지표에서 크게 움직인 프로그램", "intent": "show_kpi_categories",   "next_slot": "1_kpi", "set_toggle": { "category": "flow", "period": "day" } },
+      { "label": "개편된 프로그램 먼저",          "intent": "show_change_after_revision", "next_slot": "4_revision" }
+    ]
+  },
+
+  "slots": {
+    "1_anchor": {
+      "name": "앵커 (통합)",
+      "purpose": "담당 채널 프로그램을 선택 지표·기간 기준 변화 크기 순으로. v1의 anchor/scan/more를 지표·기간 토글로 흡수.",
+      "data_requirements": [
+        { "field": "dau / wau / mau / deep_rate / *_ret / new / churn (및 변화율)", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "cp_program_list (담당 채널 프로그램)", "source": "users.channel", "available": true }
+      ],
+      "answer_template": "{data_freshness_warning}{anchor_answer}",
+      "fallback_answer_template": "담당 채널이 설정되지 않았습니다. ‘내 정보’에서 파워FM 또는 러브FM을 선택해 주세요.",
+      "chips_next": [
+        { "label": "왜 변했어? (원인 보기)", "intent": "explain_change", "next_slot": "2_cause" },
+        { "label": "다른 프로그램들도 보기", "intent": "show_adjacent", "next_slot": "3_adjacent" }
+      ],
+      "exits": ["share", "report"],
+      "log_dimensions": ["period"]
+    },
+
+    "1_kpi": {
+      "name": "지표 범주 탐색",
+      "purpose": "다른 지표에서 크게 움직인 프로그램 — 4개 범주(규모/사용자흐름/청취품질/유지율)별 채널 KPI를 현재·전일·전주·전월 대비 표로. 프로그램 선택 시 AU 영향성 분석(2_impact).",
+      "toggles": {
+        "category": {
+          "label": "범주",
+          "options": [
+            { "id": "scale",     "label": "규모", "default": true },
+            { "id": "flow",      "label": "사용자흐름" },
+            { "id": "quality",   "label": "청취품질" },
+            { "id": "retention", "label": "유지율" }
+          ]
+        },
+        "period": {
+          "label": "기간",
+          "_note": "표의 ★ 강조 컬럼 + 영향성 분석의 중심 기간",
+          "options": [
+            { "id": "day",   "label": "일", "default": true },
+            { "id": "week",  "label": "주" },
+            { "id": "month", "label": "월" }
+          ]
+        }
+      },
+      "data_requirements": [
+        { "field": "채널(F00/L00) 시계열 KPI 전체", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{kpi_table_answer}",
+      "fallback_answer_template": "{kpi_table_answer}",
+      "chips_next": [],
+      "_dynamic_chips": "computer가 범주 주요 지표 변화 큰 프로그램 칩(→2_impact) 생성",
+      "exits": [],
+      "log_dimensions": ["category", "period"]
+    },
+
+    "2_impact": {
+      "name": "지표 영향성 분석",
+      "purpose": "선택 프로그램의 해당 범주 지표 변화를 선택 기간 중심+전일/전주/전월 종합으로 설명하고, 그 변화가 활성사용자(DAU)에 미치는 영향·관계를 분석. 마지막 칩은 PD공유 + 트랙 이동.",
+      "toggles": {
+        "category": {
+          "label": "범주",
+          "options": [
+            { "id": "scale",     "label": "규모" },
+            { "id": "flow",      "label": "사용자흐름" },
+            { "id": "quality",   "label": "청취품질", "default": true },
+            { "id": "retention", "label": "유지율" }
+          ]
+        },
+        "period": {
+          "label": "기간",
+          "options": [
+            { "id": "day",   "label": "일", "default": true },
+            { "id": "week",  "label": "주" },
+            { "id": "month", "label": "월" }
+          ]
+        }
+      },
+      "data_requirements": [
+        { "field": "프로그램 시계열 KPI + DAU", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{impact_answer}",
+      "fallback_answer_template": "{impact_answer}",
+      "chips_next": [
+        { "label": "사용자규모 변동 보기",          "intent": "show_adjacent",     "next_slot": "3_adjacent" },
+        { "label": "다른 지표 더 보기",              "intent": "goto_kpi_track",    "next_slot": "1_kpi" },
+        { "label": "개편한 프로그램 확인",           "intent": "goto_revision_track","next_slot": "4_revision" }
+      ],
+      "exits": ["share", "report"],
+      "log_dimensions": ["category", "period"]
+    },
+
+    "2_cause": {
+      "name": "원인 종합",
+      "purpose": "선택 프로그램의 변화 원인을 종합 도출. 기간은 그래프의 [일/주/월] 버튼으로 전환(본문+그래프 동시 재렌더).",
+      "data_requirements": [
+        { "field": "흐름분해(신규/복귀/이탈)·코호트·stickiness", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "지표 델타 패널(DAU/WAU/MAU·깊은청취·리텐션·신규/이탈)", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "공감로그·게스트/이벤트 캘린더", "source": "Splunk/별도 적재", "available": false, "blocks_quality": "medium" }
+      ],
+      "answer_template": "{cause_explanation}",
+      "fallback_answer_template": "{cause_explanation}",
+      "chips_next": [],
+      "_dynamic_chips": "computer가 chips_next를 _cause_nav_chips로 전량 생성(기간 전환 + 인접 비교 + 지표 탐색). 정적 칩 없음.",
+      "exits": ["share", "report"],
+      "log_dimensions": ["period"]
+    },
+
+    "3_adjacent": {
+      "name": "인접 비교",
+      "purpose": "같은 시간대(데이파트) 프로그램 대조로 채널 공통요인 vs 프로그램 고유요인 판별.",
+      "data_requirements": [
+        { "field": "dau/wau/mau 및 변화율 + STIME", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{adjacent_answer}",
+      "fallback_answer_template": "{adjacent_answer}",
+      "chips_next": [],
+      "_exits_note": "share/report는 프론트 게이트(_STORY_SHARE_GATE_SLOTS)로 분석 내용(2_cause/2_impact/4_revision_detail 방문)이 있을 때만 노출.",
+      "exits": ["share", "report"]
+    },
+
+    "3_context": {
+      "name": "PD 공유 (디스패치)",
+      "purpose": "담당 PD 전달 메시지 초안 — 헤드라인→변화요약→추정원인+근거→인접대조→점검포인트→출처.",
+      "data_requirements": [
+        { "field": "program_to_pd_mapping", "source": "user_profile 확장", "available": false },
+        { "field": "adjacent_program_dau", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "담당 **{pd_name}** PD와 나눌 포인트 초안입니다:\n\n---\n> {pd_name} PD님, **{top_change_program}** 전주 대비 {change_pct:+.1f}% 변화입니다.\n>\n> 추정 원인: {cause_summary}\n> 근거: {cause_evidence}\n> 인접 시간대({adjacent_program})는 {adjacent_change_pct:+.1f}% → 우리 프로그램 고유 요인 가능성\n>\n> 다음 회차({next_episode_date}) 점검 포인트:\n> - {watchpoint_1}\n> - {watchpoint_2}\n---\n\n*그대로 보내드릴까요, 아니면 수정하시겠어요?*",
+      "fallback_answer_template": "프로그램별 담당 PD 매핑이 아직 등록되지 않았습니다. 등록 후 자동 디스패치가 가능합니다.",
+      "chips_next": [
+        { "label": "이대로 PD에게 전송 (카톡)", "intent": "send_pd_dispatch_kakao", "next_slot": "_end", "output_format_id": "pd_dispatch_message" },
+        { "label": "국장 보고서로 승격",        "intent": "open_report",            "next_slot": "5_closing" },
+        { "label": "수정해서 전송",             "intent": "edit_pd_dispatch",       "next_slot": "3_context" }
+      ],
+      "exits": ["anchor"]
+    },
+
+    "4_revision": {
+      "name": "개편 자동감지",
+      "purpose": "최근 5주 코너 편성 변경을 자동 감지해 개편 있는 프로그램을 제시(일일코너 변경·주간코너 신설/폐지).",
+      "data_requirements": [
+        { "field": "daily_corner / weekly_corner (날짜별)", "source": "raas_kpi_latest.csv", "available": true }
+      ],
+      "answer_template": "{revision_answer}",
+      "fallback_answer_template": "{revision_answer}",
+      "chips_next": [],
+      "_dynamic_chips": "computer가 감지된 개편 프로그램별 칩(intent=revision_pick_<code>, next_slot=4_revision_detail) 생성",
+      "exits": ["share", "report"]
+    },
+
+    "4_revision_detail": {
+      "name": "개편 전후분석",
+      "purpose": "선택 프로그램의 개편 내용 + 전후 비교(DAU/깊은청취) 종합. v1의 4_revision_detail + 4_loop를 비교창 토글로 흡수.",
+      "toggles": {
+        "window": {
+          "label": "비교창",
+          "options": [
+            { "id": "2w", "label": "2주" },
+            { "id": "4w", "label": "4주", "default": true },
+            { "id": "8w", "label": "8주" }
+          ]
+        }
+      },
+      "data_requirements": [
+        { "field": "daily_corner / weekly_corner / dau / deep_rate (날짜별)", "source": "raas_kpi_latest.csv", "available": true },
+        { "field": "program_change_event_metadata (개편 일자·내용)", "source": "별도 적재", "available": false, "blocks_quality": "medium" }
+      ],
+      "answer_template": "{revision_detail_answer}",
+      "fallback_answer_template": "{revision_detail_answer}",
+      "chips_next": [
+        { "label": "주간 변화 살펴보기", "intent": "show_week_view", "next_slot": "2_cause", "set_toggle": { "period": "week" } },
+        { "label": "다른 개편 프로그램 보기", "intent": "show_change_after_revision", "next_slot": "4_revision" }
+      ],
+      "exits": ["share", "report"],
+      "log_dimensions": ["window"]
+    },
+
+    "5_closing": {
+      "name": "보고 / 산출물",
+      "purpose": "오늘 핵심 3가지 + 산출물 4종 1클릭 변환(채널총평→변화TOP→개편효과→원인종합→액션 순 구성).",
+      "data_requirements": [],
+      "answer_template": "**오늘 CP님께서 아실 핵심 3가지**\n\n1. 크게 변한 프로그램: **{top_change_program}** ({change_pct:+.1f}%)\n2. 추정 원인: {cause_summary}\n3. 디스패치 거리: {dispatch_summary}\n\n어떤 산출물이 필요하세요?",
+      "chips_next": [
+        { "label": "국장 보고용 1장 PPT",   "intent": "export_director_one_pager",   "output_format_id": "director_one_pager_ppt",   "next_slot": "_end" },
+        { "label": "주간 회의 자료에 넣기", "intent": "export_weekly_meeting",       "output_format_id": "weekly_meeting_free_format", "next_slot": "_end" },
+        { "label": "사업국장 MAU 별도 보고", "intent": "export_business_director_mau", "output_format_id": "business_director_mau_brief", "next_slot": "_end" },
+        { "label": "PD에게 카톡 디스패치",  "intent": "send_pd_dispatch_kakao",      "output_format_id": "pd_dispatch_message",      "next_slot": "_end" }
+      ],
+      "exits": ["anchor"]
+    }
+  },
+
+  "expected_user_flows": [
+    { "name": "지표_줄기", "sequence": ["entry", "1_anchor", "2_cause", "3_adjacent", "3_context", "5_closing"], "estimated_duration_min": 3 },
+    { "name": "개편_줄기", "sequence": ["entry", "4_revision", "4_revision_detail", "5_closing"], "estimated_duration_min": 3 },
+    { "name": "빠른_보고", "sequence": ["entry", "1_anchor", "5_closing"], "estimated_duration_min": 1, "_note": "어떤 분석 노드에서도 공통 출구로 보고서 직행" }
+  ],
+
+  "instrumentation": {
+    "posthog_events": [
+      { "event": "storyline_chip_click",  "properties": ["role", "slot_from", "slot_to", "chip_intent"] },
+      { "event": "storyline_toggle",      "properties": ["role", "slot", "toggle_key", "from", "to"] },
+      { "event": "storyline_freetext",    "properties": ["role", "slot_from", "routed", "returned"] },
+      { "event": "storyline_slot_view",   "properties": ["role", "slot_id", "toggle_state", "fallback_used"] },
+      { "event": "storyline_export",      "properties": ["role", "output_format_id", "slots_visited"] }
+    ],
+    "topic_key_rule": "토글 슬롯은 '{slot}:{metric}:{period}' 형태로 적재(없는 차원은 생략). __toggle__/__freetext__ 재렌더는 step 무계상, 이벤트는 별도 로깅."
+  }
+}

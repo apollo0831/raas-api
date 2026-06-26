@@ -131,6 +131,115 @@ def init_db():
             "ON query_history (user_role, topic_key)"
         )
 
+        # ── 스토리라인 내용 캐시 (이력 DB 재설계 §B) ───────────────
+        # analysis_key = hash(slot_type, channel, program, metric, period, window, data_date)
+        # data_date를 키에 포함 → 다음날 06:50 데이터 갱신 시 키 미적중으로 자동 만료.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS analysis_cache (
+                analysis_key TEXT PRIMARY KEY,
+                data_date    TEXT NOT NULL,
+                slot_type    TEXT,
+                program_code TEXT,
+                metric       TEXT,
+                period       TEXT,
+                window       TEXT,
+                payload      TEXT NOT NULL,
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                hits         INTEGER DEFAULT 0,
+                gen_tokens   INTEGER
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ac_date ON analysis_cache (data_date)"
+        )
+
+        # ── 스토리라인 경로 로그 (이력 DB 재설계 §A — 2단계) ───────
+        # 전이(edge) 1건 = 1행. 세션(session_id) 단위로 분석 이동경로 복원.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS storyline_events (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  TEXT NOT NULL,
+                seq         INTEGER NOT NULL,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                user_id     TEXT,
+                user_role   TEXT,
+                event_type  TEXT NOT NULL,        -- enter|chip|toggle|freetext|exit|export
+                slot_from   TEXT,
+                slot_to     TEXT,
+                chip_intent TEXT,
+                chip_label  TEXT,
+                program_code TEXT,
+                program_name TEXT,
+                channel_code TEXT,
+                metric      TEXT,
+                period      TEXT,
+                window      TEXT,
+                end_reason  TEXT,                 -- export|free_query|timeout
+                analysis_key TEXT,
+                cache_hit   INTEGER,
+                latency_ms  INTEGER,
+                output_tokens INTEGER
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_se_session ON storyline_events (session_id, seq)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_se_user_time ON storyline_events (user_id, created_at DESC)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_se_role_slot ON storyline_events (user_role, slot_from, slot_to)"
+        )
+        # 기존 테이블 마이그레이션 — chip_label 컬럼(첫 진입 칩 이름 표시용)
+        try:
+            conn.execute("ALTER TABLE storyline_events ADD COLUMN chip_label TEXT")
+        except Exception:
+            pass
+
+        # ── 지식 개선 루프 (docs/knowledge_loop_design.md §4) ─────────
+        # 지식 오버레이 — 온톨로지를 직접 수정하지 않고 '엔티티별 구조화 지식 항목'으로 적재.
+        #   grounding이 대상 엔티티의 항목을 읽어 LLM context에 주입(읽기시 병합).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS knowledge_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                scope        TEXT,    -- candidate(본인) | approved(공유)
+                contributor_id TEXT,
+                type         TEXT,    -- metric_definition|field_meaning|program_note|guest_policy|corner_note|decomposition_hint|fact
+                target_kind  TEXT,    -- metric|field|program|channel|global
+                target_id    TEXT,
+                content      TEXT,
+                op           TEXT,    -- add|edit
+                status       TEXT,    -- draft|submitted|approved|rejected
+                improvement_id INTEGER,
+                reviewed_by  TEXT, reviewed_at TIMESTAMP
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ki_target ON knowledge_items (target_kind, target_id, scope)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ki_contrib ON knowledge_items (contributor_id, scope)")
+        # 데이터 요청(요청형 — 스플렁크 필드 추가)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS data_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                contributor_id TEXT, kind TEXT, target_id TEXT,
+                field_name TEXT, description TEXT, splunk_spl TEXT,
+                status TEXT, processed_by TEXT, processed_at TIMESTAMP,
+                improvement_id INTEGER
+            )
+        """)
+        # 개선 시도(원답변↔개선답변 + 평가 + 상태)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS improvements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                contributor_id TEXT, source_query_id INTEGER,
+                question TEXT, answer_original TEXT, answer_improved TEXT,
+                contributions_json TEXT, user_verdict TEXT, judge_json TEXT,
+                status TEXT, reviewed_by TEXT, reviewed_at TIMESTAMP
+            )
+        """)
+
 
 @contextmanager
 def get_conn():
@@ -141,6 +250,305 @@ def get_conn():
         conn.commit()
     finally:
         conn.close()
+
+
+# ── 스토리라인 내용 캐시 (이력 DB 재설계 §B) ─────────────────────
+def cache_get(analysis_key: str):
+    """캐시 적중 시 payload(JSON 문자열) 반환 + hits 증가. 미스면 None."""
+    if not analysis_key:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT payload FROM analysis_cache WHERE analysis_key = ?",
+            (analysis_key,)
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            "UPDATE analysis_cache SET hits = hits + 1 WHERE analysis_key = ?",
+            (analysis_key,)
+        )
+        return row["payload"]
+
+
+def cache_put(analysis_key: str, data_date: str, payload: str,
+              slot_type: str = None, program_code: str = None,
+              metric: str = None, period: str = None, window: str = None,
+              gen_tokens: int = None) -> None:
+    """계산 결과 payload(JSON 문자열) 적재. 같은 키면 갱신."""
+    if not (analysis_key and data_date and payload):
+        return
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO analysis_cache "
+            "(analysis_key, data_date, slot_type, program_code, metric, period, window, "
+            " payload, hits, gen_tokens) "
+            "VALUES (?,?,?,?,?,?,?,?, "
+            "  COALESCE((SELECT hits FROM analysis_cache WHERE analysis_key = ?), 0), ?)",
+            (analysis_key, data_date, slot_type, program_code, metric, period, window,
+             payload, analysis_key, gen_tokens)
+        )
+
+
+# ── 스토리라인 경로 로그 (이력 DB 재설계 §A) ─────────────────────
+def log_event(session_id: str, event_type: str, *, user_id=None, user_role=None,
+              slot_from=None, slot_to=None, chip_intent=None, chip_label=None,
+              program_code=None, program_name=None, channel_code=None,
+              metric=None, period=None, window=None, end_reason=None,
+              analysis_key=None, cache_hit=None, latency_ms=None,
+              output_tokens=None) -> int:
+    """전이 1건 적재. seq는 세션 내 자동 증가. 실패해도 본 흐름 방해 안 함."""
+    if not session_id or not event_type:
+        return -1
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(MAX(seq), -1) + 1 AS nxt FROM storyline_events WHERE session_id = ?",
+                (session_id,)
+            ).fetchone()
+            seq = row["nxt"] if row else 0
+            cur = conn.execute(
+                "INSERT INTO storyline_events "
+                "(session_id, seq, user_id, user_role, event_type, slot_from, slot_to, "
+                " chip_intent, chip_label, program_code, program_name, channel_code, metric, period, "
+                " window, end_reason, analysis_key, cache_hit, latency_ms, output_tokens) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (session_id, seq, user_id, user_role, event_type, slot_from, slot_to,
+                 chip_intent, chip_label, program_code, program_name, channel_code, metric, period,
+                 window, end_reason, analysis_key,
+                 (1 if cache_hit else 0) if cache_hit is not None else None,
+                 latency_ms, output_tokens)
+            )
+            return cur.lastrowid
+    except Exception as e:
+        print(f"[storyline] log_event 실패(무시): {e}", flush=True)
+        return -1
+
+
+def get_session_events(session_id: str) -> list:
+    """세션의 전이 목록(순서대로) — 이력 보기/여정 복원용."""
+    if not session_id:
+        return []
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM storyline_events WHERE session_id = ? ORDER BY seq",
+            (session_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── 지식 개선 루프 (docs/knowledge_loop_design.md) ───────────────────────────
+def add_knowledge_item(contributor_id, type, target_kind, target_id, content,
+                       op="add", scope="candidate", status="draft",
+                       improvement_id=None) -> int:
+    """지식 오버레이 항목 추가. 기본 scope=candidate(본인 재질의에만 반영)."""
+    if not (type and content):
+        return -1
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO knowledge_items "
+            "(scope, contributor_id, type, target_kind, target_id, content, op, status, improvement_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (scope, str(contributor_id) if contributor_id else None, type,
+             target_kind, target_id, content, op, status, improvement_id))
+        return cur.lastrowid
+
+
+def add_data_request(contributor_id, field_name, description, target_id=None,
+                     splunk_spl=None, improvement_id=None) -> int:
+    """요청형 — 스플렁크 필드 추가 요청. 상태=요청됨."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO data_requests "
+            "(contributor_id, kind, target_id, field_name, description, splunk_spl, status, improvement_id) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (str(contributor_id) if contributor_id else None, "splunk_field", target_id,
+             field_name, description, splunk_spl, "요청됨", improvement_id))
+        return cur.lastrowid
+
+
+def add_improvement(contributor_id, question, answer_original, answer_improved=None,
+                    source_query_id=None, contributions_json=None, user_verdict=None,
+                    judge_json=None, status="검토대기") -> int:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO improvements "
+            "(contributor_id, source_query_id, question, answer_original, answer_improved, "
+            " contributions_json, user_verdict, judge_json, status) VALUES (?,?,?,?,?,?,?,?,?)",
+            (str(contributor_id) if contributor_id else None, source_query_id, question,
+             answer_original, answer_improved, contributions_json, user_verdict, judge_json, status))
+        return cur.lastrowid
+
+
+def set_improvement_verdict(improvement_id, verdict) -> bool:
+    with get_conn() as conn:
+        conn.execute("UPDATE improvements SET user_verdict = ? WHERE id = ?",
+                     (verdict, improvement_id))
+    return True
+
+
+def list_improvements(user_id=None, status=None, limit=80) -> list:
+    """개선 시도 목록 — 본인(user_id) 또는 전체(검토용). +기여자명."""
+    where, params = [], []
+    if user_id:
+        where.append("i.contributor_id = ?"); params.append(str(user_id))
+    if status:
+        where.append("i.status = ?"); params.append(status)
+    w = ("WHERE " + " AND ".join(where)) if where else ""
+    params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""SELECT i.*, (SELECT u.name FROM users u WHERE u.id = CAST(i.contributor_id AS INTEGER)) AS user_name
+                FROM improvements i {w} ORDER BY i.created_at DESC LIMIT ?""",
+            tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def list_data_requests(status=None, contributor_id=None, limit=100) -> list:
+    where, params = [], []
+    if status:
+        where.append("status = ?"); params.append(status)
+    if contributor_id:
+        where.append("contributor_id = ?"); params.append(str(contributor_id))
+    w = ("WHERE " + " AND ".join(where)) if where else ""
+    params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM data_requests {w} ORDER BY created_at DESC LIMIT ?", tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_knowledge_items_by_ids(ids) -> list:
+    if not ids:
+        return []
+    qs = ",".join("?" * len(ids))
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM knowledge_items WHERE id IN ({qs})", tuple(ids)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def review_improvement(improvement_id, action, reviewer) -> bool:
+    """승인 시 그 개선이 적용한 candidate 지식 항목을 approved(공유)로 승격 → 전체 적용."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT contributions_json FROM improvements WHERE id = ?",
+                           (improvement_id,)).fetchone()
+        if not row:
+            return False
+        if action == "approve":
+            try:
+                ids = json.loads(row["contributions_json"] or "[]")
+            except Exception:
+                ids = []
+            for kid in ids:
+                conn.execute(
+                    "UPDATE knowledge_items SET scope='approved', status='approved', "
+                    "reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?", (str(reviewer), kid))
+            conn.execute("UPDATE improvements SET status='승인', reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
+                         (str(reviewer), improvement_id))
+        else:
+            conn.execute("UPDATE improvements SET status='반려', reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
+                         (str(reviewer), improvement_id))
+    return True
+
+
+def update_data_request(req_id, status, reviewer) -> bool:
+    with get_conn() as conn:
+        conn.execute("UPDATE data_requests SET status=?, processed_by=?, processed_at=CURRENT_TIMESTAMP WHERE id=?",
+                     (status, str(reviewer), req_id))
+    return True
+
+
+def get_knowledge_items(targets, contributor_id=None, include_candidate=False) -> list:
+    """grounding 읽기시 병합용. targets=[(target_kind, target_id), ...] (+ ('global', None)).
+    approved(공유) 전체 + (include_candidate면 본인 candidate) 중 대상 매칭 항목 반환."""
+    targets = list(targets or []) + [("global", None)]
+    conds, params = [], []
+    for kind, tid in targets:
+        if tid in (None, ""):
+            conds.append("target_kind = ?"); params.append(kind)
+        else:
+            conds.append("(target_kind = ? AND target_id = ?)"); params += [kind, str(tid)]
+    target_where = "(" + " OR ".join(conds) + ")"
+    scope_where, sp = "scope = 'approved'", []
+    if include_candidate and contributor_id:
+        scope_where = "(scope = 'approved' OR (scope = 'candidate' AND contributor_id = ?))"
+        sp.append(str(contributor_id))
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM knowledge_items WHERE {target_where} AND {scope_where} "
+            f"AND status != 'rejected' ORDER BY created_at DESC LIMIT 50",
+            tuple(params + sp)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_frequent_next(user_role: str, slot_from: str, limit: int = 4) -> list:
+    """이 시점(role, slot_from)에서 사용자들이 자주 간 다음 단계 — 빈출 다음행동 추천."""
+    if not (user_role and slot_from):
+        return []
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT slot_to, chip_intent, COUNT(*) AS c
+            FROM storyline_events
+            WHERE user_role = ? AND slot_from = ?
+              AND event_type IN ('chip', 'freetext') AND slot_to IS NOT NULL
+            GROUP BY slot_to, chip_intent
+            ORDER BY c DESC
+            LIMIT ?
+            """,
+            (user_role, slot_from, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_recent_sessions(user_id: str = None, days: int = 7, limit: int = 30,
+                        offset: int = 0, all_users: bool = False) -> list:
+    """세션 요약 — 세션별 첫 분석대상/첫 진입 칩 + 전이 수 + 토큰 합계 (+사용자명).
+    all_users=True면 전체 사용자(이력 보기용), 아니면 user_id 본인(사이드바용).
+    days=0이면 전체 기간."""
+    if not all_users and not user_id:
+        return []
+    user_clause = "" if all_users else "AND e.user_id = ?"
+    date_clause = "" if int(days) <= 0 else "AND e.created_at >= datetime('now', ?, 'localtime')"
+    params: list = []
+    if not all_users:
+        params.append(str(user_id))
+    if int(days) > 0:
+        params.append(f"-{int(days)} days")
+    params += [limit, offset]
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT e.session_id,
+                   MIN(e.created_at) AS started_at,
+                   MAX(e.created_at) AS ended_at,
+                   COUNT(*)          AS steps,
+                   -- 세션 사용자명 (전체 사용자 모드 표시용)
+                   (SELECT u.name FROM users u WHERE u.id = CAST(e.user_id AS INTEGER) LIMIT 1) AS user_name,
+                   -- 첫(앵커) 분석 대상 프로그램 (seq 최소의 non-null)
+                   (SELECT e2.program_name FROM storyline_events e2
+                    WHERE e2.session_id = e.session_id AND e2.program_name IS NOT NULL
+                    ORDER BY e2.seq LIMIT 1) AS program_name,
+                   -- 첫 진입 칩 이름 (seq 최소의 non-null chip_label) — '이력 보기' 제목용
+                   (SELECT e3.chip_label FROM storyline_events e3
+                    WHERE e3.session_id = e.session_id AND e3.chip_label IS NOT NULL
+                    ORDER BY e3.seq LIMIT 1) AS first_chip_label,
+                   COUNT(DISTINCT e.program_name) AS program_count,
+                   MAX(e.channel_code) AS channel_code,
+                   COALESCE(SUM(e.output_tokens), 0) AS total_tokens,
+                   MAX(CASE WHEN e.end_reason IS NOT NULL THEN e.end_reason END) AS end_reason
+            FROM storyline_events e
+            WHERE 1=1
+              {user_clause}
+              {date_clause}
+            GROUP BY e.session_id
+            ORDER BY started_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            tuple(params)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ── IP 사용자 매핑 ─────────────────────────────────────
@@ -260,17 +668,21 @@ def save_feedback(query_id: int, feedback: int) -> bool:
     return cur.rowcount > 0
 
 
-def get_history(user_id: str, limit: int = 20) -> list:
-    """user_id의 최근 질의 N건. 최신순."""
+def get_history(user_id: str, limit: int = 20, days: int = 7) -> list:
+    """user_id의 최근 질의 N건. 최신순. 최근 `days`일(기본 7일)만.
+    스토리라인 분석 여정(칩·라우팅 질의)은 '최근 분석 여정'에서 별도 표시하므로 제외."""
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT id, question, answer, chart_data, feedback,
                       input_tokens, output_tokens, created_at, source
                FROM query_history
                WHERE user_id = ?
+                 AND COALESCE(source, '') != 'storyline'
+                 AND COALESCE(intent, '') != 'storyline_routed'
+                 AND created_at >= datetime('now', ?)
                ORDER BY created_at DESC
                LIMIT ?""",
-            (user_id, limit)
+            (user_id, f"-{int(days)} days", limit)
         ).fetchall()
     return [
         {

@@ -10,6 +10,7 @@ RAAS Local Proxy Server
 """
 
 import json
+import re
 import sys
 import os
 import time
@@ -34,7 +35,13 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 from raas_history_db import (init_db, save_query, get_history, get_popular,
                              set_ip_user, delete_ip_user, get_all_ip_users,
-                             save_feedback, get_all_history)
+                             save_feedback, get_all_history,
+                             log_event, get_session_events, get_recent_sessions,
+                             get_frequent_next,
+                             add_knowledge_item, get_knowledge_items,
+                             add_data_request, add_improvement, set_improvement_verdict,
+                             list_improvements, list_data_requests,
+                             get_knowledge_items_by_ids, review_improvement, update_data_request)
 from raas_auth import (register_user, authenticate, create_session,
                        resolve_session, destroy_session,
                        get_pending_users, list_users, approve_user, reject_user,
@@ -43,6 +50,7 @@ from raas_auth import (register_user, authenticate, create_session,
 from raas_onboarding import list_active_profiles, build_suggestions
 import raas_storyline_engine as STORY
 import raas_storyline_router as ROUTER
+import raas_grounding as GROUND
 import raas_report_engine as REPORT
 from raas_querymap import (stats_overview, stats_by_role,
                            stats_by_user, stats_topics,
@@ -58,6 +66,8 @@ SPLUNK_USER       = os.getenv("SPLUNK_USER")
 SPLUNK_PASSWORD   = os.getenv("SPLUNK_PASSWORD")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL")
+# 답변 생성 max_tokens 상한(천장) — 짤림 방지. .env의 MAX_ANSWER_TOKENS로 조절(기본 8000).
+MAX_ANSWER_TOKENS = int(os.getenv("MAX_ANSWER_TOKENS", "8000"))
 SPLUNK_APP        = os.getenv("SPLUNK_APP")        # ← Splunk 앱 내부 ID
 SPLUNK_TIMEOUT    = int(os.getenv("SPLUNK_TIMEOUT", "10"))  # 초. 미도달 환경에서 빠른 CSV 폴백을 위해 짧게
 # PostHog (4주 PoC 측정) — 공개 키이므로 브라우저 노출 OK
@@ -244,7 +254,7 @@ def call_claude(system: str, user: str) -> tuple:
             raise Exception(f"Claude API 오류: {e}")
     raise Exception("Claude API 일시 과부하. 잠시 후 다시 시도해 주세요.")
 
-def call_claude_stream(system: str, user: str, max_tokens: int = 1000):
+def call_claude_stream(system: str, user: str, max_tokens: int = 4000):
     """Claude API 스트리밍 — text 청크를 yield, 마지막에 usage dict를 yield."""
     payload = json.dumps({
         "model": CLAUDE_MODEL, "max_tokens": max_tokens,
@@ -299,6 +309,34 @@ def _app_version() -> str:
     except OSError:
         return "0"
 
+
+# 토글의 범주/카테고리 id('scale' 등)를 실제 지표명으로 — 분석 여정 로깅용
+_STORY_CAT_TO_METRIC = {
+    "deep": "깊은청취율", "retention": "리텐션", "new_churn": "신규/이탈",
+    "flow": "사용자흐름", "quality": "청취품질",
+}
+def _story_metric_name(toggle_state, focus=None) -> str:
+    """로깅할 지표명 산출. focus(kpi_metric)가 있으면 우선.
+    scale 범주는 기간에 따라 DAU/WAU/MAU로 환원(토글의 'scale'을 그대로 쓰지 않음)."""
+    if focus:
+        return focus
+    ts = toggle_state or {}
+    cat = ts.get("metric") or ts.get("category")
+    period = ts.get("period", "day")
+    if cat in (None, "", "scale"):
+        return {"week": "WAU", "month": "MAU"}.get(period, "DAU")
+    return _STORY_CAT_TO_METRIC.get(cat, cat)
+
+
+_SMALL_BLOCK_RE = re.compile(r"\[small\][\s\S]*?\[/small\]")
+def _strip_admin_meta(text):
+    """관리자 참고 메타([small] 블록: 분석 대상·실데이터·추가 적재 필요)를 제거.
+    비관리자 응답에서 호출 → 원시 데이터가 아예 전달되지 않음."""
+    if not text:
+        return text
+    t = _SMALL_BLOCK_RE.sub("", text)
+    return re.sub(r"\n{3,}", "\n\n", t).strip()
+
 class RAASHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {format % args}")
@@ -320,6 +358,87 @@ class RAASHandler(BaseHTTPRequestHandler):
     def _get_session_user(self):
         """현재 세션 사용자 dict. 토큰 무효/만료/미승인이면 None."""
         return resolve_session(self._get_session_token())
+
+    def _handle_storyline_freetext(self, body, user, role, engine, marker, channel):
+        """스토리라인 자유질의 출구 실연동.
+        ① 라우터가 '특정 프로그램 원인'으로 인식하면 2_cause로 내비게이션.
+        ② 그 외 일반질의는 쿼리엔진으로 답하고 직전 슬롯(return_slot) 레일 복귀."""
+        question = (body.get("question") or body.get("freetext") or "").strip()
+        return_slot = marker.get("return_slot")
+        ts = marker.get("toggle_state") or {}
+        if not question:
+            # 텍스트가 아직 없으면 입력을 받도록 마커만 반환
+            self.send_json({**marker, "need_question": True}, 200)
+            return
+        user_id   = str(user["id"])
+        user_name = user.get("name")
+        ip        = self._get_client_ip()
+
+        # ① 라우터 내비게이션 (프로그램 원인) — lenient로 프로그램명만으로도 시도
+        try:
+            routing = ROUTER.route(question, lenient=True)
+        except Exception as e:
+            print(f"[storyline-freetext] route error: {e}", flush=True)
+            routing = None
+        if routing and QUERY_ENGINE_AVAILABLE:
+            prog = routing["program"]
+            period = ts.get("period", "day")
+            prev = {
+                "top_change_program_code": prog["code"],
+                "top_change_program":      prog["name"],
+                "channel_name":            prog["channel"],
+            }
+            try:
+                eng2 = STORY.StorylineEngine(role=role, user=user,
+                                             channel_override=prog["channel"])
+                r2 = eng2.advance("1_anchor", "explain_change", prev_context=prev,
+                                  next_slot_override="2_cause",
+                                  toggle_state={"period": period})
+            except Exception as e:
+                print(f"[storyline-freetext] advance error: {e}", flush=True)
+                r2 = None
+            if r2 and r2.get("ok"):
+                try:
+                    save_query(user_id, f"({prog['code']})자유질의: {question}",
+                               r2.get("answer", ""), chart_data=r2.get("chart_data"),
+                               ip=ip, user_name=user_name, user_role=role,
+                               intent="freetext_routed", scope=prog["code"],
+                               scope_keyword=prog["channel"],
+                               topic_key="2_cause:freetext", source="storyline")
+                except Exception:
+                    pass
+                r2["routed_via_freetext"] = True
+                r2["routing_badge"] = "🧭 원인 분석으로 이동"
+                self.send_json(r2, 200)
+                return
+
+        # ② 일반질의 → 답변 후 레일(return_slot 칩) 복귀
+        if not QUERY_ENGINE_AVAILABLE:
+            self.send_json({"ok": False, "error": "쿼리 엔진을 사용할 수 없습니다."}, 500)
+            return
+        try:
+            qr = QE.query_with_timeline(question, get_cached_timeline())
+            answer = qr.get("answer", "")
+            chart  = qr.get("chart_data")
+            facts  = qr.get("facts") or {}
+        except Exception as e:
+            self.send_json({"ok": False, "error": f"질의 처리 실패: {e}"}, 500)
+            return
+        try:
+            save_query(user_id, f"자유질의: {question}", answer, chart_data=chart,
+                       ip=ip, user_name=user_name, user_role=role,
+                       intent="freetext", scope=facts.get("scope"),
+                       scope_keyword=facts.get("scope_keyword"),
+                       metric=facts.get("metric"),
+                       topic_key=f"{return_slot}:freetext", source="storyline")
+        except Exception:
+            pass
+        rail = engine.peek_chips(return_slot, ts)
+        self.send_json({
+            "ok": True, "freetext": True, "return_slot": return_slot,
+            "slot": return_slot, "answer": answer, "chart_data": chart,
+            "chips_next": rail, "toggle_state": ts,
+        }, 200)
 
     def _require_admin(self):
         """관리자 검증. 관리자 아니면 401/403 응답 후 None 리턴.
@@ -786,6 +905,56 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path.startswith("/api/storyline/recent"):
+            # 최근 분석 여정 — 세션 단위 요약(최근 7일)
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                    return
+                params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1])) if "?" in self.path else {}
+                days = int(params.get("days", 7))
+                limit = int(params.get("limit", 30))
+                offset = int(params.get("offset", 0))
+                all_users = params.get("all") in ("1", "true")   # 이력 보기 = 전체 사용자
+                sessions = get_recent_sessions(str(user["id"]), days=days, limit=limit,
+                                               offset=offset, all_users=all_users)
+                self.send_json({"ok": True, "sessions": sessions})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path.startswith("/api/storyline/session"):
+            # 세션 1건의 전이 목록(여정) — 이력 보기
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                    return
+                params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1])) if "?" in self.path else {}
+                sid = params.get("id", "")
+                events = get_session_events(sid)
+                # '이력 보기'는 전체 사용자 이력이 공개되는 곳(query_history/all과 동일) → 소유권 제한 없음
+                self.send_json({"ok": True, "events": events})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path.startswith("/api/storyline/recommend"):
+            # 빈출 다음행동 — (role, slot)에서 사용자들이 자주 간 다음 단계
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                    return
+                params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1])) if "?" in self.path else {}
+                role = params.get("role") or "cp_v2"
+                if role in ("cp", "CP", "cp_v2"):
+                    role = "cp_v2"   # CP는 단일 버전 — 표기 정규화
+                slot = params.get("slot", "")
+                nxt = get_frequent_next(role, slot)
+                self.send_json({"ok": True, "next": nxt})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path.startswith("/api/storyline/exports/"):
             # 일회용 토큰으로 산출물(PPT/텍스트) 다운로드 (D-014)
             try:
@@ -991,76 +1160,98 @@ class RAASHandler(BaseHTTPRequestHandler):
                 # 스토리라인 라우터 — 자유 질의에서 '특정 프로그램 원인 분석' 의도가
                 # 분명하면 2_cause 슬롯 답변을 SSE로 한 번에 송출 (칩 클릭과 동일 구조)
                 # 1_anchor_more 흐름이면 'lenient'로 의도 키워드 검사 생략 → 프로그램명만 적어도 라우팅
+                storyline_role = body.get("storyline_role") or "cp_v2"
                 storyline_slot = body.get("storyline_slot")
                 storyline_ctx  = body.get("storyline_context") or {}
-                lenient_route = (storyline_slot == "1_anchor_more")
-                try:
-                    routing = ROUTER.route(question, lenient=lenient_route)
-                except Exception as e:
-                    print(f"[router] route error: {e}")
-                    routing = None
-                if routing:
-                    prog = routing["program"]
-                    # anchor_mode에 따라 2_cause / 2_cause_weekly / 2_cause_monthly 분기
-                    am = (storyline_ctx.get("anchor_mode") or "").lower() if lenient_route else ""
-                    if am.startswith("weekly"):
-                        target_slot = "2_cause_weekly"
-                    elif am.startswith("monthly"):
-                        target_slot = "2_cause_monthly"
-                    else:
-                        target_slot = "2_cause"
-                    prev_context = {
-                        "top_change_program_code": prog["code"],
-                        "top_change_program":      prog["name"],
-                        "channel_name":            prog["channel"],
-                    }
-                    try:
-                        engine = STORY.StorylineEngine(
-                            role="CP", user=user,
-                            channel_override=prog["channel"],
-                        )
-                        result = engine.advance(
-                            routing["slot_from"], routing["chip_intent"],
-                            prev_context=prev_context,
-                            next_slot_override=target_slot,
-                        )
-                    except Exception as e:
-                        print(f"[router] advance error: {e}")
-                        result = None
-                    if result and result.get("ok"):
+                _v2 = storyline_role in ("cp", "cp_v2", "CP")   # CP는 cp_v2 단일 버전
+                # LLM 우선: 자유 질의는 모두 일반 LLM(데이터+온톨로지)이 답한다.
+                #   원인 종합 등 스토리라인 페이지는 '칩'으로만 진입. 자유 질의는 cause 라우팅 안 함.
+                #   라우터는 편성표 의도의 프로그램 탐지에만 사용.
+                routing = None
+                # 편성표 의도 — '코너 편성/편성표'는 원인 분석이 아니라 주간 편성표(룩업 데이터).
+                #   스토리라인 맥락과 무관한 자유 질의로 동작 — 프로그램명만 있으면 lenient로 탐지.
+                if STORY.is_schedule_query(question):
+                    _sr = routing
+                    if not _sr:
+                        try:
+                            _sr = ROUTER.route(question, lenient=True)
+                        except Exception:
+                            _sr = None
+                    prog = (_sr or {}).get("program")
+                    sched = None
+                    if prog:
+                        try:
+                            sched = STORY.build_program_schedule(prog["code"])
+                        except Exception as e:
+                            print(f"[schedule] build error: {e}")
+                            sched = None
+                    if sched:
                         self.send_response(200)
                         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                         self.send_header("Cache-Control", "no-cache")
                         self.send_header("Connection", "keep-alive")
                         self.send_header("Access-Control-Allow-Origin", "*")
                         self.end_headers()
-                        def sse(data: dict):
-                            self.wfile.write(
-                                ("data: " + json.dumps(data, ensure_ascii=False) + "\n\n").encode("utf-8")
-                            )
+                        def sse_s(data: dict):
+                            self.wfile.write(("data: " + json.dumps(data, ensure_ascii=False) + "\n\n").encode("utf-8"))
                             self.wfile.flush()
-                        sse({"type": "meta", "chart_data": result.get("chart_data")})
-                        sse({"type": "token", "text": result.get("answer", "")})
+                        sse_s({"type": "token", "text": sched})
                         qid = save_query(
-                            user_id, question, result.get("answer", ""),
-                            chart_data=result.get("chart_data"),
-                            ip=ip, user_name=user_name, user_role=user_role,
-                            input_tokens=None, output_tokens=None,
-                            intent="storyline_routed",
-                            scope=prog["channel"], scope_keyword=prog["code"],
-                            metric="dau", metrics=None, topic_key="cause_dau")
-                        sse({
-                            "type": "done",
-                            "query_id": qid,
-                            "routed_via_storyline": True,
-                            "routing_badge": "🧭 원인 분석 스토리라인으로 안내",
-                            "slot": result.get("slot"),
-                            "slot_name": result.get("slot_name"),
-                            "chips_next": result.get("chips_next") or [],
-                            "context_out": result.get("context_out"),
-                        })
+                            user_id, question, sched, ip=ip, user_name=user_name,
+                            user_role=user_role, intent="schedule",
+                            scope=prog["code"], scope_keyword=prog["channel"], source="general")
+                        sse_s({"type": "done", "query_id": qid,
+                               "routing_badge": "🗓 주간 편성표"})
                         self.close_connection = True
                         return
+                # 명시적 원인 의도(cause_dau)일 때만 원인 종합으로. 그 외는 일반 LLM(아래로 진행).
+                # 자유질의 — 활성 스토리라인 세션이 있으면 종료 신호로 기록
+                _sess_free = storyline_ctx.get("session") or body.get("storyline_session")
+                if _sess_free and storyline_role in ("cp", "cp_v2", "CP"):
+                    log_event(_sess_free, "exit", user_id=user_id, user_role="cp_v2",
+                              slot_from=storyline_slot, end_reason="free_query")
+
+                # 검색·Grounding 레이어 — 프로그램 관련 자유 질의는 관련 데이터·온톨로지를 골라 LLM에 넣고
+                #   LLM이 본연의 성능으로 답한다(고정 템플릿 없음). 비-프로그램 질의는 기존 엔진으로.
+                _ground = None
+                try:
+                    _ground = GROUND.assemble(question, overlay_ctx={"user_id": user_id, "mode": "normal"})
+                except Exception as _e:
+                    print(f"[grounding] assemble error: {_e}")
+                if _ground and _ground.get("ok"):
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Connection", "keep-alive")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    def sse_g(d: dict):
+                        self.wfile.write(("data: " + json.dumps(d, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                        self.wfile.flush()
+                    _gu = f"근거 데이터:\n{_ground['context']}\n\n사용자 질문: {question}"
+                    _gfull, _gusage = [], {}
+                    for chunk in call_claude_stream(GROUND.GROUNDING_SYSTEM, _gu, max_tokens=MAX_ANSWER_TOKENS):
+                        if isinstance(chunk, dict) and "_usage" in chunk:
+                            _gusage = chunk["_usage"]
+                        else:
+                            _gfull.append(chunk)
+                            sse_g({"type": "token", "text": chunk})
+                    _ganswer = "".join(_gfull)
+                    _gqid = save_query(user_id, question, _ganswer, ip=ip, user_name=user_name,
+                                       user_role=user_role, intent="grounded",
+                                       scope=_ground["provenance"].get("program"), source="general",
+                                       input_tokens=_gusage.get("input_tokens"),
+                                       output_tokens=_gusage.get("output_tokens"))
+                    if user.get("is_admin"):
+                        _ov = _ground["provenance"].get("overlay_items") or []
+                        _gp = ("[small]\n**검색 grounding** — 사용 provider: "
+                               + ", ".join(_ground["providers_used"])
+                               + (f"\n적용된 지식 오버레이: {len(_ov)}건" if _ov else "")
+                               + "\n[/small]")
+                        sse_g({"type": "token", "text": "\n\n" + _gp})
+                    sse_g({"type": "done", "query_id": _gqid, "routing_badge": "🔎 데이터 grounding"})
+                    self.close_connection = True
+                    return
 
                 timeline = get_cached_timeline()
                 sys_prompt, ctx, max_tok, chart_data, facts = QE.query_with_timeline_stream(
@@ -1106,6 +1297,14 @@ class RAASHandler(BaseHTTPRequestHandler):
                                       metric=facts.get("metric"),
                                       metrics=facts.get("metrics"),
                                       topic_key=facts.get("topic_key"))
+                # 1단계-c: 관리자에게만 참고 푸터([small]) — 사용 데이터 + 지표 정의(온톨로지)
+                if user.get("is_admin"):
+                    try:
+                        _prov = STORY.build_query_provenance(facts, target_date)
+                        if _prov:
+                            sse({"type": "token", "text": "\n\n" + _prov})
+                    except Exception as _e:
+                        print(f"[provenance] {_e}")
                 sse({"type": "done", "query_id": query_id})
                 self.close_connection = True  # SSE 완료 후 연결 명시적 종료
             except Exception as e:
@@ -1116,6 +1315,138 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                 except Exception:
                     pass
+
+        elif self.path == "/api/improve/context":
+            # 개선하기 화면 재료 — 사용 데이터 필드(의미)·온톨로지 항목·본인 기여
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                q = (body.get("question") or "").strip()
+                ctx = GROUND.improve_context(q, user_id=str(user["id"]))
+                self.send_json(ctx if ctx.get("ok") else {"ok": False, **ctx})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/improve/contribute":
+            # 기여 입력 — 온톨로지 수정/추가(candidate) 또는 데이터 요청(요청형)
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                kind = body.get("kind")
+                if kind == "knowledge":
+                    kid = add_knowledge_item(
+                        str(user["id"]), body.get("type") or "fact",
+                        body.get("target_kind") or "program", body.get("target_id"),
+                        (body.get("content") or "").strip(), op=body.get("op") or "add",
+                        scope="candidate", status="draft")
+                    self.send_json({"ok": kid > 0, "id": kid})
+                elif kind == "data_request":
+                    rid = add_data_request(
+                        str(user["id"]), body.get("field_name") or "",
+                        (body.get("description") or "").strip(),
+                        target_id=body.get("target_id"), splunk_spl=body.get("splunk_spl"))
+                    self.send_json({"ok": rid > 0, "id": rid})
+                else:
+                    self.send_json({"ok": False, "error": "kind=knowledge|data_request"}, 400)
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/improve/requery":
+            # 재질의 — 본인 candidate 오버레이 병합 grounding으로 재생성 + LLM judge(원본 vs 개선)
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                q = (body.get("question") or "").strip()
+                ans_orig = body.get("answer_original") or ""
+                g = GROUND.assemble(q, overlay_ctx={"user_id": str(user["id"]), "mode": "requery"})
+                if not (g and g.get("ok")):
+                    self.send_json({"ok": False, "error": "재질의 컨텍스트 구성 실패(프로그램 미식별)"}, 400); return
+                _gu = f"근거 데이터:\n{g['context']}\n\n사용자 질문: {q}"
+                parts = []
+                for chunk in call_claude_stream(GROUND.GROUNDING_SYSTEM, _gu, max_tokens=MAX_ANSWER_TOKENS):
+                    if not (isinstance(chunk, dict) and "_usage" in chunk):
+                        parts.append(chunk)
+                ans_new = "".join(parts)
+                verdict = GROUND.judge(q, ans_orig, ans_new) if ans_orig else None
+                imp_id = add_improvement(
+                    str(user["id"]), q, ans_orig, answer_improved=ans_new,
+                    source_query_id=body.get("source_query_id"),
+                    contributions_json=json.dumps(g["provenance"].get("overlay_items") or [], ensure_ascii=False),
+                    judge_json=json.dumps(verdict, ensure_ascii=False) if verdict else None,
+                    status="검토대기")
+                self.send_json({"ok": True, "improvement_id": imp_id,
+                                "answer_improved": ans_new, "judge": verdict,
+                                "overlay_items": g["provenance"].get("overlay_items") or []})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/improve/verdict":
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                set_improvement_verdict(body.get("id"), body.get("verdict"))
+                self.send_json({"ok": True})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/improve/mine":
+            # ⑤ 본인 개선 시도 이력 + 본인 데이터 요청
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                uid = str(user["id"])
+                imps = list_improvements(user_id=uid)
+                for it in imps:
+                    it["judge"] = json.loads(it["judge_json"]) if it.get("judge_json") else None
+                self.send_json({"ok": True, "improvements": imps,
+                                "data_requests": list_data_requests(contributor_id=uid)})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/improve/queue":
+            # ⑥ 거버넌스 검토 큐 — 관리자/데이터/총괄관리
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                imps = list_improvements(status="검토대기")
+                for it in imps:
+                    it["judge"] = json.loads(it["judge_json"]) if it.get("judge_json") else None
+                    ids = json.loads(it["contributions_json"]) if it.get("contributions_json") else []
+                    it["contributions"] = get_knowledge_items_by_ids(ids)
+                reqs = list_data_requests()
+                reqs_open = [r for r in reqs if r.get("status") in ("요청됨", "처리중")]
+                self.send_json({"ok": True, "improvements": imps, "data_requests": reqs_open})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/improve/review":
+            # ⑥ 개선 시도 승인/반려 — 승인 시 기여 지식 항목을 approved(공유)로 승격
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                action = body.get("action")  # approve | reject
+                ok = review_improvement(body.get("id"), action, str(user["id"]))
+                self.send_json({"ok": ok})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/data_request/process":
+            # ⑥ 데이터 요청 상태 갱신 — 요청됨→처리중→완료/반려
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                ok = update_data_request(body.get("id"), body.get("status"), str(user["id"]))
+                self.send_json({"ok": ok})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
 
         elif self.path == "/api/query":
             try:
@@ -1195,16 +1526,26 @@ class RAASHandler(BaseHTTPRequestHandler):
                 channel = body.get("channel")
                 prev_context = body.get("prev_context") or {}
                 next_slot_override = body.get("next_slot_override")
+                toggle_state = body.get("toggle_state")
                 engine = STORY.StorylineEngine(role=role, user=user,
                                                channel_override=channel)
                 result = engine.advance(slot_from, chip_intent,
                                         prev_context=prev_context,
-                                        next_slot_override=next_slot_override)
+                                        next_slot_override=next_slot_override,
+                                        toggle_state=toggle_state)
+
+                # 자유질의 출구 — 실제 질의 실연동 (라우터 내비 or 일반질의 후 레일 복귀)
+                if result.get("freetext"):
+                    self._handle_storyline_freetext(
+                        body, user, role, engine, result, channel)
+                    return
+
                 status = 200 if result.get("ok") else 400
                 # 스토리라인 칩 질의도 히스토리·질의맵에 기록
                 # (질의맵은 intent NOT NULL 행만 집계 → intent=chip_intent로 항상 채움)
                 try:
                     if (user and result.get("ok") and not result.get("ended")
+                            and not result.get("toggled") and not result.get("freetext")
                             and result.get("answer")):
                         ctx_out = result.get("context_out") or {}
                         ch_name = (channel or ctx_out.get("channel_name")
@@ -1220,7 +1561,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                                 break
                         # 단일 프로그램이 암묵적 주어인 슬롯 → 프로그램 코드 도출
                         prog_code = None
-                        if slot in ("2_cause", "2_cause_weekly", "2_cause_monthly"):
+                        if slot == "2_cause":
                             prog_code = (ctx_out.get("top_change_program_code")
                                          or prev_context.get("top_change_program_code"))
                         elif slot == "4_revision_detail":
@@ -1231,25 +1572,47 @@ class RAASHandler(BaseHTTPRequestHandler):
                             prog_code = chip_intent.split("_", 2)[-1]
                         # scope: 프로그램 주어면 코드, 아니면 채널 코드
                         scope = prog_code or _CH_CODE.get(ch_name)
+                        # 토글 슬롯은 topic_key에 차원(metric/period/window) 포함 — 관심사 분석용
+                        _ts = result.get("toggle_state") or {}
+                        _dims = [_ts.get("metric"), _ts.get("period"), _ts.get("window")]
+                        _dims = [d for d in _dims if d]
+                        topic_key = f"{slot}:{':'.join(_dims)}" if _dims else slot
                         chip_label = (body.get("chip_label") or result.get("slot_name")
                                       or chip_intent or "").strip()
-                        # 프로그램 주어면 질문 앞에 (코드) 접두 — 질의맵 숨은 관계 분석용
+                        # 프로그램 주어면 질문 앞에 (코드) 접두 — 클라 답변캐시 키 정합용
                         logged_q = f"({prog_code}){chip_label}" if prog_code else chip_label
                         _usage = result.get("usage") or {}
-                        save_query(
-                            str(user["id"]), logged_q, result.get("answer", ""),
-                            chart_data=result.get("chart_data"),
-                            ip=self._get_client_ip(), user_name=user.get("name"),
-                            user_role=role, intent=intent_norm, scope=scope,
-                            scope_keyword=ch_name, topic_key=slot,
-                            input_tokens=_usage.get("input_tokens"),
-                            output_tokens=_usage.get("output_tokens"),
-                            source="storyline",
-                        )
+                        # [4단계] 스토리라인 칩 네비게이션은 query_history에 적재하지 않는다.
+                        #  → 경로는 storyline_events(§A), 답변캐시는 클라 localStorage로 분리.
+                        #  query_history는 사용자가 직접 입력한 일반/라우팅 질의 전용.
                         # 프론트 캐시 키 정합 — 저장된 질문 문자열을 응답에 포함
                         result["logged_question"] = logged_q
+                        # 경로 로그(§A) — 전이 1건 적재
+                        _sess = body.get("storyline_session")
+                        if _sess:
+                            _et = ("toggle" if chip_intent == "__toggle__"
+                                   else "export" if slot == "_end" else "chip")
+                            log_event(
+                                _sess, _et, user_id=str(user["id"]),
+                                user_role=("cp_v2" if role in ("cp", "CP", "cp_v2") else role),
+                                slot_from=body.get("slot_from"), slot_to=slot,
+                                chip_intent=chip_intent,
+                                chip_label=(body.get("chip_label") or "").strip() or None,
+                                program_code=prog_code,
+                                program_name=ctx_out.get("top_change_program"),
+                                channel_code=_CH_CODE.get(ch_name),
+                                metric=_story_metric_name(_ts, ctx_out.get("kpi_metric")),
+                                period=_ts.get("period"), window=_ts.get("window"),
+                                end_reason=("export" if slot == "_end" else None),
+                                analysis_key=ctx_out.get("_analysis_key"),
+                                cache_hit=ctx_out.get("_cache_hit"),
+                                output_tokens=_usage.get("output_tokens"),
+                            )
                 except Exception as _e:
                     print(f"[storyline] save_query 실패(무시): {_e}", flush=True)
+                # 관리자 참고 메타([small])는 관리자에게만. 비관리자는 제거.
+                if not user.get("is_admin") and isinstance(result.get("answer"), str):
+                    result["answer"] = _strip_admin_meta(result["answer"])
                 self.send_json(result, status)
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)

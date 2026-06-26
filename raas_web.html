@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" id="metaThemeColor" content="#0d1117">
 <meta name="color-scheme" content="dark light">
-<script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.getElementById('metaThemeColor').setAttribute('content',t==='dark'?'#0d1117':'#f0f2f5');}());</script>
+<script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.documentElement.setAttribute('data-theme',t);var m=document.getElementById('metaThemeColor');if(m)m.setAttribute('content',t==='dark'?'#0d1117':'#fbfcfd');}());</script>
 <!-- PostHog stub loader (init은 부팅 시 /api/posthog-config 받은 뒤 호출) -->
 <script>
 !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
@@ -91,7 +91,7 @@
 }
 
 [data-theme="light"] {
-  --bg0: #f0f2f5;
+  --bg0: #fbfcfd;
   --bg1: #ffffff;
   --bg2: #f7f8fa;
   --bg3: #edf0f4;
@@ -231,6 +231,15 @@ body{
 .hist-cached{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-right:2px}
 /* 스토리라인 질의 캐시 점 — 일반(파랑)과 구분되는 보라색 */
 .hist-cached.story{background:var(--purple)}
+/* 최근 분석 여정 — 세션 카드 + 여정 펼침 */
+.story-sess{padding:9px 12px;border-radius:8px;cursor:pointer;transition:background .12s;line-height:1.4}
+.story-sess:hover{background:var(--bg3)}
+.story-sess-title{font-size:var(--fs-md);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.story-sess-meta{font-size:var(--fs-xs);color:var(--dim);margin-top:2px}
+.story-journey{margin:6px 0 2px;padding-left:8px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:5px}
+.journey-step{font-size:var(--fs-sm);color:var(--text);line-height:1.35}
+.journey-step .j-via{font-size:var(--fs-xs);color:var(--dim)}
+.journey-step .j-tgt{font-size:var(--fs-xs);color:var(--dim)}
 /* 스토리라인 질의 구분 배지 */
 .hist-src-badge{
   flex-shrink:0;font-size:10px;line-height:1;font-weight:600;
@@ -314,6 +323,48 @@ body{
 .hm-detail{display:none;padding:0 18px 14px;border-top:1px solid var(--line);background:var(--bg0)}
 .hm-detail.open{display:block}
 .hm-detail-q{font-size:var(--fs-sm);color:var(--sub);font-weight:600;margin:10px 0 6px}
+/* 분석 여정 — 세션 행 메타 + 이동 경로 타임라인 */
+.hm-sess-meta{font-size:var(--fs-xs);color:var(--dim);margin-left:auto;white-space:nowrap;flex-shrink:0}
+.jt-path{font-size:var(--fs-xs);color:var(--sub);margin:10px 0 8px;line-height:1.6;font-weight:600}
+.jt-list{display:flex;flex-direction:column;gap:0}
+.jt-step{display:flex;gap:8px;padding:6px 0;border-left:2px solid var(--line);margin-left:8px;padding-left:12px;position:relative}
+.jt-n{position:absolute;left:-9px;top:6px;width:16px;height:16px;border-radius:50%;background:var(--bg4);color:var(--text);font-size:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.jt-main{flex:1;min-width:0}
+.jt-to{font-size:var(--fs-sm);color:var(--text2);line-height:1.4}
+.jt-via{font-size:var(--fs-xs);color:var(--dim);margin-left:4px}
+.jt-tgt{font-size:var(--fs-xs);color:var(--dim);margin-top:1px}
+.jt-hit{font-size:var(--fs-xs);color:var(--purple);margin-left:4px}
+.jt-tok{font-size:var(--fs-xs);color:var(--dim);margin-left:4px;font-family:var(--mono)}
+/* 개선하기 모달 */
+.imp-btn{font-size:var(--fs-sm);padding:5px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--bg2);color:var(--text2);cursor:pointer;margin-left:6px}
+.imp-btn:hover{background:var(--bg3);color:var(--text)}
+.imp-btn-primary{background:var(--purple);color:#fff;border-color:var(--purple)}
+.imp-q{font-size:var(--fs-base);font-weight:600;color:var(--text);margin:14px 18px 6px}
+.imp-sub{font-size:var(--fs-sm);font-weight:600;color:var(--sub);margin:12px 0 6px}
+.imp-coltitle{font-size:var(--fs-md);font-weight:600;color:var(--text);margin-bottom:8px}
+.imp-orig,.imp-result{margin:0 18px;font-size:var(--fs-sm);color:var(--text2);line-height:1.7;white-space:pre-wrap;word-break:keep-all;border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--bg1);max-height:220px;overflow-y:auto}
+.imp-result{max-height:none;margin-top:10px}
+.imp-cols{display:flex;gap:14px;margin:14px 18px}
+.imp-col{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--bg1)}
+.imp-item{font-size:var(--fs-sm);color:var(--text2);margin:5px 0;line-height:1.4}
+.imp-item code{font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono)}
+.imp-mean{font-size:var(--fs-xs);color:var(--dim);margin-top:1px}
+.imp-form{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+.imp-form input,.imp-form textarea,.imp-form select{width:100%;box-sizing:border-box;margin:4px 0;padding:7px 9px;border:1px solid var(--line2);border-radius:7px;background:var(--bg2);color:var(--text);font-size:var(--fs-sm);font-family:var(--sans)}
+.imp-form textarea{min-height:54px;resize:vertical}
+.imp-tag{font-size:10px;font-weight:500;color:#fff;background:var(--bg5);border-radius:7px;padding:1px 6px;margin-left:4px}
+.imp-tag-now{background:var(--purple)}
+.imp-judge{margin:10px 18px;font-size:var(--fs-sm);color:var(--text2);background:rgba(167,139,250,0.12);border:1px solid var(--purple);border-radius:8px;padding:8px 12px}
+.imp-sec-hd{font-size:var(--fs-sm);font-weight:600;color:var(--sub);margin:16px 14px 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.imp-st{font-size:10px;font-weight:600;border-radius:7px;padding:1px 7px;white-space:nowrap}
+.imp-st-wait{background:rgba(167,139,250,0.16);color:var(--purple)}
+.imp-st-mid{background:rgba(245,180,90,0.18);color:#d98a2b}
+.imp-st-ok{background:rgba(74,201,155,0.16);color:#2fae7d}
+.imp-st-no{background:var(--bg3);color:var(--dim)}
+.imp-ab{display:flex;gap:12px;margin:10px 0}
+.imp-ab-col{flex:1;min-width:0}
+.imp-ab-col .imp-orig{margin:0}
+.imp-mini{padding:3px 8px;font-size:var(--fs-xs);margin-left:4px}
 .hm-answer{
   font-size:var(--fs-sm);color:var(--text2);
   white-space:pre-wrap;word-break:keep-all;line-height:1.7;
@@ -766,6 +817,43 @@ body{
   margin-top:14px;
 }
 .story-chips-inline .sgst-chip{font-size:var(--fs-sm)}
+/* 와이드 KPI 표 — 좌우 스크롤 + 열 클릭 정렬 */
+.story-table-scroll{overflow-x:auto;max-width:100%;margin:6px 0}
+.story-table-scroll .story-table{white-space:nowrap}
+.story-table.sortable th{cursor:pointer;user-select:none}
+.story-table.sortable th:hover{color:var(--color-accent,#7f77dd)}
+.story-sort-modes{font-size:var(--fs-xs);color:var(--color-text-tertiary);margin:10px 0 2px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.story-sort-modes button{font-size:var(--fs-xs);padding:2px 10px;border-radius:999px;cursor:pointer;background:transparent;color:var(--color-text-secondary);border:1px solid var(--color-border,rgba(127,127,127,.25))}
+.story-sort-modes button.on{background:var(--color-accent,#7f77dd);color:#fff;border-color:var(--color-accent,#7f77dd)}
+.story-small-note{font-size:var(--fs-xs);color:var(--color-text-tertiary);line-height:1.55;margin:6px 0;opacity:.85}
+.story-small-note b{font-weight:600;color:var(--color-text-secondary)}
+/* 관리자 참고 푸터(분석 대상·실데이터·추가 적재 필요) — 본문 끝에 모음. 토글로 on/off */
+.sl-meta-footer{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+body.hide-meta .sl-meta-footer{display:none}
+/* 제목(슬롯 메타)도 참고 정보 — 관리자 토글로 함께 on/off (비관리자는 hide-meta 미적용 → 항상 표시) */
+body.hide-meta .story-slot-meta{display:none}
+/* v2 토글 바 — 지표/기간/비교창 전환 */
+.sl-toggle-bar{
+  display:flex;flex-wrap:wrap;gap:14px;align-items:center;
+  margin-top:12px;padding:8px 10px;
+  background:var(--color-bg-secondary,rgba(127,127,127,.06));
+  border:1px solid var(--color-border,rgba(127,127,127,.18));
+  border-radius:var(--rad-md,10px);
+  transition:opacity .15s ease;
+}
+.sl-toggle-group{display:inline-flex;align-items:center;gap:4px}
+.sl-toggle-label{font-size:var(--fs-xs);color:var(--color-text-tertiary);margin-right:2px}
+.sl-toggle{
+  font-size:var(--fs-xs);padding:3px 10px;border-radius:999px;cursor:pointer;
+  background:transparent;color:var(--color-text-secondary);
+  border:1px solid var(--color-border,rgba(127,127,127,.25));
+  transition:all .12s ease;
+}
+.sl-toggle:hover{border-color:var(--color-accent,#7f77dd)}
+.sl-toggle.on{
+  background:var(--color-accent,#7f77dd);color:#fff;
+  border-color:var(--color-accent,#7f77dd);font-weight:600;
+}
 .story-end-msg{
   background:rgba(52,199,138,.08);
   border:1px solid rgba(52,199,138,.3);
@@ -853,6 +941,10 @@ table.story-table th{
   max-width:min(420px,94vw);text-align:left;line-height:1.4;
 }
 .sgst-chip:hover{background:var(--bg3);border-color:var(--accent);color:var(--text)}
+/* 빈출 다음행동 추천 칩 — 보라색으로 구분 */
+.sgst-chip-rec{border-color:var(--purple);color:var(--text);background:rgba(167,139,250,0.14)}
+.sgst-chip-rec:hover{border-color:var(--purple);background:rgba(167,139,250,0.24)}
+.sgst-rec-mark{font-size:11px;font-weight:500;color:#fff;background:var(--purple);border-radius:8px;padding:1px 6px;margin-left:4px;line-height:1.3;flex-shrink:0}
 /* 이상신호 칩 — 시각 강조 */
 .sgst-chip.anomaly{
   background:rgba(242,107,107,.08);border-color:rgba(242,107,107,.35);
@@ -896,6 +988,10 @@ table.story-table th{
 }
 .msg-ai-text{font-size:var(--fs-base);line-height:1.65;color:var(--text2);white-space:pre-wrap;word-break:keep-all}
 .msg-ai-name{display:none}
+/* 스토리라인 답변 페이드인 — 글자단위 타자기 대체(매끄럽고 무깜빡임) */
+.sl-fade{opacity:0}
+.sl-fade-in{opacity:1;transition:opacity .2s ease-out}
+@media (prefers-reduced-motion: reduce){ .sl-fade,.sl-fade-in{opacity:1;transition:none} }
 
 /* Typing */
 .typing-indicator{display:flex;gap:4px;padding:6px 0;align-items:center}
@@ -1051,9 +1147,26 @@ table.story-table th{
 }
 .chart-wd-toggle:hover{background:var(--accent-soft)}
 .chart-wd-toggle.active{background:var(--accent);color:#fff;font-weight:600;border-color:var(--accent)}
+/* 원인 분석 차트 — [일/주/월] 기간 전환 버튼 (좌상단) */
+.chart-period-btns{
+  position:absolute;top:10px;left:12px;z-index:5;
+  display:inline-flex;border-radius:999px;overflow:hidden;
+  border:1px solid var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.20);
+}
+.chart-period-btn{
+  font-size:var(--fs-xs);line-height:1;padding:5px 11px;cursor:pointer;
+  background:var(--color-bg-elevated-2);color:var(--accent);
+  border:none;border-right:1px solid var(--accent);
+  transition:background .12s,color .12s;
+}
+.chart-period-btn:last-child{border-right:none}
+.chart-period-btn:hover{background:var(--accent-soft)}
+.chart-period-btn.active{background:var(--accent);color:#fff;font-weight:600}
 /* 모바일 — 탭 타깃 확대 + 가시성 보장 */
 @media(max-width:600px){
   .chart-wd-toggle{top:8px;right:10px;padding:7px 12px;font-size:var(--fs-sm)}
+  .chart-period-btns{top:8px;left:10px}
+  .chart-period-btn{padding:7px 12px;font-size:var(--fs-sm)}
 }
 
 /* ECharts 컨테이너 (옵션 2 점진 도입 - D-013) */
@@ -1255,6 +1368,10 @@ table.story-table th{
     <div class="history-list" id="historyList">
       <div class="history-empty">아직 질의 내역이 없습니다.</div>
     </div>
+    <div class="sidebar-section">최근 분석 여정</div>
+    <div class="history-list" id="storyRecentList">
+      <div class="history-empty">아직 분석 여정이 없습니다.</div>
+    </div>
   </div>
 </aside>
 
@@ -1334,6 +1451,9 @@ table.story-table th{
               style="display:none" onclick="openAdminModal()">승인 관리</button>
       <button class="sidebar-user-btn admin" id="suStatsBtn"
               style="display:none" onclick="openStatsModal()">질의맵</button>
+      <button class="sidebar-user-btn admin" id="suMetaBtn"
+              style="display:none" onclick="toggleAdminMeta()"
+              title="답변의 '분석 대상·실데이터·추가 적재 필요' 참고 푸터 표시/숨김 (관리자 전용)">참고 정보: 켜짐</button>
       <button class="sidebar-user-btn" onclick="doLogout()">로그아웃</button>
     </div>
   </div>
@@ -1561,6 +1681,25 @@ function _renderSidebarUser() {
     || ['총괄관리','데이터'].includes(RAAS_USER.role);
   document.getElementById('suStatsBtn').style.display =
     statsAllowed ? 'inline-block' : 'none';
+  const revTab = document.getElementById('histTabReview');
+  if (revTab) revTab.style.display = statsAllowed ? 'inline-block' : 'none';
+  // 관리자 전용 '참고 정보(메타 푸터)' 토글
+  document.getElementById('suMetaBtn').style.display =
+    RAAS_USER.is_admin ? 'inline-block' : 'none';
+  if (RAAS_USER.is_admin) _applyAdminMeta();
+}
+
+// 답변의 관리자 참고 푸터(분석 대상·실데이터·추가 적재 필요) 표시/숨김 — localStorage 유지
+function _applyAdminMeta() {
+  const hidden = localStorage.getItem('raas_hide_meta') === '1';
+  document.body.classList.toggle('hide-meta', hidden);
+  const btn = document.getElementById('suMetaBtn');
+  if (btn) btn.textContent = hidden ? '참고 정보: 꺼짐' : '참고 정보: 켜짐';
+}
+function toggleAdminMeta() {
+  const hidden = localStorage.getItem('raas_hide_meta') === '1';
+  localStorage.setItem('raas_hide_meta', hidden ? '0' : '1');
+  _applyAdminMeta();
 }
 
 // 앱 부팅 시 호출 — 토큰이 있으면 /api/me로 복원, 없으면 게이트 표시
@@ -2563,7 +2702,32 @@ function escapeHtml(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 function renderAiText(s) {
-  return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  if (!s) return '';
+  // 마크다운 표 지원(예: 주간 편성표). 본문은 pre-wrap이라 줄바꿈은 CSS가 처리.
+  const tables = [];
+  s = s.replace(/(\|[^\n]+\|\n\|[-:|\s]+\|\n(?:\|[^\n]+\|\n?)+)/g, (match) => {
+    const rows = match.trim().split('\n');
+    const header = rows[0].split('|').slice(1, -1).map(c => c.trim());
+    const body = rows.slice(2).map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+    const thead = '<tr>' + header.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr>';
+    const tbody = body.map(r => '<tr>' + r.map(c =>
+      `<td>${escapeHtml(c).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</td>`).join('') + '</tr>').join('');
+    tables.push(`<div class="story-table-scroll"><table class="story-table">${thead}${tbody}</table></div>`);
+    return `@@TBL${tables.length - 1}@@`;
+  });
+  // [small] 참고 블록 → 답변 끝 푸터(관리자 참고 정보, 참고 토글 연동)
+  const meta = [];
+  s = s.replace(/\[small\]([\s\S]+?)\[\/small\]/g, (_, b) => { meta.push(b); return ''; });
+  let out = escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  out = out.replace(/@@TBL(\d+)@@\n?/g, (_, i) => tables[+i]);
+  if (meta.length) {
+    out = out.replace(/\s+$/, '');
+    const inner = meta.map(b =>
+      `<div class="story-small-note">${escapeHtml(b.trim()).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>`
+    ).join('');
+    out += `<div class="sl-meta-footer">${inner}</div>`;
+  }
+  return out;
 }
 function fmtK(v) {
   if (v == null || isNaN(v)) return '—';
@@ -3046,21 +3210,67 @@ function _buildEChartsMultiLineOption(chart) {
   };
 }
 
-// chart_data(timeseries_dual) → ECharts option (이중 Y축)
-// 두 시리즈가 같은 단위면 공유 Y축, 다른 단위면 좌/우 독립 Y축으로 자동 분기
+// 3중 이상 시리즈 → Y축 range 제거(숨김) + 각 시리즈 min-max 정규화로 '증감 형태'만 비교.
+// 툴팁은 실제값 표시.
+function _buildMultiTrendNoAxis(chart) {
+  const series = chart.series || [];
+  const theme = _eChartsThemeColors();
+  const dates = series[0].points.map(p => p.date);
+  const titleH = chart.title ? 30 : 6;
+  const norm = series.map((s, i) => {
+    const vals = s.points.map(p => p.value);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    const rng = (mx - mn) || 1;
+    return {
+      name: s.label || `시리즈 ${i + 1}`,
+      type: 'line', smooth: false, symbol: 'circle', symbolSize: 4,
+      data: s.points.map(p => ({ value: (p.value - mn) / rng, actual: p.value })),
+      lineStyle: { width: 2 }, emphasis: { focus: 'series' }, animation: false,
+    };
+  });
+  return {
+    backgroundColor: 'transparent',
+    title: chart.title ? { text: chart.title, left: 'center', top: 4,
+      textStyle: { color: theme.text, fontSize: 14, fontWeight: 600 } } : undefined,
+    color: theme.palette,
+    tooltip: {
+      trigger: 'axis', backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder,
+      textStyle: { color: theme.text, fontSize: 12 },
+      axisPointer: { type: 'line', lineStyle: { color: theme.textSub, type: 'dashed' } },
+      formatter: (ps) => {
+        if (!ps || !ps.length) return '';
+        let h = `<div style="font-weight:600;margin-bottom:4px;">${ps[0].axisValueLabel || ps[0].name}</div>`;
+        ps.forEach(p => {
+          const a = p.data && p.data.actual;
+          h += `<div style="display:flex;justify-content:space-between;gap:14px;"><span>${p.marker}${p.seriesName}</span>
+            <span style="font-family:'JetBrains Mono',monospace;">${a == null ? '—' : Number(a).toLocaleString()}</span></div>`;
+        });
+        return h;
+      },
+    },
+    legend: { top: titleH + 4, type: 'scroll', selectedMode: false, textStyle: { color: theme.textSub, fontSize: 12 }, icon: 'circle' },
+    grid: { top: titleH + 30, left: 12, right: 12, bottom: 30, containLabel: true },
+    xAxis: { type: 'category', data: dates, boundaryGap: false,
+      axisLine: { lineStyle: { color: theme.line } },
+      axisLabel: { color: theme.textSub, fontSize: 11, rotate: dates.length > 20 ? 30 : 0 } },
+    yAxis: { type: 'value', min: 0, max: 1, show: false },   // range 제거 — 증감 형태만 비교
+    series: norm,
+  };
+}
+
+// chart_data(timeseries_dual) → ECharts option
+// 2개 시리즈: 좌/우 독립 Y축(증감 비교). 3개 이상: 무축 정규화(_buildMultiTrendNoAxis).
 function _buildEChartsDualAxisOption(chart) {
   const series = chart.series || [];
   if (series.length < 2 || !series[0]?.points) return null;
+  if (series.length >= 3) return _buildMultiTrendNoAxis(chart);   // 3중↑ : 축 range 제거, 증감 비교
 
   const theme = _eChartsThemeColors();
   const dates = series[0].points.map(p => p.date);
   const totalPts = dates.length;
 
+  // 2축: 같은 단위라도 좌/우 독립 스케일로 분리 — 절대크기 무시, 증감 비교
   const units = series.slice(0, 2).map(s => s.unit || '');
-  const sameUnit = units[0] === units[1];
-
-  // 같은 단위 → 공유 Y축 (멀티라인 어댑터 재사용)
-  if (sameUnit) return _buildEChartsMultiLineOption(chart);
 
   // 의도된 기간
   const intentDays = (typeof chart.initial_days === 'number' && chart.initial_days > 0)
@@ -3160,6 +3370,7 @@ function _buildEChartsDualAxisOption(chart) {
     legend: {
       top: titleHeight + 4,
       type: 'scroll',
+      selectedMode: false,   // 범례 클릭으로 시리즈 켜고끄는 토글 제거 (비교 전용)
       textStyle: { color: theme.textSub, fontSize: 12 },
       pageTextStyle: { color: theme.textSub },
       icon: 'circle',
@@ -3579,6 +3790,32 @@ function _toggleChartWorkdays(btn) {
     // 아직 lazy 초기화 전 → store 사본의 기본값을 갱신해 init이 반영하게
     const c = _ECHARTS_STORE[el.id];
     if (c) c.weekday_default = el._raasWeekdayOnly;
+  }
+}
+
+// 원인 분석 차트 [일/주/월] 버튼 — 서버 왕복·LLM 재실행 없이 그래프만 전환 (본문 그대로)
+function _switchChartPeriod(btn, period) {
+  const wrap = btn.closest('.ai-chart-wrap');
+  if (!wrap) return;
+  const el = wrap.querySelector('.ai-echarts-container');
+  if (!el) return;
+  const store = _ECHARTS_STORE[el.id] || {};
+  const periods = store.periods || (el._raasEChartsChartFull && el._raasEChartsChartFull.periods);
+  const nc = periods && periods[period];
+  if (!nc) return;
+  wrap.querySelectorAll('.chart-period-btn').forEach(b => b.classList.toggle('active', b === btn));
+  el._raasWeekdayOnly = false;
+  if (el._raasEChartsInst) {
+    el._raasEChartsChartFull = nc;     // _rerenderChart가 이 차트로 다시 그림
+    _rerenderChart(el);
+  } else {                             // lazy 미초기화 → store에 새 기간 반영
+    Object.assign(store, nc);
+    store.periods = periods; store.period_switch = true; store.current_period = period;
+  }
+  const wd = wrap.querySelector('.chart-wd-toggle');   // 평일만 — 일간만 노출
+  if (wd) {
+    wd.style.display = nc.weekday_toggle ? '' : 'none';
+    wd.classList.remove('active'); wd.setAttribute('aria-pressed', 'false');
   }
 }
 
@@ -4004,7 +4241,10 @@ function addUserMsg(text) {
       <div class="msg-avatar">나</div>
       <div class="msg-body"><div class="msg-user-text">${escapeHtml(text)}</div></div>
     </div>`);
-  _scrollBottom();
+  // 질문을 화면 최상단으로 (답변 중 자동 추적은 _raas_query_inflight로 차단)
+  _anchorMsgId = id;
+  // 다음 프레임(=AI 타이핑 placeholder까지 추가된 뒤)에 앵커 적용
+  requestAnimationFrame(() => _anchorQuestionTop(id));
   return id;
 }
 
@@ -4046,23 +4286,35 @@ function _buildChartHTML(chart) {
     ? `<p class="ai-rationale" title="AI 차트 선택 근거">💡 ${escapeHtml(chart.rationale)}</p>`
     : '';
   // 일별 차트면 '평일만'(주말·공휴일 제외) 클라이언트 토글 버튼
-  const wdToggle = chart.weekday_toggle
-    ? `<button class="chart-wd-toggle${chart.weekday_default ? ' active' : ''}" type="button"
-               aria-pressed="${chart.weekday_default ? 'true' : 'false'}"
+  const _wdDay = chart.period_switch && chart.periods && chart.periods.day && chart.periods.day.weekday_toggle;
+  const _wdHide = chart.period_switch && chart.current_period !== 'day';
+  const wdToggle = (chart.weekday_toggle || _wdDay)
+    ? `<button class="chart-wd-toggle" type="button" style="${_wdHide ? 'display:none' : ''}"
+               aria-pressed="false"
                title="주말·공휴일을 제외하고 평일만 표시"
                onclick="_toggleChartWorkdays(this)">평일만</button>`
     : '';
+  // 원인 분석 차트: 그래프에 [일/주/월] 기간 전환 버튼 (스토리라인 period 토글 재렌더)
+  const periodBtns = chart.period_switch
+    ? `<div class="chart-period-btns" title="기간 전환 — 그래프만 변경(본문 유지)">`
+      + [['day', '일'], ['week', '주'], ['month', '월']].filter(([id]) => chart.periods && chart.periods[id])
+          .map(([id, l]) =>
+          `<button type="button" data-period="${id}" class="chart-period-btn${chart.current_period === id ? ' active' : ''}"
+                   onclick="_switchChartPeriod(this,'${id}')">${l}</button>`).join('')
+      + `</div>`
+    : '';
+  const topBtns = periodBtns + wdToggle;
   // chart_type 메타가 있으면 컨테이너로 감싸 open_chart 발사용 데이터 속성 부여
   if (chart.chart_type) {
     const chartId = 'chart_' + Math.random().toString(36).slice(2, 10);
-    const inner = wdToggle + h + src + rationale;
+    const inner = topBtns + h + src + rationale;
     return `<div class="ai-chart-wrap" data-chart-type="${escapeHtml(chart.chart_type)}"
                  data-chart-id="${chartId}" data-rationale-visible="1"
                  data-metric="${escapeHtml(chart.metric || '')}"
                  data-completeness="${chart.data_completeness ?? ''}">${inner}</div>`;
   }
-  return wdToggle ? `<div class="ai-chart-wrap">${wdToggle}${h}${src}${rationale}</div>`
-                  : h + src + rationale;
+  return topBtns ? `<div class="ai-chart-wrap">${topBtns}${h}${src}${rationale}</div>`
+                 : h + src + rationale;
 }
 
 // IntersectionObserver — 새로 렌더된 .ai-chart-wrap이 50% 가시되면 open_chart 발사 (인스턴스 1회)
@@ -4118,9 +4370,45 @@ function fillAiError(id, errText) {
     <div class="msg-ai-text" style="color:var(--red);">오류: ${escapeHtml(errText)}</div>`;
 }
 
+// 질의 제출 시 질문 메시지를 화면 최상단으로 고정하고, 답변 생성 중에는 마지막 줄을
+// 따라가지 않는다(자동 추적 스크롤 off). 사용자는 답변을 처음부터 읽고, 필요할 때만 직접 스크롤.
+let _anchorMsgId = null;
+let _anchoredScrollTop = 0;
+const _ANCHOR_TOP_GAP = 12;        // 상단에 약간의 여백
+
 function _scrollBottom() {
+  if (_raas_query_inflight) return; // 답변 생성 중엔 따라 내려가지 않음(질문 상단 고정)
   const t = document.getElementById('chatThread');
-  t.scrollTop = t.scrollHeight;
+  if (t) t.scrollTop = t.scrollHeight;
+}
+
+// 방금 제출한 질문 메시지를 뷰포트 최상단으로. 하단 스페이서로 항상 상단까지 오르게 보장.
+function _anchorQuestionTop(id) {
+  const thread = document.getElementById('chatThread');
+  const inner  = document.getElementById('threadInner');
+  const el     = document.getElementById(id);
+  if (!thread || !inner || !el) return;
+  let sp = document.getElementById('threadSpacer');
+  if (!sp) { sp = document.createElement('div'); sp.id = 'threadSpacer'; sp.setAttribute('aria-hidden', 'true'); }
+  inner.appendChild(sp);                          // 항상 맨 끝
+  sp.style.height = thread.clientHeight + 'px';   // 질문이 최상단까지 오를 공간 확보
+  const delta = el.getBoundingClientRect().top - thread.getBoundingClientRect().top;
+  _anchoredScrollTop = Math.max(0, thread.scrollTop + delta - _ANCHOR_TOP_GAP);
+  thread.scrollTop = _anchoredScrollTop;
+}
+
+// 답변 완료 후: 실제 답변 길이에 맞춰 하단 여백 정리(과도한 빈 공간 제거). 질문은 상단 유지.
+function _finalizeAnchor() {
+  const thread = document.getElementById('chatThread');
+  const inner  = document.getElementById('threadInner');
+  const sp     = document.getElementById('threadSpacer');
+  const el     = _anchorMsgId && document.getElementById(_anchorMsgId);
+  if (!thread || !inner || !sp || !el) return;
+  const atAnchor = Math.abs(thread.scrollTop - _anchoredScrollTop) < 4;  // 사용자가 직접 스크롤했으면 위치 보정 안 함
+  const elTop = el.getBoundingClientRect().top - inner.getBoundingClientRect().top;
+  const belowH = inner.scrollHeight - sp.offsetHeight - elTop;
+  sp.style.height = Math.max(16, thread.clientHeight - belowH) + 'px';
+  if (atAnchor) thread.scrollTop = _anchoredScrollTop;
 }
 
 // ────────────────────────────────────────────────
@@ -4132,6 +4420,10 @@ let _raas_query_inflight = false;   // 이전 질의 응답이 끝날 때까지 
 // 답변이 "완전히 끝날 때까지"(스트리밍/타자기 렌더 완료) on 유지.
 function _setQueryGenerating(on) {
   _raas_query_inflight = on;
+  if (!on) {
+    // 답변 완료 → 하단 여백 정리(질문은 상단 유지)
+    try { _finalizeAnchor(); } catch (_) {}
+  }
   const btn = document.getElementById('btnSend');
   if (!btn) return;
   btn.classList.toggle('is-generating', on);   // 네모(정지)·회색 ↔ 윗화살표
@@ -4170,14 +4462,23 @@ async function submitQuery(question, source) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         question,
-        // 스토리라인 라우터 컨텍스트 — 1_anchor_more에서 프로그램명 단독 입력 시 자동 라우팅
+        // 스토리라인 라우터 컨텍스트 — 프로그램명 단독 입력 시 현재 슬롯에 맞는 다음 단계로 자동 라우팅
+        storyline_role: (_RAAS_STORYLINE && _RAAS_STORYLINE.role) || null,
         storyline_slot: (_RAAS_STORYLINE && _RAAS_STORYLINE.slot) || null,
         storyline_context: (_RAAS_STORYLINE && _RAAS_STORYLINE.context) || {},
+        storyline_session: (_RAAS_STORYLINE && _RAAS_STORYLINE.sessionId) || null,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     let rawText = '', chartData = null, initialized = false, streamDone = false;
+    let _renderQueued = false;   // 토큰마다 재파싱하지 않고 프레임당 1회로 합쳐 깜빡임 감소
+    const _flushRender = () => {
+      _renderQueued = false;
+      const el = document.getElementById(`${aiId}-txt`);
+      if (el) el.innerHTML = renderAiText(rawText);
+      _scrollBottom();
+    };
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
@@ -4200,13 +4501,12 @@ async function submitQuery(question, source) {
             initialized = true;
           }
           rawText += ev.text;
-          document.getElementById(`${aiId}-txt`).innerHTML = renderAiText(rawText);
-          _scrollBottom();
+          if (!_renderQueued) { _renderQueued = true; requestAnimationFrame(_flushRender); }
         } else if (ev.type === 'done') {
           const qid = ev.query_id || null;
           // 스토리라인 라우팅 응답 — 칩 클릭과 동일 구조로 렌더
           if (ev.routed_via_storyline) {
-            _RAAS_STORYLINE.role    = 'CP';
+            _RAAS_STORYLINE.role    = 'cp_v2';
             _RAAS_STORYLINE.slot    = ev.slot;
             _RAAS_STORYLINE.context = ev.context_out || {};
             _RAAS_STORYLINE.visited = _RAAS_STORYLINE.visited || [];
@@ -4408,7 +4708,17 @@ window._RAAS_STORYLINE = {
   visited: [],        // 방문 슬롯 누적 — export 호출 시 전달
   entry: null,        // 캐시: 첫 화면 entry payload (period 전환 시 재렌더링용)
   entryPeriod: 'today',  // 'today' | 'last_week' | 'last_month'
+  toggleState: {},    // v2 토글 상태 {metric, period, window}
+  lastBody: null,     // v2 토글 in-place 재렌더용 — 마지막 AI 본문 ref
+  lastSlot: null,
 };
+
+// cp_v2(토글·공통출구·KPI 탐색·기간 그래프) 단일 버전. v1은 폐기됨.
+const _STORYLINE_V2 = true;
+function _storylineRole(detected) {
+  return (detected === 'cp') ? 'cp_v2' : detected;
+}
+function _storylineIsV2() { return _RAAS_STORYLINE.role === 'cp_v2'; }
 
 // 엔트리 period 라벨 유틸 — data_last_date 기준 지난주 Sun~Sat / 지난달 YYYY년 M월
 function _entryFmtDate(d) {
@@ -4485,17 +4795,21 @@ async function _tryLoadStoryline() {
       return false;
     }
 
-    const r2 = await _authedFetch(`/api/storyline/entry?role=${encodeURIComponent(detect.role)}`);
+    const role = _storylineRole(detect.role);
+    const r2 = await _authedFetch(`/api/storyline/entry?role=${encodeURIComponent(role)}`);
     if (!r2.ok) return false;
     const entry = await r2.json();
     if (!entry.ok) return false;
 
     _RAAS_STORYLINE = {
-      role: detect.role,
+      role: role,
       available: true,
       context: entry.user_context || {},
       slot: 'entry',
       visited: [],
+      toggleState: {},
+      // 이력 세션 — 진입 시 1건 발급. 자유질의/_end로 종료, 재진입 시 새 세션.
+      sessionId: 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
     };
     _renderStorylineWelcome(entry);
     return true;
@@ -4523,11 +4837,12 @@ function _renderStorylineWelcome(entry) {
     return;
   }
 
-  // 캐시 + period 적용 렌더링
+  // 캐시 + period 적용 렌더링 (v2는 토글 기반이라 period remap 우회)
   _RAAS_STORYLINE.entry = entry;
+  const isV2 = _storylineIsV2();
   const period = _RAAS_STORYLINE.entryPeriod || 'today';
-  const firstQ = _entryComputeQuestion(entry, period);
-  const chips  = _entryRemapChips(entry.chips, period);
+  const firstQ = isV2 ? (entry.first_question || '') : _entryComputeQuestion(entry, period);
+  const chips  = isV2 ? (entry.chips || []) : _entryRemapChips(entry.chips, period);
   welcome.innerHTML = `
     <h1 class="welcome-logo">${escapeHtml(entry.greeting || '')}</h1>
     <div class="welcome-sub">${_renderStorylineText(firstQ)}</div>
@@ -4547,9 +4862,42 @@ function _storylineChipHTML(chip, slotFrom) {
   const payloadAttr = chip.payload
     ? `data-payload='${JSON.stringify(chip.payload).replace(/'/g, "&#39;")}'`
     : '';
+  // v2: 진입 칩의 set_toggle(초기 토글값) 인코딩
+  const setToggleAttr = chip.set_toggle
+    ? `data-set-toggle='${JSON.stringify(chip.set_toggle).replace(/'/g, "&#39;")}'`
+    : '';
   return `<button class="sgst-chip" onclick="_onStorylineChip(this)"
     data-slot="${slot}" data-intent="${intent}" data-label="${label}"
-    data-next-slot="${nextSlot}" ${payloadAttr}>${label}</button>`;
+    data-next-slot="${nextSlot}" ${payloadAttr} ${setToggleAttr}>${label}</button>`;
+}
+
+// 빈출 다음행동 추천 — 이 슬롯에서 자주 선택된 칩을 추천 색으로 강조 (3단계 /recommend)
+const _recCache = {};
+async function _decorateRecommendedChips(container, slot) {
+  if (!container || !slot || !RAAS_TOKEN) return;
+  const role = (_RAAS_STORYLINE && _RAAS_STORYLINE.role) || 'cp_v2';
+  try {
+    let intents = _recCache[slot];
+    if (!intents) {
+      const res = await _authedFetch(
+        `/api/storyline/recommend?slot=${encodeURIComponent(slot)}&role=${encodeURIComponent(role)}`);
+      const data = await res.json();
+      intents = (data.next || []).slice(0, 2).map(n => n.chip_intent).filter(Boolean);
+      _recCache[slot] = intents;
+    }
+    if (!intents.length) return;
+    container.querySelectorAll('.sgst-chip[data-intent]').forEach(b => {
+      if (intents.indexOf(b.getAttribute('data-intent')) !== -1) {
+        b.classList.add('sgst-chip-rec');
+        if (!b.querySelector('.sgst-rec-mark')) {
+          const m = document.createElement('span');
+          m.className = 'sgst-rec-mark'; m.textContent = '추천';
+          b.appendChild(m);
+        }
+        b.title = '이 단계에서 자주 선택된 다음 단계';
+      }
+    });
+  } catch (_) {}
 }
 
 // 스토리라인 답변용 텍스트 렌더링 — **bold** + \n→<br> + 간단 markdown table
@@ -4567,7 +4915,7 @@ function _renderStorylineText(s) {
       const tbody = body.map(
         r => '<tr>' + r.map(c => `<td>${_renderStorylineInline(c)}</td>`).join('') + '</tr>'
       ).join('');
-      tables.push(`<table class="story-table">${thead}${tbody}</table>`);
+      tables.push(`<div class="story-table-scroll"><table class="story-table sortable">${thead}${tbody}</table></div>`);
       return `TABLE${tables.length - 1}`;
     }
   );
@@ -4584,6 +4932,18 @@ function _renderStorylineText(s) {
   out = out.replace(/\[hl\]([\s\S]+?)\[\/hl\]/g, (_, body) =>
     `<span class="story-hl-slot">${_renderStorylineInline(body.trim())}</span>`
   );
+  // 6) [small]...[/small] → 작은 글씨 참고 블록. 본문을 밀지 않도록 답변 맨 끝(푸터)으로 모은다.
+  //    (분석 대상·사용된 RAAS 실데이터·추가 적재 필요 데이터 = 관리자 참고 정보)
+  const _metaBlocks = [];
+  out = out.replace(/\[small\]([\s\S]+?)\[\/small\]/g, (_, body) => {
+    _metaBlocks.push(`<div class="story-small-note">${body.replace(/^(<br>)+|(<br>)+$/g, '')}</div>`);
+    return '';
+  });
+  // [small] 추출로 생긴 앞/뒤 빈 줄 정리 — 특히 맨 위 블록이 빠지며 본문 앞에 남는 <br>(제목과 간격 벌어짐) 제거
+  out = out.replace(/^(?:\s*<br>)+|(?:<br>\s*)+$/g, '');
+  if (_metaBlocks.length) {
+    out += `<div class="sl-meta-footer">${_metaBlocks.join('')}</div>`;
+  }
   return out;
 }
 
@@ -4594,36 +4954,65 @@ function _renderStorylineInline(s) {
 // 스토리라인 칩 답변을 일반 질의 스트리밍처럼 한 글자씩 써내려가는 효과로 렌더.
 // 전체 답변(answer)을 점진적으로 잘라 _renderStorylineText(부분)을 반복 호출하고,
 // 본문이 끝나면 차트·다음 칩(tail)을 노출한다.
+// 타이핑용 평문 — 내러티브만 흘리고, 구조/메타(표·[small]·[mini])는 끝에 마크다운으로 한 번에.
+//  모든 슬롯이 '서사 타이핑 → 표/차트/메타 등장'으로 동일한 느낌. (1_kpi·2_impact 등 표·provenance
+//  가 큰 슬롯이 다르게 느껴지던 문제 해결)
+function _plainStoryText(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/\[small\][\s\S]*?\[\/small\]/g, '')  // [small] 블록(분석대상·provenance) 통째 제외
+    .replace(/\[mini\][\s\S]*?\[\/mini\]/g, '')    // [mini] 보조 패널 통째 제외
+    .replace(/\[\/?hl\]/g, '')                     // [hl] 인라인 강조는 텍스트만 유지
+    .replace(/\|[^\n]*\|[ \t]*\n\|[-:|\s]+\|[ \t]*\n(?:\|[^\n]*\|[ \t]*\n?)+/g, '')  // 표 블록 통째 제거
+    .replace(/\*\*(.+?)\*\*/g, '$1')               // **볼드**
+    .replace(/\|/g, '  ')                           // 표 아닌 잔여 파이프 → 공백
+    .replace(/[ \t]{3,}/g, '  ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .trim();
+}
+
 function _typewriteStoryline(msgBody, parts) {
-  const { slotMetaCls, slotMetaTxt, answer, chartHtml, chipsHtml, onDone } = parts;
+  const { slotMetaCls, slotMetaTxt, answer, chartHtml, toggleHtml, chipsHtml, onDone } = parts;
   msgBody.innerHTML = `
     <div class="msg-ai-name">RAAS Assistant</div>
     <div class="${slotMetaCls}">${slotMetaTxt}</div>
     <div class="msg-ai-text"></div>
-    <div class="sl-tail" style="display:none">
+    <div class="sl-tail sl-fade" style="display:none">
       ${chartHtml || ''}
+      ${toggleHtml || ''}
       <div class="story-chips-inline">${chipsHtml || ''}</div>
     </div>`;
   const txtEl = msgBody.querySelector('.msg-ai-text');
   const tail  = msgBody.querySelector('.sl-tail');
   const full  = answer || '';
-  // 일반 질의(LLM 토큰 스트리밍) 체감과 맞추기 위해 길이와 무관하게 '일정 속도'로 흘린다.
-  // (이전엔 STEP을 길이에 비례시켜, 답변마다 한 번에 쓰는 분량·총 시간이 달라 보였음)
-  const STEP     = 3;    // tick당 글자수 (고정)
-  const INTERVAL = 24;   // ms — STEP/INTERVAL ≈ 125자/초, LLM 스트리밍과 유사한 체감
-  let i = 0;
-  (function tick() {
-    i = Math.min(full.length, i + STEP);
-    txtEl.innerHTML = _renderStorylineText(full.slice(0, i));
+
+  // 타이핑 종료 → 전체 마크다운 1회 렌더(표·볼드 확정) + 표/차트/칩 등장
+  //  하단 영역은 타이핑 중 display:none(공간 미점유)이라 텍스트가 아래로 흐른다. 끝에 표시+페이드.
+  const finish = () => {
+    txtEl.innerHTML = _renderStorylineText(full);
+    if (tail) { tail.style.display = ''; requestAnimationFrame(() => tail.classList.add('sl-fade-in')); }
+    if (chartHtml) { try { _observeChartsIn(msgBody); } catch (_) {} }
+    try { _makeStoryTablesSortable(msgBody); } catch (_) {}
     _scrollBottom();
-    if (i < full.length) {
-      setTimeout(tick, INTERVAL);
-    } else {
-      if (tail) tail.style.display = '';
-      if (chartHtml) { try { _observeChartsIn(msgBody); } catch (_) {} }
-      _scrollBottom();
-      if (typeof onDone === 'function') { try { onDone(); } catch (_) {} }
-    }
+    if (typeof onDone === 'function') { try { onDone(); } catch (_) {} }
+  };
+
+  const plain = _plainStoryText(full);
+  const reduce = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } })();
+  if (!plain || reduce) { finish(); return; }
+
+  // 평문을 '주루룩' 흘린다 — rAF 기반, 총 ~0.35~0.9s (재파싱 없이 textContent만 갱신 → 무깜빡임)
+  const DURATION = Math.min(900, Math.max(350, plain.length * 1.2));
+  const ticks = Math.max(1, Math.round(DURATION / 16.7));
+  const step  = Math.max(1, Math.ceil(plain.length / ticks));
+  let i = 0;
+  (function frame() {
+    i = Math.min(plain.length, i + step);
+    txtEl.textContent = plain.slice(0, i);
+    _scrollBottom();
+    if (i < plain.length) requestAnimationFrame(frame);
+    else finish();
   })();
 }
 
@@ -4641,6 +5030,14 @@ async function _onStorylineChip(btn) {
   if (intent === 'scan_free_input') {
     const el = document.getElementById('userInput') || document.querySelector('#chatInput, textarea');
     if (el) { try { el.focus(); } catch (_) {} }
+    return;
+  }
+
+  // v2 공통 출구 '자유질의' — 입력창 포커스 (기존 질의 라우팅으로 연결, 답 후 레일 유지)
+  if (intent === 'freetext') {
+    _RAAS_STORYLINE.freetextReturn = slotFrom;
+    const el = document.getElementById('userInput') || document.querySelector('#chatInput, textarea');
+    if (el) { try { el.focus(); el.placeholder = '자유질의 입력 — 답변 후 직전 단계로 돌아옵니다'; } catch (_) {} }
     return;
   }
 
@@ -4678,6 +5075,14 @@ async function _onStorylineChip(btn) {
   } catch (_) {}
 
   try {
+    // v2: 진입 칩의 set_toggle(초기 토글값)을 토글 상태에 병합
+    let setToggle = null;
+    try { setToggle = JSON.parse((btn.dataset.setToggle || 'null').replace(/&#39;/g, "'")); }
+    catch (_) { setToggle = null; }
+    if (setToggle) {
+      _RAAS_STORYLINE.toggleState = Object.assign({}, _RAAS_STORYLINE.toggleState || {}, setToggle);
+    }
+
     // 동적 칩 payload는 prev_context로 병합
     const mergedCtx = Object.assign({}, _RAAS_STORYLINE.context || {}, payload || {});
     const res = await _authedFetch('/api/storyline/advance', {
@@ -4690,6 +5095,8 @@ async function _onStorylineChip(btn) {
         chip_label: label,
         prev_context: mergedCtx,
         next_slot_override: nextSlot || undefined,
+        toggle_state: _RAAS_STORYLINE.toggleState || {},
+        storyline_session: _RAAS_STORYLINE.sessionId || null,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -4777,6 +5184,11 @@ async function _onStorylineChip(btn) {
       // 일반 슬롯 — 답변 + 다음 칩
       _RAAS_STORYLINE.context = data.context_out || _RAAS_STORYLINE.context;
       _RAAS_STORYLINE.slot    = data.slot;
+      // v2: 토글 상태/슬롯/본문 ref 갱신 (토글 in-place 재렌더용)
+      if (data.toggle_state) _RAAS_STORYLINE.toggleState = data.toggle_state;
+      msgBody._kpiMeta = data.kpi_meta || null;     // 정렬기준 칩 재생성용 코드 맵
+      _RAAS_STORYLINE.lastBody = msgBody;
+      _RAAS_STORYLINE.lastSlot = data.slot;
       // 방문 슬롯 누적 (export 호출 시 본문 텍스트로 사용)
       _RAAS_STORYLINE.visited = _RAAS_STORYLINE.visited || [];
       _RAAS_STORYLINE.visited.push({
@@ -4793,17 +5205,19 @@ async function _onStorylineChip(btn) {
 
       // chart_data가 있으면 답변 아래에 ECharts 컨테이너 삽입
       const chartHtml = data.chart_data ? _buildChartHTML(data.chart_data) : '';
-      const chipsHtml = (data.chips_next || [])
+      const toggleHtml = _storylineToggleBar(data.toggles, _RAAS_STORYLINE.toggleState);
+      const chipsHtml = _filterStoryChips(data.slot, data.chips_next)
         .map(c => _storylineChipHTML(c, data.slot)).join('');
 
-      // 일반 질의처럼 한 글자씩 써내려가는 효과 (완료 후 차트·칩 노출 + 버튼 해제)
+      // 일반 질의처럼 한 글자씩 써내려가는 효과 (완료 후 차트·토글·칩 노출 + 버튼 해제)
       _typewriteStoryline(msgBody, {
-        slotMetaCls, slotMetaTxt, answer: data.answer || '', chartHtml, chipsHtml,
+        slotMetaCls, slotMetaTxt, answer: data.answer || '', chartHtml, toggleHtml, chipsHtml,
         onDone: () => {
           _setQueryGenerating(false);
           // 일반 질의와 동일 기준으로 답변 캐시 — 이력 질문(프로그램코드 접두 포함)과 키 정합
           try { _saveCachedAnswer(data.logged_question || label, msgBody.innerHTML); } catch (_) {}
           try { refreshHistory(); } catch (_) {}   // 스토리라인 질의도 이력에 즉시 반영
+          try { _decorateRecommendedChips(msgBody, data.slot); } catch (_) {}
         },
       });
     }
@@ -4821,6 +5235,206 @@ async function _onStorylineChip(btn) {
     _scrollBottom();
     _setQueryGenerating(false);
   }
+}
+
+// v2 토글 바 — resp.toggles + 현재 toggle_state로 버튼 렌더
+function _storylineToggleBar(toggles, state) {
+  if (!toggles || !Object.keys(toggles).length) return '';
+  state = state || {};
+  const groups = Object.entries(toggles).map(([key, t]) => {
+    const def = (t.options || []).find(o => o.default) || {};
+    const cur = state[key] || def.id;
+    const opts = (t.options || []).map(o =>
+      `<button class="sl-toggle${o.id === cur ? ' on' : ''}"
+        onclick="_onStorylineToggle('${key}','${o.id}')">${escapeHtml(o.label)}</button>`
+    ).join('');
+    return `<span class="sl-toggle-group"><span class="sl-toggle-label">${escapeHtml(t.label)}</span>${opts}</span>`;
+  }).join('');
+  return `<div class="sl-toggle-bar">${groups}</div>`;
+}
+
+// 토글 클릭 → __toggle__ advance (이동 step 아님) → 같은 본문 in-place 재렌더
+async function _onStorylineToggle(key, optId) {
+  if (_raas_query_inflight) return;
+  const slot = _RAAS_STORYLINE.lastSlot || _RAAS_STORYLINE.slot;
+  if (!slot || slot === 'entry') return;
+  _RAAS_STORYLINE.toggleState = Object.assign({}, _RAAS_STORYLINE.toggleState || {}, { [key]: optId });
+  const body = _RAAS_STORYLINE.lastBody;
+  const tb = body && body.querySelector('.sl-toggle-bar');
+  if (tb) tb.style.opacity = '0.45';   // 로딩 표시
+  try {
+    const res = await _authedFetch('/api/storyline/advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: _RAAS_STORYLINE.role,
+        slot_from: slot,
+        chip_intent: '__toggle__',
+        prev_context: _RAAS_STORYLINE.context || {},
+        toggle_state: _RAAS_STORYLINE.toggleState,
+        storyline_session: _RAAS_STORYLINE.sessionId || null,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '토글 실패');
+    _RAAS_STORYLINE.context = data.context_out || _RAAS_STORYLINE.context;
+    if (data.toggle_state) _RAAS_STORYLINE.toggleState = data.toggle_state;
+    if (body) _paintStorylineSlotInPlace(body, data);
+    try { trackEvent('storyline_toggle', { role: _RAAS_STORYLINE.role, slot, toggle_key: key, to: optId }); } catch (_) {}
+  } catch (e) {
+    if (tb) tb.style.opacity = '';
+    console.warn('[storyline] toggle failed:', e);
+  }
+}
+
+// 토글 재렌더 — 타자기 없이 즉시 (meta + 답변 + 차트 + 토글 + 칩)
+function _paintStorylineSlotInPlace(body, data) {
+  const slotMetaCls = data.fallback_used ? 'story-slot-meta fallback' : 'story-slot-meta';
+  const slotMetaTxt = data.fallback_used
+    ? `⚠ ${escapeHtml(data.slot_name || data.slot)} · 데이터 부족(fallback)`
+    : `📍 ${escapeHtml(data.slot_name || data.slot)}`;
+  const chartHtml  = data.chart_data ? _buildChartHTML(data.chart_data) : '';
+  const toggleHtml = _storylineToggleBar(data.toggles, _RAAS_STORYLINE.toggleState);
+  const chipsHtml  = _filterStoryChips(data.slot, data.chips_next).map(c => _storylineChipHTML(c, data.slot)).join('');
+  body.innerHTML = `
+    <div class="msg-ai-name">RAAS Assistant</div>
+    <div class="${slotMetaCls}">${slotMetaTxt}</div>
+    <div class="msg-ai-text">${_renderStorylineText(data.answer || '')}</div>
+    <div class="sl-tail">
+      ${chartHtml || ''}
+      ${toggleHtml || ''}
+      <div class="story-chips-inline">${chipsHtml || ''}</div>
+    </div>`;
+  if (chartHtml) { try { _observeChartsIn(body); } catch (_) {} }
+  body._kpiMeta = data.kpi_meta || null;
+  try { _makeStoryTablesSortable(body); } catch (_) {}
+  try { _decorateRecommendedChips(body, data.slot); } catch (_) {}
+  _RAAS_STORYLINE.lastBody = body;
+  _RAAS_STORYLINE.lastSlot = data.slot;
+  _scrollBottom();
+}
+
+// 셀 텍스트에서 정렬 기준값 파싱. aspect: 'value'(현재값) | 'rate'(변화율%) | 'abs'(변화량)
+//  예) '38,020 (-2.9% · -1,142)'  /  '90.7% (+1.2pp)'  /  '—'
+function _cellNum(text, aspect) {
+  text = (text || '').replace(/,/g, '');
+  if (aspect === 'value') {
+    const m = text.match(/^\s*(-?\d+(?:\.\d+)?)/);     // 괄호 앞 첫 숫자 = 현재값
+    return m ? parseFloat(m[1]) : NaN;
+  }
+  // 괄호 안 숫자들 — 첫째=변화율(%/pp), 마지막=변화량(수치). 비율 셀은 pp 하나뿐.
+  const pm = text.match(/\(([^)]*)\)/);
+  const nums = (pm ? pm[1] : '').match(/-?\d+(?:\.\d+)?/g);
+  if (!nums || !nums.length) return NaN;
+  return parseFloat(aspect === 'rate' ? nums[0] : nums[nums.length - 1]);
+}
+
+// 와이드 KPI 표 — 정렬 기준(변화율·변화량·현재값) 선택 + 열 머리글 클릭 정렬.
+//  변화율·변화량 = |값| 큰 순(가장 큰 변화) 내림차순 우선 / 현재값 = 값 내림차순 우선. 재클릭=오름차순.
+function _makeStoryTablesSortable(root) {
+  if (!root) return;
+  if (!root._kpiMeta) {   // KPI 표(1_kpi)에만 정렬기준 컨트롤 — 그 외(2_impact 현황표 등)는 정적
+    root.querySelectorAll('table.story-table.sortable').forEach(t => t.classList.remove('sortable'));
+    return;
+  }
+  root.querySelectorAll('table.story-table.sortable').forEach(tbl => {
+    if (tbl.dataset.sortInit) return;
+    tbl.dataset.sortInit = '1';
+    const header = tbl.rows[0];
+    if (!header || tbl.rows.length < 3) return;
+    const tbody = header.parentNode;
+    const ths = Array.from(header.cells);
+    const baseLabels = ths.map(t => t.textContent.replace(/\s[↑↓]$/, ''));
+    let aspect = 'rate', activeCi = -1, desc = true;
+    const kpiMeta = root._kpiMeta;
+    const chipBox = root.querySelector('.story-chips-inline');
+
+    // 정렬기준(aspect)에 맞춰 각 지표 열의 1위 프로그램으로 칩 재생성
+    const rebuildChips = (asp) => {
+      if (!kpiMeta || !kpiMeta.codes || !chipBox) return;
+      const dataRows = Array.from(tbody.rows).filter(r => r !== header);
+      const out = [];
+      ths.forEach((th, ci) => {
+        if (ci === 0) return;
+        let best = null, bestKey = -Infinity;
+        dataRows.forEach(r => {
+          const raw = _cellNum(r.cells[ci] ? r.cells[ci].textContent : '', asp);
+          if (isNaN(raw)) return;
+          const k = (asp === 'value') ? raw : Math.abs(raw);   // 변화는 |값| 기준
+          if (k > bestKey) { bestKey = k; best = r; }
+        });
+        if (!best) return;
+        const name = (best.cells[0].textContent || '').trim();
+        const code = kpiMeta.codes[name];
+        if (!code) return;
+        const metric = baseLabels[ci];
+        out.push(_storylineChipHTML({
+          label: metric + ' · ' + name, intent: 'scan_pick_' + code, next_slot: '2_impact',
+          payload: { top_change_program_code: code, top_change_program: name, channel_name: kpiMeta.channel, kpi_metric: metric, kpi_aspect: asp }
+        }, '1_kpi'));
+      });
+      if (!out.length) return;
+      chipBox.querySelectorAll('button[data-intent^="scan_pick_"]').forEach(b => b.remove());
+      chipBox.insertAdjacentHTML('afterbegin', out.join(''));
+    };
+
+    const apply = () => {
+      if (activeCi < 0) return;
+      ths.forEach((t, i) => { if (i > 0) t.textContent = baseLabels[i]; });
+      ths[activeCi].textContent = baseLabels[activeCi] + (desc ? ' ↓' : ' ↑');
+      const rows = Array.from(tbody.rows).filter(r => r !== header);
+      const keyOf = (r) =>   // 변화율·변화량도 절댓값이 아닌 부호 그대로(증가 상위 ↔ 감소 상위)
+        _cellNum(r.cells[activeCi] ? r.cells[activeCi].textContent : '', aspect);
+      rows.sort((a, b) => {
+        const va = keyOf(a), vb = keyOf(b);
+        if (isNaN(va) && isNaN(vb)) return 0;
+        if (isNaN(va)) return 1;
+        if (isNaN(vb)) return -1;
+        return desc ? vb - va : va - vb;
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    };
+
+    // 정렬 기준 컨트롤 (표 위)
+    const wrap = tbl.closest('.story-table-scroll') || tbl;
+    const bar = document.createElement('div');
+    bar.className = 'story-sort-modes';
+    bar.innerHTML = '정렬 기준: ' + [['rate', '변화율'], ['abs', '변화량'], ['value', '현재값']]
+      .map(([a, l]) => `<button data-aspect="${a}"${a === aspect ? ' class="on"' : ''}>${l}</button>`).join('')
+      + ' <span style="opacity:.7">— 후 열 머리글 클릭</span>';
+    bar.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        aspect = btn.dataset.aspect;
+        bar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+        apply();
+        rebuildChips(aspect);     // 정렬기준 바뀌면 지표별 TOP 칩도 갱신
+      });
+    });
+    wrap.parentNode.insertBefore(bar, wrap);
+
+    ths.forEach((th, ci) => {
+      if (ci === 0) return;
+      th.addEventListener('click', () => {
+        if (activeCi === ci) desc = !desc; else { activeCi = ci; desc = true; }
+        apply();
+      });
+    });
+  });
+}
+
+// 공유/보고 칩 게이트 — 분석 내용(원인/영향성/개편효과)이 생기기 전엔 트랙 입구 노드에서 숨김
+const _STORY_CONTENT_SLOTS = ['2_cause', '2_impact', '4_revision_detail'];
+const _STORY_SHARE_GATE_SLOTS = ['1_anchor', '1_kpi', '4_revision', '3_adjacent'];
+function _storyHasContent() {
+  return (_RAAS_STORYLINE.visited || []).some(v => _STORY_CONTENT_SLOTS.indexOf(v.slot) !== -1);
+}
+function _filterStoryChips(slot, chips) {
+  chips = chips || [];
+  if (_STORY_SHARE_GATE_SLOTS.indexOf(slot) !== -1 && !_storyHasContent()) {
+    return chips.filter(c => c.intent !== 'draft_pd_dispatch' && c.intent !== 'open_report');
+  }
+  return chips;
 }
 
 function _resetStoryline() {
@@ -5329,6 +5943,67 @@ async function refreshHistory() {
   } catch (_) {
     list.innerHTML = '<div class="history-empty">히스토리 로드 실패</div>';
   }
+  try { refreshStoryRecent(); } catch (_) {}
+}
+
+// 최근 분석 여정 — 세션 단위(최근 7일). 카드 클릭 → 여정 펼침.
+const _JOURNEY_SLOT_KO = {
+  entry: '진입', '1_anchor': '앵커', '1_kpi': '지표범주 탐색', '2_cause': '원인 종합',
+  '2_impact': '영향성 분석', '3_adjacent': '인접 비교', '3_context': 'PD 공유',
+  '4_revision': '개편 감지', '4_revision_detail': '개편 전후', '5_closing': '보고/산출물', '_end': '종료',
+};
+async function refreshStoryRecent() {
+  const list = document.getElementById('storyRecentList');
+  if (!list) return;
+  if (!RAAS_TOKEN) { list.innerHTML = '<div class="history-empty">로그인 후 이용 가능</div>'; return; }
+  try {
+    const res = await _authedFetch('/api/storyline/recent?days=7');
+    const data = await res.json();
+    if (!data.ok || !(data.sessions || []).length) {
+      list.innerHTML = '<div class="history-empty">아직 분석 여정이 없습니다.</div>';
+      return;
+    }
+    list.innerHTML = data.sessions.map(s => {
+      const prog = s.program_name || '채널 전체';
+      // 여정 중 분석 대상이 여러 개면 첫(앵커) 대상 + "외 N개"
+      const more = (s.program_count > 1) ? ` 외 ${s.program_count - 1}개` : '';
+      const ch = s.channel_code ? (s.channel_code + ' · ') : '';
+      const end = s.end_reason === 'export' ? ' · 산출물 ✓' : '';
+      return `<div class="story-sess" onclick="_toggleJourney(this,'${escapeHtml(s.session_id)}')">
+        <div class="story-sess-title">${escapeHtml(prog)}${escapeHtml(more)}</div>
+        <div class="story-sess-meta">${escapeHtml(ch)}${s.steps}단계 · ${formatRelTime(s.started_at)}${end}</div>
+        <div class="story-journey" style="display:none"></div>
+      </div>`;
+    }).join('');
+  } catch (_) {
+    list.innerHTML = '<div class="history-empty">로드 실패</div>';
+  }
+}
+async function _toggleJourney(el, sid) {
+  const box = el && el.querySelector('.story-journey');
+  if (!box) return;
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="history-empty">불러오는 중…</div>';
+  try {
+    const res = await _authedFetch('/api/storyline/session?id=' + encodeURIComponent(sid));
+    const data = await res.json();
+    const evs = (data.events || []);
+    if (!evs.length) { box.innerHTML = '<div class="history-empty">전이 없음</div>'; return; }
+    const viaKo = { freetext: '질의입력', toggle: '토글', export: '산출물', exit: '종료', chip: '칩' };
+    const metricKo = { deep: '깊은청취율', retention: '리텐션', new_churn: '신규/이탈', flow: '사용자흐름', quality: '청취품질' };
+    const periodKo = { day: '일간', week: '주간', month: '월간' };
+    const _metricName = (m, p) => !m ? '' : (m === 'scale' ? ({ week: 'WAU', month: 'MAU' }[p] || 'DAU') : (metricKo[m] || m));
+    box.innerHTML = evs.map(e => {
+      const to = _JOURNEY_SLOT_KO[e.slot_to] || e.slot_to || (e.end_reason === 'free_query' ? '자유질의로 이탈' : '');
+      const tgt = [e.program_name, _metricName(e.metric, e.period), periodKo[e.period] || e.period].filter(Boolean).join(' · ');
+      const hit = e.cache_hit === 1 ? ' ●' : '';
+      const via = viaKo[e.event_type] || e.event_type;
+      return `<div class="journey-step"><b>${escapeHtml(to)}</b> <span class="j-via">${escapeHtml(via)}${hit}</span>${tgt ? `<div class="j-tgt">${escapeHtml(tgt)}</div>` : ''}</div>`;
+    }).join('');
+  } catch (_) {
+    box.innerHTML = '<div class="history-empty">로드 실패</div>';
+  }
 }
 
 // ────────────────────────────────────────────────
@@ -5337,7 +6012,7 @@ async function refreshHistory() {
 function _buildFeedbackBar(queryId) {
   return `<div class="feedback-bar" id="fb-${queryId}">
     <button class="fb-btn fb-good" onclick="sendFeedback(${queryId},1,this)">👍 도움됨</button>
-    <button class="fb-btn fb-bad"  onclick="sendFeedback(${queryId},-1,this)">👎 부정확</button>
+    <button class="fb-btn fb-bad"  onclick="sendFeedback(${queryId},-1,this)">👎 아쉬움</button>
   </div>`;
 }
 
@@ -5362,6 +6037,7 @@ async function sendFeedback(queryId, val, btn) {
 // HISTORY MODAL
 // ────────────────────────────────────────────────
 let _histDays = 0, _histOffset = 0, _histTotal = 0;
+let _histMode = 'all';   // 'all' | 'journey'(분석 여정) | 'query'(일반 질의)
 const HIST_PAGE_SIZE = 20;
 let _histAllItems = [];
 
@@ -5402,21 +6078,41 @@ function _histFmt(iso) {
 
 function _fbIcon(fb) {
   if (fb === 1)  return '<span class="hm-fb-icon" title="도움됨">👍</span>';
-  if (fb === -1) return '<span class="hm-fb-icon" title="부정확">👎</span>';
+  if (fb === -1) return '<span class="hm-fb-icon" title="아쉬움">👎</span>';
   return '<span class="hm-fb-icon" style="color:var(--dim)" title="미평가">—</span>';
+}
+
+function setHistMode(mode, btn) {
+  _histMode = mode;
+  _histOffset = 0;
+  if (btn) {
+    btn.parentElement.querySelectorAll('.hf-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  loadHistAll();
 }
 
 async function loadHistAll() {
   const body = document.getElementById('histModalBody');
   body.innerHTML = '<div class="hist-empty-msg">로드 중...</div>';
+  if (_histMode === 'improve') { _loadMyImprovements(); return; }
+  if (_histMode === 'review')  { _loadReviewQueue(); return; }
   try {
-    const params = new URLSearchParams({ limit: HIST_PAGE_SIZE, offset: _histOffset, days: _histDays });
-    const res  = await fetch('/api/query/history/all?' + params);
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
-    _histTotal    = data.total;
-    _histAllItems = data.items;
-    _renderHistRows(data.items);
+    let queryItems = [], sessions = [];
+    if (_histMode !== 'journey') {   // 일반 질의(전체 사용자)
+      const params = new URLSearchParams({ limit: HIST_PAGE_SIZE, offset: _histOffset, days: _histDays });
+      const res = await fetch('/api/query/history/all?' + params);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      _histTotal = data.total; queryItems = data.items || [];
+    } else { _histTotal = 0; }
+    if (_histMode !== 'query') {      // 분석 여정(전체 사용자 — 이력 보기는 전체 공개)
+      const r2 = await _authedFetch('/api/storyline/recent?all=1&days=' + _histDays + '&limit=100');
+      const d2 = await r2.json();
+      sessions = (d2 && d2.ok) ? (d2.sessions || []) : [];
+    }
+    _histAllItems = queryItems;       // 검색은 질의 텍스트 대상
+    _renderHistUnified(queryItems, sessions);
     _updateHistFooter();
   } catch (e) {
     body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`;
@@ -5425,27 +6121,53 @@ async function loadHistAll() {
 
 function _filterHistRows() {
   const kw = document.getElementById('histSearch').value.trim().toLowerCase();
-  if (!kw) { _renderHistRows(_histAllItems); return; }
-  _renderHistRows(_histAllItems.filter(it => it.question.toLowerCase().includes(kw)));
+  if (!kw) { loadHistAll(); return; }
+  _renderHistUnified(_histAllItems.filter(it => it.question.toLowerCase().includes(kw)), []);
 }
 
-function _renderHistRows(items) {
+// 분석 여정(세션) + 일반 질의를 시간순 통합 렌더
+function _renderHistUnified(queryItems, sessions) {
   const body = document.getElementById('histModalBody');
-  if (!items.length) {
-    body.innerHTML = '<div class="hist-empty-msg">질의 내역이 없습니다.</div>';
-    return;
-  }
-  body.innerHTML = items.map(it => {
-    const time    = _histFmt(it.created_at);
-    const user    = (it.user_name || '').length > 18 ? (it.user_name || '').slice(0, 16) + '…' : (it.user_name || '—');
-    const qShort  = it.question.length > 60 ? it.question.slice(0, 58) + '…' : it.question;
-    const fbStatus = it.feedback === 1 ? '👍 도움됨' : it.feedback === -1 ? '👎 부정확' : '미평가';
-    return `
-    <div class="hm-row" onclick="_toggleHmRow(this)">
+  window._histIndex = {};
+  (queryItems || []).forEach(it => { if (it.id != null) window._histIndex[it.id] = it; });
+  const rows = [];
+  (sessions || []).forEach(s => rows.push({ t: s.started_at, html: _histSessionRow(s) }));
+  (queryItems || []).forEach(it => rows.push({ t: it.created_at, html: _histQueryRow(it) }));
+  if (!rows.length) { body.innerHTML = '<div class="hist-empty-msg">내역이 없습니다.</div>'; return; }
+  rows.sort((a, b) => new Date(b.t) - new Date(a.t));
+  body.innerHTML = rows.map(r => r.html).join('');
+}
+
+// 분석 여정 = 세션 1행. 제목 = 첫 진입 칩 이름. 펼치면 이동 경로(+단계별 토큰).
+function _histSessionRow(s) {
+  const title = s.first_chip_label || s.program_name || '분석 여정';
+  const time  = _histFmt(s.started_at);
+  const user  = (s.user_name || '').length > 18 ? (s.user_name || '').slice(0, 16) + '…' : (s.user_name || '—');
+  const ch    = s.channel_code ? (s.channel_code + ' · ') : '';
+  const end   = s.end_reason === 'export' ? ' · 산출물 ✓' : '';
+  const tok   = s.total_tokens ? ` · ↓${Number(s.total_tokens).toLocaleString()} tok` : '';
+  return `<div class="hm-row" onclick="_toggleHmSession(this,'${escapeHtml(s.session_id)}')">
+    <div class="hm-summary">
+      <span class="hm-time">${escapeHtml(time)}</span>
+      <span class="hm-user">${escapeHtml(user)}</span>
+      <span class="hist-src-badge" title="스토리라인 분석 여정">여정</span>
+      <span class="hm-q">${escapeHtml(title)}</span>
+      <span class="hm-sess-meta">${escapeHtml(ch)}${s.steps}단계${tok}${end}</span>
+    </div>
+    <div class="hm-detail"><div class="hm-journey">불러오는 중…</div></div>
+  </div>`;
+}
+
+// 일반 질의 = 기존 행 ('이 질의 다시 하기' 제거)
+function _histQueryRow(it) {
+  const time    = _histFmt(it.created_at);
+  const user    = (it.user_name || '').length > 18 ? (it.user_name || '').slice(0, 16) + '…' : (it.user_name || '—');
+  const qShort  = it.question.length > 60 ? it.question.slice(0, 58) + '…' : it.question;
+  const fbStatus = it.feedback === 1 ? '👍 도움됨' : it.feedback === -1 ? '👎 아쉬움' : '미평가';
+  return `<div class="hm-row" onclick="_toggleHmRow(this)">
       <div class="hm-summary">
         <span class="hm-time">${escapeHtml(time)}</span>
         <span class="hm-user">${escapeHtml(user)}</span>
-        ${it.source === 'storyline' ? '<span class="hist-src-badge" title="스토리라인 질의">스토리</span>' : ''}
         <span class="hm-q">${escapeHtml(qShort)}</span>
         ${_fbIcon(it.feedback)}
       </div>
@@ -5453,18 +6175,294 @@ function _renderHistRows(items) {
         <div class="hm-detail-q">Q. ${escapeHtml(it.question)}</div>
         <div class="hm-answer">${renderAiText(it.answer || '')}</div>
         <div class="hm-actions">
-          <button class="hm-reuse-btn" data-q="${escapeHtml(it.question)}"
-            onclick="event.stopPropagation();_reuseHistQuery(this)">이 질의 다시 하기</button>
           <span class="hm-fb-status">${escapeHtml(fbStatus)}</span>
           ${(it.input_tokens != null) ? `<span class="hm-fb-status" style="margin-left:8px">↑${it.input_tokens.toLocaleString()} ↓${(it.output_tokens||0).toLocaleString()} tok</span>` : ''}
+          ${it.feedback === -1 ? `<button class="imp-btn" onclick="event.stopPropagation();_openImprove(${it.id})">✦ 개선하기</button>` : ''}
         </div>
       </div>
     </div>`;
-  }).join('');
 }
 
 function _toggleHmRow(row) {
   row.querySelector('.hm-detail').classList.toggle('open');
+}
+
+// ── 지식 개선 루프 (개선하기) ──
+let _improveState = null;
+function _openImprove(id) {
+  const it = (window._histIndex || {})[id];
+  if (!it) return;
+  _improveState = { question: it.question, answer: it.answer || '', qid: id };
+  document.getElementById('improveModal').classList.add('open');
+  document.getElementById('improveQ').textContent = it.question;
+  document.getElementById('improveOrig').innerHTML = renderAiText(it.answer || '');
+  const res = document.getElementById('improveResult');
+  res.style.display = 'none'; res.innerHTML = '';
+  _loadImproveContext();
+}
+function _closeImprove() { document.getElementById('improveModal').classList.remove('open'); }
+
+async function _loadImproveContext() {
+  const dataEl = document.getElementById('improveData');
+  const ontoEl = document.getElementById('improveOnto');
+  dataEl.innerHTML = ontoEl.innerHTML = '<div class="imp-mean">로딩…</div>';
+  try {
+    const r = await _authedFetch('/api/improve/context', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: _improveState.question }) });
+    const d = await r.json();
+    if (!d.ok) { dataEl.innerHTML = ontoEl.innerHTML = '<div class="imp-mean">프로그램 미식별 — 개선 대상 아님</div>'; return; }
+    _improveState.program = d.program;
+    dataEl.innerHTML =
+      '<div class="imp-sub">사용된 데이터 필드</div>' +
+      (d.used_fields || []).map(f => `<div class="imp-item"><b>${escapeHtml(f.label || f.field)}</b> <code>${escapeHtml(f.field)}</code><div class="imp-mean">${escapeHtml(f.meaning || '')}</div></div>`).join('') +
+      `<div class="imp-form"><div class="imp-sub">스플렁크 필드 추가 요청 <span class="imp-tag">요청형 · 관리자 처리 후 반영</span></div>
+        <input id="impReqField" placeholder="필드명 (예: gender_segment)">
+        <textarea id="impReqDesc" placeholder="왜 필요한지 설명"></textarea>
+        <button class="imp-btn" onclick="_submitDataRequest()">요청 등록</button></div>`;
+    ontoEl.innerHTML =
+      '<div class="imp-sub">참고한 온톨로지</div>' +
+      (d.ontology_items || []).map(o => `<div class="imp-item"><b>${escapeHtml(o.label)}</b><div class="imp-mean">${escapeHtml(o.purpose || '')}</div></div>`).join('') +
+      ((d.my_knowledge || []).length ? '<div class="imp-sub">내 기여 (미승인)</div>' + d.my_knowledge.map(k => `<div class="imp-item">• ${escapeHtml(k.content)}</div>`).join('') : '') +
+      `<div class="imp-form"><div class="imp-sub">온톨로지 수정·추가 <span class="imp-tag imp-tag-now">즉시 · 내 재질의에 반영</span></div>
+        <select id="impKType">
+          <option value="program_note">프로그램 메모</option>
+          <option value="metric_definition">지표 정의 보정</option>
+          <option value="guest_policy">게스트 정책</option>
+          <option value="corner_note">코너 메모</option>
+          <option value="decomposition_hint">분해 힌트</option>
+          <option value="fact">사실</option></select>
+        <textarea id="impKContent" placeholder="추가/수정할 도메인 지식"></textarea>
+        <button class="imp-btn" onclick="_submitKnowledge()">지식 추가</button></div>`;
+  } catch (e) { dataEl.innerHTML = ontoEl.innerHTML = '<div class="imp-mean">로드 실패</div>'; }
+}
+
+async function _submitKnowledge() {
+  const content = (document.getElementById('impKContent').value || '').trim();
+  if (!content) return;
+  await _authedFetch('/api/improve/contribute', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'knowledge', type: document.getElementById('impKType').value,
+      target_kind: 'program', target_id: _improveState.program && _improveState.program.code,
+      content, op: 'add' }) });
+  document.getElementById('impKContent').value = '';
+  _loadImproveContext();
+}
+async function _submitDataRequest() {
+  const field = (document.getElementById('impReqField').value || '').trim();
+  const desc = (document.getElementById('impReqDesc').value || '').trim();
+  if (!field && !desc) return;
+  await _authedFetch('/api/improve/contribute', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'data_request', field_name: field, description: desc,
+      target_id: _improveState.program && _improveState.program.code }) });
+  document.getElementById('impReqField').value = '';
+  document.getElementById('impReqDesc').value = '';
+  alert('데이터 요청이 등록되었습니다 (관리자/데이터 직무 처리 후 반영).');
+}
+async function _doRequery() {
+  const res = document.getElementById('improveResult');
+  res.style.display = 'block';
+  res.innerHTML = '<div class="imp-mean">재질의 중… (보강 정보 반영)</div>';
+  try {
+    const r = await _authedFetch('/api/improve/requery', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: _improveState.question, answer_original: _improveState.answer, source_query_id: _improveState.qid }) });
+    const d = await r.json();
+    if (!d.ok) { res.innerHTML = '<div class="imp-mean">재질의 실패: ' + escapeHtml(d.error || '') + '</div>'; return; }
+    const j = d.judge;
+    const jt = j ? `<div class="imp-judge">LLM 판정: <b>${j.winner === 'B' ? '개선됨(B)' : j.winner === 'A' ? '원본 우세(A)' : '비슷'}</b> · A ${j.scores && j.scores.A != null ? j.scores.A : '-'} / B ${j.scores && j.scores.B != null ? j.scores.B : '-'} — ${escapeHtml(j.reason || '')}</div>` : '';
+    res.innerHTML = `<div class="imp-sub">개선된 답변 (B) · 적용 오버레이 ${ (d.overlay_items||[]).length }건</div>
+      <div class="imp-orig">${renderAiText(d.answer_improved || '')}</div>${jt}
+      <div class="imp-form"><div class="imp-sub">이 개선이 더 나은가요? (검토 큐로 전달)</div>
+        <button class="imp-btn imp-btn-primary" onclick="_improveVerdict(${d.improvement_id},'improved')">개선됨</button>
+        <button class="imp-btn" onclick="_improveVerdict(${d.improvement_id},'same')">비슷</button>
+        <button class="imp-btn" onclick="_improveVerdict(${d.improvement_id},'worse')">더 나쁨</button></div>`;
+  } catch (e) { res.innerHTML = '<div class="imp-mean">오류: ' + escapeHtml(e.message) + '</div>'; }
+}
+async function _improveVerdict(id, v) {
+  try {
+    await _authedFetch('/api/improve/verdict', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, verdict: v }) });
+  } catch (_) {}
+  alert(v === 'improved' ? '개선됨으로 기록 — 검토 큐로 전달됩니다.' : '기록되었습니다.');
+  _closeImprove();
+}
+
+// ── ⑤ 개선 이력 (본인 개선 시도 + 데이터 요청 상태) ──
+const _IMP_STATUS_KO = { '검토대기': '검토대기', '승인': '승인 ✓', '반려': '반려' };
+const _VERDICT_KO = { improved: '개선됨', same: '비슷', worse: '더 나쁨' };
+function _impStatusBadge(st) {
+  const cls = st === '승인' ? 'imp-st-ok' : st === '반려' ? 'imp-st-no' : 'imp-st-wait';
+  return `<span class="imp-st ${cls}">${escapeHtml(_IMP_STATUS_KO[st] || st || '')}</span>`;
+}
+function _reqStatusBadge(st) {
+  const cls = st === '완료' ? 'imp-st-ok' : st === '반려' ? 'imp-st-no' : st === '처리중' ? 'imp-st-mid' : 'imp-st-wait';
+  return `<span class="imp-st ${cls}">${escapeHtml(st || '')}</span>`;
+}
+async function _loadMyImprovements() {
+  const body = document.getElementById('histModalBody');
+  _setHistFooter('개선 이력');
+  try {
+    const r = await _authedFetch('/api/improve/mine', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '로드 실패');
+    const imps = d.improvements || [], reqs = d.data_requests || [];
+    if (!imps.length && !reqs.length) { body.innerHTML = '<div class="hist-empty-msg">개선 시도 내역이 없습니다. 답변에 \'아쉬움\' → 개선하기에서 시작하세요.</div>'; return; }
+    let html = '';
+    if (imps.length) {
+      html += '<div class="imp-sec-hd">개선 시도</div>' + imps.map(it => {
+        const j = it.judge;
+        const jt = j ? `LLM ${j.winner === 'B' ? 'B우세' : j.winner === 'A' ? 'A우세' : '동률'} (A${j.scores ? j.scores.A : '-'}/B${j.scores ? j.scores.B : '-'})` : '';
+        const vd = it.user_verdict ? `평가:${_VERDICT_KO[it.user_verdict] || it.user_verdict}` : '미평가';
+        return `<div class="hm-row" onclick="_toggleHmRow(this)">
+          <div class="hm-summary">
+            <span class="hm-time">${escapeHtml(_histFmt(it.created_at))}</span>
+            ${_impStatusBadge(it.status)}
+            <span class="hm-q">${escapeHtml((it.question || '').slice(0, 56))}</span>
+            <span class="hm-sess-meta">${escapeHtml(vd)}${jt ? ' · ' + escapeHtml(jt) : ''}</span>
+          </div>
+          <div class="hm-detail">
+            <div class="imp-ab"><div class="imp-ab-col"><div class="imp-sub">원답변 (A)</div><div class="imp-orig">${renderAiText(it.answer_original || '')}</div></div>
+              <div class="imp-ab-col"><div class="imp-sub">개선 답변 (B)</div><div class="imp-orig">${renderAiText(it.answer_improved || '')}</div></div></div>
+            ${j ? `<div class="imp-judge">LLM 판정: <b>${j.winner === 'B' ? '개선됨(B)' : j.winner === 'A' ? '원본 우세(A)' : '비슷'}</b> — ${escapeHtml(j.reason || '')}</div>` : ''}
+          </div></div>`;
+      }).join('');
+    }
+    if (reqs.length) {
+      html += '<div class="imp-sec-hd">내 데이터 요청</div>' + reqs.map(rq =>
+        `<div class="hm-row"><div class="hm-summary">
+          <span class="hm-time">${escapeHtml(_histFmt(rq.created_at))}</span>
+          ${_reqStatusBadge(rq.status)}
+          <span class="hm-q"><b>${escapeHtml(rq.field_name || '필드')}</b> ${escapeHtml((rq.description || '').slice(0, 50))}</span>
+          ${rq.target_id ? `<span class="hm-sess-meta">${escapeHtml(rq.target_id)}</span>` : ''}
+        </div></div>`).join('');
+    }
+    body.innerHTML = html;
+  } catch (e) { body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`; }
+}
+
+// ── ⑥ 거버넌스 검토 큐 (관리자/데이터/총괄관리) ──
+async function _loadReviewQueue() {
+  const body = document.getElementById('histModalBody');
+  _setHistFooter('검토 큐');
+  try {
+    const r = await _authedFetch('/api/improve/queue', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '권한이 없거나 로드 실패');
+    window._reviewIndex = {};
+    const imps = d.improvements || [], reqs = d.data_requests || [];
+    if (!imps.length && !reqs.length) { body.innerHTML = '<div class="hist-empty-msg">검토 대기 항목이 없습니다.</div>'; return; }
+    let html = '';
+    if (imps.length) {
+      html += '<div class="imp-sec-hd">개선 검토 대기 · 승인 시 기여 지식이 전체에 반영됩니다</div>' + imps.map(it => {
+        window._reviewIndex[it.id] = it;
+        const j = it.judge;
+        const jt = j ? `LLM ${j.winner === 'B' ? 'B우세' : j.winner === 'A' ? 'A우세' : '동률'}` : '';
+        const contribs = (it.contributions || []).map(c => `<div class="imp-item">• [${escapeHtml(c.type || '')}] ${escapeHtml(c.content || '')}</div>`).join('') || '<div class="imp-mean">기여 지식 없음(데이터 요청만)</div>';
+        return `<div class="hm-row"><div class="hm-summary" onclick="_toggleHmRow(this)">
+            <span class="hm-time">${escapeHtml(_histFmt(it.created_at))}</span>
+            <span class="hm-user">${escapeHtml(it.user_name || '—')}</span>
+            <span class="hm-q">${escapeHtml((it.question || '').slice(0, 52))}</span>
+            <span class="hm-sess-meta">${it.user_verdict ? _VERDICT_KO[it.user_verdict] || it.user_verdict : '미평가'}${jt ? ' · ' + escapeHtml(jt) : ''}</span>
+          </div>
+          <div class="hm-detail open">
+            <div class="imp-ab"><div class="imp-ab-col"><div class="imp-sub">원답변 (A)</div><div class="imp-orig">${renderAiText(it.answer_original || '')}</div></div>
+              <div class="imp-ab-col"><div class="imp-sub">개선 답변 (B)</div><div class="imp-orig">${renderAiText(it.answer_improved || '')}</div></div></div>
+            ${j ? `<div class="imp-judge">LLM 판정: <b>${j.winner === 'B' ? '개선됨(B)' : j.winner === 'A' ? '원본 우세(A)' : '비슷'}</b> · A ${j.scores ? j.scores.A : '-'} / B ${j.scores ? j.scores.B : '-'} — ${escapeHtml(j.reason || '')}</div>` : ''}
+            <div class="imp-sub">기여 지식 (승인 시 공유 오버레이로 승격)</div>${contribs}
+            <div class="imp-form">
+              <button class="imp-btn imp-btn-primary" onclick="event.stopPropagation();_reviewImprove(${it.id},'approve',this)">승인 → 전체 반영</button>
+              <button class="imp-btn" onclick="event.stopPropagation();_reviewImprove(${it.id},'reject',this)">반려</button>
+            </div>
+          </div></div>`;
+      }).join('');
+    }
+    if (reqs.length) {
+      html += '<div class="imp-sec-hd">데이터 요청 처리</div>' + reqs.map(rq =>
+        `<div class="hm-row"><div class="hm-summary">
+          <span class="hm-time">${escapeHtml(_histFmt(rq.created_at))}</span>
+          ${_reqStatusBadge(rq.status)}
+          <span class="hm-q"><b>${escapeHtml(rq.field_name || '필드')}</b> ${escapeHtml((rq.description || '').slice(0, 46))}</span>
+          <span class="hm-sess-meta">
+            <button class="imp-btn imp-mini" onclick="_processReq(${rq.id},'처리중',this)">처리중</button>
+            <button class="imp-btn imp-mini imp-btn-primary" onclick="_processReq(${rq.id},'완료',this)">완료</button>
+            <button class="imp-btn imp-mini" onclick="_processReq(${rq.id},'반려',this)">반려</button>
+          </span>
+        </div></div>`).join('');
+    }
+    body.innerHTML = html;
+  } catch (e) { body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`; }
+}
+async function _reviewImprove(id, action, btn) {
+  if (action === 'reject' && !confirm('이 개선을 반려합니까?')) return;
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/improve/review', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '실패');
+    _loadReviewQueue();
+  } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
+}
+async function _processReq(id, status, btn) {
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/data_request/process', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '실패');
+    _loadReviewQueue();
+  } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
+}
+function _setHistFooter(label) {
+  document.getElementById('histModalCount').textContent = label;
+  document.getElementById('hmPgPrev').disabled = true;
+  document.getElementById('hmPgNext').disabled = true;
+}
+
+// 세션 행 펼침 → 이동 경로 lazy 로드
+async function _toggleHmSession(row, sid) {
+  const det = row.querySelector('.hm-detail');
+  det.classList.toggle('open');
+  const box = det.querySelector('.hm-journey');
+  if (!det.classList.contains('open') || !box || box.dataset.loaded) return;
+  box.dataset.loaded = '1';
+  try {
+    const r = await _authedFetch('/api/storyline/session?id=' + encodeURIComponent(sid));
+    const d = await r.json();
+    box.innerHTML = _renderJourneyTimeline(d.events || []);
+  } catch (_) { box.innerHTML = '<div class="hist-empty-msg">로드 실패</div>'; }
+}
+
+// 이동 경로 타임라인 — 경로 요약 + 단계별(이동수단·분석대상·캐시·토큰)
+function _renderJourneyTimeline(evs) {
+  if (!evs.length) return '<div class="hist-empty-msg">전이 없음</div>';
+  const viaKo = { freetext: '질의입력', toggle: '토글', export: '산출물', exit: '종료', chip: '칩' };
+  const metricKo = { deep: '깊은청취율', retention: '리텐션', new_churn: '신규/이탈', flow: '사용자흐름', quality: '청취품질' };
+  const periodKo = { day: '일간', week: '주간', month: '월간' };
+  const mName = (m, p) => !m ? '' : (m === 'scale' ? ({ week: 'WAU', month: 'MAU' }[p] || 'DAU') : (metricKo[m] || m));
+  const slotKo = (typeof _JOURNEY_SLOT_KO !== 'undefined') ? _JOURNEY_SLOT_KO : {};
+  const path = evs.map(e => slotKo[e.slot_to] || (e.end_reason === 'free_query' ? '이탈' : e.slot_to || '')).filter(Boolean).join(' → ');
+  const steps = evs.map((e, i) => {
+    const to  = slotKo[e.slot_to] || e.slot_to || (e.end_reason === 'free_query' ? '자유질의로 이탈' : '');
+    const tgt = [e.program_name, mName(e.metric, e.period), periodKo[e.period] || e.period].filter(Boolean).join(' · ');
+    const via = viaKo[e.event_type] || e.event_type;
+    const hit = e.cache_hit === 1 ? '<span class="jt-hit" title="캐시 적중(0토큰)">● 캐시</span>' : '';
+    const tok = (e.output_tokens != null && e.output_tokens > 0)
+      ? `<span class="jt-tok">↓${Number(e.output_tokens).toLocaleString()} tok</span>`
+      : (e.cache_hit === 1 ? '<span class="jt-tok">0 tok</span>' : '');
+    return `<div class="jt-step">
+      <span class="jt-n">${i + 1}</span>
+      <div class="jt-main">
+        <div class="jt-to"><b>${escapeHtml(to)}</b> <span class="jt-via">${escapeHtml(via)}</span> ${hit} ${tok}</div>
+        ${tgt ? `<div class="jt-tgt">${escapeHtml(tgt)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="jt-path">${escapeHtml(path)}</div><div class="jt-list">${steps}</div>`;
 }
 
 function _reuseHistQuery(btn) {
@@ -5562,7 +6560,7 @@ function _applyTheme(theme) {
   const btn = document.getElementById('btnTheme');
   if (btn) btn.innerHTML = theme === 'dark' ? SVG_SUN : SVG_MOON;
   // iOS Safari는 setAttribute로 즉시 반영 안 됨 — 제거 후 재삽입으로 강제 재읽기
-  const color = theme === 'dark' ? '#0d1117' : '#f0f2f5';
+  const color = theme === 'dark' ? '#0d1117' : '#fbfcfd';
   let meta = document.getElementById('metaThemeColor');
   if (meta) meta.remove();
   meta = document.createElement('meta');
@@ -5687,6 +6685,32 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
   </div>
 </div>
 
+<!-- ── 개선하기 MODAL (지식 개선 루프) ── -->
+<div class="hist-modal" id="improveModal">
+  <div class="hist-modal-inner">
+    <div class="hist-modal-hd">
+      <span class="hist-modal-title">✦ 답변 개선하기</span>
+      <button class="btn-icon" onclick="_closeImprove()" title="닫기" style="margin-left:auto">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="hist-modal-body">
+      <div class="imp-q">Q. <span id="improveQ"></span></div>
+      <div class="imp-sub">원래 답변 (A)</div>
+      <div class="imp-orig" id="improveOrig"></div>
+      <div class="imp-cols">
+        <div class="imp-col"><div class="imp-coltitle">📊 데이터</div><div id="improveData"></div></div>
+        <div class="imp-col"><div class="imp-coltitle">🧩 온톨로지</div><div id="improveOnto"></div></div>
+      </div>
+      <div style="text-align:center;margin:14px 0">
+        <button class="imp-btn imp-btn-primary" onclick="_doRequery()">↻ 보강 정보로 재질의</button>
+      </div>
+      <div class="imp-result" id="improveResult" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ── ADMIN MODAL (승인 관리) ── -->
 <div class="hist-modal" id="adminModal">
   <div class="hist-modal-inner">
@@ -5741,7 +6765,14 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
     <div class="hist-modal-hd">
       <span class="hist-modal-title">질의 이력</span>
       <div class="hist-tabs">
-        <button class="hf-tab active" onclick="setHistDays(0,this)">전체</button>
+        <button class="hf-tab active" onclick="setHistMode('all',this)">전체</button>
+        <button class="hf-tab" onclick="setHistMode('journey',this)">분석 여정</button>
+        <button class="hf-tab" onclick="setHistMode('query',this)">일반 질의</button>
+        <button class="hf-tab" onclick="setHistMode('improve',this)">개선 이력</button>
+        <button class="hf-tab" id="histTabReview" style="display:none" onclick="setHistMode('review',this)">검토 큐</button>
+      </div>
+      <div class="hist-tabs">
+        <button class="hf-tab active" onclick="setHistDays(0,this)">전체기간</button>
         <button class="hf-tab" onclick="setHistDays(7,this)">최근 7일</button>
         <button class="hf-tab" onclick="setHistDays(1,this)">오늘</button>
       </div>

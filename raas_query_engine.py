@@ -3602,12 +3602,14 @@ def query_with_timeline_stream(question: str, timeline: dict,
                    briefing_data=briefing_data, _return_context=True)
 
 
-# intent별 max_tokens 상한
+# 답변 생성 max_tokens — 천장(상한)일 뿐 모델은 답이 끝나면 멈춤. 짤림 방지를 위해 넉넉히.
+#   .env의 MAX_ANSWER_TOKENS로 조절(기본 8000). 의도별 미세조정은 _INTENT_TOKENS 비율 유지하되 하한 보장.
+MAX_ANSWER_TOKENS = int(os.getenv("MAX_ANSWER_TOKENS", "8000"))
 _INTENT_TOKENS = {
-    'snapshot': 700, 'trend': 800, 'compare': 800, 'compare_trend': 800, 'dual_trend': 800,
-    'ranking': 600, 'overview': 700, 'health': 900,
-    'funnel': 1000, 'engagement': 1000, 'growth': 900,
-    'anomaly': 800, 'report': 1500, 'general': 1500,
+    'snapshot': 2000, 'trend': 2000, 'compare': 2000, 'compare_trend': 2500, 'dual_trend': 2500,
+    'ranking': 2000, 'overview': 2500, 'health': 3000,
+    'funnel': 3000, 'engagement': 3000, 'growth': 3000,
+    'anomaly': 2500, 'report': MAX_ANSWER_TOKENS, 'general': MAX_ANSWER_TOKENS,
 }
 
 
@@ -3926,7 +3928,7 @@ def _answer(question, timeline, target_date, verbose, briefing_data=None, _retur
     except Exception:
         pass
 
-    max_tokens = _INTENT_TOKENS.get(intent.get('intent', 'general'), 600)
+    max_tokens = min(MAX_ANSWER_TOKENS, _INTENT_TOKENS.get(intent.get('intent', 'general'), 3000))
     date_max = available_dates[-1] if available_dates else ''
     date_system = (
         f"\n\n[날짜 기준 — 필수 준수]\n"

@@ -1,0 +1,111 @@
+{
+  "schema_version": "tobe-nav-v1",
+  "role": "CP",
+  "role_name_ko": "CP (책임 프로듀서) — TO-BE 내비 프로토타입",
+  "updated": "2026-06-22",
+  "_note": "이동 경로 + 토글 + 공통 출구 세트 검증 전용. 실제 데이터/답변 계산 없음(스텁). raas_tobe_sim.py로 실행.",
+
+  "entry": {
+    "greeting": "{user_name}님 안녕하세요.",
+    "question": "**{channel_name}** 채널, 무엇부터 보시겠어요?",
+    "auto_priority_note": "※ 진입 우선순위는 데이터 기준일 요일로 자동 정렬됨 — 평일=일간, 월요일=전주(WAU), 1일 직후=전월(MAU). (프로토타입은 모든 칩 고정 노출)",
+    "chips": [
+      { "label": "일간 변동 큰 프로그램",        "to": "anchor", "set": { "metric": "DAU", "period": "일" } },
+      { "label": "전주(WAU) 큰 프로그램 [월요일 승격]", "to": "anchor", "set": { "metric": "DAU", "period": "주" } },
+      { "label": "다른 지표에서 크게 움직인 프로그램", "to": "anchor", "set": { "metric": "깊은청취", "period": "일" } },
+      { "label": "개편된 프로그램 먼저",          "to": "revision" }
+    ]
+  },
+
+  "common_exits": [
+    { "label": "담당 PD에게 공유",   "to": "share" },
+    { "label": "국장 보고서에 넣기", "to": "report" },
+    { "label": "← 다른 프로그램",    "to": "anchor" },
+    { "label": "자유질의 입력",      "to": "__freetext__" }
+  ],
+
+  "nodes": {
+    "anchor": {
+      "name": "앵커 (통합)",
+      "stub": "[{channel_name}] **{metric}** 기준 **{period}간** 변화 큰 프로그램 TOP\n  1) 컬투쇼  2) 골든디스크  3) 영스트리트 …\n(지표/기간 토글로 정렬 기준 즉시 전환 — 1_anchor·scan·more 수렴)",
+      "toggles": {
+        "metric": { "label": "지표", "options": ["DAU", "WAU", "MAU", "깊은청취", "리텐션", "신규/이탈"], "default": "DAU" },
+        "period": { "label": "기간", "options": ["일", "주", "월"], "default": "일" }
+      },
+      "chips": [
+        { "label": "왜 변했어? (원인 보기)", "to": "cause" }
+      ],
+      "use_common_exits": true
+    },
+
+    "cause": {
+      "name": "원인 종합",
+      "stub": "**컬투쇼** {period}간 원인 종합\n  ┌ 지표 델타 패널 — DAU/WAU/MAU·깊은청취·리텐션·신규/이탈 (각 WoW·MoM)\n  └ {period} 관점 해석 + 흐름분해·코호트·편성·이벤트\n(2_cause/_weekly/_monthly를 기간 토글로 흡수)",
+      "toggles": {
+        "period": { "label": "기간", "options": ["일", "주", "월"], "default": "일" }
+      },
+      "chips": [
+        { "label": "비슷한 시간대 다른 프로그램은?", "to": "adjacent" }
+      ],
+      "use_common_exits": true
+    },
+
+    "adjacent": {
+      "name": "인접 비교",
+      "stub": "같은 시간대(출퇴근/오후/오전/저녁/심야) 프로그램 대조\n→ 채널 공통요인 vs 프로그램 고유요인 판별",
+      "toggles": {},
+      "chips": [],
+      "use_common_exits": true
+    },
+
+    "revision": {
+      "name": "개편 자동감지",
+      "stub": "최근 5주 코너 변경 자동 감지 — 개편 있는 프로그램\n  1) 컬투쇼(06-01 코너개편)  2) 골든디스크(05-20 진행자교체)",
+      "toggles": {},
+      "chips": [
+        { "label": "1) 컬투쇼 전후효과 보기",   "to": "revision_detail", "set": { "program": "컬투쇼" } },
+        { "label": "2) 골든디스크 전후효과 보기", "to": "revision_detail", "set": { "program": "골든디스크" } }
+      ],
+      "use_common_exits": true
+    },
+
+    "revision_detail": {
+      "name": "개편 전후분석",
+      "stub": "**{program}** 개편 전후 종합분석 (before → after)\n  코너 변경 내용 + DAU/깊은청취 전후 {window} 평균 + 추이 차트\n(4_revision_detail + 4_loop 수렴)",
+      "toggles": {
+        "window": { "label": "비교창", "options": ["2주", "4주", "8주"], "default": "4주" }
+      },
+      "chips": [
+        { "label": "다른 개편 프로그램 보기", "to": "revision" }
+      ],
+      "use_common_exits": true
+    },
+
+    "share": {
+      "name": "PD 공유 (디스패치)",
+      "stub": "담당 PD에게 보낼 메시지 초안\n  헤드라인 → 변화요약 → 추정원인+근거 → 인접대조 → 점검포인트 → 출처",
+      "toggles": {},
+      "chips": [
+        { "label": "이대로 PD에게 전송 (카톡)", "to": "_end", "output": "PD 디스패치 메시지" },
+        { "label": "국장 보고서로 승격",        "to": "report" },
+        { "label": "수정해서 전송",             "to": "share" },
+        { "label": "← 다른 프로그램",           "to": "anchor" }
+      ],
+      "use_common_exits": false
+    },
+
+    "report": {
+      "name": "보고 / 산출물",
+      "stub": "오늘 핵심 3가지 + 산출물 선택\n  채널총평 → 변화 TOP → 개편효과 → 원인종합 → 액션",
+      "toggles": {},
+      "chips": [
+        { "label": "국장 보고용 1장 PPT",   "to": "_end", "output": "국장 1장 PPT" },
+        { "label": "주간 회의 자료에 넣기", "to": "_end", "output": "주간회의 자료" },
+        { "label": "사업국장 MAU 별도 보고", "to": "_end", "output": "사업국장 MAU 보고" },
+        { "label": "PD에게 카톡 디스패치",  "to": "_end", "output": "PD 디스패치 메시지" },
+        { "label": "← 다른 프로그램",       "to": "anchor" }
+      ],
+      "use_common_exits": false
+    }
+  }
+}

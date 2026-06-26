@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -30,7 +31,8 @@ KPI_CSV = ROOT / "data" / "raas_kpi_latest.csv"
 # ─── 직무 매핑 ──────────────────────────────────────────────────────────
 # (1) role 식별자 → JSON 파일명
 ROLE_TO_FILE = {
-    "cp": "cp.json",
+    "cp": "cp_v2.json",      # v1(cp.json) 폐기 — cp는 cp_v2로 단일화
+    "cp_v2": "cp_v2.json",
     "pd_program": "pd_program.json",
     "제작pd": "pd_program.json",
     "pd_schedule": "pd_schedule.json",
@@ -1116,6 +1118,24 @@ def _compute_programming_impact(row: dict, history: Optional[list]) -> dict:
         })
         triggers.append("view_radio_toggle")
 
+    # 이벤트(특일) — calendar 온톨로지(공휴일·특일)에 등록된 날짜인지 확인.
+    #   라디오 청취는 공휴일/특일에 패턴이 크게 달라져 변화의 직접 원인일 수 있음.
+    try:
+        from raas_onto import get_adapter
+        _dt = get_adapter().get_day_type(row.get("DATE", ""))
+        _hol = (_dt or {}).get("holiday_name")
+        if _hol:
+            differences.append({
+                "label": "이벤트(특일)",
+                "yesterday": f"{_hol} · {_dt.get('day_type', '')}",
+                "common": f"평소 {wd_ko}요일(평일/주말)",
+                "impact": "high",
+                "category": "calendar_event",
+            })
+            triggers.append("calendar_event")
+    except Exception:
+        pass
+
     if not differences:
         triggers.append("no_change")
 
@@ -1265,7 +1285,8 @@ def _build_cause_raw_text(program_name: str, last_date: str, weekday: str,
                           programming: Optional[dict] = None,
                           new_user_check: Optional[dict] = None,
                           reference_baseline: Optional[dict] = None,
-                          events: Optional[list[dict]] = None) -> str:
+                          events: Optional[list[dict]] = None,
+                          realrate_str: str = "") -> str:
     """온톨로지(TTL) 기반 원시 분석문. 평상시 대비 비교 위주 해석.
 
     LLM polish가 톤·구조를 다듬어 최종 출력으로 변환.
@@ -1276,8 +1297,9 @@ def _build_cause_raw_text(program_name: str, last_date: str, weekday: str,
         return "(원인 분석 온톨로지를 로드할 수 없습니다. rdflib + raas_onto/*.ttl 확인)"
 
     lines = []
+    _rrp = f"({realrate_str})" if realrate_str else ""   # 러브FM: 활성사용자 옆 실청취율
     lines.append(
-        f"**{program_name}**의 일간활성사용자가 **전주 동요일 대비 {change_pct:+.1f}%** 변화한 내용을 분석합니다."
+        f"**{program_name}**의 일간활성사용자{_rrp}가 **전주 동요일 대비 {change_pct:+.1f}%** 변화한 내용을 분석합니다."
     )
     lines.append("")
 
@@ -1428,14 +1450,8 @@ def _build_cause_raw_text(program_name: str, last_date: str, weekday: str,
         elif ax_id == "SegmentDecomposition":
             hints = ax.get("ingest_hints", [])
             if not ax["available"] and hints:
+                # 세부 적재 안내는 답변 끝 '추가 데이터 고려 사항' 푸터(_data_considerations_block)로 통합.
                 lines.append("- 📊 **현재 데이터 부족** — 변화가 어느 사용자 층에서 발생했는지 확인 불가")
-                lines.append("")
-                lines.append("**추가 적재가 필요한 Splunk 데이터:**")
-                for h in hints:
-                    lines.append(f"- `{h['key']}` ({h['label']})")
-                    lines.append(f"  ↳ `{h['splunk_spl']}`")
-                lines.append("")
-                lines.append("적재 완료 후엔 성별/연령/시간대별 변화 분해가 자동으로 가능합니다.")
 
         lines.append("")
 
@@ -1827,6 +1843,12 @@ def _build_cp_anchor_period(programs: list[dict], channel: str,
         else:
             top_lines.append(f"- {p['name']}: {chg:+.1f}%")
     anchor_answer = anchor_sentence + "\n\n" + top_header + "\n" + "\n".join(top_lines)
+    _metric = "WAU" if period == "weekly" else "MAU"
+    anchor_answer += (f"\n\n칩을 눌러서 **{top3[0]['name']}**의 {_metric} 변화 원인을 보거나, "
+                      "질의창에 다른 보고 싶은 프로그램명을 입력하세요.")
+    anchor_answer = _target_block(program=top3[0]["name"], category="규모", metric=metric_label,
+                                  period=_PERIOD_LABEL_KO.get(period, "주간"),
+                                  sort=_SORT_LABEL_KO.get(sort_mode, "변화율")) + "\n\n" + anchor_answer
 
     diff_top = (top_val - top_prev) if top_prev is not None else None
     # 동적 chips_next — "왜 변했어?"가 기간에 맞는 원인 슬롯으로 가도록 override
@@ -1963,6 +1985,11 @@ def _compute_cp_anchor(user_context: dict,
                 line = f"- {p['name']}: {pct:+.1f}%"
         top_lines.append(line)
     anchor_answer = anchor_sentence + "\n\n" + top_header + "\n" + "\n".join(top_lines)
+    anchor_answer += (f"\n\n칩을 눌러서 **{top['name']}**의 DAU 변화 원인을 보거나, "
+                      "질의창에 다른 보고 싶은 프로그램명을 입력하세요.")
+    anchor_answer = _target_block(program=top["name"], category="규모", metric="DAU",
+                                  period="일간",
+                                  sort=("변화량" if mode == "abs" else "변화율")) + "\n\n" + anchor_answer
 
     data = {
         "channel_name": channel,
@@ -2226,110 +2253,587 @@ def _scan_build_chips(rows_program_codes: list[str], channel: str,
     return chips
 
 
-def _compute_cp_anchor_scan(user_context: dict,
-                            prev_context: Optional[dict] = None,
-                            chip_intent: Optional[str] = None) -> tuple[dict, bool]:
-    """CP 1_anchor_scan — 채널 전 프로그램 4단면 + 위험 진입 스캔.
+# 비-규모 지표 토글 → 그 지표의 전주 대비 변화 큰 순으로 프로그램 정렬 (v2)
+#   각: (라벨, 현재값필드, 현재단위, 변화필드, 변화단위)
+_ANCHOR_METRIC = {
+    "deep":      ("깊은청취율",     "deep_rate",  "%", "deep_rate_diff",  "pp"),
+    "retention": ("신규 D7 유지율", "new_d7_ret", "%", "new_d7_ret_diff", "pp"),
+    "new_churn": ("신규 유입",      "new",        "명", "new_chg",         "%"),
+}
+# 신규/이탈은 이탈률을 보조 컬럼으로 함께 표시
+_ANCHOR_METRIC_EXTRA = {
+    "new_churn": ("이탈률(전주대비)", "churn_rate_diff", "pp"),
+}
 
-    출력: scan_answer (markdown 본문) + 동적 chips_next (등장 빈도순 TOP 5).
+
+def _compute_cp_anchor_metric(user_context: dict, prev_context: Optional[dict],
+                              metric: str) -> tuple[dict, bool]:
+    """CP 1_anchor (v2 비-규모 지표) — 선택 지표의 전주 대비 변화 큰 순으로 정렬.
+
+    규모(scale)는 _compute_cp_anchor(DAU/WAU/MAU)가 담당. 깊은청취/리텐션/신규이탈은
+    각 지표 변화 필드로 채널 프로그램을 |변화| 큰 순 TOP5 + 프로그램 칩(→2_cause).
     """
     prev_context = prev_context or {}
-    channel = (user_context or {}).get("channel_name") or \
-              prev_context.get("channel_name") or ""
-    if not channel:
-        return {"scan_answer": "담당 채널이 결정되지 않았습니다."}, True
-
+    channel = (user_context or {}).get("channel_name") or prev_context.get("channel_name")
+    cfg = _ANCHOR_METRIC.get(metric)
+    if not channel or not cfg:
+        return {}, True
     programs = _load_scan_program_kpis(channel)
     if not programs:
-        return {"scan_answer": f"**{channel}** 채널의 프로그램 KPI를 찾을 수 없습니다."}, True
+        return {}, True
+    label, val_f, val_u, chg_f, chg_u = cfg
+    extra = _ANCHOR_METRIC_EXTRA.get(metric)
+
+    ranked = []
+    for p in programs:
+        c = _safe_float(p.get(chg_f))
+        if c is None:
+            continue
+        ranked.append((abs(c), c, p))
+    ranked.sort(key=lambda x: -x[0])
+    top = ranked[:5]
+    if not top:
+        return {"anchor_answer": f"**{channel}** — {label} 변화 데이터를 찾을 수 없습니다."}, True
 
     last_date = (programs[0].get("DATE") or "").replace("/", "-")
     weekday = _weekday_ko(programs[0].get("DATE", ""))
-
-    # 섹션별 TOP
-    scale_rows   = _scan_top_per_metric(programs, _SCAN_METRICS_SCALE)
-    flow_rows    = _scan_top_per_metric(programs, _SCAN_METRICS_FLOW)
-    quality_rows = _scan_top_per_metric(programs, _SCAN_METRICS_QUALITY)
-    ret_overall  = _scan_top_retention(programs, _SCAN_RETENTION_OVERALL, "전체")
-    ret_new      = _scan_top_retention(programs, _SCAN_RETENTION_NEW, "신규")
-    at_risk      = _scan_detect_at_risk(programs)
-
-    # 본문 조립
-    lines: list[str] = []
-    lines.append(f"**{channel} 전체 프로그램 스캔** — {last_date} {weekday}요일 기준")
+    head = f"| 프로그램 | {label} | 전주 대비 |" + (f" {extra[0]} |" if extra else "")
+    sep = "|---|---|---|" + ("---|" if extra else "")
+    lines = [f"**{channel}** — **{label}** 전주 대비 변화 큰 프로그램 ({last_date} {weekday}요일)",
+             "", head, sep]
+    chips = []
+    for _, chg, p in top:
+        cur = _scan_format_current(_safe_float(p.get(val_f)), val_u)
+        chg_s = _scan_format_value(chg, chg_u)
+        ex = ""
+        if extra:
+            ev = _safe_float(p.get(extra[1]))
+            ex = f" {_scan_format_value(ev, extra[2])} |" if ev is not None else " — |"
+        lines.append(f"| {p['_name']} | {cur} | {chg_s} |" + ex)
+        chips.append({
+            "label": f"{p['_code']} {p['_name']}",
+            "intent": f"scan_pick_{p['_code']}",
+            "next_slot": "2_cause",
+            "payload": {
+                "top_change_program_code": p["_code"],
+                "top_change_program":      p["_name"],
+                "channel_name":            channel,
+            },
+        })
     lines.append("")
+    lines.append("어떤 프로그램의 원인을 볼까요?")
+    return {"anchor_answer": "\n".join(lines), "chips_next": chips}, False
 
-    def _render_section(emoji_title: str, rows: list[dict]):
-        if not rows:
-            return
-        lines.append(f"{emoji_title}")
-        lines.append("| 지표 | 가장 큰 변화 프로그램 | 이번 수치 | 전주 대비 |")
-        lines.append("|---|---|---|---|")
-        for r in rows:
-            cur = _scan_format_current(r["current"], r["current_unit"])
-            chg = _scan_format_value(r["change"], r["change_unit"])
-            lines.append(f"| {r['label']} | {r['name']} | {cur} | {chg} |")
-        lines.append("")
 
-    _render_section("📏 **사용자 규모 변화**",   scale_rows)
-    _render_section("🔄 **사용자 흐름 변화**",   flow_rows)
-    _render_section("🎧 **청취 품질 변화 (전주 대비)**", quality_rows)
+# ─── 동향 트랙 (v2 1_kpi / 2_impact) — KPI 범주 표 + AU 영향성 분석 ────────
+_CHANNEL_CODE = {"파워FM": "F00", "러브FM": "L00", "고릴라M": "G00", "픽채널": "P00"}
 
-    # 유지율 — 2줄 표
-    if ret_overall or ret_new:
-        lines.append("🔁 **유지율 변화 (코호트 × 기간)**")
-        lines.append("| 코호트 | 기간 | 프로그램 | 이번 수치 | 전주 대비 |")
-        lines.append("|---|---|---|---|---|")
-        for r in (ret_overall, ret_new):
-            if not r:
-                continue
-            cur = _scan_format_current(r["current"], r["current_unit"])
-            chg = _scan_format_value(r["change"], r["change_unit"])
-            lines.append(f"| {r['cohort']} | {r['period']} | {r['name']} | {cur} | {chg} |")
-        lines.append("")
+# 범주 → (라벨, [(지표라벨, 필드, 종류)])  종류: cnt=명 / rate=%·pp
+_KPI_CATEGORIES = {
+    "scale":     ("규모",        [("DAU", "dau", "cnt"), ("WAU", "wau", "cnt"), ("MAU", "mau", "cnt"),
+                                  ("롤링WAU", "dau_r7", "cnt"), ("롤링MAU", "dau_r30", "cnt")]),
+    "flow":      ("사용자 흐름", [("신규", "new", "cnt"), ("복귀", "react", "cnt"),
+                                  ("복귀율", "react_rate", "rate"), ("이탈률", "churn_rate", "rate")]),
+    "quality":   ("청취 품질",   [("실청취율", "real_rate", "rate"), ("깊은청취율", "deep_rate", "rate"),
+                                  ("참여율", "engage_rate", "rate"), ("습관형성률", "habit_rate", "rate")]),
+    "retention": ("유지율",      [("D1 유지", "d1_ret", "rate"), ("D7 유지", "d7_ret", "rate"),
+                                  ("신규 D1", "new_d1_ret", "rate"), ("신규 D7", "new_d7_ret", "rate")]),
+}
+_KPI_CATEGORY_PRIMARY = {"scale": "dau_chg", "flow": "new_chg",
+                         "quality": "deep_rate_diff", "retention": "new_d7_ret_diff"}
+_PERIOD_KO = {"day": "전일", "week": "전주", "month": "전월"}
 
-    # 위험 범위
-    if at_risk:
-        lines.append(f"⚠ **위험 범위 진입 ({len(at_risk)}건)**")
-        for ar in at_risk[:6]:
-            kinds = ", ".join(rs["kind"] for rs in ar["reasons"])
-            details = " · ".join(rs["detail"] for rs in ar["reasons"])
-            lines.append(f"- **{ar['code']} {ar['name']}**: {details} _({kinds})_")
-        lines.append("")
+
+def _series_date_map(series: list[dict]) -> tuple[dict, list[str]]:
+    smap = {}
+    for r in series:
+        d = (r.get("DATE") or "").replace("/", "-")
+        if d:
+            smap[d] = r
+    return smap, sorted(smap)
+
+
+def _kpi_deltas(smap: dict, dates: list[str], field: str) -> tuple:
+    """(현재, 전일, 전주, 전월) — 전일=직전 가용일, 전주=-7d, 전월=-28d (±3일 근사)."""
+    from datetime import datetime, timedelta
+    if not dates:
+        return (None, None, None, None)
+    last = dates[-1]
+    cur = _safe_float(smap.get(last, {}).get(field))
+
+    def back(days):
+        try:
+            tgt = datetime.strptime(last, "%Y-%m-%d") - timedelta(days=days)
+        except (ValueError, TypeError):
+            return None
+        for off in range(0, 4):
+            d = (tgt - timedelta(days=off)).strftime("%Y-%m-%d")
+            if d in smap:
+                return _safe_float(smap[d].get(field))
+        return None
+
+    def diff(days):
+        v = back(days)
+        return (cur - v) if (cur is not None and v is not None) else None
+
+    # 전일은 직전 인덱스 우선
+    dod = None
+    if len(dates) >= 2:
+        pv = _safe_float(smap.get(dates[-2], {}).get(field))
+        dod = (cur - pv) if (cur is not None and pv is not None) else None
+    return (cur, dod, diff(7), diff(28))
+
+
+def _kpi_fmt_cur(v, kind: str) -> str:
+    if v is None:
+        return "—"
+    return f"{v:.1f}%" if kind == "rate" else f"{int(round(v)):,}"
+
+
+def _kpi_fmt_delta(v, kind: str) -> str:
+    if v is None:
+        return "—"
+    return f"{v:+.1f}pp" if kind == "rate" else f"{v:+,.0f}"
+
+
+# 1_kpi 표 컬럼 — (category, period) → [(지표라벨, 값필드, 변화필드, 종류)]
+_KPI_TABLE_COLS = {
+    "scale": {
+        "day":   [("DAU", "dau", "dau_chg", "cnt"), ("1분↑", "dau_1min", "dau_1min_chg", "cnt"),
+                  ("10분↑", "dau_10min", "dau_10min_chg", "cnt"),
+                  ("롤링WAU", "dau_r7", "dau_r7_chg", "cnt"), ("롤링MAU", "dau_r30", "dau_r30_chg", "cnt")],
+        "week":  [("WAU", "wau", "wau_chg", "cnt"), ("1분↑", "wau_1min", "wau_1min_chg", "cnt"),
+                  ("10분↑", "wau_10min", "wau_10min_chg", "cnt")],
+        "month": [("MAU", "mau", "mau_chg", "cnt"), ("1분↑", "mau_1min", "mau_1min_chg", "cnt"),
+                  ("10분↑", "mau_10min", "mau_10min_chg", "cnt")],
+    },
+    "flow": {
+        "day":   [("신규", "new", "new_chg", "cnt"), ("복귀", "react", "react_chg", "cnt"),
+                  ("복귀율", "react_rate", "react_rate_diff", "rate"), ("이탈률", "churn_rate", "churn_rate_diff", "rate")],
+        "week":  [("신규", "new_week", "new_week_chg", "cnt"), ("복귀", "react_week", "react_week_chg", "cnt"),
+                  ("복귀율", "react_rate_week", "react_rate_week_diff", "rate"), ("이탈률", "churn_rate_week", "churn_rate_week_diff", "rate")],
+        "month": [("신규", "new_mon", "new_mon_chg", "cnt"), ("복귀", "react_mon", "react_mon_chg", "cnt"),
+                  ("복귀율", "react_rate_mon", "react_rate_mon_diff", "rate"), ("이탈률", "churn_rate_mon", "churn_rate_mon_diff", "rate")],
+    },
+    "quality": {
+        "day":   [("실청취율", "real_rate", "real_rate_diff", "rate"), ("깊은청취율", "deep_rate", "deep_rate_diff", "rate"),
+                  ("참여율", "engage_rate", "engage_rate_diff", "rate"), ("습관형성률", "habit_rate", "habit_rate_diff", "rate")],
+        "week":  [("실청취율", "real_rate_week", "real_rate_week_diff", "rate"), ("깊은청취율", "deep_rate_week", "deep_rate_week_diff", "rate"),
+                  ("참여율", "engage_rate_week", "engage_rate_week_diff", "rate"), ("습관형성률", "habit_rate_week", "habit_rate_week_diff", "rate")],
+        "month": [("실청취율", "real_rate_mon", "real_rate_mon_diff", "rate"), ("깊은청취율", "deep_rate_mon", "deep_rate_mon_diff", "rate"),
+                  ("참여율", "engage_rate_mon", "engage_rate_mon_diff", "rate"), ("습관형성률", "habit_rate_mon", "habit_rate_mon_diff", "rate")],
+    },
+    "retention": {
+        "day":   [("D1", "d1_ret", "d1_ret_diff", "rate"), ("D7", "d7_ret", "d7_ret_diff", "rate"),
+                  ("신규D1", "new_d1_ret", "new_d1_ret_diff", "rate"), ("신규D7", "new_d7_ret", "new_d7_ret_diff", "rate")],
+        "week":  [("W1", "w1_ret", "w1_ret_diff", "rate"), ("신규W1", "new_w1_ret", "new_w1_ret_diff", "rate")],
+        "month": [("M1", "m1_ret", "m1_ret_diff", "rate"), ("신규M1", "new_m1_ret", "new_m1_ret_diff", "rate")],
+    },
+}
+# 기본 정렬 대표 지표 — (category, period) → (값필드, 변화필드)
+_KPI_REP = {
+    "scale":     {"day": ("dau", "dau_chg"), "week": ("wau", "wau_chg"), "month": ("mau", "mau_chg")},
+    "flow":      {"day": ("new", "new_chg"), "week": ("new_week", "new_week_chg"), "month": ("new_mon", "new_mon_chg")},
+    "quality":   {"day": ("deep_rate", "deep_rate_diff"), "week": ("deep_rate_week", "deep_rate_week_diff"),
+                  "month": ("deep_rate_mon", "deep_rate_mon_diff")},
+    "retention": {"day": ("d1_ret", "d1_ret_diff"), "week": ("w1_ret", "w1_ret_diff"), "month": ("m1_ret", "m1_ret_diff")},
+}
+_PERIOD_BASELINE = {"day": "전주 동요일 대비", "week": "전주 대비", "month": "전월 대비"}
+
+# 질의창 입력 지표명 → (범주, 지표라벨, 기간힌트). 1_kpi에서 '프로그램+지표' 입력 시 2_impact 라우팅용.
+_KPI_METRIC_LOOKUP = [
+    (["롤링wau"], "scale", "롤링WAU", "day"),
+    (["롤링mau"], "scale", "롤링MAU", "day"),
+    (["wau"], "scale", "WAU", "week"),
+    (["mau"], "scale", "MAU", "month"),
+    (["dau"], "scale", "DAU", "day"),
+    (["1분"], "scale", "1분↑", None),
+    (["10분"], "scale", "10분↑", None),
+    (["깊은청취", "깊은 청취", "deep"], "quality", "깊은청취율", None),
+    (["실청취", "real"], "quality", "실청취율", None),
+    (["참여"], "quality", "참여율", None),
+    (["습관"], "quality", "습관형성률", None),
+    (["신규d1", "신규 d1"], "retention", "신규D1", "day"),
+    (["신규d7", "신규 d7"], "retention", "신규D7", "day"),
+    (["신규w1", "신규 w1"], "retention", "신규W1", "week"),
+    (["신규m1", "신규 m1"], "retention", "신규M1", "month"),
+    (["w1"], "retention", "W1", "week"),
+    (["m1"], "retention", "M1", "month"),
+    (["d1"], "retention", "D1", "day"),
+    (["d7"], "retention", "D7", "day"),
+    (["리텐션", "유지율"], "retention", "D7", "day"),
+    (["복귀율"], "flow", "복귀율", None),
+    (["복귀"], "flow", "복귀", None),
+    (["이탈"], "flow", "이탈률", None),
+    (["신규"], "flow", "신규", None),
+]
+
+
+def extract_kpi_metric(text: str):
+    """질의창 입력에서 KPI 지표명 추출 → {category, metric, period} 또는 None."""
+    t = (text or "").lower()
+    for terms, cat, metric, period in _KPI_METRIC_LOOKUP:
+        if any(term in t for term in terms):
+            return {"category": cat, "metric": metric, "period": period}
+    return None
+
+
+def is_schedule_query(text: str) -> bool:
+    """'코너 편성/편성표' 조회 의도 — 원인 분석이 아니라 주간 편성표를 보여줘야 함."""
+    t = text or ""
+    return ("편성" in t) or ("편성표" in t) or ("코너표" in t)
+
+
+def build_program_schedule(code: str) -> Optional[str]:
+    """프로그램 주간 편성표(요일별 weekly_corner + 매일 고정 daily_corner)
+    + 최근 4주 구조적 편성 변경(신설/폐지/일일코너 변경). 마크다운 문자열."""
+    from datetime import datetime
+    if not code:
+        return None
+    hist = _load_program_history(code, 35)
+    if not hist:
+        return None
+    latest = hist[-1]
+    name = (latest.get("PGM_NAME") or code).strip()
+    channel = PROGRAM_PREFIX_TO_CHANNEL.get((code or " ")[0].upper(), "")
+    stime = (latest.get("STIME") or "").strip()
+    time_s = f"{stime[:2]}:{stime[2:]}" if len(stime) == 4 and stime.isdigit() else stime
+    daily = (latest.get("daily_corner") or "").strip()
+    last_date = (latest.get("DATE") or "").replace("/", "-")
+
+    # 요일별 최신 weekly_corner (최근 14일 내, 요일별 가장 최근 회차)
+    by_wd = {}
+    for r in hist[-14:]:
+        d = (r.get("DATE") or "").replace("/", "-")
+        try:
+            wd = datetime.strptime(d, "%Y-%m-%d").weekday()
+        except (ValueError, TypeError):
+            continue
+        if wd not in by_wd or d > by_wd[wd][0]:
+            by_wd[wd] = (d, (r.get("weekly_corner") or "").strip())
+    wd_ko = "월화수목금토일"
+
+    lines = [f"**{name}** 주간 편성표"]
+    meta = " · ".join([x for x in [channel, (time_s if time_s else None),
+                                   (f"기준일 {last_date}" if last_date else None)] if x])
+    if meta:
+        lines.append(meta)
+    if daily:
+        lines.append(f"\n**매일 고정 코너** — {daily}")
+    lines += ["", "**요일별 주간 코너**", "| 요일 | 코너 편성 |", "|---|---|"]
+    for wd in range(7):
+        if wd in by_wd:
+            lines.append(f"| {wd_ko[wd]} | {by_wd[wd][1] or '—'} |")
+
+    # 최근 4주 편성 변경 — 전체 코너 라인업 기준(요일 로테이션은 변경으로 보지 않음)
+    recent7, prior3w = hist[-7:], hist[-28:-7]
+    latest_set, prior_set = set(), set()
+    for r in recent7:
+        latest_set |= _corner_tokens(r.get("weekly_corner"))
+    for r in prior3w:
+        prior_set |= _corner_tokens(r.get("weekly_corner"))
+    new_c = latest_set - prior_set
+    dropped_c = prior_set - latest_set
+    dc = _detect_program_revision(code, window=28).get("daily_change")
+
+    lines += ["", "**최근 4주 편성 변경**"]
+    changed = False
+    if dc:
+        lines.append(f"- 일일코너 변경: **{dc[0]} → {dc[1]}** ({dc[2][5:]}~)")
+        changed = True
+    if new_c:
+        lines.append("- 신설/재개 코너 (이번 주 새로 편성): " + ", ".join(sorted(new_c)[:10]))
+        changed = True
+    if dropped_c:
+        lines.append("- 이번 주 미편성 코너 (직전 3주 방영): " + ", ".join(sorted(dropped_c)[:10]))
+        changed = True
+    if not changed:
+        lines.append("- 최근 4주간 코너 라인업 변경 없음 (요일별 로테이션은 정상 운영)")
+    return "\n".join(lines)
+
+
+def _kpi_cell(p: dict, val_field: str, delta_field: str, kind: str) -> str:
+    """셀 = 값 (변화).
+    rate: '90.7% (+1.2pp)' / cnt: '38,020 (-2.9% · -1,142)'  — 변화율(소수1자리 %)·변화량(절대).
+    """
+    v = _safe_float(p.get(val_field))
+    if v is None:
+        return "—"
+    d = _safe_float(p.get(delta_field))
+    if kind == "rate":
+        return f"{v:.1f}% ({d:+.1f}pp)" if d is not None else f"{v:.1f}%"
+    # cnt: delta_field는 변화율(%) — 절대변화량은 value − 전주값(prev)
+    val = f"{int(round(v)):,}"
+    prev = _safe_float(p.get(val_field + "_prev"))
+    parts = []
+    if d is not None:
+        parts.append(f"{d:+.1f}%")
+    if prev is not None:
+        parts.append(f"{v - prev:+,.0f}")
+    return f"{val} ({' · '.join(parts)})" if parts else val
+
+
+def _compute_cp_kpi_table(user_context: dict, prev_context: Optional[dict],
+                          toggle_state: dict) -> tuple[dict, bool]:
+    """1_kpi — 프로그램(행) × 범주·기간 지표(열) 표. 대표지표 변화순 정렬 + 프로그램 칩(→2_impact)."""
+    prev_context = prev_context or {}
+    channel = (user_context or {}).get("channel_name") or prev_context.get("channel_name")
+    category = (toggle_state or {}).get("category", "scale")
+    period = (toggle_state or {}).get("period", "day")
+    if not channel:
+        return {"kpi_table_answer": "담당 채널이 결정되지 않았습니다."}, True
+    cols = (_KPI_TABLE_COLS.get(category) or _KPI_TABLE_COLS["scale"]).get(period) \
+        or _KPI_TABLE_COLS["scale"]["day"]
+    rep_field, rep_delta = (_KPI_REP.get(category) or _KPI_REP["scale"]).get(period, ("dau", "dau_chg"))
+    cat_label = (_KPI_CATEGORIES.get(category) or _KPI_CATEGORIES["scale"])[0]
+
+    progs = _load_scan_program_kpis(channel)
+    if not progs:
+        return {"kpi_table_answer": f"**{channel}** 채널의 프로그램 KPI를 찾을 수 없습니다."}, True
+    # 대표 지표 |변화| 큰 순 (값 없으면 뒤로)
+    progs.sort(key=lambda p: (_safe_float(p.get(rep_delta)) is None,
+                              -abs(_safe_float(p.get(rep_delta)) or 0)))
+    last_date = (progs[0].get("DATE") or "").replace("/", "-")
+    weekday = _weekday_ko(progs[0].get("DATE", ""))
+
+    head = "| 프로그램 | " + " | ".join(lbl for lbl, vf, df, kind in cols) + " |"
+    sep = "|---|" + "---|" * len(cols)
+    lines = [f"**{channel} · {cat_label}** 프로그램별 — {last_date} {weekday}요일 · {_PERIOD_BASELINE.get(period, '전주 대비')}",
+             "", head, sep]
+    _tgt_name = (prev_context or {}).get("top_change_program")  # 특정 프로그램일 때만 (채널 전체면 None)
+    for p in progs:
+        cells = []
+        for lbl, vf, df, kind in cols:
+            cells.append(_kpi_cell(p, vf, df, kind))
+        nm = f"**{p['_name']}**" if (_tgt_name and p["_name"] == _tgt_name) else p["_name"]
+        lines.append(f"| {nm} | " + " | ".join(cells) + " |")
+    lines.append("")
+    lines.append("표 위 **정렬 기준(변화율·변화량·현재값)**을 고르고 열 머리글을 누르면 그 지표로 정렬됩니다.")
+    lines.append("칩을 선택하거나 **프로그램명을 지표명과 함께 입력**하세요.")
+
+    # 칩 = 표에 보이는 지표 항목별로 그 지표 |변화| 1위 프로그램 (열 수만큼).
+    #   같은 프로그램이 여러 지표 TOP이어도 라벨의 지표명으로 구별 (코드는 라벨에서 제거, intent/payload엔 유지).
+    chips = []
+    for lbl, vf, df, kind in cols:
+        ranked = [p for p in progs if _safe_float(p.get(df)) is not None]
+        if not ranked:
+            continue
+        top = max(ranked, key=lambda p: abs(_safe_float(p.get(df)) or 0.0))
+        chips.append({
+            "label": f"{lbl} · {top['_name']}",
+            "intent": f"scan_pick_{top['_code']}",
+            "next_slot": "2_impact",
+            "payload": {"top_change_program_code": top["_code"],
+                        "top_change_program": top["_name"],
+                        "channel_name": channel, "kpi_metric": lbl, "kpi_aspect": "rate"},
+        })
+    # 클라이언트가 정렬기준 바뀔 때 지표별 TOP 칩을 재생성하도록 코드 맵 동봉
+    meta = {"channel": channel, "codes": {p["_name"]: p["_code"] for p in progs}}
+    rep_label = next((lbl for lbl, vf, df, kind in cols if vf == rep_field), None)
+    _tgt = (prev_context or {}).get("top_change_program") or f"{channel} 전체"
+    _tb = _target_block(program=_tgt, category=cat_label, metric=rep_label,
+                        period=_PERIOD_LABEL_KO.get(period, "일간"), sort="변화율")
+    return {"kpi_table_answer": _tb + "\n\n" + "\n".join(lines),
+            "chips_next": chips, "kpi_meta": meta}, False
+
+
+_ASPECT_KO = {"rate": "변화율", "abs": "변화량", "value": "현재값"}
+# 기간 맞춤 활성사용자 — (값필드, 라벨)
+_AU_FIELD = {"day": ("dau", "DAU"), "week": ("wau", "WAU"), "month": ("mau", "MAU")}
+
+
+def _pearson(xs: list, ys: list) -> Optional[float]:
+    """피어슨 상관계수. n<3 또는 분산 0이면 None."""
+    n = len(xs)
+    if n < 3 or len(ys) != n:
+        return None
+    mx, my = sum(xs) / n, sum(ys) / n
+    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    sx = sum((x - mx) ** 2 for x in xs) ** 0.5
+    sy = sum((y - my) ** 2 for y in ys) ** 0.5
+    if sx == 0 or sy == 0:
+        return None
+    return cov / (sx * sy)
+
+
+def _metric_au_points(series: list, m_field: str, au_field: str,
+                      m_kind: str, period: str) -> tuple[list, list]:
+    """지표·활성사용자 시계열 포인트 (동일 날짜축). 주/월은 활성사용자 변화 기준 중복 제거."""
+    mpts, apts = [], []
+    if period == "day":
+        for r in series[-28:]:
+            d = (r.get("DATE") or "").replace("/", "-")
+            mv, av = _safe_float(r.get(m_field)), _safe_float(r.get(au_field))
+            if d and mv is not None and av is not None:
+                mpts.append({"date": d, "value": round(mv, 1) if m_kind == "rate" else int(round(mv))})
+                apts.append({"date": d, "value": int(round(av))})
     else:
-        lines.append("⚠ 위험 범위 진입 프로그램은 없습니다.")
-        lines.append("")
+        prev = None
+        for r in series:
+            d = (r.get("DATE") or "").replace("/", "-")
+            av, mv = _safe_float(r.get(au_field)), _safe_float(r.get(m_field))
+            if not d or av is None or mv is None:
+                continue
+            iv = int(round(av))
+            if iv == prev:
+                continue
+            prev = iv
+            mpts.append({"date": d, "value": round(mv, 1) if m_kind == "rate" else int(round(mv))})
+            apts.append({"date": d, "value": iv})
+        mpts, apts = mpts[-12:], apts[-12:]
+    return mpts, apts
 
-    lines.append("어떤 프로그램을 살펴볼까요?")
 
-    answer = "\n".join(lines)
+def _impact_status_table(p: dict, cols: list) -> str:
+    """지표 현황 — 행=지표, 열=지표·현재·변화율·변화량 (선택 기간 기준)."""
+    out = ["| 지표 | 현재 | 변화율 | 변화량 |", "|---|---|---|---|"]
+    for lbl, vf, df, kind in cols:
+        v, d = _safe_float(p.get(vf)), _safe_float(p.get(df))
+        if kind == "rate":
+            cur = f"{v:.1f}%" if v is not None else "—"
+            rate = f"{d:+.1f}pp" if d is not None else "—"
+            amt = "—"
+        else:
+            cur = f"{int(round(v)):,}" if v is not None else "—"
+            rate = f"{d:+.1f}%" if d is not None else "—"
+            pv = _safe_float(p.get(vf + "_prev"))
+            amt = f"{v - pv:+,.0f}" if (v is not None and pv is not None) else "—"
+        out.append(f"| {lbl} | {cur} | {rate} | {amt} |")
+    return "\n".join(out)
 
-    # 동적 칩 — 본문 등장 프로그램 빈도순
-    appearance: list[str] = []
-    name_by_code: dict[str, str] = {}
-    for r in (scale_rows + flow_rows + quality_rows):
-        appearance.append(r["code"])
-        name_by_code[r["code"]] = r["name"]
-    for r in (ret_overall, ret_new):
-        if r:
-            appearance.append(r["code"])
-            name_by_code[r["code"]] = r["name"]
-    at_risk_codes: list[str] = []
-    for ar in at_risk:
-        appearance.append(ar["code"])
-        name_by_code[ar["code"]] = ar["name"]
-        at_risk_codes.append(ar["code"])
 
-    chips = _scan_build_chips(appearance, channel, at_risk_codes, name_by_code)
-    # 끝에 직접 입력 안내 칩
-    chips.append({
-        "label": "💬 직접 입력",
-        "intent": "scan_free_input",
-        "next_slot": "1_anchor_scan",  # 같은 슬롯 유지 (실제로는 클라이언트가 입력창 포커스)
-        "payload": {},
-    })
+def _compute_cp_metric_impact(user_context: dict, prev_context: Optional[dict],
+                              toggle_state: dict, chip_intent: Optional[str] = None) -> tuple[dict, bool]:
+    """2_impact — 선택 프로그램·지표의 영향성 분석.
+    헤더(프로그램+범주+지표+기간+정렬기준) / 지표 우선 서술 / 일·주·월 변화 요약 /
+    지표↔활성사용자 이중축 그래프+상관 / 같은 범주 주목 변화 / 지표 현황표 / 사용 데이터.
+    """
+    prev_context = prev_context or {}
+    code = prev_context.get("top_change_program_code")
+    if not code and chip_intent and chip_intent.startswith("scan_pick_"):
+        code = chip_intent[len("scan_pick_"):]
+    if not code:
+        return {"impact_answer": "분석할 프로그램이 선택되지 않았습니다. 표에서 프로그램을 고르거나 이름을 입력해 주세요."}, True
 
-    return {"scan_answer": answer, "chips_next": chips}, False
+    category = (toggle_state or {}).get("category", "scale")
+    period = (toggle_state or {}).get("period", "day")
+    aspect = prev_context.get("kpi_aspect") or "rate"
+    cat_label = (_KPI_CATEGORIES.get(category) or _KPI_CATEGORIES["scale"])[0]
+    cols = (_KPI_TABLE_COLS.get(category) or _KPI_TABLE_COLS["scale"]).get(period) \
+        or _KPI_TABLE_COLS["scale"]["day"]
+    # 분석 지표 — 칩이 넘긴 kpi_metric, 없으면 대표 지표
+    focus = next((c for c in cols if c[0] == prev_context.get("kpi_metric")), None)
+    if focus is None:
+        rep_field = (_KPI_REP.get(category) or _KPI_REP["scale"]).get(period, ("dau", "dau_chg"))[0]
+        focus = next((c for c in cols if c[1] == rep_field), cols[0])
+    flbl, fvf, fdf, fkind = focus
+
+    series = _load_program_history(code, 120)
+    if not series:
+        return {"impact_answer": f"`{code}` 프로그램 시계열을 찾을 수 없습니다."}, True
+    p = series[-1]
+    smap, dates = _series_date_map(series)
+    name = p.get("PGM_NAME") or prev_context.get("top_change_program") or code
+    last = dates[-1]
+    weekday = _weekday_ko(last.replace("-", "/"))
+    period_ko = _PERIOD_KO.get(period, "전주")
+    aspect_ko = _ASPECT_KO.get(aspect, "변화율")
+    au_field, au_label = _AU_FIELD.get(period, ("dau", "DAU"))
+
+    # 분석 지표 일/주/월 변화 + 활성사용자
+    f_cur, f_dod, f_wow, f_mom = _kpi_deltas(smap, dates, fvf)
+    a_cur, a_dod, a_wow, a_mom = _kpi_deltas(smap, dates, au_field)
+
+    # 이중축 그래프 포인트 + 상관계수
+    mpts, apts = _metric_au_points(series, fvf, au_field, fkind, period)
+    corr = _pearson([x["value"] for x in mpts], [x["value"] for x in apts])
+    chart = None
+    if len(mpts) >= 2:
+        chart = {
+            "type": "timeseries_dual",
+            "title": f"{name} · {flbl} vs {au_label}",
+            "series": [
+                {"label": flbl, "unit": "%" if fkind == "rate" else "명", "points": mpts},
+                {"label": au_label, "unit": "명", "points": apts},
+            ],
+            "initial_days": 28 if period == "day" else None,
+            "cadence": {"day": "1d", "week": "1w", "month": "1m"}.get(period, "1d"),
+            "source": f"raas_kpi_latest.csv:{fvf},{au_field}",
+        }
+
+    # 같은 범주 내 가장 눈에 띄는 변화 (분석 지표 제외, 기간 변화 |최대|)
+    notable = None
+    nkey = -1.0
+    for lbl, vf, df, kind in cols:
+        if vf == fvf:
+            continue
+        _, dod, wow, mom = _kpi_deltas(smap, dates, vf)
+        chg = {"day": dod, "week": wow, "month": mom}.get(period, wow)
+        if chg is not None and abs(chg) > nkey:
+            nkey = abs(chg)
+            notable = (lbl, chg, kind)
+
+    # ── LLM 서술 (지표 우선 → 일/주/월 → 상관 → 범주 주목) ──
+    corr_s = f"{corr:+.2f}" if corr is not None else "산출 불가(데이터 부족)"
+    notable_s = (f"{notable[0]} {_kpi_fmt_delta(notable[1], notable[2])}" if notable else "없음")
+    raw = (
+        f"프로그램 {name} · 범주 {cat_label} · 분석 지표 {flbl} · 기간 {period_ko}\n\n"
+        f"[{flbl} 변화]\n"
+        f"- 현재 {_kpi_fmt_cur(f_cur, fkind)} / 전일 {_kpi_fmt_delta(f_dod, fkind)} "
+        f"/ 전주 {_kpi_fmt_delta(f_wow, fkind)} / 전월 {_kpi_fmt_delta(f_mom, fkind)}\n\n"
+        f"[활성사용자 {au_label} (기간 맞춤)]\n"
+        f"- 현재 {_kpi_fmt_cur(a_cur, 'cnt')} / 전일 {_kpi_fmt_delta(a_dod, 'cnt')} "
+        f"/ 전주 {_kpi_fmt_delta(a_wow, 'cnt')} / 전월 {_kpi_fmt_delta(a_mom, 'cnt')}\n\n"
+        f"[{flbl} ↔ {au_label} 상관계수] {corr_s} (최근 {len(mpts)}포인트)\n\n"
+        f"[같은 범주 내 가장 큰 변화] {notable_s}\n"
+    )
+    polish_instr = (
+        f"라디오 프로그램 '{name}'의 '{flbl}' 지표 영향성 분석입니다. CP에게 보고하듯 자연스러운 한국어로, 아래 순서로 쓰세요.\n"
+        f"1) **'{flbl}' 지표부터** 언급하며 시작 — 이 지표가 어떻게 움직였는지.\n"
+        f"2) '{flbl}'의 **일간(전일)·주간(전주)·월간(전월) 변화를 요약**하고, 주목할 변화가 있으면 짚기.\n"
+        f"3) '{flbl}'와 **활성사용자({au_label})의 관계** — 위 상관계수·수치 근거로 동행/역행/무관 해석 (아래 이중축 그래프 참조).\n"
+        f"4) 끝으로 **같은 범주({cat_label}) 내 가장 눈에 띄는 변화({notable_s})**를 한 줄 언급하며 확인을 유도.\n"
+        "조건: 주어진 수치만(추측·날조 금지, '—'=데이터없음), 인과 단정 금지('~경향/~로 보입니다'), "
+        "상관계수는 |0.7|↑ 강함·|0.4~0.7| 중간·그 이하 약함으로 해석, '###' 헤더 금지, 결과만 출력."
+    )
+    polished = _llm_polish(raw, instruction=polish_instr, max_tokens=1100)
+
+    # ── 헤더 블록 + 현황표 + 사용 데이터 (결정적, 비-LLM) ──
+    period_label = {"day": "일간", "week": "주간", "month": "월간"}.get(period, "일간")
+    header = _target_block(program=name, category=cat_label, metric=flbl,
+                           period=period_label, sort=aspect_ko)
+    status = "**지표 현황** (현재 · 변화율 · 변화량)\n" + _impact_status_table(p, cols)
+
+    # 사용된 RAAS 실데이터 — 분석에 쓴 모든 필드 + 값
+    used, seen = [], set()
+    def _add(f):
+        if f and f not in seen:
+            seen.add(f)
+            used.append(f)
+    _add(fvf); _add(fdf); _add(fvf + "_prev"); _add(au_field); _add(au_field + "_prev")
+    for lbl, vf, df, kind in cols:
+        _add(vf); _add(df)
+        if kind != "rate":
+            _add(vf + "_prev")
+    prov_lines = [f"**사용된 RAAS 실데이터** — `raas_kpi_latest.csv` · 기준일 {last} {weekday}요일",
+                  f"시계열 {dates[0]}~{last} ({len(dates)}일) · 그래프 {fvf},{au_field} ({len(mpts)}p) · 상관 {corr_s}", ""]
+    for f in used:
+        val = p.get(f)
+        prov_lines.append(f"- `{f}` = {val if val not in (None, '') else '—'}")
+    _defs = _metric_definitions_lines(used)
+    if _defs:
+        prov_lines += ["", "**지표 정의** (온톨로지)"] + _defs
+    provenance = "\n".join(prov_lines)
+
+    # 분석대상·사용데이터·추가 데이터 고려 사항은 작은 글씨 참고 블록([small])
+    answer = (header + "\n\n"
+              + polished + "\n\n" + status
+              + "\n\n" + _data_considerations_block("impact")
+              + "\n\n[small]\n" + provenance + "\n[/small]")
+    out = {"impact_answer": answer}
+    if chart:
+        out["chart_data"] = chart
+    return out, False
 
 
 # ─── 주간·월간 원인 분석 헬퍼 ──────────────────────────────────
@@ -2492,7 +2996,9 @@ def _build_cause_weekly_text(program_name: str, code: str, row: dict, history: l
     lines = []
     # 헤더
     if wau is not None and wau_chg is not None:
-        lines.append(f"**{program_name}**의 WAU가 **전주 대비 {wau_chg:+.1f}%** 변화했습니다 (WAU **{int(wau):,}명**).")
+        _rr = _lovefm_realrate_str(code, row, "week")
+        _rrs = f", {_rr}" if _rr else ""
+        lines.append(f"**{program_name}**의 WAU가 **전주 대비 {wau_chg:+.1f}%** 변화했습니다 (WAU **{int(wau):,}명**{_rrs}).")
     else:
         lines.append(f"**{program_name}** 주간 데이터 일부가 부족합니다.")
     lines.append("")
@@ -2697,7 +3203,9 @@ def _build_cause_monthly_text(program_name: str, code: str, row: dict, history: 
 
     lines = []
     if mau is not None and mau_chg is not None:
-        lines.append(f"**{program_name}**의 MAU가 **전월 대비 {mau_chg:+.1f}%** 변화했습니다 (MAU **{int(mau):,}명**).")
+        _rr = _lovefm_realrate_str(code, row, "month")
+        _rrs = f", {_rr}" if _rr else ""
+        lines.append(f"**{program_name}**의 MAU가 **전월 대비 {mau_chg:+.1f}%** 변화했습니다 (MAU **{int(mau):,}명**{_rrs}).")
     else:
         lines.append(f"**{program_name}** 월간 데이터 일부가 부족합니다.")
     lines.append("")
@@ -2738,6 +3246,293 @@ def _build_cause_monthly_text(program_name: str, code: str, row: dict, history: 
     return "\n".join(lines)
 
 
+def _build_period_switch_chart(name: str, code: str, default_period: str = "day") -> Optional[dict]:
+    """일/주/월(DAU/WAU/MAU) 추이를 한 차트에 담아 클라이언트가 그래프만 전환하게 함.
+    반환 = 기본 기간 차트 + periods(3개 전체) + period_switch 플래그. 본문은 재계산 안 함."""
+    hist = _load_program_history(code, 0)
+    if not hist:
+        return None
+    built = {
+        "day": _build_dau_chart_data(name, hist),
+        "week": _build_wau_chart_data(name, hist),
+        "month": _build_mau_chart_data(name, hist),
+    }
+    periods = {k: v for k, v in built.items() if v}
+    if not periods:
+        return None
+    if default_period not in periods:
+        default_period = next(iter(periods))
+    base = dict(periods[default_period])
+    base["period_switch"] = True
+    base["current_period"] = default_period
+    base["periods"] = periods
+    return base
+
+
+# ─── 원인 종합(2_cause) 메타 — 분석대상·사용데이터 (작은 글씨 [small]) ─────────
+_CAUSE_FIELDS = {
+    "day": [
+        ("활성사용자", ["dau", "dau_prev", "dau_chg"]),
+        ("사용자 흐름", ["new", "new_prev", "new_chg", "react", "react_prev", "churn_rate", "churn_rate_diff"]),
+        ("코호트 유지율", ["d1_ret", "d7_ret", "new_d1_ret", "new_d7_ret"]),
+        ("청취 품질", ["real_rate", "deep_rate", "dau_1min", "dau_10min"]),
+        ("편성", ["guestname", "daily_corner", "weekly_corner"]),
+    ],
+    "week": [
+        ("활성사용자", ["wau", "wau_prev", "wau_chg"]),
+        ("사용자 흐름", ["new_week", "react_week", "churn_rate_week"]),
+        ("코호트 유지율", ["w1_ret", "new_w1_ret"]),
+        ("청취 품질", ["real_rate_week", "deep_rate_week", "wau_1min", "wau_10min"]),
+        ("편성", ["weekly_corner"]),
+    ],
+    "month": [
+        ("활성사용자", ["mau", "mau_prev", "mau_chg"]),
+        ("사용자 흐름", ["new_mon", "react_mon", "churn_rate_mon"]),
+        ("코호트 유지율", ["m1_ret", "new_m1_ret"]),
+        ("청취 품질", ["real_rate_mon", "deep_rate_mon", "mau_1min", "mau_10min"]),
+    ],
+}
+
+
+_PERIOD_LABEL_KO = {"day": "일간", "week": "주간", "month": "월간", "weekly": "주간", "monthly": "월간"}
+_SORT_LABEL_KO = {"pct": "변화율", "abs": "변화량", "rate": "변화율", "value": "현재값"}
+
+
+def _target_block(program=None, category=None, metric=None, period=None, sort=None) -> str:
+    """모든 노드 공통 '분석 대상' 작은 글씨 블록 ([small])."""
+    parts = []
+    if program:  parts.append(f"프로그램: {program}")
+    if category: parts.append(f"범주: {category}")
+    if metric:   parts.append(f"지표: {metric}")
+    if period:   parts.append(f"기간: {period}")
+    if sort:     parts.append(f"정렬기준: {sort}")
+    if not parts:
+        return ""
+    return "[small]\n**분석 대상**\n- " + "  · ".join(parts) + "\n[/small]"
+
+
+# ─── 추가 데이터 고려 사항 (관리자 참고 [small]) ──────────────────────────
+# 더 정확한 분석을 위해 활용/적재를 고려할 데이터.
+#   status: "미활용"(룩업에 있으나 분석 미반영) | "미적재"(없음, 적재 필요)
+_DATA_CONSIDERATIONS = {
+    "cause": [
+        {"status": "미활용", "data": "게스트(`guestname`)",
+         "why": "게스트 교체·특집이 변화의 직접 원인일 수 있으나 상관 미반영"},
+        {"status": "미활용", "data": "코너 편성(`daily_corner`·`weekly_corner`)",
+         "why": "코너 신설·폐지가 흐름 변화를 유발(현재 개편 감지에만 사용)"},
+        {"status": "미활용", "data": "신규·복귀 비중(`new_share`·`react_share`)",
+         "why": "변화가 신규 유입인지 복귀인지 구성비로 명확화"},
+        {"status": "미활용", "data": "보이는 라디오·라이브(`view_radio_yn`·`live_yn`)",
+         "why": "영상·라이브 회차가 깊은청취·DAU에 영향"},
+        {"status": "미적재", "data": "공감로그(회차별 반응)",
+         "why": "콘텐츠 반응을 변화에 직접 귀속", "source": "별도 적재"},
+        {"status": "미적재", "data": "게스트·이벤트 캘린더(구조화)",
+         "why": "특집·이벤트 일자와 변화 시점 정렬", "source": "별도 적재"},
+        {"status": "미적재", "data": "성별·연령·시간대 세그먼트",
+         "why": "변화가 어느 사용자 층에서 발생했는지 분해", "source": "Splunk 추가 적재"},
+    ],
+    "impact": [
+        {"status": "미활용", "data": "깊은청취 절대 사용자수(`dau_1min`·`dau_10min`)",
+         "why": "비율만 보고 규모 변화는 미반영 — 비율·규모 동시 해석 가능"},
+        {"status": "미활용", "data": "신규·복귀 비중(`new_share`·`react_share`)",
+         "why": "지표 변화의 사용자 구성을 함께 설명"},
+        {"status": "미활용", "data": "보이는 라디오·라이브(`view_radio_yn`·`live_yn`)",
+         "why": "영상·라이브 여부가 청취품질 지표에 영향"},
+        {"status": "미적재", "data": "이벤트·프로모션 캘린더",
+         "why": "외부 이벤트가 지표↔활성사용자 상관을 교란하는지 통제", "source": "별도 적재"},
+        {"status": "미적재", "data": "세그먼트별 지표",
+         "why": "영향이 어느 사용자 층에 집중되는지", "source": "Splunk 추가 적재"},
+    ],
+    "revision": [
+        {"status": "미활용", "data": "게스트(`guestname`) 추이",
+         "why": "개편 전후 게스트 구성 변화가 효과에 섞일 수 있음"},
+        {"status": "미활용", "data": "보이는 라디오·라이브(`view_radio_yn`·`live_yn`)",
+         "why": "개편과 동시에 영상·라이브가 도입됐는지"},
+        {"status": "미적재", "data": "개편 메타데이터(일자·내용)",
+         "why": "현재 코너 변경으로 개편을 추정 — 정확한 개편 일자·의도 필요", "source": "별도 적재(수기 등록)"},
+        {"status": "미적재", "data": "개편 사유·기획 메모",
+         "why": "효과 해석의 맥락(왜 바꿨는지)", "source": "별도 적재"},
+    ],
+}
+
+
+def _data_considerations_block(analysis_type: str) -> str:
+    """'추가 데이터 고려 사항' [small] 블록 — polish 밖에서 결정적으로 조립(LLM 미관여)."""
+    items = _DATA_CONSIDERATIONS.get(analysis_type) or []
+    if not items:
+        return ""
+    unused = [it for it in items if it["status"] == "미활용"]
+    missing = [it for it in items if it["status"] == "미적재"]
+    lines = ["[small]", "**추가 데이터 고려 사항**",
+             "더 정확한 분석을 위해 활용·적재를 고려할 데이터입니다.", ""]
+    if unused:
+        lines.append("**룩업에 있으나 미활용**")
+        lines += [f"- {it['data']} — {it['why']}" for it in unused]
+        lines.append("")
+    if missing:
+        lines.append("**미적재 (적재 필요)**")
+        for it in missing:
+            src = f" · {it['source']}" if it.get("source") else ""
+            lines.append(f"- {it['data']}{src} — {it['why']}")
+    lines.append("[/small]")
+    return "\n".join(lines)
+
+
+def _lovefm_realrate_str(code: str, row: dict, period: str = "day") -> str:
+    """러브FM(L·M 코드)은 앱 첫 진입이 파워FM이라 활성사용자수와 함께 실청취율(1분↑)을 표기.
+    활성사용자 옆에 끼워넣을 '실청취율 **X%**' 문자열 반환(타 채널·결측은 '')."""
+    if not code or code[0].upper() not in ("L", "M"):
+        return ""
+    fld = {"week": "real_rate_week", "month": "real_rate_mon"}.get(period, "real_rate")
+    try:
+        rr = float(row.get(fld))
+    except (TypeError, ValueError):
+        return ""
+    return f"실청취율 **{rr:.1f}%**"
+
+
+# ─── 1단계(투명성): 스플렁크 필드 → 온톨로지 정의 ──────────────────────────
+def _field_meaning(field: str):
+    """필드명 → (지표 라벨, 정의) 온톨로지 기반. 없으면 None."""
+    try:
+        from raas_onto import get_adapter
+        info = get_adapter().get_field_info(field)
+    except Exception:
+        return None
+    m = (info or {}).get("metric")
+    if not m or not m.get("label"):
+        return None
+    return (m["label"], (m.get("definition") or "").strip())
+
+
+def _metric_definitions_lines(fields) -> list:
+    """필드 목록 → 사용된 지표의 온톨로지 정의(중복 제거) 줄 목록.
+    답변 '참고 정보'에 '이 숫자가 무엇인지'를 명시(스플렁크 데이터 ↔ 온톨로지 의미 연결)."""
+    seen = {}
+    for f in fields:
+        mm = _field_meaning(f)
+        if mm and mm[0] not in seen:
+            seen[mm[0]] = mm[1]
+    return [(f"- {label}: {defn}" if defn else f"- {label}") for label, defn in seen.items()]
+
+
+# facts.metric 짧은 id → CSV 필드 (온톨로지 정의 조회용)
+_QMETRIC_FIELD = {
+    "dau": "dau", "wau": "wau", "mau": "mau", "dau_r7": "dau_r7", "dau_r30": "dau_r30",
+    "new": "new", "react": "react", "churn": "churn_rate", "real": "real_rate",
+    "deep": "deep_rate", "engage": "engage_rate", "habit": "habit_rate",
+    "d1": "d1_ret", "d7": "d7_ret", "w1": "w1_ret", "m1": "m1_ret",
+    "new_d1": "new_d1_ret", "new_d7": "new_d7_ret", "new_w1": "new_w1_ret", "new_m1": "new_m1_ret",
+    "1min": "dau_1min", "10min": "dau_10min",
+}
+def _query_metric_to_field(mid):
+    if not mid or mid == "all":
+        return None
+    base = mid.replace("_week", "").replace("_mon", "")
+    return _QMETRIC_FIELD.get(base, _QMETRIC_FIELD.get(mid, base))
+
+
+def build_query_provenance(facts, target_date=None) -> str:
+    """1단계-c: 일반/자유 질의 답변의 참고 푸터([small]) — 사용 데이터 + 지표 정의(온톨로지).
+    관리자에게만 전송(서버), renderAiText가 [small]을 푸터로 렌더 + 참고 토글 연동."""
+    facts = facts or {}
+    mids = []
+    if facts.get("metric"):
+        mids.append(facts["metric"])
+    for m in (facts.get("metrics") or []):
+        if m and m not in mids:
+            mids.append(m)
+    fields = [_query_metric_to_field(m) for m in mids]
+    defs = _metric_definitions_lines([f for f in fields if f])
+    src = "데이터: `raas_kpi_latest.csv` / 타임라인"
+    if target_date:
+        src += f" · 기준일 {target_date}"
+    lines = ["[small]", "**사용된 데이터·정의**", src]
+    if facts.get("scope"):
+        lines.append(f"대상: {facts['scope']}")
+    if defs:
+        lines += ["", "**지표 정의** (온톨로지)"] + defs
+    lines.append("[/small]")
+    return "\n".join(lines)
+
+
+def _ontology_basis_block(code: str = None, date: str = None) -> str:
+    """1단계-b: 답변에 '적용한 온톨로지 규칙'을 명시 — 데이터 정의(1a)를 넘어
+    어떤 분석 프레임워크·판정 규칙으로 해석했는지. [small] 참고 블록."""
+    lines = ["[small]", "**온톨로지 근거** (적용한 분석 규칙)"]
+    n0 = len(lines)
+    # 변화 분해 프레임워크 (cause 온톨로지)
+    try:
+        decs = _query_decompositions()
+    except Exception:
+        decs = []
+    if decs:
+        lines.append("- 변화 분해 프레임워크 (`raas_ontology_cause.ttl`):")
+        for d in decs:
+            avail = "" if d.get("available") else " · (데이터 미적재)"
+            purpose = (d.get("purpose") or "").strip()
+            lines.append(f"  · {d.get('label')} — {purpose}{avail}")
+    # 일자 유형 판정 (calendar 온톨로지)
+    if date:
+        try:
+            from raas_onto import get_adapter
+            dt = get_adapter().get_day_type(date) or {}
+            hol = dt.get("holiday_name")
+            jud = f"{hol} ({dt.get('day_type')})" if hol else dt.get("day_type")
+            if jud:
+                lines.append(f"- 일자 유형 판정 (`raas_ontology_calendar.ttl`): {date} = {jud}")
+        except Exception:
+            pass
+    if len(lines) <= n0:
+        return ""
+    lines.append("[/small]")
+    return "\n".join(lines)
+
+
+def _cause_meta_blocks(name: str, period: str, prev_context: dict, p: dict) -> tuple[str, str]:
+    """원인 종합 분석용 [small] 메타 — (분석대상 헤더, 사용된 RAAS 실데이터) 블록."""
+    metric_label = {"day": "DAU", "week": "WAU", "month": "MAU"}.get(period, "DAU")
+    am = (prev_context or {}).get("anchor_mode") or ""
+    sort_ko = "변화량" if "abs" in am else "변화율"
+    header = _target_block(program=name, category="규모", metric=metric_label,
+                           period=_PERIOD_LABEL_KO.get(period, "일간"), sort=sort_ko)
+    last = (p.get("DATE") or "").replace("/", "-")
+    lines = ["[small]", f"**사용된 RAAS 실데이터** — `raas_kpi_latest.csv` · 기준일 {last}", ""]
+    _grp_fields = _CAUSE_FIELDS.get(period, _CAUSE_FIELDS["day"])
+    for grp, fields in _grp_fields:
+        vals = " · ".join(
+            f"`{f}`={p.get(f) if p.get(f) not in (None, '') else '—'}" for f in fields)
+        lines.append(f"- **{grp}**: {vals}")
+    # 지표 정의(온톨로지) — 위 스플렁크 필드가 무엇을 뜻하는지
+    _defs = _metric_definitions_lines([f for _, fs in _grp_fields for f in fs])
+    if _defs:
+        lines += ["", "**지표 정의** (온톨로지)"] + _defs
+    lines.append("[/small]")
+    provenance = "\n".join(lines)
+    # 1단계-b: 온톨로지 근거(적용 규칙) 블록 — provenance 옆에 추가
+    _code = (prev_context or {}).get("top_change_program_code")
+    _onto = _ontology_basis_block(_code, last)
+    if _onto:
+        provenance += "\n\n" + _onto
+    return header, provenance
+
+
+def _cause_nav_chips(period: str) -> list:
+    """현재 기간을 제외한 다른 두 기간의 '변화 살펴보기' 칩 + 인접 비교 칩."""
+    labels = {"day": "일간", "week": "주간", "month": "월간"}
+    chips = []
+    for p in ("day", "week", "month"):
+        if p == period:
+            continue
+        chips.append({"label": f"📅 {labels[p]} 변화 살펴보기", "intent": f"show_{p}_view",
+                      "next_slot": "2_cause", "set_toggle": {"period": p}})
+    chips.append({"label": "비슷한 시간대 다른 프로그램은?",
+                  "intent": "compare_adjacent_programs", "next_slot": "3_adjacent"})
+    chips.append({"label": "다른 지표 변화도 탐색", "intent": "explore_kpi",
+                  "next_slot": "1_kpi", "set_toggle": {"category": "flow"}})
+    return chips
+
+
 def _compute_cp_cause_weekly(user_context: dict,
                              prev_context: Optional[dict] = None,
                              chip_intent: Optional[str] = None) -> tuple[dict, bool]:
@@ -2768,8 +3563,11 @@ def _compute_cp_cause_weekly(user_context: dict,
         "- 결과만 출력"
     )
     polished = _llm_polish(raw, instruction=polish_instr, max_tokens=1500)
-    chart = _build_wau_chart_data(program_name, history)
-    out = {"cause_explanation": polished}
+    chart = _build_period_switch_chart(program_name, code, "week")
+    _h, _prov = _cause_meta_blocks(program_name, "week", prev_context, row)
+    out = {"cause_explanation": _h + "\n\n" + polished + "\n\n"
+           + _data_considerations_block("cause") + "\n\n" + _prov,
+           "chips_next": _cause_nav_chips("week")}
     if chart:
         out["chart_data"] = chart
     return out, False
@@ -2800,8 +3598,11 @@ def _compute_cp_cause_monthly(user_context: dict,
         "- 결과만 출력"
     )
     polished = _llm_polish(raw, instruction=polish_instr, max_tokens=1500)
-    chart = _build_mau_chart_data(program_name, history)
-    out = {"cause_explanation": polished}
+    chart = _build_period_switch_chart(program_name, code, "month")
+    _h, _prov = _cause_meta_blocks(program_name, "month", prev_context, row)
+    out = {"cause_explanation": _h + "\n\n" + polished + "\n\n"
+           + _data_considerations_block("cause") + "\n\n" + _prov,
+           "chips_next": _cause_nav_chips("month")}
     if chart:
         out["chart_data"] = chart
     return out, False
@@ -2874,6 +3675,7 @@ def _compute_cp_cause(user_context: dict,
         new_user_check=new_user_check,
         reference_baseline=reference_baseline,
         events=events,
+        realrate_str=_lovefm_realrate_str(code, row, "day"),
     )
     polish_instr = (
         "다음 분석 내용을 라디오 데이터 담당자(CP)에게 보고하듯 자연스러운 한국어로 다듬어 주세요.\n\n"
@@ -2892,8 +3694,11 @@ def _compute_cp_cause(user_context: dict,
     )
     polished = _llm_polish(raw, instruction=polish_instr, max_tokens=1500)
 
-    chart = _build_dau_chart_data(program_name, history)  # 평일 토글은 프론트에서 처리
-    out = {"cause_explanation": polished}
+    chart = _build_period_switch_chart(program_name, code, "day")  # 일/주/월 그래프 동봉(클라 전환)
+    _h, _prov = _cause_meta_blocks(program_name, "day", prev_context, row)
+    out = {"cause_explanation": _h + "\n\n" + polished + "\n\n"
+           + _data_considerations_block("cause") + "\n\n" + _prov,
+           "chips_next": _cause_nav_chips("day")}
     if chart:
         out["chart_data"] = chart
     return out, False
@@ -3024,89 +3829,6 @@ def _anchor_icon_legend() -> str:
             "📈/📉 지표별 채널 내 상승/하락 최고 (이상치만 표시)[/mini]")
 
 
-def _compute_cp_anchor_more(user_context: dict,
-                            prev_context: Optional[dict] = None,
-                            chip_intent: Optional[str] = None) -> tuple[dict, bool]:
-    """CP 1_anchor_more — 1_anchor의 TOP3를 제외한 나머지 프로그램을 변화 순위로 나열.
-
-    prev_context["anchor_mode"]에 따라 지표 선택:
-        'pct' / None  → DAU 전주 동요일 대비 (변동폭)
-        'abs'         → DAU 변동수치
-        'weekly'      → WAU 전주 대비
-        'monthly'     → MAU 전월 대비
-    """
-    prev_context = prev_context or {}
-    channel = (user_context or {}).get("channel_name") or prev_context.get("channel_name")
-    if not channel:
-        return {"more_answer": "담당 채널이 결정되지 않았습니다."}, True
-    programs = _load_latest_program_kpis(channel)
-    if not programs:
-        return {"more_answer": f"**{channel}** 채널의 프로그램 KPI를 찾을 수 없습니다."}, True
-
-    f = _anchor_mode_fields(prev_context.get("anchor_mode"))
-    raw_mode, val_f, prev_f, chg_f = f["raw_mode"], f["val_f"], f["prev_f"], f["chg_f"]
-    metric_label, compare_ko, sort_pct = f["metric_label"], f["compare_ko"], f["sort_pct"]
-    rows = _kpi_rows()
-    last_date = max((r.get("DATE", "") for r in rows if r.get("DATE")), default="").replace("/", "-")
-
-    have = [p for p in programs if p.get(chg_f) is not None and p.get(val_f) is not None]
-    if sort_pct:
-        # 활성사용자 변동율 기준 내림차순 (증가 → 감소, 부호 유지)
-        have.sort(key=lambda p: p[chg_f], reverse=True)
-    else:
-        def _delta(p):
-            v = p.get(val_f); pr = p.get(prev_f)
-            return (v - pr) if (v is not None and pr is not None) else 0
-        have = [p for p in have if p.get(prev_f) is not None]
-        # 활성사용자 변동수치 기준 내림차순 (증가 → 감소, 부호 유지)
-        have.sort(key=lambda p: _delta(p), reverse=True)
-
-    rest = have
-    if not rest:
-        return {"more_answer": f"**{channel}**에서 표시할 프로그램이 없습니다."}, False
-
-    lines: list[str] = []
-    sort_basis = "변동율" if sort_pct else "변동수치"
-    lines.append(f"**{channel}**의 전체 {len(rest)}개 프로그램 — **{metric_label} {compare_ko}** {sort_basis} 내림차순(증가→감소)")
-    period_label_ko = _anchor_period_label(raw_mode, last_date)
-    if period_label_ko:
-        lines.append(f"_({period_label_ko})_")
-    lines.append(_anchor_icon_legend())
-    lines.append("")
-
-    notable_tags = _notable_metric_tags(programs, f["tag_period"])
-    rate_leader_code, delta_leader_code = _anchor_leaders(rest, f)
-
-    for i, p in enumerate(rest, start=1):
-        line = _anchor_program_line(p, f, notable_tags,
-                                    rate_leader_code, delta_leader_code, prefix=f"{i}. ")
-        if line:
-            lines.append(line)
-
-    lines.append("")
-    lines.append("어떤 프로그램을 살펴볼까요?")
-
-    # 후속 칩 — "왜 변했어?"는 기간 모드에 맞는 원인 슬롯으로 라우팅
-    if raw_mode in ("weekly_pct", "weekly_abs"):
-        cause_slot = "2_cause_weekly"
-    elif raw_mode in ("monthly_pct", "monthly_abs"):
-        cause_slot = "2_cause_monthly"
-    else:
-        cause_slot = "2_cause"
-    chips_next = [
-        {"label": "왜 변했어? (원인 보기)", "intent": "explain_change", "next_slot": cause_slot},
-        {"label": "최근 개편한 거 효과는?", "intent": "show_change_after_revision", "next_slot": "4_revision"},
-    ]
-
-    data = {
-        "more_answer": "\n".join(lines),
-        "channel_name": channel,
-        "anchor_mode": raw_mode,
-        "chips_next": chips_next,
-    }
-    return data, False
-
-
 def _compute_cp_anchor_adjacent(user_context: dict,
                                 prev_context: Optional[dict] = None,
                                 chip_intent: Optional[str] = None) -> tuple[dict, bool]:
@@ -3171,7 +3893,7 @@ def _compute_cp_anchor_adjacent(user_context: dict,
     lines.append(f"**{channel}** 시간대별 프로그램 — **{metric_label} {compare_ko}** 변화 (편성 순)")
     period_label_ko = _anchor_period_label(raw_mode, last_date)
     if period_label_ko:
-        lines.append(f"_({period_label_ko})_")
+        lines.append(f"({period_label_ko})")
     lines.append(_anchor_icon_legend())
 
     for label in _DAYPART_ORDER:
@@ -3200,10 +3922,15 @@ def _compute_cp_anchor_adjacent(user_context: dict,
                 lines.append(line)
 
     lines.append("")
-    lines.append("어떤 프로그램을 살펴볼까요?")
+    lines.append("원인을 살펴볼 **프로그램명을 입력**해 주세요.")
 
+    _ap = "weekly" if raw_mode.startswith("weekly") else ("monthly" if raw_mode.startswith("monthly") else "day")
+    _tgt = prev_context.get("top_change_program") or f"{channel} 전체"
+    _tb = _target_block(program=_tgt, category="규모", metric=metric_label,
+                        period=_PERIOD_LABEL_KO.get(_ap, "일간"),
+                        sort=("변화량" if "abs" in raw_mode else "변화율"))
     data = {
-        "adjacent_answer": "\n".join(lines),
+        "adjacent_answer": _tb + "\n\n" + "\n".join(lines),
         "channel_name": channel,
         "anchor_mode": raw_mode,
     }
@@ -3231,8 +3958,13 @@ def _corner_fmt(items: set, cap: int = 3) -> str:
     return ", ".join(items) if len(items) <= cap else ", ".join(items[:cap]) + f" 외 {len(items)-cap}개"
 
 
-def _detect_program_revision(code: str, window: int = _CORNER_WINDOW) -> dict:
+def _detect_program_revision(code: str, window: int = _CORNER_WINDOW,
+                             effect_half_days: int = 14) -> dict:
     """프로그램 1개의 최근 N일 코너 개편 감지 + 사후 DAU 효과 (1·2단계 공용).
+
+    Args:
+        window: 코너 개편을 탐지하는 범위(일). 기본 35일(5주).
+        effect_half_days: 개편 전후 DAU 평균을 낼 한쪽 창(일). 비교창 토글(2/4/8주) 연동.
 
     반환: {daily_change, new_c, dropped_c, signal, effect}
       daily_change: (이전, 새, 변경일) | None
@@ -3241,7 +3973,9 @@ def _detect_program_revision(code: str, window: int = _CORNER_WINDOW) -> dict:
     from collections import defaultdict
     from datetime import datetime
 
-    rows = _load_program_history(code, window + 7)[-window:]
+    # DAU 전후 평균은 탐지 범위보다 넓은 풀이 필요 — 큰 풀을 따로 적재
+    hist_all = _load_program_history(code, window + effect_half_days + 7)
+    rows = hist_all[-window:]   # 코너 개편 탐지는 기존 범위(window) 유지
     if not rows:
         return {"daily_change": None, "new_c": set(), "dropped_c": set(), "signal": 0, "effect": None}
 
@@ -3292,14 +4026,14 @@ def _detect_program_revision(code: str, window: int = _CORNER_WINDOW) -> dict:
     effect = None
     if anchor:
         dau_by_date = {}
-        for r in rows:
+        for r in hist_all:   # 넓은 풀에서 전후 평균 — 비교창(effect_half_days)만큼 확보
             d = r.get("DATE", "").replace("/", "-")
             v = _safe_float(r.get("dau"))
             if d and v is not None:
                 dau_by_date.setdefault(d, v)
         items = sorted(dau_by_date.items())
-        before = [v for d, v in items if d < anchor][-14:]
-        after = [v for d, v in items if d >= anchor][:14]
+        before = [v for d, v in items if d < anchor][-effect_half_days:]
+        after = [v for d, v in items if d >= anchor][:effect_half_days]
         # 양쪽 1주 이상일 때만 산정 — 요일 구성 균형(주말 편향 제거)
         if len(before) >= 7 and len(after) >= 7:
             b = sum(before) / len(before)
@@ -3352,9 +4086,10 @@ def _compute_cp_revision_effect(user_context: dict,
             detected.append((p, rev))
     detected.sort(key=lambda x: x[1]["signal"], reverse=True)
 
-    lines = [f"**{channel}** 최근 5주 개편 감지 — **{len(detected)}개** (전체 {len(programs)}개 프로그램)"]
+    lines = [_target_block(program=f"{channel} 전체", category="개편"), "",
+             f"**{channel}** 최근 5주 개편 감지 — **{len(detected)}개** (전체 {len(programs)}개 프로그램)"]
     if last_date:
-        lines.append(f"_(기준일: {last_date} · 최근 35일, 같은 요일끼리 주차 비교)_")
+        lines.append(f"(기준일: {last_date} · 최근 35일, 같은 요일끼리 주차 비교)")
     lines.append("")
     if not detected:
         lines.append("최근 5주간 코너 개편이 감지된 프로그램이 없습니다.")
@@ -3365,7 +4100,7 @@ def _compute_cp_revision_effect(user_context: dict,
     lines.append("")
     lines.append("아래에서 프로그램을 선택하면 **개편 사후 효과**를 분석해 드립니다.")
     lines.append("")
-    lines.append("_주간코너는 게스트·특집 로테이션이 섞일 수 있어, 확실한 개편 신호는 일일코너 변경입니다._")
+    lines.append("※ 주간코너는 게스트·특집 로테이션이 섞일 수 있어, 확실한 개편 신호는 일일코너 변경입니다.")
 
     chips = [{"label": p["name"], "intent": f"revision_pick_{p['code']}",
               "next_slot": "4_revision_detail"} for p, _ in detected]
@@ -3385,16 +4120,22 @@ def _compute_cp_revision_detail(user_context: dict,
     if not code:
         return {"revision_detail_answer": "분석할 프로그램이 선택되지 않았습니다. 개편 목록에서 프로그램을 선택해 주세요."}, True
 
+    # 비교창 토글(2/4/8주) → 개편 전후 DAU 평균 창(한쪽 일수)
+    _win_map = {"2w": 14, "4w": 28, "8w": 56}
+    eff_half = _win_map.get((prev_context or {}).get("window"), 14)
+    win_weeks = eff_half // 7
+
     hist = _load_program_history(code, 60)
     name = (hist[-1].get("PGM_NAME") if hist else None) or code
-    rev = _detect_program_revision(code)
+    rev = _detect_program_revision(code, effect_half_days=eff_half)
 
     rows_all = _kpi_rows()
     last_date = max((r.get("DATE", "") for r in rows_all if r.get("DATE")), default="").replace("/", "-")
 
-    lines = [f"**{name}** 개편 사후 효과"]
+    lines = [_target_block(program=name, category="개편", period=f"전후 {win_weeks}주 비교"), "",
+             f"**{name}** 개편 사후 효과"]
     if last_date:
-        lines.append(f"_(기준일: {last_date} · 최근 35일)_")
+        lines.append(f"(기준일: {last_date} · 최근 35일 · 전후 {win_weeks}주 비교)")
     lines.append("")
     lines.append("**① 개편 내용**")
     dc = rev["daily_change"]
@@ -3414,12 +4155,17 @@ def _compute_cp_revision_detail(user_context: dict,
     else:
         lines.append("- 개편 기준일을 특정할 수 없어 사후 효과를 산정하지 못했습니다.")
     lines.append("")
-    lines.append("_사후 효과는 요일 구성 편향을 막기 위해 개편 전후 각 1주 이상일 때만 산정합니다._")
+    lines.append("※ 사후 효과는 요일 구성 편향을 막기 위해 개편 전후 각 1주 이상일 때만 산정합니다.")
+    lines.append("")
+    lines.append(_data_considerations_block("revision"))
 
     out = {
         "revision_detail_answer": "\n".join(lines),
         "channel_name": (user_context or {}).get("channel_name") or prev_context.get("channel_name"),
         "revision_code": code,
+        # '주간 변화 살펴보기'(→2_cause) 등으로 넘어갈 때 분석 대상 프로그램 유지
+        "top_change_program": name,
+        "top_change_program_code": code,
     }
     chart = _build_dau_chart_data(name, hist)  # 프로그램 DAU 추이 (평일 토글 가능)
     if chart:
@@ -3431,16 +4177,128 @@ def _compute_cp_revision_detail(user_context: dict,
 # 일부 computer는 prev_context 가 필요 (예: 2_cause는 1_anchor의 top program code)
 _SLOT_COMPUTERS = {
     ("CP", "1_anchor"): _compute_cp_anchor,
-    ("CP", "1_anchor_scan"): _compute_cp_anchor_scan,
-    ("CP", "1_anchor_more"): _compute_cp_anchor_more,
     ("CP", "3_adjacent"): _compute_cp_anchor_adjacent,
     ("CP", "4_revision"): _compute_cp_revision_effect,
     ("CP", "4_revision_detail"): _compute_cp_revision_detail,
     ("CP", "2_cause"): _compute_cp_cause,
-    ("CP", "2_cause_weekly"): _compute_cp_cause_weekly,
-    ("CP", "2_cause_monthly"): _compute_cp_cause_monthly,
     ("PD_PROGRAM", "1_anchor"): _compute_pd_program_anchor,
 }
+
+
+# ─── 내용 캐시 (이력 DB 재설계 §B — 1단계) ──────────────────────────────
+# 같은 분석(프로그램·지표·기간·data_date)이면 경로(어떤 칩으로 왔는지) 무관하게 1회만 LLM 호출.
+# data_date를 키에 포함 → 다음날 06:50 데이터 갱신 시 자동 만료.
+try:
+    from raas_history_db import cache_get as _cache_get, cache_put as _cache_put
+except Exception:   # DB 미가용 환경(테스트 등)에서는 캐시 비활성
+    _cache_get = _cache_put = None
+
+# LLM polish가 무거운 슬롯만 캐싱 (프로그램 단위 — channel은 program에 내포)
+_CACHE_SLOT_TYPES = {"cause", "impact"}
+# 답변 콘텐츠/포맷 로직이 바뀌면 이 값을 올려 기존 캐시를 자동 무효화(수동 삭제 불필요).
+_CACHE_VERSION = "2026-06-25e"
+
+
+def _data_date() -> str:
+    """캐시·무효화 기준일 — KPI 데이터의 최신 DATE."""
+    rows = _kpi_rows()
+    return max((r.get("DATE", "") for r in rows if r.get("DATE")), default="").replace("/", "-")
+
+
+def _analysis_key(slot_type, channel_code, program_code,
+                  metric, period, window, data_date) -> str:
+    parts = [_CACHE_VERSION, slot_type, channel_code or "-", program_code or "-",
+             metric or "-", period or "-", window or "-", data_date or "-"]
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _cached_compute(slot_type, key_inputs, compute):
+    """compute: () -> (data, fb). 캐시 적중 시 LLM 우회.
+
+    key_inputs: {program_code, metric, period, window, channel_code, data_date}
+    """
+    if not (_cache_get and _cache_put and slot_type in _CACHE_SLOT_TYPES):
+        return compute()
+    ddate = key_inputs.get("data_date") or _data_date()
+    if not ddate:
+        return compute()
+    key = _analysis_key(slot_type, key_inputs.get("channel_code"),
+                        key_inputs.get("program_code"), key_inputs.get("metric"),
+                        key_inputs.get("period"), key_inputs.get("window"), ddate)
+    try:
+        cached = _cache_get(key)
+    except Exception:
+        cached = None
+    if cached:
+        try:
+            data = json.loads(cached)
+            data["_cache_hit"] = True
+            data["_analysis_key"] = key
+            return data, False
+        except Exception:
+            pass   # 손상된 캐시는 무시하고 재계산
+    data, fb = compute()
+    if not fb and isinstance(data, dict):
+        data["_analysis_key"] = key
+        data["_cache_hit"] = False
+        try:
+            payload = json.dumps(
+                {k: v for k, v in data.items() if not k.startswith("_")},
+                ensure_ascii=False)
+            _cache_put(key, ddate, payload, slot_type=slot_type,
+                       program_code=key_inputs.get("program_code"),
+                       metric=key_inputs.get("metric"), period=key_inputs.get("period"),
+                       window=key_inputs.get("window"), gen_tokens=len(payload) // 3)
+        except Exception:
+            pass
+    return data, fb
+
+
+# ─── v2 스키마 헬퍼 (토글 + 공통 출구) ───────────────────────────────────
+def _is_v2(cfg: dict) -> bool:
+    return (cfg or {}).get("schema_version") == "v2"
+
+
+def _resolve_exits(cfg: dict, slot_cfg: dict) -> list[dict]:
+    """슬롯의 exits id 목록 → common_exits 칩 리스트 (사본)."""
+    ce = cfg.get("common_exits") or {}
+    return [dict(ce[eid]) for eid in (slot_cfg.get("exits") or []) if eid in ce]
+
+
+def _call_computer(fn, ctx: dict, prev: Optional[dict], chip_intent: Optional[str]):
+    """computer 호출 — 시그니처 후방 호환 (3/2/1 인자)."""
+    try:
+        return fn(ctx, prev, chip_intent)
+    except TypeError:
+        try:
+            return fn(ctx, prev)
+        except TypeError:
+            return fn(ctx)
+
+
+def _reorder_entry_chips(cfg: dict, chips: list, ctx: dict) -> list:
+    """entry.priority_rule(by=data_last_weekday) — 월요일→전주(WAU), 월초→전월(MAU) 칩 승격."""
+    rule = (cfg.get("entry") or {}).get("priority_rule") or {}
+    if rule.get("by") != "data_last_weekday":
+        return chips
+    last = ctx.get("data_last_date")
+    if not last:
+        return chips
+    promote = rule.get("promote") or {}
+    target = None
+    try:
+        from datetime import datetime
+        d = datetime.strptime(last.replace("/", "-"), "%Y-%m-%d")
+        if d.weekday() == 0 and promote.get("mon"):
+            target = promote["mon"]
+        elif d.day <= 7 and promote.get("month_start"):
+            target = promote["month_start"]
+    except Exception:
+        return chips
+    if not target:
+        return chips
+    return ([c for c in chips if c.get("intent") == target]
+            + [c for c in chips if c.get("intent") != target])
 
 
 # ─── 스토리라인 엔진 ──────────────────────────────────────────────────────
@@ -3531,40 +4389,49 @@ class StorylineEngine:
             "role_name_ko": self.config["role_name_ko"],
             "greeting": greeting,
             "first_question": render(entry_cfg["first_question"], ctx),
-            "chips": entry_cfg["default_chips"],
+            "chips": (_reorder_entry_chips(self.config, entry_cfg["default_chips"], ctx)
+                      if _is_v2(self.config) else entry_cfg["default_chips"]),
             "user_context": ctx,
         }
 
     def advance(self, slot_from: str, chip_intent: str,
                 prev_context: Optional[dict] = None,
-                next_slot_override: Optional[str] = None) -> dict:
+                next_slot_override: Optional[str] = None,
+                toggle_state: Optional[dict] = None) -> dict:
         """칩 클릭 → 다음 슬롯 답변 렌더링.
 
         Args:
             slot_from: "entry" 또는 슬롯 ID ("1_anchor" 등)
-            chip_intent: 클릭한 칩의 intent 값
+            chip_intent: 클릭한 칩의 intent. "__toggle__"이면 같은 슬롯 재렌더(이동 아님).
             prev_context: 직전 advance가 돌려준 context_out
-            next_slot_override: 동적 칩의 next_slot을 직접 지정 (slot config에 없는 칩 지원)
+            next_slot_override: 동적 칩의 next_slot 직접 지정 (slot config에 없는 칩 지원)
+            toggle_state: v2 토글 상태 {"metric":..,"period":..,"window":..}
 
         Returns:
-            {ok, slot, slot_name, answer, fallback_used, chips_next, context_out}
+            {ok, slot, slot_name, answer, fallback_used, chips_next, toggles, context_out}
         """
         prev_context = prev_context or {}
-        _reset_polish_usage()  # 이 advance에서 쓴 LLM polish 토큰 집계 시작
+        cfg = self.config
+        v2 = _is_v2(cfg)
+        toggle_state = toggle_state or prev_context.get("toggle_state") or {}
+        _reset_polish_usage()
 
-        # 동적 칩 → next_slot_override가 있으면 chips 매칭 우회
-        if next_slot_override:
+        # 토글 변경 → 같은 슬롯 재렌더 (이동 step 아님)
+        is_toggle = (chip_intent == "__toggle__")
+        if is_toggle:
+            clicked_chip = {"intent": "__toggle__", "next_slot": slot_from}
+        elif next_slot_override:
             clicked_chip = {"intent": chip_intent, "next_slot": next_slot_override}
         else:
-            # slot_from에서 칩 목록 찾기
             if slot_from == "entry":
-                chips = self.config["entry"]["default_chips"]
+                chips = list(cfg["entry"]["default_chips"])
             else:
-                slot_cfg_from = self.config["slots"].get(slot_from)
+                slot_cfg_from = cfg["slots"].get(slot_from)
                 if not slot_cfg_from:
                     return {"ok": False, "error": f"slot '{slot_from}' not found"}
-                chips = slot_cfg_from.get("chips_next", [])
-
+                chips = list(slot_cfg_from.get("chips_next", []))
+                if v2:                       # 공통 출구도 클릭 가능하도록 포함
+                    chips += _resolve_exits(cfg, slot_cfg_from)
             clicked_chip = next(
                 (c for c in chips if c.get("intent") == chip_intent), None
             )
@@ -3577,47 +4444,51 @@ class StorylineEngine:
 
         next_slot = clicked_chip.get("next_slot")
 
-        # _end: 산출물 종료 (Phase 3 ⑥에서 본격 구현)
+        # 자유질의 출구 → 쿼리엔진/라우터에 위임, slot_from 유지(레일 복귀)
+        if next_slot == "__freetext__":
+            return {
+                "ok": True, "freetext": True, "return_slot": slot_from,
+                "toggle_state": toggle_state,
+                "message": "자유질의를 쿼리엔진/라우터에 위임하고 직전 슬롯으로 복귀합니다.",
+            }
+
+        # _end: 산출물 종료
         if next_slot == "_end":
             output_id = clicked_chip.get("output_format_id", "")
-            outputs = {o["id"]: o for o in self.config["ontology"]["outputsTo"]}
+            outputs = {o["id"]: o for o in cfg["ontology"]["outputsTo"]}
             o = outputs.get(output_id, {"name": output_id, "format": "?"})
             return {
-                "ok": True,
-                "slot": "_end",
-                "ended": True,
+                "ok": True, "slot": "_end", "ended": True,
                 "output_format_id": output_id,
                 "output_name": o.get("name", output_id),
                 "output_format": o.get("format", ""),
-                "message": (
-                    f"{o.get('name', output_id)} 산출물 생성 — "
-                    "Phase 3 ⑥에서 실제 변환 구현 예정"
-                ),
+                "message": f"{o.get('name', output_id)} 산출물 생성 — 리포트 엔진에서 변환",
             }
 
-        # 다음 슬롯 렌더링
-        slot_cfg = self.config["slots"].get(next_slot)
+        slot_cfg = cfg["slots"].get(next_slot)
         if not slot_cfg:
             return {"ok": False, "error": f"next_slot '{next_slot}' not found"}
 
         slot_data, fallback_used = self._compute_slot_data(
-            next_slot, prev_context, chip_intent=chip_intent
+            next_slot, prev_context, chip_intent=chip_intent, toggle_state=toggle_state
         )
         ctx = {**self._user_context(), **prev_context, **slot_data}
+        ctx["toggle_state"] = toggle_state
 
-        template_key = (
-            "fallback_answer_template" if fallback_used else "answer_template"
-        )
-        template = (
-            slot_cfg.get(template_key) or slot_cfg.get("answer_template") or ""
-        )
+        template_key = "fallback_answer_template" if fallback_used else "answer_template"
+        template = slot_cfg.get(template_key) or slot_cfg.get("answer_template") or ""
         answer = render(template, ctx)
 
-        # 동적 칩 — slot_data["chips_next"]가 있으면 cp.json의 chips_next 덮어쓰기
+        # chips_next: 동적(computer) 우선, 없으면 정적 → v2는 공통 출구 보강
         if isinstance(slot_data, dict) and slot_data.get("chips_next"):
-            chips_next = slot_data["chips_next"]
+            chips_next = list(slot_data["chips_next"])
         else:
-            chips_next = slot_cfg.get("chips_next", [])
+            chips_next = list(slot_cfg.get("chips_next", []))
+        if v2:
+            have = {c.get("intent") for c in chips_next}
+            for e in _resolve_exits(cfg, slot_cfg):
+                if e.get("intent") not in have:
+                    chips_next.append(e)
 
         resp = {
             "ok": True,
@@ -3627,35 +4498,114 @@ class StorylineEngine:
             "answer": answer,
             "fallback_used": fallback_used,
             "chips_next": chips_next,
+            "toggles": slot_cfg.get("toggles"),
+            "toggle_state": toggle_state,
             "context_out": ctx,
-            "usage": _get_polish_usage(),  # 이 단계에서 쓴 LLM 토큰
+            "usage": _get_polish_usage(),
         }
-        # slot computer가 chart_data를 만들었으면 응답에 포함 (클라이언트가 ECharts로 렌더)
+        if is_toggle:
+            resp["toggled"] = True       # 클라이언트: 이동 step으로 계상하지 말 것
         if isinstance(slot_data, dict) and slot_data.get("chart_data"):
             resp["chart_data"] = slot_data["chart_data"]
+        if isinstance(slot_data, dict) and slot_data.get("kpi_meta"):
+            resp["kpi_meta"] = slot_data["kpi_meta"]   # 클라 칩 재생성용 코드 맵
         return resp
 
     def _compute_slot_data(self, slot_id: str,
                            prev_context: dict,
-                           chip_intent: Optional[str] = None) -> tuple[dict, bool]:
-        """슬롯별 데이터 계산. _SLOT_COMPUTERS에 등록된 함수만 본격 동작.
+                           chip_intent: Optional[str] = None,
+                           toggle_state: Optional[dict] = None) -> tuple[dict, bool]:
+        """슬롯별 데이터 계산.
 
-        computer 시그니처 후방 호환:
-            (user_context, prev_context=None, chip_intent=None)
-            (user_context, prev_context=None)
-            (user_context)
+        v2(CP) 토글 슬롯은 toggle_state로 기존 computer에 라우팅. 그 외는 _SLOT_COMPUTERS.
         """
-        computer = _SLOT_COMPUTERS.get((self.config["role"], slot_id))
+        cfg = self.config
+        role = cfg.get("role")
+        ctx = self._user_context()
+        if _is_v2(cfg) and role == "CP":
+            res = self._cp_v2_compute(slot_id, ctx, prev_context,
+                                      chip_intent, toggle_state or {})
+            if res is not None:
+                return res
+        computer = _SLOT_COMPUTERS.get((role, slot_id))
         if computer:
-            ctx = self._user_context()
-            try:
-                return computer(ctx, prev_context, chip_intent)
-            except TypeError:
-                try:
-                    return computer(ctx, prev_context)
-                except TypeError:
-                    return computer(ctx)
+            return _call_computer(computer, ctx, prev_context, chip_intent)
         return {}, True
+
+    def _cp_v2_compute(self, slot_id, ctx, prev_context, chip_intent, ts):
+        """v2 CP 슬롯 → 토글 상태로 기존 computer에 라우팅. 미처리 슬롯은 None 반환."""
+        if slot_id == "1_anchor":
+            metric = ts.get("metric", "scale")
+            period = ts.get("period", "day")
+            if metric in ("deep", "retention", "new_churn"):
+                # 다른 지표 큰 변화 → 해당 지표 변화순 정렬 (지표별로 결과 차별화)
+                return _compute_cp_anchor_metric(ctx, prev_context, metric)
+            ci = {"week": "show_weekly_top", "month": "show_monthly_top"}.get(period)
+            data, fb = _call_computer(_compute_cp_anchor, ctx, prev_context, ci)
+            if isinstance(data, dict):
+                data.pop("chips_next", None)   # v2 정적 칩 + 공통 출구 사용
+            return data, fb
+        if slot_id == "2_cause":
+            period = ts.get("period", "day")
+            fn = {"week": _compute_cp_cause_weekly,
+                  "month": _compute_cp_cause_monthly}.get(period, _compute_cp_cause)
+            pc = prev_context or {}
+            key_inputs = {
+                "program_code": pc.get("top_change_program_code"),
+                "metric": {"week": "WAU", "month": "MAU"}.get(period, "DAU"),
+                "period": period, "data_date": _data_date(),
+            }
+            return _cached_compute(
+                "cause", key_inputs,
+                lambda: _call_computer(fn, ctx, prev_context, chip_intent))
+        if slot_id == "3_adjacent":
+            # 인접 비교도 첫 화면에서 고른 기간(toggle_state) 그대로 이어감
+            pc = dict(prev_context or {})
+            _am = {"day": "pct", "week": "weekly_pct", "month": "monthly_pct"}.get(ts.get("period"))
+            if _am:
+                pc["anchor_mode"] = _am
+            data, fb = _call_computer(_compute_cp_anchor_adjacent, ctx, pc, chip_intent)
+            if isinstance(data, dict):
+                data.pop("chips_next", None)
+            return data, fb
+        if slot_id == "4_revision":
+            return _call_computer(_compute_cp_revision_effect, ctx, prev_context, chip_intent)
+        if slot_id == "4_revision_detail":
+            pc = dict(prev_context or {})
+            pc["window"] = ts.get("window", "4w")
+            data, fb = _call_computer(_compute_cp_revision_detail, ctx, pc, chip_intent)
+            if isinstance(data, dict):
+                data.pop("chips_next", None)
+            return data, fb
+        if slot_id == "1_kpi":
+            return _compute_cp_kpi_table(ctx, prev_context, ts)
+        if slot_id == "2_impact":
+            pc = prev_context or {}
+            key_inputs = {
+                "program_code": pc.get("top_change_program_code"),
+                # focus 지표(kpi_metric) 우선, 없으면 범주로 키 구분(범주는 저장 안 하지만 키 내부엔 사용)
+                "metric": pc.get("kpi_metric") or ts.get("category") or "scale",
+                "period": ts.get("period", "day"), "data_date": _data_date(),
+            }
+            return _cached_compute(
+                "impact", key_inputs,
+                lambda: _compute_cp_metric_impact(ctx, prev_context, ts, chip_intent))
+        if slot_id in ("3_context", "5_closing"):
+            return {}, False   # 템플릿(answer_template) 사용
+        return None
+
+    def peek_chips(self, slot_id: str, toggle_state: Optional[dict] = None) -> list:
+        """슬롯의 정적 chips_next + 공통 출구만 반환 (무거운 computer 호출 없음).
+        자유질의 복귀 시 레일(칩) 재구성용."""
+        cfg = self.config
+        sc = cfg.get("slots", {}).get(slot_id) or {}
+        chips = list(sc.get("chips_next", []))
+        if _is_v2(cfg):
+            have = {c.get("intent") for c in chips}
+            for e in _resolve_exits(cfg, sc):
+                if e.get("intent") not in have:
+                    chips.append(e)
+        return chips
 
 
 # ─── Export stub (Phase 3 ⑥ 예정) ───────────────────────────────────────
