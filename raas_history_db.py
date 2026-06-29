@@ -452,6 +452,28 @@ def review_improvement(improvement_id, action, reviewer) -> bool:
     return True
 
 
+def list_approved_knowledge(limit=200) -> list:
+    """승인된 공유 지식(본체) — grounding이 모든 답변에 주입하는 canonical 도메인 지식."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT id, type, target_kind, target_id, content, contributor_id,
+                      reviewed_by, reviewed_at, created_at
+                 FROM knowledge_items
+                WHERE scope='approved' AND status='approved'
+                ORDER BY target_kind, target_id, reviewed_at DESC
+                LIMIT ?""", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def retire_knowledge_item(item_id, reviewer) -> bool:
+    """승인된 지식 회수 — status='rejected'로 내려 오버레이에서 제외(롤백)."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE knowledge_items SET status='rejected', reviewed_by=?, "
+            "reviewed_at=CURRENT_TIMESTAMP WHERE id=?", (str(reviewer), item_id))
+    return True
+
+
 def feedback_weakness(days=30, limit=15) -> list:
     """scope(프로그램/채널)별 👎 집계 — 약점 후보 랭킹. 👎 많은/비율 높은 순."""
     with get_conn() as conn:

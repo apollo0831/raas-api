@@ -5509,8 +5509,32 @@ async function _loadReviewQueue() {
           </span>
         </div></div>`).join('');
     }
+    // 📚 승인된 공유 지식(본체) — 모든 답변에 주입되는 canonical 도메인 지식. 회수 가능.
+    const ak = d.approved_knowledge || [];
+    if (ak.length) {
+      const KT = { metric_definition:'지표정의', field_meaning:'필드의미', program_note:'프로그램메모',
+        guest_policy:'게스트정책', corner_note:'코너메모', decomposition_hint:'분해힌트', fact:'사실' };
+      html += `<div class="imp-sec-hd">📚 승인된 공유 지식 (본체) · ${ak.length}건 — 모든 답변 grounding에 주입 중</div>` +
+        ak.map(k => `<div class="hm-row"><div class="hm-summary">
+          <span class="wk-chip" style="margin:0">${escapeHtml(KT[k.type] || k.type || '')}</span>
+          <span class="wk-chip" style="margin:0">${escapeHtml(k.target_id || '전역')}</span>
+          <span class="hm-q">${escapeHtml((k.content || '').slice(0, 70))}</span>
+          <span class="hm-sess-meta"><button class="imp-btn imp-mini" onclick="_retireKnowledge(${k.id},this)">회수</button></span>
+        </div></div>`).join('');
+    }
     body.innerHTML = html;
   } catch (e) { body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`; }
+}
+async function _retireKnowledge(id, btn) {
+  if (!confirm('이 공유 지식을 회수합니까? (모든 답변에서 제외됩니다)')) return;
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/knowledge/retire', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '실패');
+    _loadReviewQueue();
+  } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
 }
 async function _reviewImprove(id, action, btn) {
   if (action === 'reject' && !confirm('이 개선을 반려합니까?')) return;

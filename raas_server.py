@@ -42,7 +42,8 @@ from raas_history_db import (init_db, save_query, get_history, get_popular,
                              add_data_request, add_improvement, set_improvement_verdict,
                              list_improvements, list_data_requests,
                              get_knowledge_items_by_ids, review_improvement, update_data_request,
-                             feedback_weakness, feedback_negative_open)
+                             feedback_weakness, feedback_negative_open,
+                             list_approved_knowledge, retire_knowledge_item)
 from raas_auth import (register_user, authenticate, create_session,
                        resolve_session, destroy_session,
                        get_pending_users, list_users, approve_user, reject_user,
@@ -1275,7 +1276,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                         w["name"] = w["scope"]
                 self.send_json({"ok": True, "improvements": imps, "data_requests": reqs_open,
                                 "weakness": wk,
-                                "negative_open": feedback_negative_open(days=30)})
+                                "negative_open": feedback_negative_open(days=30),
+                                "approved_knowledge": list_approved_knowledge()})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
@@ -1298,6 +1300,17 @@ class RAASHandler(BaseHTTPRequestHandler):
                 return
             try:
                 ok = update_data_request(body.get("id"), body.get("status"), str(user["id"]))
+                self.send_json({"ok": ok})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/knowledge/retire":
+            # 본체(승인된 공유 지식) 회수 — 오버레이에서 제외(롤백)
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                ok = retire_knowledge_item(body.get("id"), str(user["id"]))
                 self.send_json({"ok": ok})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
