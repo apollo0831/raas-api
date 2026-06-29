@@ -5366,7 +5366,7 @@ async function _doRequery() {
     const d = await r.json();
     if (!d.ok) { res.innerHTML = '<div class="imp-mean">재질의 실패: ' + escapeHtml(d.error || '') + '</div>'; return; }
     const j = d.judge;
-    const jt = j ? `<div class="imp-judge">LLM 판정: <b>${j.winner === 'B' ? '개선됨(B)' : j.winner === 'A' ? '원본 우세(A)' : '비슷'}</b> · A ${j.scores && j.scores.A != null ? j.scores.A : '-'} / B ${j.scores && j.scores.B != null ? j.scores.B : '-'} — ${escapeHtml(j.reason || '')}</div>` : '';
+    const jt = _judgeDetail(j);
     res.innerHTML = `<div class="imp-sub">개선된 답변 (B) · 적용 오버레이 ${ (d.overlay_items||[]).length }건</div>
       <div class="imp-orig">${renderAiText(d.answer_improved || '')}</div>${jt}
       <div class="imp-form"><div class="imp-sub">이 개선이 더 나은가요? (검토 큐로 전달)</div>
@@ -5387,6 +5387,28 @@ async function _improveVerdict(id, v) {
 // ── ⑤ 개선 이력 (본인 개선 시도 + 데이터 요청 상태) ──
 const _IMP_STATUS_KO = { '검토대기': '검토대기', '승인': '승인 ✓', '반려': '반려' };
 const _VERDICT_KO = { improved: '개선됨', same: '비슷', worse: '더 나쁨' };
+// LLM judge(다수결) 표시 헬퍼
+function _judgeDetail(j) {
+  if (!j) return '';
+  const w = j.winner === 'B' ? '개선됨(B)' : j.winner === 'A' ? '원본 우세(A)' : '비슷';
+  const agree = j.agreement != null
+    ? ` · 합의 ${j.agreement}%${j.tally ? ` (B${j.tally.B}:A${j.tally.A}:동률${j.tally.tie})` : ''}` : '';
+  const sa = j.scores && j.scores.A != null ? j.scores.A : '-';
+  const sb = j.scores && j.scores.B != null ? j.scores.B : '-';
+  return `<div class="imp-judge">LLM 판정(다수결): <b>${w}</b> · A ${sa} / B ${sb}${agree} — ${escapeHtml(j.reason || '')}</div>`;
+}
+function _judgeBadge(j) {
+  if (!j) return '';
+  const w = j.winner === 'B' ? 'B우세' : j.winner === 'A' ? 'A우세' : '동률';
+  return `LLM ${w}${j.agreement != null ? ' ' + j.agreement + '%' : ''}`;
+}
+// 사용자 verdict ↔ judge 불일치 (improved→B기대, worse→A기대)
+function _verdictMismatch(verdict, j) {
+  if (!verdict || !j) return false;
+  if (verdict === 'improved' && j.winner !== 'B') return true;
+  if (verdict === 'worse' && j.winner !== 'A') return true;
+  return false;
+}
 function _impStatusBadge(st) {
   const cls = st === '승인' ? 'imp-st-ok' : st === '반려' ? 'imp-st-no' : 'imp-st-wait';
   return `<span class="imp-st ${cls}">${escapeHtml(_IMP_STATUS_KO[st] || st || '')}</span>`;
@@ -5409,7 +5431,7 @@ async function _loadMyImprovements() {
     if (imps.length) {
       html += '<div class="imp-sec-hd">개선 시도</div>' + imps.map(it => {
         const j = it.judge;
-        const jt = j ? `LLM ${j.winner === 'B' ? 'B우세' : j.winner === 'A' ? 'A우세' : '동률'} (A${j.scores ? j.scores.A : '-'}/B${j.scores ? j.scores.B : '-'})` : '';
+        const jt = _judgeBadge(j);
         const vd = it.user_verdict ? `평가:${_VERDICT_KO[it.user_verdict] || it.user_verdict}` : '미평가';
         return `<div class="hm-row" onclick="_toggleHmRow(this)">
           <div class="hm-summary">
@@ -5421,7 +5443,7 @@ async function _loadMyImprovements() {
           <div class="hm-detail">
             <div class="imp-ab"><div class="imp-ab-col"><div class="imp-sub">원답변 (A)</div><div class="imp-orig">${renderAiText(it.answer_original || '')}</div></div>
               <div class="imp-ab-col"><div class="imp-sub">개선 답변 (B)</div><div class="imp-orig">${renderAiText(it.answer_improved || '')}</div></div></div>
-            ${j ? `<div class="imp-judge">LLM 판정: <b>${j.winner === 'B' ? '개선됨(B)' : j.winner === 'A' ? '원본 우세(A)' : '비슷'}</b> — ${escapeHtml(j.reason || '')}</div>` : ''}
+            ${_judgeDetail(j)}
           </div></div>`;
       }).join('');
     }
@@ -5476,18 +5498,19 @@ async function _loadReviewQueue() {
       html += '<div class="imp-sec-hd">개선 검토 대기 · 승인 시 기여 지식이 전체에 반영됩니다</div>' + imps.map(it => {
         window._reviewIndex[it.id] = it;
         const j = it.judge;
-        const jt = j ? `LLM ${j.winner === 'B' ? 'B우세' : j.winner === 'A' ? 'A우세' : '동률'}` : '';
+        const jt = _judgeBadge(j);
+        const mism = _verdictMismatch(it.user_verdict, j) ? '<span class="wk-badge" title="사용자 평가와 LLM 판정이 다름">⚠ 불일치</span>' : '';
         const contribs = (it.contributions || []).map(c => `<div class="imp-item">• [${escapeHtml(c.type || '')}] ${escapeHtml(c.content || '')}</div>`).join('') || '<div class="imp-mean">기여 지식 없음(데이터 요청만)</div>';
         return `<div class="hm-row"><div class="hm-summary" onclick="_toggleHmRow(this)">
             <span class="hm-time">${escapeHtml(_histFmt(it.created_at))}</span>
             <span class="hm-user">${escapeHtml(it.user_name || '—')}</span>
             <span class="hm-q">${escapeHtml((it.question || '').slice(0, 52))}</span>
-            <span class="hm-sess-meta">${it.user_verdict ? _VERDICT_KO[it.user_verdict] || it.user_verdict : '미평가'}${jt ? ' · ' + escapeHtml(jt) : ''}</span>
+            <span class="hm-sess-meta">${it.user_verdict ? _VERDICT_KO[it.user_verdict] || it.user_verdict : '미평가'}${jt ? ' · ' + escapeHtml(jt) : ''} ${mism}</span>
           </div>
           <div class="hm-detail open">
             <div class="imp-ab"><div class="imp-ab-col"><div class="imp-sub">원답변 (A)</div><div class="imp-orig">${renderAiText(it.answer_original || '')}</div></div>
               <div class="imp-ab-col"><div class="imp-sub">개선 답변 (B)</div><div class="imp-orig">${renderAiText(it.answer_improved || '')}</div></div></div>
-            ${j ? `<div class="imp-judge">LLM 판정: <b>${j.winner === 'B' ? '개선됨(B)' : j.winner === 'A' ? '원본 우세(A)' : '비슷'}</b> · A ${j.scores ? j.scores.A : '-'} / B ${j.scores ? j.scores.B : '-'} — ${escapeHtml(j.reason || '')}</div>` : ''}
+            ${_judgeDetail(j)}
             <div class="imp-sub">기여 지식 (승인 시 공유 오버레이로 승격)</div>${contribs}
             <div class="imp-form">
               <button class="imp-btn imp-btn-primary" onclick="event.stopPropagation();_reviewImprove(${it.id},'approve',this)">승인 → 전체 반영</button>

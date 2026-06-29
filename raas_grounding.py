@@ -678,29 +678,59 @@ _JUDGE_SYSTEM = (
     'JSON으로만: {"winner":"1"|"2"|"tie","scores":{"1":0~10,"2":0~10},"reason":"한두 문장"}'
 )
 
-def judge(question: str, answer_a: str, answer_b: str) -> Optional[dict]:
-    """A(원본) vs B(개선) 비교. 위치 편향 제거 위해 순서 무작위화 후 매핑."""
-    if not call_claude:
-        return None
-    swap = random.random() < 0.5
+def _judge_once(question, answer_a, answer_b, swap):
+    """단일 판정 — swap이면 순서 교대(위치편향 제거). 반환 (winner∈A/B/tie, sA, sB, reason)."""
     first, second = (answer_b, answer_a) if swap else (answer_a, answer_b)
     user = f"질문: {question}\n\n[답변1]\n{first}\n\n[답변2]\n{second}"
     try:
-        text, _ = call_claude(_JUDGE_SYSTEM, user, max_tokens=500, model=HAIKU_MODEL)
+        text, _ = call_claude(_JUDGE_SYSTEM, user, max_tokens=400, model=HAIKU_MODEL)
         r = json.loads(text[text.find("{"): text.rfind("}") + 1])
     except Exception as e:
         print(f"[judge] {e}")
         return None
     w = r.get("winner")
-    if w in ("1", "2"):
-        # 1/2 → A/B (swap 보정)
-        r["winner"] = ("B" if w == "1" else "A") if swap else ("A" if w == "1" else "B")
+    if w == "1":
+        winner = "B" if swap else "A"
+    elif w == "2":
+        winner = "A" if swap else "B"
+    else:
+        winner = "tie"
     sc = r.get("scores") or {}
-    if swap and isinstance(sc, dict):  # 점수도 보정
-        r["scores"] = {"A": sc.get("2"), "B": sc.get("1")}
-    elif isinstance(sc, dict):
-        r["scores"] = {"A": sc.get("1"), "B": sc.get("2")}
-    return r
+    sa = sc.get("2") if swap else sc.get("1")
+    sb = sc.get("1") if swap else sc.get("2")
+    return winner, sa, sb, (r.get("reason") or "")
+
+
+def judge(question: str, answer_a: str, answer_b: str, votes: int = 3) -> Optional[dict]:
+    """A(원본) vs B(개선) 다수결 판정. 표마다 순서 교대로 위치편향 제거.
+       반환: {winner, tally, votes, agreement, scores:{A,B}, reason}."""
+    if not call_claude:
+        return None
+    tally = {"A": 0, "B": 0, "tie": 0}
+    sA, sB, reasons = [], [], []
+    for i in range(max(1, votes)):
+        res = _judge_once(question, answer_a, answer_b, swap=(i % 2 == 1))
+        if not res:
+            continue
+        w, a, b, reason = res
+        tally[w] = tally.get(w, 0) + 1
+        if isinstance(a, (int, float)):
+            sA.append(a)
+        if isinstance(b, (int, float)):
+            sB.append(b)
+        if reason:
+            reasons.append(reason)
+    total = sum(tally.values())
+    if not total:
+        return None
+    winner = max(tally, key=tally.get)
+    return {
+        "winner": winner, "tally": tally, "votes": total,
+        "agreement": round(tally[winner] / total * 100),
+        "scores": {"A": round(sum(sA) / len(sA), 1) if sA else None,
+                   "B": round(sum(sB) / len(sB), 1) if sB else None},
+        "reason": reasons[0] if reasons else "",
+    }
 
 
 # 최종 답변용 시스템 프롬프트(서버가 사용)
