@@ -3011,6 +3011,7 @@ function _llmChartOption(spec, c) {
     xAxis: { type: 'category', data: spec.x, boundaryGap: type === 'bar',
              axisLabel: { color: c.textSub, fontSize: 11 }, axisLine: { lineStyle: { color: c.line } } },
     yAxis: { type: 'value', name: spec.unit || '', nameTextStyle: { color: c.textSub },
+             scale: (type === 'line'),   // line은 데이터 범위로 자동 스케일(변화 강조), bar는 0부터
              axisLabel: { color: c.textSub, fontSize: 11 }, splitLine: { lineStyle: { color: c.line } } },
     series: (spec.series || []).map((s, i) => ({
       name: s.name, type, data: s.data, smooth: type === 'line',
