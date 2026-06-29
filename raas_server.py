@@ -41,7 +41,8 @@ from raas_history_db import (init_db, save_query, get_history, get_popular,
                              add_knowledge_item, get_knowledge_items,
                              add_data_request, add_improvement, set_improvement_verdict,
                              list_improvements, list_data_requests,
-                             get_knowledge_items_by_ids, review_improvement, update_data_request)
+                             get_knowledge_items_by_ids, review_improvement, update_data_request,
+                             feedback_weakness, feedback_negative_open)
 from raas_auth import (register_user, authenticate, create_session,
                        resolve_session, destroy_session,
                        get_pending_users, list_users, approve_user, reject_user,
@@ -1266,7 +1267,15 @@ class RAASHandler(BaseHTTPRequestHandler):
                     it["contributions"] = get_knowledge_items_by_ids(ids)
                 reqs = list_data_requests()
                 reqs_open = [r for r in reqs if r.get("status") in ("요청됨", "처리중")]
-                self.send_json({"ok": True, "improvements": imps, "data_requests": reqs_open})
+                wk = feedback_weakness(days=30)
+                for w in wk:
+                    try:
+                        w["name"] = GROUND._resolve_name(w["scope"]) or w["scope"]
+                    except Exception:
+                        w["name"] = w["scope"]
+                self.send_json({"ok": True, "improvements": imps, "data_requests": reqs_open,
+                                "weakness": wk,
+                                "negative_open": feedback_negative_open(days=30)})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 

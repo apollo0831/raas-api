@@ -361,6 +361,11 @@ body{
 .imp-st-mid{background:rgba(245,180,90,0.18);color:#d98a2b}
 .imp-st-ok{background:rgba(74,201,155,0.16);color:#2fae7d}
 .imp-st-no{background:var(--bg3);color:var(--dim)}
+.wk-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 14px 10px}
+.wk-chip{font-size:var(--fs-xs);background:var(--bg2);border:1px solid var(--line2);border-radius:8px;padding:3px 9px;color:var(--text2)}
+.wk-chip b{color:var(--red);margin-left:3px}
+.wk-rate{color:var(--dim);margin-left:5px}
+.wk-badge{font-size:11px;background:rgba(242,107,107,.15);color:var(--red);border-radius:6px;padding:1px 6px;font-weight:600}
 .imp-ab{display:flex;gap:12px;margin:10px 0}
 .imp-ab-col{flex:1;min-width:0}
 .imp-ab-col .imp-orig{margin:0}
@@ -5273,10 +5278,19 @@ let _improveState = null;
 function _openImprove(id) {
   const it = (window._histIndex || {})[id];
   if (!it) return;
-  _improveState = { question: it.question, answer: it.answer || '', qid: id };
+  _openImproveWith(it.question, it.answer || '', id);
+}
+// 약점 신호(미개선 👎 질의)에서 직접 개선 착수
+function _openImproveFromNeg(id) {
+  const q = (window._reviewNegIndex || {})[id];
+  if (q) _openImproveWith(q.question, q.answer || '', q.id);
+}
+// 직접 진입 — 질의·답변을 직접 받아 개선 모달 오픈
+function _openImproveWith(question, answer, qid) {
+  _improveState = { question: question, answer: answer || '', qid: qid };
   document.getElementById('improveModal').classList.add('open');
-  document.getElementById('improveQ').textContent = it.question;
-  document.getElementById('improveOrig').innerHTML = renderAiText(it.answer || '');
+  document.getElementById('improveQ').textContent = question;
+  document.getElementById('improveOrig').innerHTML = renderAiText(answer || '');
   const res = document.getElementById('improveResult');
   res.style.display = 'none'; res.innerHTML = '';
   _loadImproveContext();
@@ -5433,10 +5447,31 @@ async function _loadReviewQueue() {
       headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || '권한이 없거나 로드 실패');
-    window._reviewIndex = {};
+    window._reviewIndex = {}; window._reviewNegIndex = {};
     const imps = d.improvements || [], reqs = d.data_requests || [];
-    if (!imps.length && !reqs.length) { body.innerHTML = '<div class="hist-empty-msg">검토 대기 항목이 없습니다.</div>'; return; }
+    const wk = d.weakness || [], neg = d.negative_open || [];
+    if (!imps.length && !reqs.length && !wk.length && !neg.length) { body.innerHTML = '<div class="hist-empty-msg">검토 대기·약점 신호가 없습니다.</div>'; return; }
     let html = '';
+    // 약점 신호 — 👎 집계 + 미개선 아쉬움 질의(클릭→바로 개선 착수)
+    if (wk.length || neg.length) {
+      html += '<div class="imp-sec-hd">⚠ 약점 신호 · 최근 30일 \'아쉬움\' 피드백 — 클릭해 바로 개선 착수</div>';
+      if (wk.length) {
+        html += '<div class="wk-chips">' + wk.map(w =>
+          `<span class="wk-chip" title="👎 ${w.neg} / 전체 ${w.total}">${escapeHtml(w.name || w.scope)} <b>👎${w.neg}</b><span class="wk-rate">${w.neg_rate}%</span></span>`
+        ).join('') + '</div>';
+      }
+      html += neg.map(q => {
+        window._reviewNegIndex[q.id] = q;
+        return `<div class="hm-row" style="cursor:pointer" onclick="_openImproveFromNeg(${q.id})">
+          <div class="hm-summary">
+            <span class="hm-time">${escapeHtml(_histFmt(q.created_at))}</span>
+            <span class="hm-user">${escapeHtml(q.user_name || '—')}</span>
+            <span class="wk-badge">👎</span>
+            <span class="hm-q">${escapeHtml((q.question || '').slice(0, 54))}</span>
+            <span class="hm-sess-meta">${escapeHtml(q.scope || '')} · ✦ 개선하기</span>
+          </div></div>`;
+      }).join('');
+    }
     if (imps.length) {
       html += '<div class="imp-sec-hd">개선 검토 대기 · 승인 시 기여 지식이 전체에 반영됩니다</div>' + imps.map(it => {
         window._reviewIndex[it.id] = it;

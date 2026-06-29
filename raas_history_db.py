@@ -452,6 +452,45 @@ def review_improvement(improvement_id, action, reviewer) -> bool:
     return True
 
 
+def feedback_weakness(days=30, limit=15) -> list:
+    """scope(프로그램/채널)별 👎 집계 — 약점 후보 랭킹. 👎 많은/비율 높은 순."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT scope,
+                      SUM(CASE WHEN feedback=-1 THEN 1 ELSE 0 END) AS neg,
+                      SUM(CASE WHEN feedback=1  THEN 1 ELSE 0 END) AS pos,
+                      COUNT(*) AS total
+                 FROM query_history
+                WHERE created_at >= datetime('now', ?)
+                  AND scope IS NOT NULL AND scope != ''
+                GROUP BY scope
+               HAVING neg > 0
+                ORDER BY neg DESC, (neg*1.0/total) DESC
+                LIMIT ?""",
+            (f'-{int(days)} days', limit)).fetchall()
+        out = []
+        for r in rows:
+            tot = r["total"] or 1
+            out.append({"scope": r["scope"], "neg": r["neg"], "pos": r["pos"],
+                        "total": r["total"], "neg_rate": round(r["neg"] / tot * 100, 1)})
+        return out
+
+
+def feedback_negative_open(days=30, limit=25) -> list:
+    """개선 시도가 아직 없는 '아쉬움' 질의 — 검토자가 바로 착수할 수 있는 약점 신호."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT q.id, q.question, q.answer, q.scope, q.user_name, q.created_at
+                 FROM query_history q
+                WHERE q.feedback = -1
+                  AND q.created_at >= datetime('now', ?)
+                  AND NOT EXISTS (SELECT 1 FROM improvements i WHERE i.source_query_id = q.id)
+                ORDER BY q.created_at DESC
+                LIMIT ?""",
+            (f'-{int(days)} days', limit)).fetchall()
+        return [dict(r) for r in rows]
+
+
 def update_data_request(req_id, status, reviewer) -> bool:
     with get_conn() as conn:
         conn.execute("UPDATE data_requests SET status=?, processed_by=?, processed_at=CURRENT_TIMESTAMP WHERE id=?",
