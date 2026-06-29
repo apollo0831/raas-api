@@ -276,6 +276,8 @@ body{
   padding:24px 16px;overflow-y:auto;
 }
 .hist-modal.open{display:flex}
+/* 개선하기 모달은 이력 모달(히스토리/검토 큐) 위에서 열리므로 더 높은 스택 */
+#improveModal{z-index:600}
 .hist-modal-inner{
   width:100%;max-width:980px;
   background:var(--bg1);border-radius:14px;border:1px solid var(--line2);
