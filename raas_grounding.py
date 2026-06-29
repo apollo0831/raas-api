@@ -317,10 +317,85 @@ def _overlay_block(ent, overlay_ctx) -> tuple:
     return _fetch_overlay(targets, overlay_ctx)
 
 
+# ─── Compare scope — 두 대상 비교(A vs B) ───────────────────────────────────
+#    프로그램·채널을 2~4개 감지해 나란히 비교. 같은 엔진(GROUNDING_SYSTEM·온톨로지·오버레이).
+_COMPARE_SPLIT = re.compile(r"\s*(?:vs\.?|VS|대비|비교|차이|와|과|랑|이랑|,|그리고|對)\s*")
+
+def _resolve_one(seg: str):
+    """세그먼트 → 단일 엔티티(program 우선, 아니면 channel). 없으면 None."""
+    p = extract_program(seg)
+    if p:
+        return {"kind": "program", "code": p["code"], "name": p["name"], "channel": p["channel"]}
+    c, n = _detect_channel(seg)
+    if c:
+        return {"kind": "channel", "code": c, "name": n, "channel": c}
+    return None
+
+
+def _detect_compare(question: str):
+    """비교 구분자로 분할해 서로 다른 엔티티 ≥2개면 비교 scope. 아니면 None."""
+    ents, seen = [], set()
+    for s in _COMPARE_SPLIT.split(question or ""):
+        s = s.strip()
+        if not s:
+            continue
+        e = _resolve_one(s)
+        if e and e["code"] not in seen:
+            seen.add(e["code"]); ents.append(e)
+    return ents[:4] if len(ents) >= 2 else None
+
+
+def _compare_ts(hist) -> list:
+    hist = hist or []
+    if len(hist) > 120:
+        hist = hist[-120:]
+    flds = ["dau", "wau", "mau", "deep_rate", "real_rate", "new", "churn_rate"]
+    return [{"date": (h.get("DATE") or "").replace("/", "-"),
+             **{f: h.get(f) for f in flds if h.get(f) not in (None, "")}} for h in hist]
+
+
+def _assemble_compare(question, ents, overlay_ctx=None) -> dict:
+    lookback = _detect_lookback(question)
+    period = _detect_period(question)
+    metric = S.extract_kpi_metric(question)
+    blocks, kpi_fields = [], []
+    for e in ents:
+        row = S._load_program_latest_row(e["code"])
+        hist = S._load_program_history(e["code"], lookback)
+        el = {"code": e["code"], "row": row, "history": hist, "scope_kind": e["kind"]}
+        kpi = _p_program_kpi(el) or {}
+        if not kpi_fields:
+            kpi_fields = list(kpi.keys())
+        blocks.append(f"### {e['name']}({e['code']}) — 최신 KPI 스냅샷\n"
+                      + json.dumps(kpi, ensure_ascii=False, default=str))
+        blocks.append(f"### {e['name']}({e['code']}) — 시계열(최근)\n"
+                      + json.dumps(_compare_ts(hist), ensure_ascii=False, default=str))
+    head = ("비교 분석: " + " vs ".join(f"{e['name']}({e['code']})" for e in ents)
+            + f" · 기간 힌트: {_PERIOD_KO.get(period, '일간')} · 비교지표: {metric or '핵심 지표'}")
+    context = head + "\n\n" + "\n\n".join(blocks)
+    defs = S._metric_definitions_lines(kpi_fields) if kpi_fields else []
+    if defs:
+        context += "\n\n## 온톨로지 근거\n[지표 정의 (온톨로지)]\n" + "\n".join(defs)
+    targets = [(("channel" if e["kind"] == "channel" else "program"), e["code"]) for e in ents]
+    otext, overlay_ids = _fetch_overlay(targets, overlay_ctx)
+    if otext:
+        context += "\n\n" + otext
+    return {
+        "ok": True, "context": context,
+        "providers_used": ["compare_kpi", "compare_timeseries"],
+        "entities_brief": head,
+        "provenance": {"providers": ["compare_kpi", "compare_timeseries"], "scope": "compare",
+                       "entities": [e["code"] for e in ents], "overlay_items": overlay_ids},
+    }
+
+
 # ─── 메인 — 맥락 조립 ───────────────────────────────────────────────────────
 def assemble(question: str, overlay_ctx=None) -> dict:
     """질문 → 근거 context 조립. overlay_ctx={user_id, mode:'normal'|'requery'}.
        반환: {ok, context, providers_used, entities_brief, provenance}"""
+    cmp_ents = _detect_compare(question)
+    if cmp_ents:
+        return _assemble_compare(question, cmp_ents, overlay_ctx)
     ent = resolve_entities(question)
     if not ent.get("code"):
         return {"ok": False, "reason": "프로그램 미식별"}   # 비-프로그램 질의는 기존 엔진으로
