@@ -138,6 +138,43 @@ def _p_metric_timeseries(ent):
     ]
 
 
+def _clean_onto(v):
+    """온톨로지 dict에서 IRI(id)·빈값 제거 → LLM에 깔끔히 주입."""
+    if isinstance(v, dict):
+        return {k: _clean_onto(x) for k, x in v.items()
+                if k not in ("id",) and x not in (None, "", [], {})}
+    if isinstance(v, list):
+        return [_clean_onto(x) for x in v]
+    return v
+
+
+def _p_ontology(ent):
+    """[1A 얇은 generic] 엔티티에 대해 온톨로지가 가진 도메인 사실을 무엇이든 surfacing.
+       온톨로지가 채워질수록 추가 코드 없이 답변 품질이 자동 향상."""
+    code = ent.get("code")
+    if not code:
+        return None
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+    except Exception:
+        return None
+    out = {}
+    try:
+        m = a.get_program_meta(code)
+        if m:
+            out["program"] = _clean_onto(m)
+    except Exception:
+        pass
+    try:
+        gp = a.get_guestname_policy(code)
+        if gp:
+            out["guest_policy"] = _clean_onto(gp)
+    except Exception:
+        pass
+    return out or None
+
+
 def _p_flow(ent):
     return S._compute_flow_decomposition(ent.get("row") or {}, ent.get("history"))
 
@@ -187,6 +224,9 @@ PROVIDERS = [
     {"name": "metric_timeseries", "needs": "program",
      "desc": "주요 지표 시계열(의도 기반: 추이 질의는 전체, 원인·포인트 질의는 최근 4주)",
      "fetch": _p_metric_timeseries},
+    {"name": "ontology", "needs": "program",
+     "desc": "프로그램 도메인 사실(진행자·정규게스트·시간대·편성유형·광고가치·게스트명 해석정책 등 온톨로지)",
+     "fetch": _p_ontology},
     {"name": "flow_decomp", "needs": "program",
      "desc": "활성사용자 변화를 신규·복귀·이탈로 분해(왜 늘었나/줄었나의 사용자 흐름 구조)",
      "fetch": _p_flow},
