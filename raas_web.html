@@ -5510,7 +5510,9 @@ async function _loadReviewQueue() {
     window._reviewIndex = {}; window._reviewNegIndex = {};
     const imps = d.improvements || [], reqs = d.data_requests || [];
     const wk = d.weakness || [], neg = d.negative_open || [];
-    if (!imps.length && !reqs.length && !wk.length && !neg.length) { body.innerHTML = '<div class="hist-empty-msg">검토 대기·약점 신호가 없습니다.</div>'; return; }
+    const _anyQueue = imps.length || reqs.length || wk.length || neg.length ||
+      (d.approved_knowledge || []).length || (d.pending_uploads || []).length || (d.effect || []).length;
+    if (!_anyQueue) { body.innerHTML = '<div class="hist-empty-msg">검토 대기·약점 신호가 없습니다.</div>'; return; }
     let html = '';
     // 약점 신호 — 👎 집계 + 미개선 아쉬움 질의(클릭→바로 개선 착수)
     if (wk.length || neg.length) {
@@ -5569,6 +5571,23 @@ async function _loadReviewQueue() {
             <button class="imp-btn imp-mini" onclick="_processReq(${rq.id},'반려',this)">반려</button>
           </span>
         </div></div>`).join('');
+    }
+    // 📈 반영 효과 — 승인된 지식 대상 scope의 승인 전/후 👎 비교(롤백 판단 보조)
+    const eff = d.effect || [];
+    if (eff.length) {
+      html += '<div class="imp-sec-hd">📈 반영 효과 · 승인 지식 대상의 전/후 \'아쉬움\' 비교 (after가 더 나쁘면 회수 검토)</div>' +
+        eff.map(e => {
+          const br = e.before.tot ? Math.round(e.before.neg / e.before.tot * 100) : null;
+          const ar = e.after.tot ? Math.round(e.after.neg / e.after.tot * 100) : null;
+          const worse = (ar != null && br != null && ar > br);
+          const arr = (ar == null) ? '<span class="wk-rate">후속 표본 없음</span>'
+            : `${br == null ? '–' : br + '%'} → <b style="color:${worse ? 'var(--red)' : 'var(--green)'}">${ar}%</b>`;
+          return `<div class="hm-row"><div class="hm-summary">
+            <span class="wk-chip" style="margin:0">${escapeHtml(e.target_id || '전역')}</span>
+            <span class="hm-q">${escapeHtml((e.content || '').slice(0, 50))}</span>
+            <span class="hm-sess-meta">👎 ${arr} (전 ${e.before.neg}/${e.before.tot} · 후 ${e.after.neg}/${e.after.tot})${worse ? ' <span class="wk-badge">⚠ 악화</span>' : ''}</span>
+          </div></div>`;
+        }).join('');
     }
     // 📚 승인된 공유 지식(본체) — 모든 답변에 주입되는 canonical 도메인 지식. 회수 가능.
     const ak = d.approved_knowledge || [];

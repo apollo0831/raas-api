@@ -577,6 +577,34 @@ def retire_knowledge_item(item_id, reviewer) -> bool:
     return True
 
 
+def knowledge_effect(days=30, limit=30) -> list:
+    """승인된 공유 지식의 반영 효과 — 대상 scope의 승인 전/후 👎 비교(롤백 판단 보조)."""
+    with get_conn() as conn:
+        items = conn.execute(
+            """SELECT id, type, target_id, content, reviewed_at
+                 FROM knowledge_items
+                WHERE scope='approved' AND status='approved' AND reviewed_at IS NOT NULL
+                  AND target_kind IN ('program','channel') AND target_id IS NOT NULL
+                ORDER BY reviewed_at DESC LIMIT ?""", (limit,)).fetchall()
+
+        def win(scope, lo, hi):
+            r = conn.execute(
+                "SELECT SUM(CASE WHEN feedback=-1 THEN 1 ELSE 0 END) AS neg, COUNT(*) AS tot "
+                "FROM query_history WHERE scope=? AND created_at>=? AND created_at<?",
+                (scope, lo, hi)).fetchone()
+            return {"neg": r["neg"] or 0, "tot": r["tot"] or 0}
+
+        out = []
+        for it in items:
+            ra, sc = it["reviewed_at"], it["target_id"]
+            lo_b = conn.execute("SELECT datetime(?, ?)", (ra, f'-{days} days')).fetchone()[0]
+            hi_a = conn.execute("SELECT datetime(?, ?)", (ra, f'+{days} days')).fetchone()[0]
+            out.append({"id": it["id"], "type": it["type"], "target_id": sc,
+                        "content": it["content"], "reviewed_at": ra,
+                        "before": win(sc, lo_b, ra), "after": win(sc, ra, hi_a)})
+        return out
+
+
 def feedback_weakness(days=30, limit=15) -> list:
     """scope(프로그램/채널)별 👎 집계 — 약점 후보 랭킹. 👎 많은/비율 높은 순."""
     with get_conn() as conn:
