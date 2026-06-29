@@ -29,72 +29,90 @@ python raas_query_engine.py "최근 트렌드" --date 2024-04-20
 | `SPLUNK_USER` / `SPLUNK_PASSWORD` | Splunk 인증 |
 | `SPLUNK_APP` | Splunk 앱 내부 ID (예: `gorealra_v4`) |
 | `ANTHROPIC_API_KEY` | Claude API 키 |
-| `CLAUDE_MODEL` | 사용 모델 (현재: `claude-opus-4-7`) |
+| `CLAUDE_MODEL` | 답변 생성 모델 (현재: `claude-sonnet-4-6`) |
+| `HAIKU_MODEL` | provider 선택·judge 등 경량 작업 모델 (`claude-haiku-4-5-...`) |
+| `MAX_ANSWER_TOKENS` | 답변 max_tokens 상한 (기본 8000, 천장이며 모델이 끝나면 조기 종료) |
 | `GMAIL_ADDRESS` / `GMAIL_APP_PW` | 이메일 발송용 Gmail 앱 비밀번호 |
 
-## Architecture
+## Architecture (LLM-first grounding)
+
+핵심 방향: **모든 자유질의는 grounding 엔진이 답한다** — Splunk 데이터 × 온톨로지 × 사용자 오버레이를
+LLM context에 골라 넣고 LLM이 본연의 성능으로 답변(고정 출력 템플릿 없음).
 
 ```
-브라우저 (raas_web.html)
+브라우저 (raas_web.html, 챗 UI)
     ↓ HTTP (CORS 해결)
-raas_server.py  ← 진입점, HTTPServer on port 5000
-    ├── GET  /api/briefing    → raas_briefing_engine.collect_all() → Claude
-    ├── GET  /api/top_programs → Splunk inputlookup
-    ├── POST /api/query       → raas_query_engine.query() (or fallback Claude)
+raas_server.py  ← 진입점, ThreadingHTTPServer on port 5000
+    ├── POST /api/query/stream → [핵심] 자유질의 SSE 스트리밍
+    │       1) 편성표 의도면 STORY.build_program_schedule (룩업)
+    │       2) GROUND.assemble(question) → ok면 grounding 답변 스트리밍
+    │       3) 미식별이면 raas_query_engine(구 QE)로 폴백
+    ├── POST /api/storyline/today → '어제 방송 특이사항' digest (grounding)
+    ├── POST /api/improve/* · /api/knowledge/* → 지식 개선 루프
+    ├── GET  /api/briefing · /api/suggestions · /api/query/history/* 등
     └── GET  /                → raas_web.html 정적 서빙
 
-raas_briefing_engine.py  ← KPI 섹션별 계산 (s1~s7)
-    └── Splunk lookups: raas_kpi_latest.csv, raas_top_programs_latest.csv
+raas_grounding.py  ← [핵심] 검색·Grounding 레이어 (단일 답변 엔진)
+    resolve_entities → scope 판별(program/channel/compare/ranking) → provider 선택(Haiku)
+    → fetch(구조화 데이터) → 온톨로지 팩 + 사용자 오버레이 병합 → GROUNDING_SYSTEM으로 LLM 생성
 
-raas_query_engine.py  ← 자연어 질의 엔진 (3단계 파이프라인)
-    1. classify_intent()  → Claude로 질의 의도 분류 (JSON 응답)
-    2. get_data_for_intent() → 의도별 Splunk SPL 실행
-    3. call_claude()      → 최종 답변 생성
+raas_storyline_engine.py  ← grounding이 재사용하는 데이터 computer 모음
+    _compute_flow_decomposition / _compute_cohort / _compute_stickiness /
+    _compute_programming_impact / _compute_weekday_pattern_check / _detect_program_revision /
+    build_program_schedule / build_query_provenance / _metric_definitions_lines / _query_decompositions
+    (구 CP 다중슬롯 스토리라인 오케스트레이션은 은퇴·제거됨)
+
+raas_query_engine.py  ← 폴백 엔진(거래성·메타 질의) + collect_briefing_data(s1~s7) + timeline 캐시
+raas_onto/raas_ontology_adapter.py  ← TTL 온톨로지 8종 로더(지표/프로그램/게스트/특일/cause 등)
+raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·data_requests·storyline_events
 ```
 
-## 대시보드 페이지 구조 (raas_web.html)
+### 자유질의 답변 엔진 — scope (raas_grounding.assemble)
+`assemble(question)`이 질문을 scope로 분기. 모든 scope가 동일 엔진(GROUNDING_SYSTEM·온톨로지·오버레이) 사용:
 
-하단 네비게이션 기반 5페이지 SPA:
+| scope | 트리거 예시 | 데이터 |
+|-------|------------|--------|
+| **program** | "컬투쇼 어제 왜 빠졌어?" | provider 10종(KPI·시계열·흐름분해·코호트·편성·요일·개편·편성표·특일) |
+| **channel** | "러브FM 어때?", "전사 트렌드" | 채널행(F00/L00/G00/P00/T00) — 프로그램 전용 provider 제외 |
+| **compare** | "파워FM vs 러브FM 비교" | 엔티티 2~4개 KPI·시계열 나란히 |
+| **ranking** | "프로그램별 DAU 순위" | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬 |
+| **digest** | "어제 방송 특이사항"(스토리라인 단일경로) | z-score 이상탐지(get_cached_anomalies) |
+| (폴백) | "어제 MAU는?"(거래성), "어떤 지표 있나"(메타) | raas_query_engine |
 
-| page id | 네비 라벨 | 내용 |
-|---------|-----------|------|
-| `page-home` | 홈 | 핵심 지표(KPI), 이상 알림, 프로그램 흐름, 리텐션/품질 섹션 |
-| `page-analytics` | 분석 | 채널 스코프 전환 + KPI/퍼널/코호트/품질/성장 상세 |
-| `page-programs` | 프로그램 | 프로그램 랭킹 (DAU TOP, 깊은청취 TOP) |
-| `page-ai` | AI | AI 브리핑 전문 텍스트 |
-| `page-settings` | 더보기 | Phase 4 예정 (미구현) |
+- provider = `{name, needs, desc, fetch}`. LLM(Haiku)이 질문에 맞는 provider만 선택(`select_providers`).
+- 온톨로지 팩: 지표 정의 + cause 분해 프레임워크. 오버레이: 사용자 기여 지식(read-time 병합).
+- 관리자에게는 응답 끝에 `[small]` 참고 푸터(사용 provider·적용 오버레이)를 SSE로 덧붙임.
 
-- 기간 탭(일/주/월)은 home·analytics 페이지에서만 표시 (`PERIOD_TAB_PAGES = ['home', 'analytics']`)
-- 전역 상태: `_data`, `_scope` (채널코드), `_period` (day/week/mon), `_pgmTab`, `_cohortTab`
+### 스토리라인 = '어제 방송 특이사항' 단일 경로
+구 CP 다중슬롯 스토리라인(advance/슬롯/칩)은 **제품에서 은퇴**. 현재 스토리라인은 웰컴 CTA
+`🗓 어제 방송 특이사항 보기` → `/api/storyline/today`(grounding digest) 하나. 결과의 특이 프로그램
+드릴다운 칩은 일반 자유질의(통합 grounding 경로)로 흡수.
 
-## 분석 페이지 채널 연동 (`page-analytics`)
+### 지식 개선 루프 (raas_history_db + raas_grounding + 검토 큐)
+'아쉬움(👎)' → 개선하기 → 기여(온톨로지 즉시 / 데이터 요청형) → 재질의(A/B + 다수결 judge) →
+검토 큐 승인 → 공유 오버레이(본체) 반영. candidate(본인)/approved(공유) 격리, read-time 병합.
+- `knowledge_items`(scope=candidate|approved), `improvements`(judge_json·user_verdict·status),
+  `data_requests`(요청형). 거버넌스 권한: is_admin OR role∈{총괄관리, 데이터}.
+- 검토 큐: 개선 승인·반려, 데이터 요청 처리, **약점 신호**(👎 집계·미개선 질의),
+  **승인된 공유 지식(본체)** 관리·회수.
 
-### scope-bar 탭
+## 프론트엔드 구조 (raas_web.html)
+
+단일 HTML(내부 `<script>`) — **챗 인터페이스** (구 5페이지 SPA는 제거됨):
+
 ```
-전체(T00) | 파워FM(F00) | 러브FM(L00) | 고릴라M(G00) | 픽채널(P00)
-```
-`setScope(code)` → `_scope` 변경 → `renderAnalyticsPage(_data)` 재호출
-
-### getScopeData(data, scope)
-채널 스코프 선택 시 `s6_channels.channels[]`에서 해당 채널 데이터를 찾아 s1/s2/s3 형태로 재구성하는 어댑터 함수.
-
-```js
-// T00(전체)이면 원본 data 그대로 반환
-// 채널 코드면 ch = s6_channels.channels.find(c => c.code === scope)
-// → { s1_executive: {...}, s2_funnel: {...}, s3_engagement: {...} } 반환
+사이드바          | 빠른 질의(QUICK_QUERIES) · 최근 질의 · 내 정보 · 이력 보기
+chat-main        | 헤더(사이드바·KPI 토글) · 웰컴(CTA '🗓 어제 방송 특이사항 보기' + 추천칩)
+                 | · chat-thread(질의/답변 스트리밍) · 입력창(#chatInput)
+KPI 패널         | 우측 토글 패널(loadKpiPanel) — 핵심 지표 스냅샷
 ```
 
-**현재 매핑 완료 필드:**
-- s1: dau, wau(=dau_week), mau(=dau_mon), new_user, new_pct, dau_week, dau_mon
-- s2: dau, dau_week, dau_mon, new_user/week/mon, churn_rate/week/mon, react_rate/week/mon
-- s3: dau, deep_rate/week/mon, wau_1min/10min, mau_1min/10min
-
-**채널 스코프에서 null(미지원) 필드 (진행 중):**
-- s1: dau_wow, react_user, react_pct, dau_week_wow, dau_mon_wow
-- s3: dau_1min, dau_10min, deep_rate_diff, engage_rate/week/mon, channel_deep
-- s4(성장 품질): 채널 스코프 무관하게 항상 전체 data.s4_growth 사용
-
-**TODO:** P00(픽채널) s6_channels 데이터 연결, s4 채널별 스코핑
+- 질의 진입: `submitQuery(question, source, opts)` — opts.endpoint로 `/api/storyline/today` 등 전환.
+  답변은 SSE 토큰 스트리밍 → `renderAiText`(굵게·표·`[small]`푸터 지원).
+- 추천칩(`/api/suggestions`): ① 어제 이상신호(직무 필터) → ② 개인화 → ③ 직무 템플릿 순 6개.
+- 모달 5종: `profileModal`(내 정보) · `histModal`(이력 보기) · `improveModal`(개선하기) ·
+  `adminModal`(관리자) · `statsModal`(질의맵). 이력 보기 탭: 전체/일반질의/개선이력/**검토 큐**(직무권한).
+- 관리자 메타 토글: `body.hide-meta`로 답변 `[small]` 참고 푸터 표시/숨김.
 
 ## Splunk Lookups
 
@@ -109,9 +127,9 @@ raas_query_engine.py  ← 자연어 질의 엔진 (3단계 파이프라인)
 1. `data/raas_kpi_latest.csv` (권장)
 2. `raas_kpi_latest.csv` (구 위치, 호환용 fallback)
 
-## Briefing Engine Sections (raas_briefing_engine.py)
+## Briefing Sections (raas_query_engine.collect_briefing_data)
 
-`collect_all()` 반환 딕셔너리의 7개 섹션:
+`collect_briefing_data(timeline)` 반환 딕셔너리의 7개 섹션 (s7 이상탐지는 grounding digest가 재사용):
 
 | 키 | 내용 |
 |----|------|
@@ -125,9 +143,11 @@ raas_query_engine.py  ← 자연어 질의 엔진 (3단계 파이프라인)
 
 ## Program Code Conventions
 
-`PGM_NAMES` 딕셔너리 (briefing_engine.py):
-- `T00` = 전체, `F00` = 파워FM, `L00` = 러브FM, `G00` = 고릴라M
+프로그램 매핑: `raas_storyline_router.PROGRAM_DIRECTORY` + `extract_program(text)` (질문→프로그램),
+채널 매핑: `raas_storyline_engine._CHANNEL_CODE`, 코드→이름: `adapter.get_program_meta(code)`:
+- `T00` = 전체, `F00` = 파워FM, `L00` = 러브FM, `G00` = 고릴라M, `P00` = 픽채널
 - `F01`~`F13` = 파워FM 프로그램, `L01`~`L15` / `M05`~`M11` = 러브FM 프로그램
+- 채널/집계 코드는 X00 패턴(ranking scope에서 제외)
 
 ## Key Metrics Definitions
 
@@ -165,6 +185,15 @@ s3_engagement 추가:
 - 일간: PERIOD=1D (없으면 30D롤링 값이 들어옴)
 - 주간: PERIOD=1W
 - 월간: PERIOD=1M
+
+## 설계 문서 / 개발 메모
+- `docs/`: grounding_retrieval_design · knowledge_loop_design · ab_harness_design ·
+  storyline_cp_v2_schema · storyline_history_db_design (설계 근거)
+- 서버 재시작(윈도우): 포트 5000 종료 후 `nohup python raas_server.py > server_restart.log 2>&1 &`,
+  config(cp_v2.json 등) 캐시 때문에 변경 시 재시작 필요. HTML은 디스크 서빙이라 재시작 불필요.
+- grounding 헤드리스 테스트: `import raas_grounding as G` → `G.assemble(q)`(LLM 없이 데이터 경로 확인은
+  `G.call_claude=None`). `_kpi_rows()`가 timeline 쓰려면 `G.S.set_timeline_provider(SRV.get_cached_timeline)`.
+- JS 검증: 최대 `<script>` 추출 후 `node --check`. 큰 dead-code 제거는 ast 콜그래프 도달성으로 안전 판정.
 
 ## 접속 환경
 - 회사 윈도우PC: localhost:5000 직접 접속, Splunk(10.10.15.31) 접근 가능
