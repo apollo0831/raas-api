@@ -51,6 +51,13 @@ def _detect_lookback(q: str) -> int:
     return 0               # 추이·전체·기본 → 가용 데이터 전부 (LLM이 필요한 만큼 사용)
 
 
+# 추이·추세 질의 판별 — 시계열 슬라이싱(1D)에서 전체 vs 최근 구간 결정
+_TREND_SIGNAL = ("추이", "추세", "트렌드", "그래프", "장기", "월별", "주별", "일별 추이", "추세선", "흐름 추이")
+
+def _is_trend_query(q: str) -> bool:
+    return any(s in (q or "") for s in _TREND_SIGNAL)
+
+
 # 채널 감지 — 특정 프로그램이 아닌 채널/전사 단위 질의 식별 (scope 확장)
 _CH_NAME_BY_CODE = {v: k for k, v in S._CHANNEL_CODE.items()}
 _CH_NAME_BY_CODE["T00"] = "전체"
@@ -74,7 +81,8 @@ def resolve_entities(question: str) -> dict:
     prog = extract_program(question)
     ent = {"program": prog, "period": _detect_period(question),
            "metric": S.extract_kpi_metric(question),
-           "lookback": _detect_lookback(question), "scope_kind": None}
+           "lookback": _detect_lookback(question),
+           "is_trend": _is_trend_query(question), "scope_kind": None}
     code = None
     if prog:
         ent["scope_kind"] = "program"
@@ -111,9 +119,17 @@ def _p_program_kpi(ent):
 
 
 def _p_metric_timeseries(ent):
+    """의도 기반 슬라이싱(1D): 명시 기간>그만큼 / 추이 질의>전체(상한) / 원인·포인트 질의>최근 4주.
+       전체 노이즈·토큰을 줄여 핵심 근거에 집중."""
     hist = ent.get("history") or []
-    if len(hist) > 400:          # 안전 상한(데이터가 매우 길 때만). 보통 전체 제공.
-        hist = hist[-400:]
+    lb = ent.get("lookback") or 0
+    if lb > 0:
+        hist = hist[-lb:]                      # 사용자가 명시한 기간만
+    elif ent.get("is_trend"):
+        if len(hist) > 400:
+            hist = hist[-400:]                 # 추이·추세 질의 → 전체(안전 상한)
+    else:
+        hist = hist[-28:]                      # 원인·포인트·기본 → 최근 4주(같은요일 비교 충분)
     flds = ["dau", "wau", "mau", "deep_rate", "real_rate", "new", "churn_rate"]
     return [
         {"date": (h.get("DATE") or "").replace("/", "-"),
@@ -169,7 +185,7 @@ PROVIDERS = [
      "desc": "프로그램의 최신 핵심 KPI 스냅샷(DAU/WAU/MAU·신규·복귀·이탈·실청취·깊은청취·유지율과 증감)",
      "fetch": _p_program_kpi},
     {"name": "metric_timeseries", "needs": "program",
-     "desc": "주요 지표 시계열(질문 기간만큼, 기본은 가용 전체 — 추이·변동 추세)",
+     "desc": "주요 지표 시계열(의도 기반: 추이 질의는 전체, 원인·포인트 질의는 최근 4주)",
      "fetch": _p_metric_timeseries},
     {"name": "flow_decomp", "needs": "program",
      "desc": "활성사용자 변화를 신규·복귀·이탈로 분해(왜 늘었나/줄었나의 사용자 흐름 구조)",
