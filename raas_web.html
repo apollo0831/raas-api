@@ -1032,6 +1032,11 @@ table.story-table th{
 .ai-chart-box{
   margin:10px 0;padding:12px;overflow:hidden;
 }
+/* LLM 답변 차트(```chart → ECharts) */
+.llm-chart-box{margin:12px 0;border:1px solid var(--line);border-radius:10px;padding:10px 8px 8px;background:var(--bg1)}
+.llm-chart{width:100%;height:300px}
+.llm-chart-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+@media (max-width:560px){ .llm-chart{height:240px} }
 .ai-chart-meta{
   display:flex;justify-content:space-between;align-items:flex-start;
   gap:8px;font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;flex-wrap:wrap;
@@ -2625,6 +2630,20 @@ function escapeHtml(s) {
 }
 function renderAiText(s) {
   if (!s) return '';
+  // 차트 블록(```chart {json}```) → ECharts 컨테이너. 미완성(스트리밍)은 안내로 대체.
+  const charts = [];
+  s = s.replace(/```chart\s*\n([\s\S]*?)\n```/g, (m, body) => {
+    let spec; try { spec = JSON.parse(body.trim()); } catch (e) { return ''; }
+    if (!spec || !Array.isArray(spec.x) || !Array.isArray(spec.series)) return '';
+    const id = 'lc' + (_llmChartSeq++);
+    _llmChartStore[id] = { spec };
+    charts.push(`<div class="llm-chart-box"><div class="llm-chart" id="${id}"></div>
+      <div class="llm-chart-actions">
+        <button class="dl-btn" onclick="_chartPNG('${id}')">🖼 이미지 저장</button>
+        <button class="dl-btn" onclick="_chartShare('${id}')">↗ 공유</button></div></div>`);
+    return `@@CHART${charts.length - 1}@@\n`;
+  });
+  s = s.replace(/```chart[\s\S]*$/g, '📊 차트 생성 중…');
   // 마크다운 표 지원(예: 주간 편성표). 본문은 pre-wrap이라 줄바꿈은 CSS가 처리.
   const tables = [];
   s = s.replace(/(\|[^\n]+\|\n\|[-:|\s]+\|\n(?:\|[^\n]+\|\n?)+)/g, (match) => {
@@ -2642,6 +2661,7 @@ function renderAiText(s) {
   s = s.replace(/\[small\]([\s\S]+?)\[\/small\]/g, (_, b) => { meta.push(b); return ''; });
   let out = escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
   out = out.replace(/@@TBL(\d+)@@\n?/g, (_, i) => tables[+i]);
+  out = out.replace(/@@CHART(\d+)@@\n?/g, (_, i) => charts[+i]);
   if (meta.length) {
     out = out.replace(/\s+$/, '');
     const inner = meta.map(b =>
@@ -2975,6 +2995,83 @@ function _eChartsThemeColors() {
     palette: ['#e74c3c','#2563eb','#0e9384','#d97706','#7c3aed','#0891b2','#c2410c','#475569'],
   };
 }
+
+// ─── LLM 답변 차트 (```chart 블록 → ECharts) ─────────────────────
+let _llmChartSeq = 0;
+const _llmChartStore = {};   // id → {spec, chart}
+
+function _llmChartOption(spec, c) {
+  const type = (spec.type === 'bar') ? 'bar' : 'line';
+  const multi = (spec.series || []).length > 1;
+  return {
+    grid: { left: 6, right: 16, top: spec.title ? 34 : 14, bottom: 6, containLabel: true },
+    title: spec.title ? { text: spec.title, left: 0, textStyle: { color: c.text, fontSize: 13, fontWeight: 600 } } : undefined,
+    tooltip: { trigger: 'axis', backgroundColor: c.tooltipBg, borderColor: c.tooltipBorder, textStyle: { color: c.text } },
+    legend: multi ? { top: 2, right: 0, textStyle: { color: c.textSub }, itemWidth: 14 } : undefined,
+    xAxis: { type: 'category', data: spec.x, boundaryGap: type === 'bar',
+             axisLabel: { color: c.textSub, fontSize: 11 }, axisLine: { lineStyle: { color: c.line } } },
+    yAxis: { type: 'value', name: spec.unit || '', nameTextStyle: { color: c.textSub },
+             axisLabel: { color: c.textSub, fontSize: 11 }, splitLine: { lineStyle: { color: c.line } } },
+    series: (spec.series || []).map((s, i) => ({
+      name: s.name, type, data: s.data, smooth: type === 'line',
+      itemStyle: { color: c.palette[i % c.palette.length] },
+      lineStyle: { width: 2 }, symbol: 'circle', symbolSize: 4,
+    })),
+  };
+}
+
+// 삽입된 답변 영역의 차트 컨테이너를 ECharts로 렌더 (컨테이너가 보일 때 호출)
+function _initLLMCharts(root) {
+  if (!root) return;
+  const els = root.querySelectorAll('.llm-chart');
+  if (!els.length) return;
+  _loadECharts().then(echarts => {
+    const c = _eChartsThemeColors();
+    els.forEach(el => {
+      if (el.dataset.initialized) return;
+      const entry = _llmChartStore[el.id];
+      if (!entry || !entry.spec) return;
+      el.dataset.initialized = '1';
+      try {
+        const chart = echarts.init(el, null, { renderer: 'canvas' });
+        chart.setOption(_llmChartOption(entry.spec, c));
+        entry.chart = chart;
+      } catch (e) { el.innerHTML = '<div class="ai-echarts-fallback-note">차트 렌더 실패</div>'; }
+    });
+  }).catch(() => {});
+}
+
+function _chartPNG(id) {
+  const e = _llmChartStore[id];
+  if (!e || !e.chart) return;
+  const bg = (getComputedStyle(document.body).getPropertyValue('--bg1') || '#ffffff').trim();
+  const url = e.chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: bg });
+  const a = document.createElement('a');
+  a.href = url; a.download = ((e.spec.title || 'chart').replace(/[\\/:*?"<>|]/g, '_')) + '.png';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+async function _chartShare(id) {
+  const e = _llmChartStore[id];
+  if (!e || !e.chart) return;
+  const bg = (getComputedStyle(document.body).getPropertyValue('--bg1') || '#ffffff').trim();
+  const url = e.chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: bg });
+  try {
+    const blob = await (await fetch(url)).blob();
+    const file = new File([blob], ((e.spec.title || 'chart')) + '.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: e.spec.title || 'RAAS 차트' });
+    } else {
+      _chartPNG(id);
+      alert('이 환경은 직접 공유를 지원하지 않아 이미지를 저장했습니다.\n저장된 이미지를 카카오톡에 첨부해 보내세요.');
+    }
+  } catch (err) { /* 사용자 취소 또는 미지원 */ }
+}
+
+// 창 크기 변경 시 답변 차트 리사이즈
+window.addEventListener('resize', () => {
+  Object.values(_llmChartStore).forEach(e => { try { e.chart && e.chart.resize(); } catch (_) {} });
+});
 
 // 의도된 기간을 한국어 라벨로 — 차트 subtitle용
 function _formatPeriodLabel(cadence, n) {
@@ -4436,6 +4533,7 @@ async function submitQuery(question, source, opts) {
           const qid = ev.query_id || null;
           msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text">${renderAiText(rawText)}</div>${_buildChartHTML(chartData)}`;
           _observeChartsIn(msgBody);
+          _initLLMCharts(msgBody);   // ```chart 블록 → ECharts 렌더
           // 드릴다운(어제 특이사항 → 프로그램별 원인) — 클릭 시 일반 자유질의(통합 grounding 경로)로
           if (ev.drill && ev.drill.length) msgBody.insertAdjacentHTML('beforeend', _buildDrillChips(ev.drill));
           _saveCachedAnswer(question, msgBody.innerHTML);
@@ -5183,7 +5281,9 @@ function _histQueryRow(it) {
 }
 
 function _toggleHmRow(row) {
-  row.querySelector('.hm-detail').classList.toggle('open');
+  const det = row.querySelector('.hm-detail');
+  det.classList.toggle('open');
+  if (det.classList.contains('open')) _initLLMCharts(det);   // 펼칠 때 차트 렌더(숨김 상태 init 회피)
 }
 
 // ── 지식 개선 루프 (개선하기) ──
