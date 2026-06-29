@@ -389,6 +389,87 @@ def _assemble_compare(question, ents, overlay_ctx=None) -> dict:
     }
 
 
+# ─── Ranking scope — 전 프로그램 순위(프로그램별 X 순위 / X 높은·낮은 프로그램) ──
+_RANK_SIGNAL = ("순위", "랭킹", "top", "상위", "하위", "높은 프로그램", "낮은 프로그램",
+                "최고", "최저", "best", "worst")
+_RANK_FIELD_MAP = [
+    (("깊은청취", "깊은 청취", "deep"), "deep_rate", "깊은청취율"),
+    (("실청취", "real_rate"), "real_rate", "실청취율"),
+    (("mau", "월간", "월활"), "mau", "MAU"),
+    (("wau", "주간", "주활"), "wau", "WAU"),
+    (("이탈", "churn"), "churn_rate", "이탈률"),
+    (("신규",), "new", "신규유입"),
+    (("dau", "활성", "일활", "청취자"), "dau", "DAU"),
+]
+_RANK_EXCLUDE = {"T00", "F00", "L00", "G00", "P00"}
+
+def _to_float(v):
+    try:
+        return float(str(v).replace(",", "").replace("%", ""))
+    except Exception:
+        return None
+
+def _detect_ranking(question: str):
+    t = question or ""
+    tl = t.lower()
+    if not any(s.lower() in tl for s in _RANK_SIGNAL):
+        return None
+    fld, label = "dau", "DAU"
+    for keys, f, lab in _RANK_FIELD_MAP:
+        if any(k.lower() in tl for k in keys):
+            fld, label = f, lab
+            break
+    asc = any(k in t for k in ("낮은", "최저", "하위", "worst", "적은", "least"))
+    return {"field": fld, "label": label, "asc": asc}
+
+
+def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        rows = []
+    if not rows:
+        return {"ok": False, "reason": "데이터 없음"}
+    latest = max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
+    fld = spec["field"]
+    items, seen = [], set()
+    for r in rows:
+        if r.get("DATE") != latest:
+            continue
+        code = r.get("PGM_CODE")
+        if not code or code in _RANK_EXCLUDE or code.endswith("00") or code in seen:
+            continue
+        v = _to_float(r.get(fld))
+        if v is None:
+            continue
+        seen.add(code)
+        items.append({"code": code, "name": _resolve_name(code), fld: r.get(fld), "_v": v})
+    if not items:
+        return {"ok": False, "reason": "지표 데이터 없음"}
+    items.sort(key=lambda x: x["_v"], reverse=not spec["asc"])
+    top = [{k: v for k, v in it.items() if k != "_v"} for it in items[:15]]
+    payload = {"date": latest, "metric": spec["label"], "field": fld,
+               "order": "asc(낮은순)" if spec["asc"] else "desc(높은순)",
+               "count": len(items), "ranking": top}
+    head = (f"순위 분석: 전 프로그램 {spec['label']} "
+            f"{'하위' if spec['asc'] else '상위'} (기준일 {latest}, 대상 {len(items)}개)")
+    context = (head + f"\n\n### program_ranking — 전 프로그램 {spec['label']} 순위\n"
+               + json.dumps(payload, ensure_ascii=False, default=str))
+    defs = S._metric_definitions_lines([fld])
+    if defs:
+        context += "\n\n## 온톨로지 근거\n[지표 정의 (온톨로지)]\n" + "\n".join(defs)
+    targets = [("program", it["code"]) for it in top[:8]] + [("global", None)]
+    otext, overlay_ids = _fetch_overlay(targets, overlay_ctx)
+    if otext:
+        context += "\n\n" + otext
+    return {
+        "ok": True, "context": context,
+        "providers_used": ["program_ranking"], "entities_brief": head,
+        "provenance": {"providers": ["program_ranking"], "scope": "ranking",
+                       "metric": fld, "overlay_items": overlay_ids},
+    }
+
+
 # ─── 메인 — 맥락 조립 ───────────────────────────────────────────────────────
 def assemble(question: str, overlay_ctx=None) -> dict:
     """질문 → 근거 context 조립. overlay_ctx={user_id, mode:'normal'|'requery'}.
@@ -396,6 +477,11 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     cmp_ents = _detect_compare(question)
     if cmp_ents:
         return _assemble_compare(question, cmp_ents, overlay_ctx)
+    rank_spec = _detect_ranking(question)
+    if rank_spec:
+        _r = _assemble_ranking(question, rank_spec, overlay_ctx)
+        if _r.get("ok"):
+            return _r
     ent = resolve_entities(question)
     if not ent.get("code"):
         return {"ok": False, "reason": "프로그램 미식별"}   # 비-프로그램 질의는 기존 엔진으로
