@@ -817,6 +817,14 @@ body{
   margin-top:14px;
 }
 .story-chips-inline .sgst-chip{font-size:var(--fs-sm)}
+.drill-label{width:100%;font-size:var(--fs-xs);color:var(--dim);margin-bottom:2px}
+.welcome-cta{margin:16px 0 4px}
+.today-digest-btn{
+  font-size:var(--fs-md);font-weight:600;padding:11px 20px;border-radius:12px;cursor:pointer;
+  background:var(--purple);color:#fff;border:1px solid var(--purple);
+  box-shadow:0 1px 6px rgba(127,119,221,.28);transition:transform .08s,box-shadow .15s;
+}
+.today-digest-btn:hover{transform:translateY(-1px);box-shadow:0 3px 12px rgba(127,119,221,.4)}
 /* 와이드 KPI 표 — 좌우 스크롤 + 열 클릭 정렬 */
 .story-table-scroll{overflow-x:auto;max-width:100%;margin:6px 0}
 .story-table-scroll .story-table{white-space:nowrap}
@@ -1397,6 +1405,7 @@ table.story-table th{
       <div class="welcome" id="welcomeScreen">
         <h1 class="welcome-logo">안녕하세요 👋</h1>
         <div class="welcome-sub">SBS 고릴라 라디오의 청취 데이터를 자연어로 질의하세요. 지표, 트렌드, 프로그램 분석을 AI가 답합니다.</div>
+        <div class="welcome-cta"><button class="today-digest-btn" onclick="startTodayDigest()">🗓 어제 방송 특이사항 보기</button></div>
         <div class="welcome-chips" id="suggestChips"></div>
       </div>
     </div>
@@ -4430,7 +4439,22 @@ function _setQueryGenerating(on) {
   btn.setAttribute('aria-label', on ? '생성 중' : '전송');
 }
 
-async function submitQuery(question, source) {
+// 어제 방송 특이사항 — 스토리라인(단일 경로). 통합 엔진(grounding digest)으로 스트리밍.
+function startTodayDigest() {
+  submitQuery('어제 방송 특이사항', 'today_digest', { endpoint: '/api/storyline/today' });
+}
+// 드릴다운 칩 — 특이 프로그램 → 그 프로그램 원인 자유질의(통합 grounding 경로)
+function _buildDrillChips(drill) {
+  const chips = (drill || []).map(d =>
+    `<button class="sgst-chip" onclick="submitQuery('${escapeHtml(d.name)} 어제 왜 그런지 원인 분석해줘','storyline_drill')">${escapeHtml(d.name)} 들여다보기</button>`
+  ).join('');
+  if (!chips) return '';
+  return `<div class="story-chips-inline"><div class="drill-label">자세히 볼 프로그램</div>${chips}</div>`;
+}
+
+async function submitQuery(question, source, opts) {
+  opts = opts || {};
+  const _endpoint = opts.endpoint || '/api/query/stream';
   question = question.trim();
   if (!question) return;
   // 직전 질의의 답변(스트리밍)이 완전히 끝나기 전에는 새 질의를 막는다.
@@ -4457,7 +4481,7 @@ async function submitQuery(question, source) {
   });
 
   try {
-    const res = await _authedFetch('/api/query/stream', {
+    const res = await _authedFetch(_endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4534,6 +4558,8 @@ async function submitQuery(question, source) {
           }
           msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text">${renderAiText(rawText)}</div>${_buildChartHTML(chartData)}`;
           _observeChartsIn(msgBody);
+          // 드릴다운(어제 특이사항 → 프로그램별 원인) — 클릭 시 일반 자유질의(통합 grounding 경로)로
+          if (ev.drill && ev.drill.length) msgBody.insertAdjacentHTML('beforeend', _buildDrillChips(ev.drill));
           _saveCachedAnswer(question, msgBody.innerHTML);
           if (qid) msgBody.insertAdjacentHTML('beforeend', _buildFeedbackBar(qid));
           refreshHistory();
@@ -4662,6 +4688,7 @@ document.getElementById('btnNewChat').addEventListener('click', () => {
     <div class="welcome" id="welcomeScreen">
       <h1 class="welcome-logo">안녕하세요 👋</h1>
       <div class="welcome-sub">SBS 고릴라 라디오의 청취 데이터를 자연어로 질의하세요. 지표, 트렌드, 프로그램 분석을 AI가 답합니다.</div>
+        <div class="welcome-cta"><button class="today-digest-btn" onclick="startTodayDigest()">🗓 어제 방송 특이사항 보기</button></div>
       <div class="welcome-chips" id="suggestChips"></div>
     </div>`;
   _msgCount = 0;
@@ -4673,13 +4700,10 @@ document.getElementById('btnNewChat').addEventListener('click', () => {
 // ────────────────────────────────────────────────
 function _initWelcomeChips() { /* 보팅 시점엔 RAAS_TOKEN 가능 — _bootAuth 직후 loadSuggestions가 별도 호출 */ }
 
-// 직무 기반 추천 칩 — Phase 2 ④ 스토리라인 우선, 미지원 직무는 기존 /api/suggestions
+// 웰컴 추천 칩 — 스토리라인은 '어제 방송 특이사항' 단일 경로(웰컴 CTA 상시 노출)로 전환.
+//   구 CP 스토리라인 자동 진입(_tryLoadStoryline → _renderStorylineWelcome)은 비활성화:
+//   웰컴 화면 전체를 교체하며 CTA를 덮어쓰던 오버랩 제거. (구 스토리라인 코드는 dormant, 후속 제거)
 async function loadSuggestions() {
-  // 1) 스토리라인 지원 직무면 storyline UI 렌더 후 종료
-  const used = await _tryLoadStoryline();
-  if (used) return;
-
-  // 2) 미지원 직무 → 기존 추천 칩
   await _loadLegacySuggestions();
 }
 

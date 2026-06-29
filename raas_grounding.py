@@ -236,19 +236,13 @@ _KTYPE_KO = {
     "corner_note": "코너 메모", "decomposition_hint": "분해 힌트", "fact": "사실",
 }
 
-def _overlay_block(ent, overlay_ctx) -> tuple:
-    """대상 엔티티에 매칭되는 사용자/운영 지식 항목을 끌어와 context 블록 + provenance 반환."""
+def _fetch_overlay(targets, overlay_ctx) -> tuple:
+    """주어진 (kind, id) 타깃들에 매칭되는 지식 항목을 끌어와 context 블록 + id 목록 반환.
+       모든 scope(program/digest/channel/global …)에서 공유하는 단일 오버레이 게이트."""
     try:
         import raas_history_db as HDB
     except Exception:
         return "", []
-    targets = []
-    if ent.get("code"):
-        targets.append(("program", ent["code"]))
-    if ent.get("channel"):
-        targets.append(("channel", ent["channel"]))
-    for f in (_p_program_kpi(ent) or {}).keys():
-        targets.append(("field", f))
     octx = overlay_ctx or {}
     try:
         items = HDB.get_knowledge_items(
@@ -267,6 +261,18 @@ def _overlay_block(ent, overlay_ctx) -> tuple:
         tgt = it.get("target_id") or "전역"
         lines.append(f"- [{tk}·{tgt}] {it.get('content')} {tag}")
     return "\n".join(lines), [it["id"] for it in items]
+
+
+def _overlay_block(ent, overlay_ctx) -> tuple:
+    """프로그램 scope용 — 엔티티에서 타깃을 구성해 _fetch_overlay 호출."""
+    targets = []
+    if ent.get("code"):
+        targets.append(("program", ent["code"]))
+    if ent.get("channel"):
+        targets.append(("channel", ent["channel"]))
+    for f in (_p_program_kpi(ent) or {}).keys():
+        targets.append(("field", f))
+    return _fetch_overlay(targets, overlay_ctx)
 
 
 # ─── 메인 — 맥락 조립 ───────────────────────────────────────────────────────
@@ -310,6 +316,117 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         "provenance": {"providers": used, "program": ent.get("code"),
                        "overlay_items": overlay_ids},
     }
+
+
+# ─── Digest scope — 어제 방송 특이사항 (비-프로그램, 전사 이상탐지 기반) ───
+#    엔진 일원화: 프로그램 1개에 묶이지 않는 scope도 같은 GROUNDING_SYSTEM·온톨로지·
+#    오버레이로 답한다. anomalies는 서버(get_cached_anomalies)가 주입 — grounding은 순수.
+def _resolve_name(code) -> str:
+    if not code:
+        return ""
+    try:
+        from raas_onto import get_adapter
+        m = get_adapter().get_program_meta(code)
+        return (m or {}).get("label") or code
+    except Exception:
+        return code
+
+
+def assemble_digest(ref_date, anomalies, overlay_ctx=None, question=None) -> dict:
+    """어제 방송 특이사항 digest 조립. anomalies=서버 주입(get_cached_anomalies()).
+       반환 형태는 assemble()과 동일 + drill(드릴다운 후보 프로그램)."""
+    anomalies = anomalies or []
+    _LV = ("red", "yellow", "green")
+    items, codes = [], []
+    for a in anomalies:
+        it = {k: a.get(k) for k in
+              ("level", "code", "field", "label", "value", "z", "msg", "direction")
+              if a.get(k) not in (None, "")}
+        if a.get("code"):
+            it["name"] = _resolve_name(a.get("code"))
+        items.append(it)
+        c = a.get("code")
+        if c and c not in codes and a.get("level") in ("red", "yellow"):
+            codes.append(c)
+    summary = {lv: sum(1 for a in anomalies if a.get("level") == lv) for lv in _LV}
+
+    # 특이 프로그램 최신 KPI 스냅샷(설명 근거) — 상위 6개
+    snaps = {}
+    for c in codes[:6]:
+        try:
+            e = {"code": c, "row": S._load_program_latest_row(c)}
+            kpi = _p_program_kpi(e) or {}
+            if kpi:
+                snaps[c] = {"name": _resolve_name(c), **kpi}
+        except Exception:
+            pass
+
+    day_type = None
+    try:
+        from raas_onto import get_adapter
+        day_type = get_adapter().get_day_type((ref_date or "").replace("/", "-"))
+    except Exception:
+        pass
+
+    payload = {"date": ref_date, "day_type": day_type, "summary": summary, "items": items}
+    blocks = [f"### daily_anomalies — 어제({ref_date}) 전 프로그램 이상·특이 신호(z-score 탐지)\n"
+              + json.dumps(payload, ensure_ascii=False, default=str)]
+    used = ["daily_anomalies"]
+    if snaps:
+        blocks.append("### notable_program_kpi — 특이 프로그램 최신 KPI 스냅샷\n"
+                      + json.dumps(snaps, ensure_ascii=False, default=str))
+        used.append("notable_program_kpi")
+    if day_type:
+        used.append("calendar")
+
+    _dt_label = ""
+    if isinstance(day_type, dict):
+        _dt_label = day_type.get("day_type") or ""
+        if day_type.get("holiday_name"):
+            _dt_label += f"({day_type['holiday_name']})"
+        if day_type.get("day_of_week"):
+            _dt_label = f"{day_type['day_of_week']}·{_dt_label}".strip("·")
+    elif day_type:
+        _dt_label = str(day_type)
+    head = (f"분석 대상: 어제({ref_date}) 방송 특이사항 digest · 전 프로그램 이상탐지 기반"
+            + (f" · 일자 유형: {_dt_label}" if _dt_label else ""))
+    context = head + "\n\n" + "\n\n".join(blocks)
+
+    flds = sorted({a.get("field") for a in anomalies if a.get("field")})
+    defs = S._metric_definitions_lines(list(flds)) if flds else []
+    if defs:
+        context += "\n\n## 온톨로지 근거\n[지표 정의 (온톨로지)]\n" + "\n".join(defs)
+
+    # 오버레이 — 특이 프로그램 + 전역
+    overlay_ids = []
+    if codes:
+        targets = [("program", c) for c in codes] + [("global", None)]
+        otext, overlay_ids = _fetch_overlay(targets, overlay_ctx)
+        if otext:
+            context += "\n\n" + otext
+
+    drill = [{"code": c, "name": _resolve_name(c)} for c in codes[:6]]
+    return {
+        "ok": True,
+        "context": context,
+        "providers_used": used,
+        "entities_brief": head,
+        "drill": drill,
+        "provenance": {"providers": used, "scope": "digest",
+                       "ref_date": ref_date, "overlay_items": overlay_ids},
+    }
+
+
+# digest 전용 시스템 — 엔진(provider·온톨로지·오버레이·LLM)은 동일, 출력 형태만 digest에 맞춤
+DIGEST_SYSTEM = (
+    "당신은 SBS 고릴라 라디오의 데이터 분석 어시스턴트입니다.\n"
+    "아래 '근거 데이터'(전 프로그램 이상탐지 + 특이 프로그램 KPI + 일자 유형 + 온톨로지)만 사용해, "
+    "**어제 방송에서 눈여겨볼 특이사항**을 간결한 브리핑으로 정리하세요.\n"
+    "- 가장 중요한 신호부터. red(심각) → yellow(주의) 순.\n"
+    "- 각 항목: 무엇이(프로그램·지표) 어떻게(증감·수치) 특이한지 1줄 + 가능한 원인 힌트(편성·요일·특일).\n"
+    "- 근거에 없는 수치는 지어내지 말 것. 특이사항이 없으면 '특이사항 없음'으로 명시.\n"
+    "- 군더더기·일반론 금지. 마크다운(굵게·목록) 사용 가능. 끝에 '자세히 볼 프로그램'을 묻도록 유도하지 말 것(드릴다운은 UI가 제공).\n"
+)
 
 
 # ─── 개선하기 컨텍스트 (이력 → 개선 화면 재료) ─────────────────────────────

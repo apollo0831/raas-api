@@ -187,6 +187,17 @@ def get_cached_anomalies() -> list:
         alerts = []
     cache_set("anomalies", alerts)
     return alerts
+
+
+def _latest_data_date() -> str:
+    """캐시된 타임라인의 최신 데이터 일자(어제 방송 기준). 'YYYY/MM/DD' 형식."""
+    try:
+        tl = get_cached_timeline()
+        ds = sorted((tl.get("T00") or {}).keys())
+        return ds[-1] if ds else ""
+    except Exception as e:
+        print(f"[latest_date] {e}", flush=True)
+        return ""
 # ──────────────────────────────────────────────────────────
 
 def splunk_auth():
@@ -1503,6 +1514,59 @@ class RAASHandler(BaseHTTPRequestHandler):
                                 "query_id": query_id, "chart_data": chart_data})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/storyline/today":
+            # 스토리라인(단일 경로) — 어제 방송 특이사항. 엔진 일원화: grounding digest를
+            #   GROUNDING_SYSTEM과 동일 엔진(provider·온톨로지·오버레이·LLM)으로 스트리밍.
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                user_id = str(user["id"]); user_name = user["name"]; user_role = user["role"]
+                ip = self._get_client_ip()
+                ref_date = _latest_data_date()
+                anomalies = get_cached_anomalies()
+                g = GROUND.assemble_digest(
+                    ref_date, anomalies,
+                    overlay_ctx={"user_id": user_id, "mode": "normal"},
+                    question="어제 방송 특이사항")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                def sse_t(d: dict):
+                    self.wfile.write(("data: " + json.dumps(d, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                    self.wfile.flush()
+                _tu = f"근거 데이터:\n{g['context']}\n\n사용자 질문: 어제 방송에서 특이사항을 알려줘"
+                _full, _usage = [], {}
+                for chunk in call_claude_stream(GROUND.DIGEST_SYSTEM, _tu, max_tokens=MAX_ANSWER_TOKENS):
+                    if isinstance(chunk, dict) and "_usage" in chunk:
+                        _usage = chunk["_usage"]
+                    else:
+                        _full.append(chunk); sse_t({"type": "token", "text": chunk})
+                _ans = "".join(_full)
+                _qid = save_query(user_id, "어제 방송 특이사항", _ans, ip=ip, user_name=user_name,
+                                  user_role=user_role, intent="today_digest", source="general",
+                                  input_tokens=_usage.get("input_tokens"),
+                                  output_tokens=_usage.get("output_tokens"))
+                if user.get("is_admin"):
+                    _ov = g["provenance"].get("overlay_items") or []
+                    _gp = ("[small]\n**특이사항 digest** — 기준일 " + (ref_date or "?")
+                           + " · provider: " + ", ".join(g["providers_used"])
+                           + (f"\n적용된 지식 오버레이: {len(_ov)}건" if _ov else "") + "\n[/small]")
+                    sse_t({"type": "token", "text": "\n\n" + _gp})
+                sse_t({"type": "done", "query_id": _qid, "routing_badge": "🗓 어제 특이사항",
+                       "drill": g.get("drill") or []})
+                self.close_connection = True
+                return
+            except Exception as e:
+                try:
+                    self.send_json({"ok": False, "error": str(e)}, 500)
+                except Exception:
+                    pass
+                return
 
         elif self.path == "/api/storyline/advance":
             # 칩 클릭 → 다음 슬롯 답변 렌더링
