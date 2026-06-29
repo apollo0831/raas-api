@@ -5285,6 +5285,45 @@ async function _retireMyKnowledge(id, btn) {
     _loadMyImprovements();
   } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
 }
+async function _submitUpload() {
+  const name = (document.getElementById('udName').value || '').trim();
+  const kind = document.getElementById('udKind').value;
+  const target = (document.getElementById('udTarget').value || '').trim();
+  const raw = (document.getElementById('udCsv').value || '').trim();
+  if (!raw) { alert('표 데이터를 붙여넣으세요.'); return; }
+  if (kind !== 'global' && !target) { alert('대상 코드를 입력하세요.'); return; }
+  const lines = raw.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) { alert('헤더 + 최소 1행이 필요합니다.'); return; }
+  const sep = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
+  const columns = lines[0].split(sep).map(s => s.trim());
+  const rows = lines.slice(1).map(l => l.split(sep).map(s => s.trim()));
+  await _authedFetch('/api/upload/add', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, target_kind: kind, target_id: kind === 'global' ? null : target, columns, rows }) });
+  ['udCsv', 'udName', 'udTarget'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  _loadMyImprovements();
+}
+async function _retireMyUpload(id, btn) {
+  if (!confirm('이 업로드를 삭제합니까?')) return;
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/upload/mine/retire', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '실패');
+    _loadMyImprovements();
+  } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
+}
+async function _reviewUpload(id, btn) {
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/upload/review', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '실패');
+    _loadReviewQueue();
+  } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
+}
 async function _submitDataRequest() {
   const field = (document.getElementById('impReqField').value || '').trim();
   const desc = (document.getElementById('impReqDesc').value || '').trim();
@@ -5377,6 +5416,7 @@ async function _loadMyImprovements() {
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || '로드 실패');
     const imps = d.improvements || [], reqs = d.data_requests || [], kn = d.knowledge || [];
+    const ups = d.uploads || [];
     let html = '';
     // 능동 기여 — 질문 없이 도메인 지식 직접 추가
     html += `<div class="imp-sec-hd">＋ 지식 추가 (질문 없이 능동 기여 · 내 재질의에 즉시 반영, 승인 시 전체 반영)</div>
@@ -5401,7 +5441,29 @@ async function _loadMyImprovements() {
           <span class="hm-sess-meta"><button class="imp-btn imp-mini" onclick="_retireMyKnowledge(${k.id},this)">삭제</button></span>
         </div></div>`).join('');
     }
-    if (!imps.length && !reqs.length && !kn.length) {
+    // 본인 데이터 업로드 — 소규모 표(CSV/탭 붙여넣기)
+    html += `<div class="imp-sec-hd">⬆ 데이터 업로드 (소규모 표 · 내 재질의에 즉시 반영, 승인 시 전체)</div>
+      <div class="imp-form" style="margin:0 14px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input id="udName" style="flex:2;min-width:120px" placeholder="데이터 이름 (예: 외부 설문 만족도)">
+          <select id="udKind" style="flex:1;min-width:100px"><option value="program">프로그램</option><option value="channel">채널</option><option value="global">전역</option></select>
+          <input id="udTarget" style="flex:1;min-width:110px" placeholder="대상 코드 (F09)">
+        </div>
+        <textarea id="udCsv" placeholder="CSV/탭 붙여넣기 — 첫 줄 헤더\n날짜,만족도\n2026-06-19,4.2"></textarea>
+        <button class="imp-btn imp-btn-primary" onclick="_submitUpload()">업로드</button>
+      </div>`;
+    if (ups.length) {
+      html += '<div class="imp-sec-hd">내 업로드 ' + ups.length + '건</div>' + ups.map(u => {
+        let nc = 0, nr = 0; try { nc = JSON.parse(u.columns_json || '[]').length; nr = JSON.parse(u.rows_json || '[]').length; } catch (_) {}
+        return `<div class="hm-row"><div class="hm-summary">
+          <span class="wk-chip" style="margin:0">${escapeHtml(u.target_id || '전역')}</span>
+          <span class="imp-st ${u.scope === 'approved' ? 'imp-st-ok' : 'imp-st-wait'}">${u.scope === 'approved' ? '승인·공유' : '내 후보'}</span>
+          <span class="hm-q"><b>${escapeHtml(u.name || '업로드')}</b> · ${nc}열 ${nr}행</span>
+          <span class="hm-sess-meta"><button class="imp-btn imp-mini" onclick="_retireMyUpload(${u.id},this)">삭제</button></span>
+        </div></div>`;
+      }).join('');
+    }
+    if (!imps.length && !reqs.length && !kn.length && !ups.length) {
       html += '<div class="hist-empty-msg" style="padding:16px">아직 개선 시도·기여 내역이 없습니다.</div>';
     }
     if (imps.length) {
@@ -5520,6 +5582,18 @@ async function _loadReviewQueue() {
           <span class="hm-q">${escapeHtml((k.content || '').slice(0, 70))}</span>
           <span class="hm-sess-meta"><button class="imp-btn imp-mini" onclick="_retireKnowledge(${k.id},this)">회수</button></span>
         </div></div>`).join('');
+    }
+    // ⬆ 업로드 데이터 승인 대기
+    const pu = d.pending_uploads || [];
+    if (pu.length) {
+      html += '<div class="imp-sec-hd">⬆ 업로드 데이터 승인 대기 · 승인 시 전체 답변에 반영</div>' + pu.map(u => {
+        let nc = 0, nr = 0; try { nc = JSON.parse(u.columns_json || '[]').length; nr = JSON.parse(u.rows_json || '[]').length; } catch (_) {}
+        return `<div class="hm-row"><div class="hm-summary">
+          <span class="wk-chip" style="margin:0">${escapeHtml(u.target_id || '전역')}</span>
+          <span class="hm-q"><b>${escapeHtml(u.name || '업로드')}</b> · ${nc}열 ${nr}행</span>
+          <span class="hm-sess-meta"><button class="imp-btn imp-mini imp-btn-primary" onclick="_reviewUpload(${u.id},this)">승인 → 전체</button></span>
+        </div></div>`;
+      }).join('');
     }
     body.innerHTML = html;
   } catch (e) { body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`; }

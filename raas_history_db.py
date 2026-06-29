@@ -239,6 +239,19 @@ def init_db():
                 status TEXT, reviewed_by TEXT, reviewed_at TIMESTAMP
             )
         """)
+        # 본인 데이터 업로드(소규모 표) — grounding candidate provider
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS uploaded_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                contributor_id TEXT,
+                target_kind TEXT, target_id TEXT,
+                name TEXT, columns_json TEXT, rows_json TEXT,
+                scope TEXT, status TEXT,
+                reviewed_by TEXT, reviewed_at TIMESTAMP
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ud_target ON uploaded_data (target_kind, target_id, scope)")
 
 
 @contextmanager
@@ -449,6 +462,75 @@ def review_improvement(improvement_id, action, reviewer) -> bool:
         else:
             conn.execute("UPDATE improvements SET status='반려', reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
                          (str(reviewer), improvement_id))
+    return True
+
+
+def add_uploaded_data(contributor_id, target_kind, target_id, name, columns, rows,
+                      scope="candidate") -> int:
+    """소규모 표 데이터 저장(candidate). columns: [str], rows: [[...]]."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO uploaded_data "
+            "(contributor_id, target_kind, target_id, name, columns_json, rows_json, scope, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (str(contributor_id), target_kind, target_id, name,
+             json.dumps(columns, ensure_ascii=False), json.dumps(rows, ensure_ascii=False),
+             scope, "draft"))
+        return cur.lastrowid
+
+
+def list_my_uploads(contributor_id, limit=50) -> list:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, target_kind, target_id, name, columns_json, rows_json, scope, status, created_at "
+            "FROM uploaded_data WHERE contributor_id=? AND status!='rejected' "
+            "ORDER BY created_at DESC LIMIT ?", (str(contributor_id), limit)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def retire_my_upload(upload_id, contributor_id) -> bool:
+    with get_conn() as conn:
+        conn.execute("UPDATE uploaded_data SET status='rejected' WHERE id=? AND contributor_id=?",
+                     (upload_id, str(contributor_id)))
+    return True
+
+
+def get_uploaded_data(targets, contributor_id=None, include_candidate=False) -> list:
+    """grounding 주입용 — targets [(kind,id)]에 매칭되는 업로드. approved(+본인 candidate)."""
+    if not targets:
+        return []
+    conds, params = [], []
+    for kind, tid in targets:
+        if tid is None:
+            conds.append("(target_kind=? AND target_id IS NULL)"); params.append(kind)
+        else:
+            conds.append("(target_kind=? AND target_id=?)"); params += [kind, tid]
+    where_t = "(" + " OR ".join(conds) + ")"
+    scope_or = ["scope='approved'"]
+    if include_candidate and contributor_id is not None:
+        scope_or.append("(scope='candidate' AND contributor_id=?)"); params_tail = [str(contributor_id)]
+    else:
+        params_tail = []
+    sql = (f"SELECT * FROM uploaded_data WHERE {where_t} AND status!='rejected' "
+           f"AND ({' OR '.join(scope_or)})")
+    with get_conn() as conn:
+        rows = conn.execute(sql, tuple(params + params_tail)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def list_pending_uploads(limit=100) -> list:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM uploaded_data WHERE scope='candidate' AND status!='rejected' "
+            "ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def approve_upload(upload_id, reviewer) -> bool:
+    with get_conn() as conn:
+        conn.execute("UPDATE uploaded_data SET scope='approved', status='approved', "
+                     "reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
+                     (str(reviewer), upload_id))
     return True
 
 

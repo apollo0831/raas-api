@@ -301,8 +301,8 @@ def _fetch_overlay(targets, overlay_ctx) -> tuple:
     return "\n".join(lines), [it["id"] for it in items]
 
 
-def _overlay_block(ent, overlay_ctx) -> tuple:
-    """program/channel scope용 — 엔티티에서 타깃을 구성해 _fetch_overlay 호출."""
+def _entity_targets(ent) -> list:
+    """엔티티 → 오버레이/업로드 매칭 타깃 [(kind,id)]."""
     targets = []
     if ent.get("scope_kind") == "channel":
         if ent.get("code"):
@@ -312,9 +312,47 @@ def _overlay_block(ent, overlay_ctx) -> tuple:
             targets.append(("program", ent["code"]))
         if ent.get("channel"):
             targets.append(("channel", ent["channel"]))
+    return targets
+
+
+def _overlay_block(ent, overlay_ctx) -> tuple:
+    """program/channel scope용 — 엔티티에서 타깃을 구성해 _fetch_overlay 호출."""
+    targets = list(_entity_targets(ent))
     for f in (_p_program_kpi(ent) or {}).keys():
         targets.append(("field", f))
     return _fetch_overlay(targets, overlay_ctx)
+
+
+def _fetch_uploads(targets, overlay_ctx) -> tuple:
+    """타깃에 매칭되는 사용자 업로드 표 데이터를 markdown 블록으로. 반환 (text, [ids])."""
+    try:
+        import raas_history_db as HDB
+    except Exception:
+        return "", []
+    octx = overlay_ctx or {}
+    try:
+        ups = HDB.get_uploaded_data(targets, contributor_id=octx.get("user_id"),
+                                    include_candidate=(octx.get("mode") == "requery"))
+    except Exception as e:
+        print(f"[grounding] uploads error: {e}")
+        ups = []
+    if not ups:
+        return "", []
+    lines = ["## 사용자 업로드 데이터", "아래는 사용자가 올린 보조 데이터입니다. 질문과 관련되면 근거로 활용하세요."]
+    for u in ups:
+        try:
+            cols = json.loads(u.get("columns_json") or "[]")
+            rows = json.loads(u.get("rows_json") or "[]")
+        except Exception:
+            cols, rows = [], []
+        tag = "(본인 미승인)" if u.get("scope") == "candidate" else "(승인됨)"
+        lines.append(f"### {u.get('name') or '업로드'} · 대상 {u.get('target_id') or '전역'} {tag}")
+        if cols:
+            lines.append("| " + " | ".join(str(c) for c in cols) + " |")
+            lines.append("| " + " | ".join("---" for _ in cols) + " |")
+        for r in rows[:50]:
+            lines.append("| " + " | ".join(str(c) for c in r) + " |")
+    return "\n".join(lines), [u["id"] for u in ups]
 
 
 # ─── Compare scope — 두 대상 비교(A vs B) ───────────────────────────────────
@@ -515,13 +553,17 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     overlay_text, overlay_ids = _overlay_block(ent, overlay_ctx)
     if overlay_text:
         context += "\n\n" + overlay_text
+    up_text, up_ids = _fetch_uploads(_entity_targets(ent) + [("global", None)], overlay_ctx)
+    if up_text:
+        context += "\n\n" + up_text
     return {
         "ok": True,
         "context": context,
-        "providers_used": used,
+        "providers_used": used + (["uploaded_data"] if up_ids else []),
         "entities_brief": head,
         "provenance": {"providers": used, "program": ent.get("code"),
-                       "scope": ent.get("scope_kind"), "overlay_items": overlay_ids},
+                       "scope": ent.get("scope_kind"), "overlay_items": overlay_ids,
+                       "uploads": up_ids},
     }
 
 

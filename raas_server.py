@@ -44,7 +44,9 @@ from raas_history_db import (init_db, save_query, get_history, get_popular,
                              get_knowledge_items_by_ids, review_improvement, update_data_request,
                              feedback_weakness, feedback_negative_open,
                              list_approved_knowledge, retire_knowledge_item,
-                             list_my_knowledge, retire_my_knowledge)
+                             list_my_knowledge, retire_my_knowledge,
+                             add_uploaded_data, list_my_uploads, retire_my_upload,
+                             list_pending_uploads, approve_upload)
 from raas_auth import (register_user, authenticate, create_session,
                        resolve_session, destroy_session,
                        get_pending_users, list_users, approve_user, reject_user,
@@ -1253,7 +1255,47 @@ class RAASHandler(BaseHTTPRequestHandler):
                     it["judge"] = json.loads(it["judge_json"]) if it.get("judge_json") else None
                 self.send_json({"ok": True, "improvements": imps,
                                 "data_requests": list_data_requests(contributor_id=uid),
-                                "knowledge": list_my_knowledge(uid)})
+                                "knowledge": list_my_knowledge(uid),
+                                "uploads": list_my_uploads(uid)})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/upload/add":
+            # 본인 데이터 업로드 — 소규모 표(columns + rows). candidate 저장.
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                cols = body.get("columns") or []
+                rows = body.get("rows") or []
+                if not cols or not rows:
+                    self.send_json({"ok": False, "error": "표 데이터(헤더+행)가 필요합니다."}, 400); return
+                rows = rows[:200]   # 소규모 상한
+                kind = body.get("target_kind") or "program"
+                uid_ = add_uploaded_data(
+                    str(user["id"]), kind,
+                    (None if kind == "global" else body.get("target_id")),
+                    (body.get("name") or "업로드").strip(), cols, rows)
+                self.send_json({"ok": uid_ > 0, "id": uid_})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/upload/mine/retire":
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                self.send_json({"ok": retire_my_upload(body.get("id"), str(user["id"]))})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/upload/review":
+            # 거버넌스 — 업로드 데이터 승인(공유)
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                self.send_json({"ok": approve_upload(body.get("id"), str(user["id"]))})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
@@ -1290,7 +1332,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": True, "improvements": imps, "data_requests": reqs_open,
                                 "weakness": wk,
                                 "negative_open": feedback_negative_open(days=30),
-                                "approved_knowledge": list_approved_knowledge()})
+                                "approved_knowledge": list_approved_knowledge(),
+                                "pending_uploads": list_pending_uploads()})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
