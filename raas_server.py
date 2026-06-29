@@ -194,6 +194,19 @@ def get_cached_anomalies() -> list:
     return alerts
 
 
+def _verify_line(vr) -> str:
+    """수치 검증 결과(GROUND.verify_numbers)를 관리자 푸터 한 줄로."""
+    if not vr:
+        return ""
+    if vr.get("ok"):
+        return "\n수치 검증: ✓ 근거 일치"
+    ups = vr.get("unsupported") or []
+    line = f"\n수치 검증: ⚠ 근거 미확인 {len(ups)}건"
+    if ups:
+        line += " — " + "; ".join(str(u) for u in ups[:3])
+    return line
+
+
 def _latest_data_date() -> str:
     """캐시된 타임라인의 최신 데이터 일자(어제 방송 기준). 'YYYY/MM/DD' 형식."""
     try:
@@ -1094,9 +1107,15 @@ class RAASHandler(BaseHTTPRequestHandler):
                                        output_tokens=_gusage.get("output_tokens"))
                     if user.get("is_admin"):
                         _ov = _ground["provenance"].get("overlay_items") or []
+                        _vr = None
+                        try:
+                            _vr = GROUND.verify_numbers(_ground["context"], _ganswer)
+                        except Exception as _e:
+                            print(f"[verify] {_e}")
                         _gp = ("[small]\n**검색 grounding** — 사용 provider: "
                                + ", ".join(_ground["providers_used"])
                                + (f"\n적용된 지식 오버레이: {len(_ov)}건" if _ov else "")
+                               + _verify_line(_vr)
                                + "\n[/small]")
                         sse_g({"type": "token", "text": "\n\n" + _gp})
                     sse_g({"type": "done", "query_id": _gqid, "routing_badge": "🔎 데이터 grounding"})
@@ -1466,9 +1485,15 @@ class RAASHandler(BaseHTTPRequestHandler):
                                   output_tokens=_usage.get("output_tokens"))
                 if user.get("is_admin"):
                     _ov = g["provenance"].get("overlay_items") or []
+                    _vr = None
+                    try:
+                        _vr = GROUND.verify_numbers(g["context"], _ans)
+                    except Exception as _e:
+                        print(f"[verify] {_e}")
                     _gp = ("[small]\n**특이사항 digest** — 기준일 " + (ref_date or "?")
                            + " · provider: " + ", ".join(g["providers_used"])
-                           + (f"\n적용된 지식 오버레이: {len(_ov)}건" if _ov else "") + "\n[/small]")
+                           + (f"\n적용된 지식 오버레이: {len(_ov)}건" if _ov else "")
+                           + _verify_line(_vr) + "\n[/small]")
                     sse_t({"type": "token", "text": "\n\n" + _gp})
                 sse_t({"type": "done", "query_id": _qid, "routing_badge": "🗓 어제 특이사항",
                        "drill": g.get("drill") or []})

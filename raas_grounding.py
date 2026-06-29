@@ -775,6 +775,36 @@ def judge(question: str, answer_a: str, answer_b: str, votes: int = 3) -> Option
     }
 
 
+# ─── 수치 환각 검증 게이트 (1E) ─────────────────────────────────────────────
+_VERIFY_SYSTEM = (
+    "당신은 데이터 답변 검증관입니다. '근거 데이터'와 'AI 답변'을 받아, 답변의 수치 중 "
+    "**근거로 뒷받침되지 않거나 근거와 모순되는 것만** 찾으세요.\n"
+    "- 근거 수치로부터 계산된 값(증감·차이·비율·합계·평균·순위)은 **정상**으로 간주(환각 아님).\n"
+    "- 근거에 전혀 없는 수치, 또는 근거와 명백히 다른 수치만 보고.\n"
+    "- 날짜·이름·라벨은 검증 대상 아님(수치만).\n"
+    'JSON으로만: {"ok": true|false, "unsupported": ["수치+맥락 한 항목씩"], "note": "한 줄 요약"}'
+)
+
+def verify_numbers(context: str, answer: str) -> Optional[dict]:
+    """답변 수치가 근거로 뒷받침되는지 경량 검증(Haiku). 파생값은 정상 처리.
+       반환: {ok, unsupported:[...], note} 또는 None(검증 불가)."""
+    if not call_claude or not answer:
+        return None
+    # 컨텍스트가 매우 길면 앞부분만(검증 비용·지연 제한). 핵심 근거는 앞쪽에 있음.
+    ctx = context if len(context) <= 12000 else context[:12000]
+    user = f"[근거 데이터]\n{ctx}\n\n[AI 답변]\n{answer}"
+    try:
+        text, _ = call_claude(_VERIFY_SYSTEM, user, max_tokens=400, model=HAIKU_MODEL)
+        r = json.loads(text[text.find("{"): text.rfind("}") + 1])
+    except Exception as e:
+        print(f"[verify] {e}")
+        return None
+    r["ok"] = bool(r.get("ok", True)) and not (r.get("unsupported") or [])
+    if not isinstance(r.get("unsupported"), list):
+        r["unsupported"] = []
+    return r
+
+
 # 최종 답변용 시스템 프롬프트(서버가 사용)
 GROUNDING_SYSTEM = (
     "당신은 SBS 고릴라 라디오의 데이터 분석 어시스턴트입니다.\n"
