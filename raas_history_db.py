@@ -452,6 +452,27 @@ def review_improvement(improvement_id, action, reviewer) -> bool:
     return True
 
 
+def list_my_knowledge(contributor_id, limit=100) -> list:
+    """본인이 기여한 지식 항목(candidate+approved, rejected 제외) — 능동 기여 관리용."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT id, type, target_kind, target_id, content, scope, status, created_at
+                 FROM knowledge_items
+                WHERE contributor_id = ? AND status != 'rejected'
+                ORDER BY created_at DESC LIMIT ?""",
+            (str(contributor_id), limit)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def retire_my_knowledge(item_id, contributor_id) -> bool:
+    """본인 기여 지식 삭제(rejected). 소유자 확인."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE knowledge_items SET status='rejected' "
+            "WHERE id=? AND contributor_id=?", (item_id, str(contributor_id)))
+    return True
+
+
 def list_approved_knowledge(limit=200) -> list:
     """승인된 공유 지식(본체) — grounding이 모든 답변에 주입하는 canonical 도메인 지식."""
     with get_conn() as conn:

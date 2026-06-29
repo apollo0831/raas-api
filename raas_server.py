@@ -43,7 +43,8 @@ from raas_history_db import (init_db, save_query, get_history, get_popular,
                              list_improvements, list_data_requests,
                              get_knowledge_items_by_ids, review_improvement, update_data_request,
                              feedback_weakness, feedback_negative_open,
-                             list_approved_knowledge, retire_knowledge_item)
+                             list_approved_knowledge, retire_knowledge_item,
+                             list_my_knowledge, retire_my_knowledge)
 from raas_auth import (register_user, authenticate, create_session,
                        resolve_session, destroy_session,
                        get_pending_users, list_users, approve_user, reject_user,
@@ -1251,7 +1252,19 @@ class RAASHandler(BaseHTTPRequestHandler):
                 for it in imps:
                     it["judge"] = json.loads(it["judge_json"]) if it.get("judge_json") else None
                 self.send_json({"ok": True, "improvements": imps,
-                                "data_requests": list_data_requests(contributor_id=uid)})
+                                "data_requests": list_data_requests(contributor_id=uid),
+                                "knowledge": list_my_knowledge(uid)})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/knowledge/mine/retire":
+            # 본인 기여 지식 삭제(능동 기여 관리)
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                ok = retire_my_knowledge(body.get("id"), str(user["id"]))
+                self.send_json({"ok": ok})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 

@@ -5253,6 +5253,38 @@ async function _submitKnowledge() {
   document.getElementById('impKContent').value = '';
   _loadImproveContext();
 }
+// 능동 기여 (내 기여 탭) — 질문 없이 지식 추가
+function _akKindHint() {
+  const k = document.getElementById('akKind').value;
+  const t = document.getElementById('akTarget');
+  const ph = { program:'프로그램 코드 (F09)', channel:'채널 코드 (L00 / F00 / T00)',
+    field:'지표 필드 (deep_rate)', global:'전역 — 입력 불필요' };
+  t.placeholder = ph[k] || ''; t.disabled = (k === 'global');
+}
+async function _submitMyKnowledge() {
+  const kind = document.getElementById('akKind').value;
+  const target = (document.getElementById('akTarget').value || '').trim();
+  const type = document.getElementById('akType').value;
+  const content = (document.getElementById('akContent').value || '').trim();
+  if (!content) { alert('내용을 입력하세요.'); return; }
+  if (kind !== 'global' && !target) { alert('대상 코드를 입력하세요 (전역이면 전역 선택).'); return; }
+  await _authedFetch('/api/improve/contribute', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'knowledge', type, target_kind: kind,
+      target_id: kind === 'global' ? null : target, content, op: 'add' }) });
+  _loadMyImprovements();
+}
+async function _retireMyKnowledge(id, btn) {
+  if (!confirm('이 기여 지식을 삭제합니까?')) return;
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/knowledge/mine/retire', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '실패');
+    _loadMyImprovements();
+  } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
+}
 async function _submitDataRequest() {
   const field = (document.getElementById('impReqField').value || '').trim();
   const desc = (document.getElementById('impReqDesc').value || '').trim();
@@ -5327,17 +5359,51 @@ function _reqStatusBadge(st) {
   const cls = st === '완료' ? 'imp-st-ok' : st === '반려' ? 'imp-st-no' : st === '처리중' ? 'imp-st-mid' : 'imp-st-wait';
   return `<span class="imp-st ${cls}">${escapeHtml(st || '')}</span>`;
 }
+const _KTYPE_OPTS = `<option value="program_note">프로그램 메모</option>
+  <option value="metric_definition">지표 정의 보정</option>
+  <option value="guest_policy">게스트 정책</option>
+  <option value="corner_note">코너 메모</option>
+  <option value="decomposition_hint">분해 힌트</option>
+  <option value="fact">사실</option>`;
+const _KT_KO = { metric_definition:'지표정의', field_meaning:'필드의미', program_note:'프로그램메모',
+  guest_policy:'게스트정책', corner_note:'코너메모', decomposition_hint:'분해힌트', fact:'사실' };
+
 async function _loadMyImprovements() {
   const body = document.getElementById('histModalBody');
-  _setHistFooter('개선 이력');
+  _setHistFooter('내 기여');
   try {
     const r = await _authedFetch('/api/improve/mine', { method: 'POST',
       headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || '로드 실패');
-    const imps = d.improvements || [], reqs = d.data_requests || [];
-    if (!imps.length && !reqs.length) { body.innerHTML = '<div class="hist-empty-msg">개선 시도 내역이 없습니다. 답변에 \'아쉬움\' → 개선하기에서 시작하세요.</div>'; return; }
+    const imps = d.improvements || [], reqs = d.data_requests || [], kn = d.knowledge || [];
     let html = '';
+    // 능동 기여 — 질문 없이 도메인 지식 직접 추가
+    html += `<div class="imp-sec-hd">＋ 지식 추가 (질문 없이 능동 기여 · 내 재질의에 즉시 반영, 승인 시 전체 반영)</div>
+      <div class="imp-form" style="margin:0 14px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <select id="akKind" style="flex:1;min-width:110px" onchange="_akKindHint()">
+            <option value="program">프로그램</option><option value="channel">채널</option>
+            <option value="field">지표(필드)</option><option value="global">전역</option></select>
+          <input id="akTarget" style="flex:2;min-width:140px" placeholder="대상 코드 (F09 · L00 · deep_rate)">
+          <select id="akType" style="flex:1;min-width:120px">${_KTYPE_OPTS}</select>
+        </div>
+        <textarea id="akContent" placeholder="추가할 도메인 지식 (예: F09는 매주 금요일 특별 게스트 코너 운영)"></textarea>
+        <button class="imp-btn imp-btn-primary" onclick="_submitMyKnowledge()">지식 추가</button>
+      </div>`;
+    if (kn.length) {
+      html += '<div class="imp-sec-hd">내 기여 지식 ' + kn.length + '건</div>' + kn.map(k =>
+        `<div class="hm-row"><div class="hm-summary">
+          <span class="wk-chip" style="margin:0">${escapeHtml(_KT_KO[k.type] || k.type || '')}</span>
+          <span class="wk-chip" style="margin:0">${escapeHtml(k.target_id || '전역')}</span>
+          <span class="imp-st ${k.scope === 'approved' ? 'imp-st-ok' : 'imp-st-wait'}">${k.scope === 'approved' ? '승인·공유' : '내 후보'}</span>
+          <span class="hm-q">${escapeHtml((k.content || '').slice(0, 56))}</span>
+          <span class="hm-sess-meta"><button class="imp-btn imp-mini" onclick="_retireMyKnowledge(${k.id},this)">삭제</button></span>
+        </div></div>`).join('');
+    }
+    if (!imps.length && !reqs.length && !kn.length) {
+      html += '<div class="hist-empty-msg" style="padding:16px">아직 개선 시도·기여 내역이 없습니다.</div>';
+    }
     if (imps.length) {
       html += '<div class="imp-sec-hd">개선 시도</div>' + imps.map(it => {
         const j = it.judge;
@@ -5799,7 +5865,7 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
       <div class="hist-tabs">
         <button class="hf-tab active" onclick="setHistMode('all',this)">전체</button>
         <button class="hf-tab" onclick="setHistMode('query',this)">일반 질의</button>
-        <button class="hf-tab" onclick="setHistMode('improve',this)">개선 이력</button>
+        <button class="hf-tab" onclick="setHistMode('improve',this)">내 기여</button>
         <button class="hf-tab" id="histTabReview" style="display:none" onclick="setHistMode('review',this)">검토 큐</button>
       </div>
       <div class="hist-tabs">
