@@ -1376,10 +1376,6 @@ table.story-table th{
     <div class="history-list" id="historyList">
       <div class="history-empty">아직 질의 내역이 없습니다.</div>
     </div>
-    <div class="sidebar-section">최근 분석 여정</div>
-    <div class="history-list" id="storyRecentList">
-      <div class="history-empty">아직 분석 여정이 없습니다.</div>
-    </div>
   </div>
 </aside>
 
@@ -2631,7 +2627,6 @@ const QUICK_QUERIES = [
   '이번 주 DAU 추이',
   '파워FM vs 러브FM 주간 신규유입 추이 비교',
   '프로그램별 DAU 순위',
-  '채널 전체 프로그램 스캔',
   '지난주 컬투쇼 게스트 일자별로',
   '어제 프로그램별로 생방송/보라 편성정보 알려줘',
   '컬투쇼 코너 편성 알려줘',
@@ -5825,11 +5820,6 @@ function _onQuickQuery(i) {
     _showBriefingInChat();
     return;
   }
-  // 특수 분기: 채널 전체 프로그램 스캔 → 스토리라인 1_anchor_scan 직접 호출
-  if (q === FULL_SCAN_QUERY_TEXT) {
-    _showFullScanInChat();
-    return;
-  }
   submitQuery(q, 'sidebar_chip');
 }
 
@@ -5967,7 +5957,6 @@ async function refreshHistory() {
   } catch (_) {
     list.innerHTML = '<div class="history-empty">히스토리 로드 실패</div>';
   }
-  try { refreshStoryRecent(); } catch (_) {}
 }
 
 // 최근 분석 여정 — 세션 단위(최근 7일). 카드 클릭 → 여정 펼침.
@@ -6122,21 +6111,14 @@ async function loadHistAll() {
   if (_histMode === 'improve') { _loadMyImprovements(); return; }
   if (_histMode === 'review')  { _loadReviewQueue(); return; }
   try {
-    let queryItems = [], sessions = [];
-    if (_histMode !== 'journey') {   // 일반 질의(전체 사용자)
-      const params = new URLSearchParams({ limit: HIST_PAGE_SIZE, offset: _histOffset, days: _histDays });
-      const res = await fetch('/api/query/history/all?' + params);
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error);
-      _histTotal = data.total; queryItems = data.items || [];
-    } else { _histTotal = 0; }
-    if (_histMode !== 'query') {      // 분석 여정(전체 사용자 — 이력 보기는 전체 공개)
-      const r2 = await _authedFetch('/api/storyline/recent?all=1&days=' + _histDays + '&limit=100');
-      const d2 = await r2.json();
-      sessions = (d2 && d2.ok) ? (d2.sessions || []) : [];
-    }
+    const params = new URLSearchParams({ limit: HIST_PAGE_SIZE, offset: _histOffset, days: _histDays });
+    const res = await fetch('/api/query/history/all?' + params);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    _histTotal = data.total;
+    const queryItems = data.items || [];
     _histAllItems = queryItems;       // 검색은 질의 텍스트 대상
-    _renderHistUnified(queryItems, sessions);
+    _renderHistUnified(queryItems, []);
     _updateHistFooter();
   } catch (e) {
     body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`;
@@ -6790,7 +6772,6 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
       <span class="hist-modal-title">질의 이력</span>
       <div class="hist-tabs">
         <button class="hf-tab active" onclick="setHistMode('all',this)">전체</button>
-        <button class="hf-tab" onclick="setHistMode('journey',this)">분석 여정</button>
         <button class="hf-tab" onclick="setHistMode('query',this)">일반 질의</button>
         <button class="hf-tab" onclick="setHistMode('improve',this)">개선 이력</button>
         <button class="hf-tab" id="histTabReview" style="display:none" onclick="setHistMode('review',this)">검토 큐</button>
