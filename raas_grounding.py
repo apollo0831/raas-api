@@ -51,15 +51,42 @@ def _detect_lookback(q: str) -> int:
     return 0               # 추이·전체·기본 → 가용 데이터 전부 (LLM이 필요한 만큼 사용)
 
 
+# 채널 감지 — 특정 프로그램이 아닌 채널/전사 단위 질의 식별 (scope 확장)
+_CH_NAME_BY_CODE = {v: k for k, v in S._CHANNEL_CODE.items()}
+_CH_NAME_BY_CODE["T00"] = "전체"
+
+def _detect_channel(q: str):
+    t = q or ""
+    for name, code in S._CHANNEL_CODE.items():        # 파워FM/러브FM/고릴라M/픽채널
+        if name in t:
+            return code, name
+    for code in ("F00", "L00", "G00", "P00"):          # 코드 직접 언급
+        if code in t:
+            return code, _CH_NAME_BY_CODE.get(code, code)
+    if any(k in t for k in ("전사", "전체 채널", "네트워크", "앱 전체", "고릴라 전체")):
+        return "T00", "전체"
+    return None, None
+
+
 def resolve_entities(question: str) -> dict:
-    """질문 → {program, code, name, channel, period, metric, lookback, row, history, date}."""
+    """질문 → {program, code, name, channel, period, metric, lookback, row, history, date, scope_kind}.
+       scope_kind: 'program'(특정 프로그램) | 'channel'(채널/전사) | None(미식별→기존 엔진)."""
     prog = extract_program(question)
     ent = {"program": prog, "period": _detect_period(question),
            "metric": S.extract_kpi_metric(question),
-           "lookback": _detect_lookback(question)}
+           "lookback": _detect_lookback(question), "scope_kind": None}
+    code = None
     if prog:
+        ent["scope_kind"] = "program"
         code = prog["code"]
         ent.update(code=code, name=prog["name"], channel=prog["channel"])
+    else:
+        ch_code, ch_name = _detect_channel(question)
+        if ch_code:
+            ent["scope_kind"] = "channel"
+            code = ch_code
+            ent.update(code=code, name=ch_name, channel=ch_code)
+    if code:
         ent["row"] = S._load_program_latest_row(code)
         # 질문 의도 범위만큼(기본 전체) 로드. 분해·baseline provider도 이 history 공유.
         ent["history"] = S._load_program_history(code, ent["lookback"])
@@ -74,7 +101,12 @@ def _p_program_kpi(ent):
     keys = ["DATE", "STIME", "dau", "dau_chg", "wau", "wau_chg", "mau", "mau_chg",
             "new", "new_chg", "react", "react_chg", "churn_rate", "churn_rate_diff",
             "real_rate", "real_rate_diff", "deep_rate", "deep_rate_diff",
-            "engage_rate", "habit_rate", "d1_ret", "d7_ret"]
+            "engage_rate", "habit_rate", "d1_ret", "d7_ret",
+            # 채널 scope에서 의미 있는 주간/월간 변형(프로그램 행엔 없으면 자동 제외)
+            "deep_rate_week", "deep_rate_mon", "real_rate_week", "real_rate_mon",
+            "engage_rate_week", "engage_rate_mon", "churn_rate_week", "churn_rate_mon",
+            "react_rate", "react_rate_week", "react_rate_mon",
+            "habit_rate_week", "habit_rate_mon", "w1_ret", "m1_ret"]
     return {k: r.get(k) for k in keys if r.get(k) not in (None, "")}
 
 
@@ -167,14 +199,20 @@ PROVIDERS = [
 _PROVIDER_BY_NAME = {p["name"]: p for p in PROVIDERS}
 
 
+# 채널 scope에서 의미가 약하거나 프로그램 전용인 provider — 제외(노이즈 방지)
+_PROGRAM_ONLY = {"programming", "revision", "schedule", "weekday_pattern"}
+
 def _applicable(ent) -> list:
     """엔티티상 호출 가능한 provider만(예: program 필요한데 프로그램 없음 → 제외)."""
+    is_channel = ent.get("scope_kind") == "channel"
     ok = []
     for p in PROVIDERS:
         need = p["needs"]
         if need == "program" and not ent.get("code"):
             continue
         if need == "date" and not ent.get("date"):
+            continue
+        if is_channel and p["name"] in _PROGRAM_ONLY:
             continue
         ok.append(p)
     return ok
@@ -264,12 +302,16 @@ def _fetch_overlay(targets, overlay_ctx) -> tuple:
 
 
 def _overlay_block(ent, overlay_ctx) -> tuple:
-    """프로그램 scope용 — 엔티티에서 타깃을 구성해 _fetch_overlay 호출."""
+    """program/channel scope용 — 엔티티에서 타깃을 구성해 _fetch_overlay 호출."""
     targets = []
-    if ent.get("code"):
-        targets.append(("program", ent["code"]))
-    if ent.get("channel"):
-        targets.append(("channel", ent["channel"]))
+    if ent.get("scope_kind") == "channel":
+        if ent.get("code"):
+            targets.append(("channel", ent["code"]))
+    else:
+        if ent.get("code"):
+            targets.append(("program", ent["code"]))
+        if ent.get("channel"):
+            targets.append(("channel", ent["channel"]))
     for f in (_p_program_kpi(ent) or {}).keys():
         targets.append(("field", f))
     return _fetch_overlay(targets, overlay_ctx)
@@ -300,7 +342,11 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         body = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False, default=str)
         blocks.append(f"### {n} — {p['desc']}\n{body}")
     onto = ontology_pack(ent, used)
-    head = (f"분석 대상: {ent.get('name')} ({ent.get('code')}, {ent.get('channel')}) · "
+    if ent.get("scope_kind") == "channel":
+        _scope_str = f"{ent.get('name')} 채널 ({ent.get('code')}) — 채널 전체 집계"
+    else:
+        _scope_str = f"{ent.get('name')} ({ent.get('code')}, {ent.get('channel')})"
+    head = (f"분석 대상: {_scope_str} · "
             f"기간 힌트: {_PERIOD_KO.get(ent.get('period'), '일간')} · 기준일: {ent.get('date')}")
     context = head + "\n\n" + "\n\n".join(blocks)
     if onto:
@@ -314,7 +360,7 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         "providers_used": used,
         "entities_brief": head,
         "provenance": {"providers": used, "program": ent.get("code"),
-                       "overlay_items": overlay_ids},
+                       "scope": ent.get("scope_kind"), "overlay_items": overlay_ids},
     }
 
 
