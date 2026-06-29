@@ -58,6 +58,47 @@ def _is_trend_query(q: str) -> bool:
     return any(s in (q or "") for s in _TREND_SIGNAL)
 
 
+# ── 용어→필드 해석 (1A-P1): 온톨로지 변형 라벨로 질의어를 필드로 매핑 ──
+#    예: '롤링MAU'→dau_r30, 'MAU'→mau. 온톨로지가 채워지면 자동 확장.
+_TERM2FIELD = None
+
+def _term_field_map():
+    """[(term_lower, field), ...] 길이 내림차순(긴 용어 우선 매칭)."""
+    global _TERM2FIELD
+    if _TERM2FIELD is not None:
+        return _TERM2FIELD
+    m = {}
+    try:
+        from raas_onto import get_adapter
+        for field, terms in (get_adapter().get_field_term_map() or {}).items():
+            for t in terms:
+                m.setdefault((t or "").lower(), field)
+    except Exception as e:
+        print(f"[grounding] term map error: {e}")
+    _TERM2FIELD = sorted(((t, f) for t, f in m.items() if t), key=lambda kv: -len(kv[0]))
+    return _TERM2FIELD
+
+
+def _focus_fields(question: str) -> list:
+    """질의어에서 온톨로지 용어를 찾아 대응 필드 목록 반환(긴 용어 우선, 소비로 substring 재매칭 방지)."""
+    t = (question or "").lower()
+    found = []
+    for term, field in _term_field_map():
+        idx = t.find(term)
+        if idx >= 0:
+            if field not in found:
+                found.append(field)
+            t = t[:idx] + (" " * len(term)) + t[idx + len(term):]
+    return found
+
+
+_ANALYTICAL_SIGNAL = ("원인", "왜", "이유", "때문", "분석", "하락", "급락", "급증", "빠졌", "떨어", "부진")
+
+def _is_analytical(q: str) -> bool:
+    """원인·분석형 질의 — 필드 narrowing을 끄고 주변 지표까지 넓게 유지."""
+    return any(s in (q or "") for s in _ANALYTICAL_SIGNAL)
+
+
 # 채널 감지 — 특정 프로그램이 아닌 채널/전사 단위 질의 식별 (scope 확장)
 _CH_NAME_BY_CODE = {v: k for k, v in S._CHANNEL_CODE.items()}
 _CH_NAME_BY_CODE["T00"] = "전체"
@@ -82,7 +123,10 @@ def resolve_entities(question: str) -> dict:
     ent = {"program": prog, "period": _detect_period(question),
            "metric": S.extract_kpi_metric(question),
            "lookback": _detect_lookback(question),
-           "is_trend": _is_trend_query(question), "scope_kind": None}
+           "is_trend": _is_trend_query(question),
+           "focus_fields": _focus_fields(question),      # 질의어→필드(롤링MAU→dau_r30)
+           "analytical": _is_analytical(question),       # 분석형이면 narrowing 끔
+           "scope_kind": None}
     code = None
     if prog:
         ent["scope_kind"] = "program"
@@ -104,17 +148,25 @@ def resolve_entities(question: str) -> dict:
 
 # ─── Provider 레지스트리 ────────────────────────────────────────────────────
 # 각 provider: name, desc(LLM 선택용), needs(필요 엔티티), fetch(ent)->data(JSON 직렬화 가능)
+_KPI_BROAD = ["DATE", "STIME", "dau", "dau_chg", "wau", "wau_chg", "mau", "mau_chg",
+              "new", "new_chg", "react", "react_chg", "churn_rate", "churn_rate_diff",
+              "real_rate", "real_rate_diff", "deep_rate", "deep_rate_diff",
+              "engage_rate", "habit_rate", "d1_ret", "d7_ret",
+              # 채널 scope에서 의미 있는 주간/월간 변형(프로그램 행엔 없으면 자동 제외)
+              "deep_rate_week", "deep_rate_mon", "real_rate_week", "real_rate_mon",
+              "engage_rate_week", "engage_rate_mon", "churn_rate_week", "churn_rate_mon",
+              "react_rate", "react_rate_week", "react_rate_mon",
+              "habit_rate_week", "habit_rate_mon", "w1_ret", "m1_ret"]
+
 def _p_program_kpi(ent):
+    """[P1] 의도 기반 필드 선택. 집중 질의(특정 지표·비분석)는 핵심+포커스만(좁힘),
+       분석형·일반은 넓게 + 포커스 보강(롤링MAU=dau_r30 같은 용어 필드를 반드시 포함)."""
     r = ent.get("row") or {}
-    keys = ["DATE", "STIME", "dau", "dau_chg", "wau", "wau_chg", "mau", "mau_chg",
-            "new", "new_chg", "react", "react_chg", "churn_rate", "churn_rate_diff",
-            "real_rate", "real_rate_diff", "deep_rate", "deep_rate_diff",
-            "engage_rate", "habit_rate", "d1_ret", "d7_ret",
-            # 채널 scope에서 의미 있는 주간/월간 변형(프로그램 행엔 없으면 자동 제외)
-            "deep_rate_week", "deep_rate_mon", "real_rate_week", "real_rate_mon",
-            "engage_rate_week", "engage_rate_mon", "churn_rate_week", "churn_rate_mon",
-            "react_rate", "react_rate_week", "react_rate_mon",
-            "habit_rate_week", "habit_rate_mon", "w1_ret", "m1_ret"]
+    focus = ent.get("focus_fields") or []
+    if focus and not ent.get("analytical"):
+        keys = ["DATE", "STIME", "dau"] + [f for f in focus if f != "dau"]
+    else:
+        keys = _KPI_BROAD + [f for f in focus if f not in _KPI_BROAD]
     return {k: r.get(k) for k in keys if r.get(k) not in (None, "")}
 
 
@@ -130,7 +182,12 @@ def _p_metric_timeseries(ent):
             hist = hist[-400:]                 # 추이·추세 질의 → 전체(안전 상한)
     else:
         hist = hist[-28:]                      # 원인·포인트·기본 → 최근 4주(같은요일 비교 충분)
-    flds = ["dau", "wau", "mau", "deep_rate", "real_rate", "new", "churn_rate"]
+    base = ["dau", "wau", "mau", "deep_rate", "real_rate", "new", "churn_rate"]
+    focus = ent.get("focus_fields") or []
+    if focus and not ent.get("analytical"):
+        flds = ["dau"] + [f for f in focus if f != "dau"]   # 집중 → 핵심+포커스(롤링MAU=dau_r30)
+    else:
+        flds = base + [f for f in focus if f not in base]   # 넓게 + 포커스 보강
     return [
         {"date": (h.get("DATE") or "").replace("/", "-"),
          **{f: h.get(f) for f in flds if h.get(f) not in (None, "")}}
@@ -304,11 +361,46 @@ def select_providers(question: str, ent: dict) -> list:
 
 
 # ─── 온톨로지 grounding 팩 ──────────────────────────────────────────────────
+def _metric_def_lines(fields) -> list:
+    """[P1] 필드별 지표 정의 — 변형·단위(롤링MAU·일간·월간)와 별칭까지 명시.
+       같은 '활성 사용자 수'라도 일/주/월/롤링을 LLM이 구분하도록 surfacing."""
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+        tmap = a.get_field_term_map() or {}
+    except Exception:
+        return []
+    out, seen = [], set()
+    for f in fields:
+        if not f or f in seen:
+            continue
+        seen.add(f)
+        try:
+            info = a.get_field_info(f)
+        except Exception:
+            info = None
+        m = (info or {}).get("metric")
+        if not m or not m.get("label"):
+            continue
+        parts = [m["label"]]
+        gran = (info.get("granularity") or {}).get("label")
+        var = (info.get("variant") or {}).get("label")
+        if gran:
+            parts.append(gran)
+        if var and var != "현재값":
+            parts.append(var)
+        alias = (tmap.get(f) or [None])[0]
+        head = f + (f"({alias})" if alias else "")
+        defn = (m.get("definition") or "").strip()
+        out.append(f"- {head} = " + " · ".join(parts) + (f" — {defn}" if defn else ""))
+    return out
+
+
 def ontology_pack(ent, provider_names) -> str:
     lines = []
-    # 사용 지표 정의
+    # 사용 지표 정의(변형·단위까지 명시)
     fields = list((_p_program_kpi(ent) or {}).keys()) if ent.get("row") else []
-    defs = S._metric_definitions_lines(fields)
+    defs = _metric_def_lines(fields)
     if defs:
         lines += ["[지표 정의 (온톨로지)]"] + defs
     # 분해 프레임워크(분석형 provider가 선택됐을 때)
@@ -467,7 +559,7 @@ def _assemble_compare(question, ents, overlay_ctx=None) -> dict:
     head = ("비교 분석: " + " vs ".join(f"{e['name']}({e['code']})" for e in ents)
             + f" · 기간 힌트: {_PERIOD_KO.get(period, '일간')} · 비교지표: {metric or '핵심 지표'}")
     context = head + "\n\n" + "\n\n".join(blocks)
-    defs = S._metric_definitions_lines(kpi_fields) if kpi_fields else []
+    defs = _metric_def_lines(kpi_fields) if kpi_fields else []
     if defs:
         context += "\n\n## 온톨로지 근거\n[지표 정의 (온톨로지)]\n" + "\n".join(defs)
     targets = [(("channel" if e["kind"] == "channel" else "program"), e["code"]) for e in ents]
@@ -549,7 +641,7 @@ def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
             f"{'하위' if spec['asc'] else '상위'} (기준일 {latest}, 대상 {len(items)}개)")
     context = (head + f"\n\n### program_ranking — 전 프로그램 {spec['label']} 순위\n"
                + json.dumps(payload, ensure_ascii=False, default=str))
-    defs = S._metric_definitions_lines([fld])
+    defs = _metric_def_lines([fld])
     if defs:
         context += "\n\n## 온톨로지 근거\n[지표 정의 (온톨로지)]\n" + "\n".join(defs)
     targets = [("program", it["code"]) for it in top[:8]] + [("global", None)]
@@ -698,7 +790,7 @@ def assemble_digest(ref_date, anomalies, overlay_ctx=None, question=None) -> dic
     context = head + "\n\n" + "\n\n".join(blocks)
 
     flds = sorted({a.get("field") for a in anomalies if a.get("field")})
-    defs = S._metric_definitions_lines(list(flds)) if flds else []
+    defs = _metric_def_lines(list(flds)) if flds else []
     if defs:
         context += "\n\n## 온톨로지 근거\n[지표 정의 (온톨로지)]\n" + "\n".join(defs)
 
@@ -735,22 +827,46 @@ DIGEST_SYSTEM = (
 
 
 # ─── 개선하기 컨텍스트 (이력 → 개선 화면 재료) ─────────────────────────────
+def _field_onto_item(f):
+    """필드 → {field, label(변형 포함), meaning, formula, source(TTL·IRI)} 또는 None(비지표)."""
+    try:
+        from raas_onto import get_adapter
+        info = get_adapter().get_field_info(f)
+    except Exception:
+        info = None
+    m = (info or {}).get("metric")
+    if not m or not m.get("label"):
+        return None
+    gran = (info.get("granularity") or {}).get("label")
+    var = (info.get("variant") or {}).get("label")
+    label = m["label"] + (f" · {gran}" if gran else "") + (f" · {var}" if var and var != "현재값" else "")
+    src = "raas_ontology_kpi.ttl" + (f" · {m['id']}" if m.get("id") else "")
+    return {"field": f, "label": label, "meaning": (m.get("definition") or "").strip(),
+            "formula": m.get("formula"), "source": src}
+
+
 def improve_context(question: str, user_id=None) -> dict:
-    """개선하기 화면용 — 이 질문이 쓰는 데이터 필드(의미)·온톨로지 항목·본인 기존 기여."""
+    """개선하기 화면용 — 이 질문이 실제 쓰는 데이터 필드(의미·출처)·온톨로지 항목·본인 기여.
+       [P1] 온톨로지 항목 = 실제 사용한 것(필드 지표정의 + 분석형일 때만 분해 프레임워크), 출처 TTL 표기."""
     ent = resolve_entities(question)
     if not ent.get("code"):
         return {"ok": False, "reason": "프로그램 미식별"}
     kpi = _p_program_kpi(ent) or {}
-    used_fields = []
-    for f in kpi.keys():
-        mm = S._field_meaning(f)
-        used_fields.append({"field": f, "meaning": (mm[1] if mm else ""), "label": (mm[0] if mm else "")})
-    onto = []
-    try:
-        decs = S._query_decompositions()
-        onto = [{"label": d.get("label"), "purpose": d.get("purpose")} for d in (decs or [])]
-    except Exception:
-        pass
+    used_fields = [it for f in kpi.keys() if (it := _field_onto_item(f))]
+    # 온톨로지 항목 = 실제 사용한 지표 정의(distinct) + 분석형이면 분해 프레임워크(cause.ttl)
+    onto, seen = [], set()
+    for it in used_fields:
+        if it["label"] not in seen:
+            seen.add(it["label"])
+            onto.append({"label": it["label"], "purpose": it.get("meaning") or "",
+                         "source": it["source"]})
+    if ent.get("analytical"):
+        try:
+            for d in (S._query_decompositions() or []):
+                onto.append({"label": d.get("label"), "purpose": d.get("purpose"),
+                             "source": "raas_ontology_cause.ttl"})
+        except Exception:
+            pass
     my = []
     try:
         import raas_history_db as HDB

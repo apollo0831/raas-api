@@ -332,6 +332,7 @@ body{
 .imp-item{font-size:var(--fs-sm);color:var(--text2);margin:5px 0;line-height:1.4}
 .imp-item code{font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono)}
 .imp-mean{font-size:var(--fs-xs);color:var(--dim);margin-top:1px}
+.imp-src{font-size:var(--fs-xs);color:var(--purple);margin-top:2px;font-family:var(--mono);opacity:.85}
 .imp-form{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
 .imp-form input,.imp-form textarea,.imp-form select{width:100%;box-sizing:border-box;margin:4px 0;padding:7px 9px;border:1px solid var(--line2);border-radius:7px;background:var(--bg2);color:var(--text);font-size:var(--fs-sm);font-family:var(--sans)}
 .imp-form textarea{min-height:54px;resize:vertical}
@@ -5222,14 +5223,14 @@ async function _loadImproveContext() {
     _improveState.program = d.program;
     dataEl.innerHTML =
       '<div class="imp-sub">사용된 데이터 필드</div>' +
-      (d.used_fields || []).map(f => `<div class="imp-item"><b>${escapeHtml(f.label || f.field)}</b> <code>${escapeHtml(f.field)}</code><div class="imp-mean">${escapeHtml(f.meaning || '')}</div></div>`).join('') +
+      (d.used_fields || []).map(f => `<div class="imp-item"><b>${escapeHtml(f.label || f.field)}</b> <code>${escapeHtml(f.field)}</code><div class="imp-mean">${escapeHtml(f.meaning || '')}</div>${f.source ? `<div class="imp-src">📄 ${escapeHtml(f.source)}</div>` : ''}</div>`).join('') +
       `<div class="imp-form"><div class="imp-sub">스플렁크 필드 추가 요청 <span class="imp-tag">요청형 · 관리자 처리 후 반영</span></div>
         <input id="impReqField" placeholder="필드명 (예: gender_segment)">
         <textarea id="impReqDesc" placeholder="왜 필요한지 설명"></textarea>
         <button class="imp-btn" onclick="_submitDataRequest()">요청 등록</button></div>`;
     ontoEl.innerHTML =
       '<div class="imp-sub">참고한 온톨로지</div>' +
-      (d.ontology_items || []).map(o => `<div class="imp-item"><b>${escapeHtml(o.label)}</b><div class="imp-mean">${escapeHtml(o.purpose || '')}</div></div>`).join('') +
+      (d.ontology_items || []).map(o => `<div class="imp-item"><b>${escapeHtml(o.label)}</b><div class="imp-mean">${escapeHtml(o.purpose || '')}</div>${o.source ? `<div class="imp-src">📄 ${escapeHtml(o.source)}</div>` : ''}</div>`).join('') +
       ((d.my_knowledge || []).length ? '<div class="imp-sub">내 기여 (미승인)</div>' + d.my_knowledge.map(k => `<div class="imp-item">• ${escapeHtml(k.content)}</div>`).join('') : '') +
       `<div class="imp-form"><div class="imp-sub">온톨로지 수정·추가 <span class="imp-tag imp-tag-now">즉시 · 내 재질의에 반영</span></div>
         <select id="impKType">

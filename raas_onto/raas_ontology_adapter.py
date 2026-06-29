@@ -403,6 +403,23 @@ class OntologyAdapter:
         """온톨로지에 정의된 모든 필드명 (변형 접미사 적용 전)."""
         return list(self._field_to_variant.keys())
 
+    def get_field_term_map(self) -> dict:
+        """필드 → 변형(MetricVariant) 특화 용어 목록(rdfs:label + altLabel).
+        예: {'dau_r30': ['롤링MAU'], 'mau': ['MAU'], 'dau': ['DAU'], 'dau_r7': ['롤링WAU'] ...}
+        베이스 metric altLabel(DAU/WAU/MAU)은 dau-family 전체에 공유돼 모호하므로 제외 —
+        변형 라벨이 이미 일/주/월/롤링을 특정함. LLM 용어 해석('롤링MAU'→dau_r30)·필드 선택용."""
+        out = {}
+        for field, mv in self._field_to_variant.items():
+            terms, seen = [], set()
+            for v in [self._onto.label_ko(mv)] + [self._onto.value_str(x)
+                                                  for x in self._onto.get(mv, "raas:altLabel")]:
+                v = (v or "").strip()
+                if v and v.lower() not in seen:
+                    seen.add(v.lower()); terms.append(v)
+            if terms:
+                out[field] = terms
+        return out
+
     def get_metadata_field_info(self, csv_column: str) -> Optional[dict]:
         """CSV 컬럼명 → 메타데이터 속성 정보 (raas:csvField 어노테이션 기반).
 
