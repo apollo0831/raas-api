@@ -99,10 +99,6 @@ raas:RollingGranularity a owl:Class ;
     rdfs:label "롤링 시간 단위"@ko ;
     rdfs:comment "오늘 기준 소급 이동 윈도우"@ko .
 
-raas:PeriodAvgGranularity a owl:Class ;
-    rdfs:subClassOf raas:Granularity ;
-    rdfs:label "기간 평균 단위"@ko ;
-    rdfs:comment "전주/전월 기간의 일평균 — 누적값이 아닌 기간 내 평균"@ko .
 
 raas:Variant a owl:Class ;
     rdfs:label "변형"@ko ;
@@ -343,19 +339,6 @@ raas:Rolling30Day a raas:RollingGranularity ;
     raas:rollingFrom "today" ;
     raas:appliesTo raas:AU ;
     raas:order 5 .
-
-# ─── 3.3b Period Average Granularity ─────────────────────────────────────────
-
-raas:PrevWeekAvg a raas:PeriodAvgGranularity ;
-    rdfs:label "전주 일평균 (월~일 7일간 DAU 평균)"@ko ;
-    raas:windowDays 7 ;
-    raas:windowType "period_avg" ;
-    raas:order 6 .
-
-raas:PrevMonAvg a raas:PeriodAvgGranularity ;
-    rdfs:label "전월 일평균 (1일~말일 기간 평균)"@ko ;
-    raas:windowType "period_avg" ;
-    raas:order 7 .
 
 # ─── 3.4 Variant (변형) ──────────────────────────────────────────────────────
 

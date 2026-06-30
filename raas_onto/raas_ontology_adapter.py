@@ -420,6 +420,20 @@ class OntologyAdapter:
                 out[field] = terms
         return out
 
+    def get_lookup_columns(self) -> dict:
+        """LookupColumn 컬럼 사전 → {csvField: {label, definition}}.
+        dimension/metadata 컬럼(guestname·코너·생방·DATE 등)의 의미. grounding surfacing용."""
+        out = {}
+        for col in self._onto.instances_of("raas:LookupColumn"):
+            csv = self._onto.value_str(self._onto.get_one(col, "raas:csvField"))
+            if not csv:
+                continue
+            out[csv] = {
+                "label": self._onto.label_ko(col),
+                "definition": self._onto.value_str(self._onto.get_one(col, "raas:definition")),
+            }
+        return out
+
     def get_metadata_field_info(self, csv_column: str) -> Optional[dict]:
         """CSV 컬럼명 → 메타데이터 속성 정보 (raas:csvField 어노테이션 기반).
 

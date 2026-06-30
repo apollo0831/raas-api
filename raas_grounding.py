@@ -422,6 +422,18 @@ def ontology_pack(ent, provider_names) -> str:
     defs = _metric_def_lines(fields)
     if defs:
         lines += ["[지표 정의 (온톨로지)]"] + defs
+    # 편성 메타 컬럼 의미(편성/편성표 provider 선택 시) — guestname·코너·생방·보라 해석
+    if any(n in provider_names for n in ("programming", "schedule")):
+        try:
+            from raas_onto import get_adapter
+            cols = get_adapter().get_lookup_columns() or {}
+            wanted = ["guestname", "daily_corner", "weekly_corner", "view_radio_yn", "live_yn"]
+            clines = [f"- {cols[c]['label']}({c}): {cols[c]['definition']}"
+                      for c in wanted if c in cols and cols[c].get("definition")]
+            if clines:
+                lines += ["", "[편성 메타 정의 (온톨로지 컬럼 사전)]"] + clines
+        except Exception as e:
+            print(f"[grounding] column defs error: {e}")
     # 분해 프레임워크(분석형 provider가 선택됐을 때)
     if any(n in provider_names for n in ("flow_decomp", "cohort", "stickiness", "programming")):
         try:
