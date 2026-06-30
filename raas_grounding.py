@@ -595,31 +595,65 @@ def _detect_compare(question: str):
     return ents[:4] if len(ents) >= 2 else None
 
 
-def _compare_ts(hist) -> list:
+# 시계열 직렬화 — CSV(키 1회) + 주간/월간 지표는 기간 내 매일 같은 값이므로 변동 시점만.
+#   주간 지표(wau 등)는 월~일 동일, 월간 지표(mau 등)는 1일~말일 동일 → 첫날 값만 보내면 충분.
+_TS_FIELDS = ["dau", "wau", "mau", "deep_rate", "real_rate", "new", "churn_rate"]
+_WEEKLY_FIELDS = {"wau", "wau_1min", "wau_10min", "w1_ret", "new_w1_ret"}
+_MONTHLY_FIELDS = {"mau", "mau_1min", "mau_10min", "m1_ret", "new_m1_ret"}
+
+def _ts_csv(hist, fields=None) -> str:
+    """시계열을 CSV로 직렬화(키 반복 제거). 일별 지표는 매일, 주간·월간 지표는 변동 시점(첫날)만 →
+       기간 내 중복 값 제거로 토큰 대폭 절감. 행 구조 보존(날짜+값 한 줄)이라 정합성 안전."""
     hist = hist or []
-    if len(hist) > 120:
-        hist = hist[-120:]
-    flds = ["dau", "wau", "mau", "deep_rate", "real_rate", "new", "churn_rate"]
-    return [{"date": (h.get("DATE") or "").replace("/", "-"),
-             **{f: h.get(f) for f in flds if h.get(f) not in (None, "")}} for h in hist]
+    fields = fields or _TS_FIELDS
+    def _d(h): return (h.get("DATE") or "").replace("/", "-")
+    def _v(h, f):
+        x = h.get(f)
+        return "" if x in (None, "") else str(x)
+    # 기간 내 값이 한 번도 없는 필드는 열에서 제외(빈 열 낭비 방지)
+    fields = [f for f in fields if any(h.get(f) not in (None, "") for h in hist)]
+    daily   = [f for f in fields if f not in _WEEKLY_FIELDS and f not in _MONTHLY_FIELDS]
+    weekly  = [f for f in fields if f in _WEEKLY_FIELDS]
+    monthly = [f for f in fields if f in _MONTHLY_FIELDS]
+    out = []
+    if daily:
+        out.append("[일별] date," + ",".join(daily))
+        out += [_d(h) + "," + ",".join(_v(h, f) for f in daily) for h in hist]
+    def _step(label, flds):
+        if not flds:
+            return
+        rows, prev = [], None
+        for h in hist:
+            key = tuple(h.get(f) for f in flds)
+            if key != prev:
+                prev = key
+                if any(h.get(f) not in (None, "") for f in flds):  # 빈 값 변동점은 생략
+                    rows.append(_d(h) + "," + ",".join(_v(h, f) for f in flds))
+        if rows:
+            out.append(f"[{label}] date,{','.join(flds)}  (기간 내 매일 동일 — 변동 시점만)")
+            out.extend(rows)
+    _step("주별", weekly)
+    _step("월별", monthly)
+    return "\n".join(out)
 
 
 def _assemble_compare(question, ents, overlay_ctx=None) -> dict:
     lookback = _detect_lookback(question)
+    win = lookback if lookback > 0 else 90       # 기간 미지정 시 전부 대신 최근 90일
     period = _detect_period(question)
     metric = S.extract_kpi_metric(question)
     blocks, kpi_fields = [], []
     for e in ents:
         row = S._load_program_latest_row(e["code"])
-        hist = S._load_program_history(e["code"], lookback)
+        hist = S._load_program_history(e["code"], win)
         el = {"code": e["code"], "row": row, "history": hist, "scope_kind": e["kind"]}
         kpi = _p_program_kpi(el) or {}
         if not kpi_fields:
             kpi_fields = list(kpi.keys())
         blocks.append(f"### {e['name']}({e['code']}) — 최신 KPI 스냅샷\n"
                       + json.dumps(kpi, ensure_ascii=False, default=str))
-        blocks.append(f"### {e['name']}({e['code']}) — 시계열(최근)\n"
-                      + json.dumps(_compare_ts(hist), ensure_ascii=False, default=str))
+        blocks.append(f"### {e['name']}({e['code']}) — 시계열(최근 {win}일, CSV)\n"
+                      + _ts_csv(hist))
     head = ("비교 분석: " + " vs ".join(f"{e['name']}({e['code']})" for e in ents)
             + f" · 기간 힌트: {_PERIOD_KO.get(period, '일간')} · 비교지표: {metric or '핵심 지표'}")
     context = head + "\n\n" + "\n\n".join(blocks)
