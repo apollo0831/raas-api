@@ -126,6 +126,37 @@ def _render_contributed_ttl(items: list) -> str:
     return _HEADER + body + "\n"
 
 
+def preview_promotion() -> dict:
+    """승격 dry-run — 파일을 쓰지 않고 변경 예정 내용을 반환.
+       반환 {ok, count, promoted, items:[{id,type,target,content,predicate,node,excluded,reason}],
+             ttl_before, ttl_after}. UI에서 병합 전후·텍스트 변경을 검토하는 용도."""
+    import raas_history_db as HDB
+    items = HDB.list_approved_for_promotion()
+    try:
+        before = open(_CONTRIB_PATH, encoding="utf-8").read()
+    except Exception:
+        before = ""
+    after = _render_contributed_ttl(items)
+    rows = []
+    for it in items:
+        typ = it.get("type") or "fact"
+        excluded = typ in _SKIP_TYPES
+        tk = it.get("target_kind") or "global"
+        tid = it.get("target_id")
+        rows.append({
+            "id": it["id"], "type": typ,
+            "target": (f"{tk}:{tid}" if tid else tk),
+            "content": it.get("content"),
+            "predicate": (None if excluded else _TYPE_PREDICATE.get(typ, "raas:contributedNote")),
+            "node": (None if excluded else _resolve_target_node(it)),
+            "excluded": excluded,
+            "reason": ("answer_style는 style_policy 도메인(승격 제외)" if excluded else None),
+        })
+    return {"ok": True, "count": len(items),
+            "promoted": sum(1 for r in rows if not r["excluded"]),
+            "items": rows, "ttl_before": before, "ttl_after": after}
+
+
 def promote_approved_to_ttl() -> dict:
     """승인 지식 전체를 구조화 contributed.ttl로 재생성(멱등) + promoted_at 기록.
        반환: {ok, count, promoted, path}. count=대상 건수, promoted=실제 구조화된 건수."""

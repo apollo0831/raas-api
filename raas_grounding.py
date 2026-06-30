@@ -444,6 +444,13 @@ def _metric_def_lines(fields) -> list:
         head = f + (f"({alias})" if alias else "")
         defn = (m.get("definition") or "").strip()
         out.append(f"- {head} = " + " · ".join(parts) + (f" — {defn}" if defn else ""))
+        # 깊은 통합(Q2 v2): 이 필드의 승격된 기여 정의 보정을 정의 줄 옆에 병합(출처 명시)
+        try:
+            for cf in (a.get_contributed_for("field", f) or []):
+                if cf.get("predicate") == "raas:contributedDefinition":
+                    out[-1] += f"  ※기여 보정: {cf['content']}"
+        except Exception:
+            pass
     return out
 
 
@@ -505,6 +512,9 @@ def _fetch_contributed_struct(targets) -> str:
         except Exception:
             facts = []
         for f in facts:
+            # contributedDefinition은 _metric_def_lines가 정의 줄에 병합(깊은 통합) → 블록 제외
+            if f.get("predicate") == "raas:contributedDefinition":
+                continue
             key = (f.get("predicate"), f.get("content"))
             if key in seen:
                 continue

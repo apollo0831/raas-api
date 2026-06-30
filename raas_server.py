@@ -1411,14 +1411,25 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
         elif self.path == "/api/knowledge/promote":
-            # 승인 지식 → TTL canonical 승격 배치(contributed.ttl 재생성)
-            user = self._require_stats_viewer()
+            # 승인 지식 → TTL canonical 승격 배치(contributed.ttl 재생성). 관리자(is_admin) 전용.
+            user = self._require_admin()
             if not user:
                 return
             try:
                 import raas_ontology_promote as PROMOTE
                 res = PROMOTE.promote_approved_to_ttl()
                 self.send_json(res)
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/knowledge/promote/preview":
+            # 승격 전 미리보기(dry-run) — 병합 전후/대상/제외 항목. 관리자 전용.
+            user = self._require_admin()
+            if not user:
+                return
+            try:
+                import raas_ontology_promote as PROMOTE
+                self.send_json(PROMOTE.preview_promotion())
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
