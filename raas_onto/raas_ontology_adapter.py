@@ -50,7 +50,7 @@ def _find_ontology_dir() -> Path:
     ]
     for c in candidates:
         # 첫 번째 .ttl 파일 존재 여부로 판정
-        if (c / "raas_ontology_kpi.ttl").exists():
+        if (c / "raas_ontology_fields.ttl").exists():
             return c
 
     # 못 찾으면 같은 폴더로 (어댑터 init 시 경고 발생)
@@ -60,7 +60,7 @@ def _find_ontology_dir() -> Path:
 ONTOLOGY_DIR = _find_ontology_dir()
 
 ONTOLOGY_FILES = [
-    "raas_ontology_kpi.ttl",
+    "raas_ontology_fields.ttl",
     "raas_ontology_program.ttl",
     "raas_ontology_time.ttl",
     "raas_ontology_noteworthy.ttl",

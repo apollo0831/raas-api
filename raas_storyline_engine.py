@@ -176,7 +176,7 @@ _WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
 
 
 # ─── 원인 분석 온톨로지 로더 (RDF/Turtle, D-016) ─────────────────
-# raas_onto/raas_ontology_kpi.ttl + raas_ontology_cause.ttl 결합
+# raas_onto/raas_ontology_fields.ttl + raas_ontology_cause.ttl 결합
 # SPARQL로 4축·해석 규칙·적재 힌트·우선순위 조회
 _RDF_GRAPH = None
 
@@ -192,7 +192,7 @@ def _load_rdf_graph():
         print("[ontology] rdflib 미설치 — 원인 분석 비활성")
         return None
     g = rdflib.Graph()
-    for fname in ("raas_ontology_kpi.ttl", "raas_ontology_cause.ttl", "raas_ontology_calendar.ttl"):
+    for fname in ("raas_ontology_fields.ttl", "raas_ontology_cause.ttl", "raas_ontology_calendar.ttl"):
         p = ONTO_DIR / fname
         if p.exists():
             try:

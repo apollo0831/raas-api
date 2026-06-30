@@ -850,7 +850,7 @@ def _field_onto_item(f):
     gran = (info.get("granularity") or {}).get("label")
     var = (info.get("variant") or {}).get("label")
     label = m["label"] + (f" · {gran}" if gran else "") + (f" · {var}" if var and var != "현재값" else "")
-    src = "raas_ontology_kpi.ttl" + (f" · {m['id']}" if m.get("id") else "")
+    src = "raas_ontology_fields.ttl" + (f" · {m['id']}" if m.get("id") else "")
     return {"field": f, "label": label, "meaning": (m.get("definition") or "").strip(),
             "formula": m.get("formula"), "source": src}
 

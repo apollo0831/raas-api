@@ -308,13 +308,13 @@ raas:Percentage a raas:MeasureType ;
 # ─── 3.2 Calendar Granularity ────────────────────────────────────────────────
 
 raas:Day a raas:CalendarGranularity ;
-    rdfs:label "일간"@ko ;
+    rdfs:label "일간 (자정~자정 1일 집계)"@ko ;
     raas:windowDays 1 ;
     raas:windowType "single_day" ;
     raas:order 1 .
 
 raas:Week a raas:CalendarGranularity ;
-    rdfs:label "주간 (캘린더 월~일 누적)"@ko ;
+    rdfs:label "주간 (캘린더 월~일)"@ko ;
     raas:windowDays 7 ;
     raas:windowType "calendar_week" ;
     raas:windowStart "monday" ;
@@ -322,7 +322,7 @@ raas:Week a raas:CalendarGranularity ;
     raas:order 2 .
 
 raas:Month a raas:CalendarGranularity ;
-    rdfs:label "월간 (캘린더 1~말일 누적)"@ko ;
+    rdfs:label "월간 (캘린더 1~말일)"@ko ;
     raas:windowType "calendar_month" ;
     raas:order 3 .
 
@@ -438,7 +438,7 @@ raas:AU a raas:Metric ;
     raas:altLabel "AU"@en ;
     raas:unit "명" ;
     raas:hasMeasureType raas:Count ;
-    raas:definition "특정 기간 내 청취시간이 0보다 큰 고유 사용자 수"@ko ;
+    raas:definition "측정 기간 내 고릴라에 접속해 청취를 시작한 고유 사용자 수"@ko ;
     raas:formula "COUNT(DISTINCT user_id WHERE listen_duration > 0)" ;
     raas:dictionarySection "B. user_size" .
 
@@ -538,10 +538,10 @@ raas:AU_10min_Month a raas:MetricVariant ;
 
 raas:NewUser a raas:Metric ;
     rdfs:label "신규 사용자"@ko ;
-    raas:altLabel "신규유저"@ko, "신규"@ko ;
+    raas:altLabel "신규유저"@ko, "신규"@ko, "신규유입"@ko ;
     raas:unit "명" ;
     raas:hasMeasureType raas:Count ;
-    raas:definition "고릴라 앱 또는 해당 채널·프로그램에 첫 진입한 사용자 수"@ko ;
+    raas:definition "고릴라 앱 또는 해당 채널·프로그램에 첫 진입한 사용자 수 (과거 2년동안 사용 이력 없음)"@ko ;
     raas:dictionarySection "C. user_growth" .
 
 raas:NewUser_Day a raas:MetricVariant ;
@@ -589,8 +589,8 @@ raas:ChurnRate a raas:Metric ;
     raas:altLabel "Churn Rate"@en, "이탈"@ko ;
     raas:unit "%" ;
     raas:hasMeasureType raas:Percentage ;
-    raas:definition "직전 기간 활성사용자 대비 이탈 비율"@ko ;
-    raas:formula "이탈사용자 / 직전 기간 활성사용자 × 100" ;
+    raas:definition "직전 기간 활성이었지만 현재 기간 비활성인 비율"@ko ;
+    raas:formula "이탈사용자(직전 기간 활성이었지만 현재 기간 비활성) / 직전 기간 활성사용자 × 100" ;
     raas:dictionarySection "D. user_quality" .
 
 raas:ChurnRate_Day a raas:MetricVariant ;
@@ -611,10 +611,10 @@ raas:ChurnRate_Month a raas:MetricVariant ;
 
 raas:ReactRate a raas:Metric ;
     rdfs:label "복귀율"@ko ;
-    raas:altLabel "복귀 비율"@ko ;
+    raas:altLabel "복귀 비율"@ko, "재활성화율"@ko ;
     raas:unit "%" ;
     raas:hasMeasureType raas:Percentage ;
-    raas:definition "이번 기간 휴면풀 대비 복귀 비율"@ko ;
+    raas:definition "이번 기간 휴면풀 대비 복귀사용자 비율"@ko ;
     raas:formula "복귀사용자 / 이번 기간 휴면풀 × 100" ;
     raas:dictionarySection "D. user_quality" .
 
@@ -737,27 +737,6 @@ raas:RealListenRate_Month a raas:MetricVariant ;
     raas:fieldName "real_rate_mon" .
 
 
-# ─── 4.3c 기간 평균 지표 ─────────────────────────────────────────────────────
-
-raas:AU_WeekAvg a raas:MetricVariant ;
-    raas:ofMetric raas:AU ;
-    raas:granularity raas:PrevWeekAvg ;
-    raas:fieldName "dau_week_avg" ;
-    rdfs:comment "전주 월~일 7일간 DAU 일평균"@ko .
-
-raas:AU_MonAvg a raas:MetricVariant ;
-    raas:ofMetric raas:AU ;
-    raas:granularity raas:PrevMonAvg ;
-    raas:fieldName "dau_mon_avg" ;
-    rdfs:comment "전월 1일~말일 DAU 일평균"@ko .
-
-raas:WAU_MonAvg a raas:MetricVariant ;
-    raas:ofMetric raas:AU ;
-    raas:granularity raas:PrevMonAvg ;
-    raas:fieldName "wau_mon_avg" ;
-    rdfs:comment "전월 1일~말일 7D롤링 WAU 일평균"@ko .
-
-
 # ─── 4.4 그룹 D: 유지율 (단일 metric + 윈도우 × 코호트) ──────────────────────
 
 raas:RetentionRate a raas:Metric ;
@@ -765,7 +744,7 @@ raas:RetentionRate a raas:Metric ;
     raas:altLabel "Retention Rate"@en, "리텐션"@ko ;
     raas:unit "%" ;
     raas:hasMeasureType raas:Percentage ;
-    raas:definition "기준 시점 사용자 중 일정 기간 후에도 접속한 비율"@ko ;
+    raas:definition "기준 시점 사용자 중 일정 기간 후에도 활성인 비율"@ko ;
     raas:formula "COUNT(returned_users) / COUNT(base_users) * 100" ;
     raas:dictionarySection "F. user_retention" .
 
@@ -834,6 +813,67 @@ raas:RetentionRate_M1_NewUser a raas:MetricVariant ;
     raas:hasWindow raas:Window_M1 ;
     raas:hasCohort raas:Cohort_NewUser ;
     raas:fieldName "new_m1_ret" .
+
+
+# =============================================================================
+# 5. 스플렁크 룩업 컬럼 사전 (dimension / metadata)
+#    KPI 지표(Metric/MetricVariant) 외 모든 룩업 컬럼을 한 곳에 정의.
+#    필드→의미는 여기서 관리, 깊은 개념(게스트 해석정책 등)은 도메인 ttl에 raas:relatesTo로 링크.
+# =============================================================================
+
+raas:LookupColumn a owl:Class ;
+    rdfs:label "룩업 컬럼"@ko ;
+    rdfs:comment "Splunk 룩업테이블 컬럼(차원/메타데이터). KPI 지표 외 모든 컬럼의 정의 사전."@ko .
+
+raas:relatesTo a owl:ObjectProperty ;
+    rdfs:label "관련 개념"@ko ;
+    rdfs:comment "컬럼이 표현하는 도메인 개념(Program/Person/Corner 등). 깊은 의미는 해당 ttl 참조."@ko .
+
+# ── 시간 차원 ──
+raas:Col_DATE a raas:LookupColumn ;
+    raas:csvField "DATE" ; rdfs:label "일간 측정일"@ko ;
+    raas:definition "일간 단위 측정 기준일"@ko .
+raas:Col_DATE_WEEK a raas:LookupColumn ;
+    raas:csvField "DATE_WEEK" ; rdfs:label "주간 측정 시작일"@ko ;
+    raas:definition "주간 단위 측정 구간의 시작일(월요일)"@ko .
+raas:Col_DATE_MON a raas:LookupColumn ;
+    raas:csvField "DATE_MON" ; rdfs:label "월간 측정 시작일"@ko ;
+    raas:definition "월간 단위 측정 구간의 시작일(1일)"@ko .
+
+# ── 프로그램 차원 ──
+raas:Col_PGM_CODE a raas:LookupColumn ;
+    raas:csvField "PGM_CODE" ; rdfs:label "프로그램 코드"@ko ;
+    raas:definition "프로그램/채널 식별 코드(예: F09, F00=파워FM 채널)"@ko ;
+    raas:relatesTo raas:Program .
+raas:Col_PGM_NAME a raas:LookupColumn ;
+    raas:csvField "PGM_NAME" ; rdfs:label "프로그램명"@ko ;
+    raas:definition "프로그램 이름"@ko ;
+    raas:relatesTo raas:Program .
+raas:Col_STIME a raas:LookupColumn ;
+    raas:csvField "STIME" ; rdfs:label "편성 시작 시간"@ko ;
+    raas:definition "프로그램 편성 시작 시각(HHMM)"@ko ;
+    raas:relatesTo raas:TimeSlot .
+
+# ── 편성/출연 메타데이터 (편성 영향 분석 입력) ──
+raas:Col_guestname a raas:LookupColumn ;
+    raas:csvField "guestname" ; rdfs:label "게스트/출연자"@ko ;
+    raas:definition "해당 회차 게스트·출연자 텍스트. 프로그램별 해석 정책은 person.ttl(guestnameInterpretation) 참조"@ko ;
+    raas:relatesTo raas:Person .
+raas:Col_daily_corner a raas:LookupColumn ;
+    raas:csvField "daily_corner" ; rdfs:label "매일 코너"@ko ;
+    raas:definition "매일 고정 편성되는 코너명"@ko ;
+    raas:relatesTo raas:Corner .
+raas:Col_weekly_corner a raas:LookupColumn ;
+    raas:csvField "weekly_corner" ; rdfs:label "요일 코너"@ko ;
+    raas:definition "특정 요일에 편성되는 코너명"@ko ;
+    raas:relatesTo raas:Corner .
+raas:Col_view_radio_yn a raas:LookupColumn ;
+    raas:csvField "view_radio_yn" ; rdfs:label "보는라디오 편성 여부"@ko ;
+    raas:definition "보는라디오(영상 라디오) 편성 여부(Y/N)"@ko .
+raas:Col_live_yn a raas:LookupColumn ;
+    raas:csvField "live_yn" ; rdfs:label "생방송 여부"@ko ;
+    raas:definition "생방송/녹음 방송 여부(Y=생방송)"@ko .
+# program_title: PGM_NAME 중복 → 삭제 예정(정의 생략)
 
 
 # =============================================================================
