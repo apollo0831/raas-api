@@ -155,13 +155,11 @@ KPI 패널         | 우측 토글 패널(loadKpiPanel) — 핵심 지표 스냅
 - **깊은청취율**: 10분 이상 연속 청취 / 1분 이상 연속 청취 비율 (몰입도)
 - **WoW**: 전주 동일 요일 대비 증감률
 - **습관형성률**: 신규 사용자 중 7일 내 재방문 비율
+- **기간 평균(전주/전월 일평균 등)**: 룩업에 저장 필드 없음 → grounding이 제공한 **일별 시계열에서 LLM이 계산**(평균은 저장하지 않고 파생). 과거 모델링했던 dau_week_avg/dau_mon_avg/wau_mon_avg 변형은 실 데이터에 없어 제거됨.
 
 ## 최근 주요 변경사항 (2026-04 기준)
 
 ### raas_kpi_latest.csv 신규 필드
-- dau_week_avg: 전주 월~일 7일간 DAU 일평균
-- dau_mon_avg:  전월 1일~말일 DAU 일평균
-- wau_mon_avg:  전월 1일~말일 7D롤링 평균
 - new_d1_ret / new_d1_ret_pw / new_d1_diff: 신규코호트 D1유지율
 - new_d7_ret / new_d7_ret_pw / new_d7_diff: 신규코호트 D7유지율
 - new_w1_ret / new_w1_ret_pw / new_w1_diff: 신규코호트 W1유지율
@@ -170,7 +168,6 @@ KPI 패널         | 우측 토글 패널(loadKpiPanel) — 핵심 지표 스냅
 ### Briefing Engine 섹션 추가 필드
 s2_funnel 추가:
 - new_d1_ret / new_d7_ret / new_w1_ret / new_m1_ret (신규 코호트 유지율 4종)
-- dau_week_avg / dau_mon_avg / wau_mon_avg (기간별 평균 지표)
 
 s3_engagement 추가:
 - wau_1min / wau_10min (주간 1분이상/10분이상 사용자)
