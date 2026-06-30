@@ -216,11 +216,7 @@ def _p_metric_timeseries(ent):
         flds = ["dau"] + [f for f in focus if f != "dau"]   # 집중 → 핵심+포커스(롤링MAU=dau_r30)
     else:
         flds = base + [f for f in focus if f not in base]   # 넓게 + 포커스 보강
-    return [
-        {"date": (h.get("DATE") or "").replace("/", "-"),
-         **{f: h.get(f) for f in flds if h.get(f) not in (None, "")}}
-        for h in hist
-    ]
+    return _ts_csv(hist, flds)   # CSV(키 1회) + 주간/월간 변동시점-only 직렬화
 
 
 def _clean_onto(v):
@@ -639,7 +635,8 @@ def _ts_csv(hist, fields=None) -> str:
 
 def _assemble_compare(question, ents, overlay_ctx=None) -> dict:
     lookback = _detect_lookback(question)
-    win = lookback if lookback > 0 else 90       # 기간 미지정 시 전부 대신 최근 90일
+    # 명시 기간 존중 / 추세·장기 질의는 길게(365) / 그 외 미지정은 최근 90일
+    win = lookback if lookback > 0 else (365 if _is_trend_query(question) else 90)
     period = _detect_period(question)
     metric = S.extract_kpi_metric(question)
     blocks, kpi_fields = [], []
