@@ -5629,8 +5629,21 @@ async function _loadReviewQueue() {
     const wk = d.weakness || [], neg = d.negative_open || [];
     const _anyQueue = imps.length || reqs.length || wk.length || neg.length ||
       (d.approved_knowledge || []).length || (d.pending_uploads || []).length || (d.effect || []).length;
-    if (!_anyQueue) { body.innerHTML = '<div class="hist-empty-msg">검토 대기·약점 신호가 없습니다.</div>'; return; }
-    let html = '';
+    // ✍ 답변 스타일 정책 — 매 답변에 주입되는 단일 큐레이션 블록(거버넌스 편집). 큐가 비어도 항상 노출.
+    const styleHtml = `<div class="imp-sec-hd">✍ 답변 스타일 정책 — <b>모든 답변</b>에 주입되는 단일 블록(짧게 유지)</div>
+      <div class="imp-form" style="margin:0 14px">
+        <textarea id="stylePolicyText" style="min-height:120px" placeholder="불러오는 중…" oninput="_styleCount()"></textarea>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span id="styleCount" class="imp-mean" style="margin:0">— / —자</span>
+          <span id="styleDefaultTag" class="imp-tag" style="display:none">기본값(미저장)</span>
+          <button class="imp-btn imp-btn-primary" onclick="_saveStylePolicy(this)">정책 저장</button>
+        </div>
+      </div>`;
+    if (!_anyQueue) {
+      body.innerHTML = styleHtml + '<div class="hist-empty-msg" style="margin-top:8px">검토 대기·약점 신호가 없습니다.</div>';
+      _loadStylePolicy(); return;
+    }
+    let html = styleHtml;
     // 약점 신호 — 👎 집계 + 미개선 아쉬움 질의(클릭→바로 개선 착수)
     if (wk.length || neg.length) {
       html += '<div class="imp-sec-hd">⚠ 약점 신호 · 최근 30일 \'아쉬움\' 피드백 — 클릭해 바로 개선 착수</div>';
@@ -5736,7 +5749,49 @@ async function _loadReviewQueue() {
       }).join('');
     }
     body.innerHTML = html;
+    _loadStylePolicy();
   } catch (e) { body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`; }
+}
+// ✍ 답변 스타일 정책 — 불러오기/글자수/저장
+let _styleMax = 1000;
+async function _loadStylePolicy() {
+  const ta = document.getElementById('stylePolicyText');
+  if (!ta) return;
+  try {
+    const r = await _authedFetch('/api/style/get', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '로드 실패');
+    ta.value = d.content || '';
+    _styleMax = d.max || 1000;
+    const tag = document.getElementById('styleDefaultTag');
+    if (tag) tag.style.display = d.is_default ? '' : 'none';
+    _styleCount();
+  } catch (e) { ta.placeholder = '로드 실패: ' + e.message; }
+}
+function _styleCount() {
+  const ta = document.getElementById('stylePolicyText');
+  const el = document.getElementById('styleCount');
+  if (!ta || !el) return;
+  const n = (ta.value || '').length;
+  el.textContent = `${n} / ${_styleMax}자`;
+  el.style.color = n > _styleMax ? '#c0392b' : '';
+}
+async function _saveStylePolicy(btn) {
+  const ta = document.getElementById('stylePolicyText');
+  const content = (ta.value || '').trim();
+  if (!content) { alert('내용이 비어 있습니다.'); return; }
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/style/set', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '저장 실패');
+    const tag = document.getElementById('styleDefaultTag');
+    if (tag) tag.style.display = 'none';
+    alert('스타일 정책 저장 완료 — 이후 모든 답변에 반영됩니다.');
+  } catch (e) { alert('실패: ' + e.message); }
+  finally { btn.disabled = false; }
 }
 async function _reclassifyKnowledge(id, btn) {
   const kind = prompt('대상 종류를 입력: program / channel / field / global / unclassified', 'program');

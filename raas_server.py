@@ -1093,7 +1093,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                         self.wfile.flush()
                     _gu = f"근거 데이터:\n{_ground['context']}\n\n사용자 질문: {question}"
                     _gfull, _gusage = [], {}
-                    for chunk in call_claude_stream(GROUND.GROUNDING_SYSTEM, _gu, max_tokens=MAX_ANSWER_TOKENS):
+                    for chunk in call_claude_stream(GROUND.system_with_style(GROUND.GROUNDING_SYSTEM), _gu, max_tokens=MAX_ANSWER_TOKENS):
                         if isinstance(chunk, dict) and "_usage" in chunk:
                             _gusage = chunk["_usage"]
                         else:
@@ -1235,7 +1235,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "error": "재질의 컨텍스트 구성 실패(프로그램 미식별)"}, 400); return
                 _gu = f"근거 데이터:\n{g['context']}\n\n사용자 질문: {q}"
                 parts = []
-                for chunk in call_claude_stream(GROUND.GROUNDING_SYSTEM, _gu, max_tokens=MAX_ANSWER_TOKENS):
+                for chunk in call_claude_stream(GROUND.system_with_style(GROUND.GROUNDING_SYSTEM), _gu, max_tokens=MAX_ANSWER_TOKENS):
                     if not (isinstance(chunk, dict) and "_usage" in chunk):
                         parts.append(chunk)
                 ans_new = "".join(parts)
@@ -1419,6 +1419,32 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path == "/api/style/get":
+            # 답변 스타일 정책 조회(편집 화면용). 거버넌스 권한.
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                import raas_history_db as HDB
+                cur = HDB.get_style_policy()
+                self.send_json({"ok": True,
+                                "content": cur if cur is not None else GROUND._DEFAULT_STYLE_POLICY,
+                                "is_default": cur is None, "max": HDB.STYLE_POLICY_MAX})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/style/set":
+            # 답변 스타일 정책 저장(새 버전). 거버넌스 권한 + 문자 상한.
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                import raas_history_db as HDB
+                res = HDB.set_style_policy(body.get("content"), str(user["id"]))
+                self.send_json(res, 200 if res.get("ok") else 400)
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/query":
             try:
                 user = self._get_session_user()
@@ -1501,7 +1527,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                 _tu = f"근거 데이터:\n{g['context']}\n\n사용자 질문: 어제 방송에서 특이사항을 알려줘"
                 _full, _usage = [], {}
-                for chunk in call_claude_stream(GROUND.DIGEST_SYSTEM, _tu, max_tokens=MAX_ANSWER_TOKENS):
+                for chunk in call_claude_stream(GROUND.system_with_style(GROUND.DIGEST_SYSTEM), _tu, max_tokens=MAX_ANSWER_TOKENS):
                     if isinstance(chunk, dict) and "_usage" in chunk:
                         _usage = chunk["_usage"]
                     else:

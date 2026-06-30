@@ -258,6 +258,16 @@ def init_db():
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ud_target ON uploaded_data (target_kind, target_id, scope)")
+        # 답변 스타일 정책 — 단일 큐레이션 블록(버전드). 매 답변마다 시스템 프롬프트에 주입되므로
+        #   '기여당 1행 오버레이'가 아니라 '거버넌스가 편집하는 1개 블록'으로 관리(토큰 상한 STYLE_POLICY_MAX).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS style_policy (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                content TEXT,
+                updated_by TEXT
+            )
+        """)
 
 
 @contextmanager
@@ -617,6 +627,33 @@ def retire_knowledge_item(item_id, reviewer) -> bool:
             "UPDATE knowledge_items SET status='rejected', reviewed_by=?, "
             "reviewed_at=CURRENT_TIMESTAMP WHERE id=?", (str(reviewer), item_id))
     return True
+
+
+# ─── 답변 스타일 정책(단일 큐레이션 블록) ──────────────────────────────────────
+STYLE_POLICY_MAX = 1000   # 문자 상한. 매 답변 주입되므로 토큰을 묶기 위함(한글≈1.5~2토큰/자).
+
+def get_style_policy() -> Optional[str]:
+    """현재 활성 스타일 정책(가장 최근 버전). 없으면 None(→ grounding 기본 시드 사용)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT content FROM style_policy ORDER BY id DESC LIMIT 1").fetchone()
+    if not row:
+        return None
+    content = (row[0] or "").strip()
+    return content or None
+
+def set_style_policy(content, editor) -> dict:
+    """스타일 정책 새 버전 저장(이력 보존). 상한 초과 시 거부. 반환 {ok, len, max, error?}."""
+    content = (content or "").strip()
+    if not content:
+        return {"ok": False, "error": "내용이 비어 있습니다.", "len": 0, "max": STYLE_POLICY_MAX}
+    if len(content) > STYLE_POLICY_MAX:
+        return {"ok": False, "error": f"{STYLE_POLICY_MAX}자 상한 초과({len(content)}자). 더 줄여주세요.",
+                "len": len(content), "max": STYLE_POLICY_MAX}
+    with get_conn() as conn:
+        conn.execute("INSERT INTO style_policy (content, updated_by) VALUES (?,?)",
+                     (content, str(editor)))
+    return {"ok": True, "len": len(content), "max": STYLE_POLICY_MAX}
 
 
 def knowledge_effect(days=30, limit=30) -> list:
