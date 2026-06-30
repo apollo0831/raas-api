@@ -361,8 +361,26 @@ def select_providers(question: str, ent: dict) -> list:
 
 
 # ─── 온톨로지 grounding 팩 ──────────────────────────────────────────────────
+def _comparison_basis(info) -> Optional[str]:
+    """[Q2] 비교형 변형(_chg/_prev/_diff)의 비교 기준을 granularity 인지로 반환.
+       일간=전주 동요일(D-7), 주간=전주, 월간=전월(라디오 청취 요일 패턴 반영)."""
+    var_id = ((info or {}).get("variant") or {}).get("id") or ""
+    if var_id not in ("raas:Change", "raas:Diff", "raas:Previous"):
+        return None
+    g = ((info or {}).get("granularity") or {}).get("id") or ""
+    if g == "raas:Day":
+        return "전주 동요일(D-7) 대비"
+    if g == "raas:Week":
+        return "전주 대비"
+    if g == "raas:Month":
+        return "전월 대비"
+    if "Rolling" in g:
+        return "7일 전(D-7) 대비"
+    return "직전 기간 대비"
+
+
 def _metric_def_lines(fields) -> list:
-    """[P1] 필드별 지표 정의 — 변형·단위(롤링MAU·일간·월간)와 별칭까지 명시.
+    """[P1] 필드별 지표 정의 — 변형·단위(롤링MAU·일간·월간)·비교근거(전주동요일/전주/전월)까지 명시.
        같은 '활성 사용자 수'라도 일/주/월/롤링을 LLM이 구분하도록 surfacing."""
     try:
         from raas_onto import get_adapter
@@ -388,7 +406,8 @@ def _metric_def_lines(fields) -> list:
         if gran:
             parts.append(gran)
         if var and var != "현재값":
-            parts.append(var)
+            basis = _comparison_basis(info)
+            parts.append(f"{var} · {basis}" if basis else var)
         alias = (tmap.get(f) or [None])[0]
         head = f + (f"({alias})" if alias else "")
         defn = (m.get("definition") or "").strip()
