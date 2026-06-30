@@ -476,6 +476,11 @@ def ontology_pack(ent, provider_names) -> str:
 
 # ─── 지식 오버레이 (읽기시 병합) ────────────────────────────────────────────
 _KTYPE_KO = {
+    # 현재 6분류
+    "episode_note": "회차별 방송 특이사항", "program_corner": "프로그램 및 코너 정보",
+    "metric_term": "지표 및 용어 정의", "answer_style": "답변 스타일",
+    "analysis_method": "분석 기법", "misc": "기타(미분류)",
+    # 레거시 type 호환
     "metric_definition": "지표 정의 보정", "field_meaning": "필드 의미",
     "program_note": "프로그램 메모", "guest_policy": "게스트 정책",
     "corner_note": "코너 메모", "decomposition_hint": "분해 힌트", "fact": "사실",

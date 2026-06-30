@@ -5340,13 +5340,7 @@ async function _loadImproveContext() {
             <option value="ent" selected>이 ${d.scope_kind === 'channel' ? '채널' : '프로그램'}: ${escapeHtml((d.program && d.program.name) || '')}(${escapeHtml((d.program && d.program.code) || '')})</option>
             <option value="unclassified">미지정(관리자 분류)</option>
             <option value="global">전역</option></select>
-          <select id="impKType" style="flex:1;min-width:120px">
-            <option value="program_note">프로그램 메모</option>
-            <option value="metric_definition">지표 정의 보정</option>
-            <option value="guest_policy">게스트 정책</option>
-            <option value="corner_note">코너 메모</option>
-            <option value="decomposition_hint">분해 힌트</option>
-            <option value="fact">사실</option></select></div>
+          <select id="impKType" style="flex:1;min-width:120px">${_KTYPE_OPTS}</select></div>
         <textarea id="impKContent" placeholder="추가/수정할 도메인 지식"></textarea>
         <button class="imp-btn" onclick="_submitKnowledge()">지식 추가</button></div>`;
   } catch (e) { dataEl.innerHTML = ontoEl.innerHTML = '<div class="imp-mean">로드 실패</div>'; }
@@ -5515,13 +5509,16 @@ function _reqStatusBadge(st) {
   const cls = st === '완료' ? 'imp-st-ok' : st === '반려' ? 'imp-st-no' : st === '처리중' ? 'imp-st-mid' : 'imp-st-wait';
   return `<span class="imp-st ${cls}">${escapeHtml(st || '')}</span>`;
 }
-const _KTYPE_OPTS = `<option value="program_note">프로그램 메모</option>
-  <option value="metric_definition">지표 정의 보정</option>
-  <option value="guest_policy">게스트 정책</option>
-  <option value="corner_note">코너 메모</option>
-  <option value="decomposition_hint">분해 힌트</option>
-  <option value="fact">사실</option>`;
-const _KT_KO = { metric_definition:'지표정의', field_meaning:'필드의미', program_note:'프로그램메모',
+const _KTYPE_OPTS = `<option value="episode_note">회차별 방송 특이사항</option>
+  <option value="program_corner">프로그램 및 코너 정보</option>
+  <option value="metric_term">지표 및 용어 정의</option>
+  <option value="answer_style">답변 스타일</option>
+  <option value="analysis_method">분석 기법</option>
+  <option value="misc" selected>기타 정보(미분류)</option>`;
+const _KT_KO = { episode_note:'회차별 방송 특이사항', program_corner:'프로그램 및 코너 정보',
+  metric_term:'지표 및 용어 정의', answer_style:'답변 스타일', analysis_method:'분석 기법', misc:'기타(미분류)',
+  // 레거시 type 호환(기존 기여 표시용)
+  metric_definition:'지표정의', field_meaning:'필드의미', program_note:'프로그램메모',
   guest_policy:'게스트정책', corner_note:'코너메모', decomposition_hint:'분해힌트', fact:'사실' };
 
 async function _loadMyImprovements() {
