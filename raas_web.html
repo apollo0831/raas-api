@@ -2528,12 +2528,19 @@ function renderAiText(s) {
     const tbody = body.map(r => '<tr>' + r.map(c =>
       `<td>${escapeHtml(c).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</td>`).join('') + '</tr>').join('');
     tables.push(`<div class="story-table-scroll"><table class="story-table">${thead}${tbody}</table></div>`);
-    return `@@TBL${tables.length - 1}@@`;
+    return `@@TBL${tables.length - 1}@@\n`;   // \n로 줄 구조 보존(하드닝 줄단위 처리용; 재삽입 시 \n? 흡수)
   });
   // [small] 참고 블록 → 답변 끝 푸터(관리자 참고 정보, 참고 토글 연동)
   const meta = [];
   s = s.replace(/\[small\]([\s\S]+?)\[\/small\]/g, (_, b) => { meta.push(b); return ''; });
   let out = escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  // 렌더러 하드닝 — LLM이 마크다운 기호를 emit해도 화면은 깨끗하게(표·차트는 이미 placeholder).
+  //   보수적: '기호+공백' 또는 '기호만 있는 단독 줄'일 때만 변환 → #1순위·"DAU > 90%" 등 오탐 방지.
+  out = out
+    .replace(/^[ \t]*#{1,6}[ \t]+(.+)$/gm, '<b>$1</b>')   // 제목 #/##/### → 굵게
+    .replace(/^[ \t]*([-*_])\1{2,}[ \t]*$/gm, '')          // 단독 구분선 ---/***/___ 제거
+    .replace(/^[ \t]*&gt;[ \t]+/gm, '')                    // 줄머리 인용 > 제거(내용은 유지)
+    .replace(/\n{3,}/g, '\n\n');                           // 과도한 빈 줄 축소
   out = out.replace(/@@TBL(\d+)@@\n?/g, (_, i) => tables[+i]);
   out = out.replace(/@@CHART(\d+)@@\n?/g, (_, i) => charts[+i]);
   if (meta.length) {
