@@ -435,6 +435,32 @@ class OntologyAdapter:
             }
         return out
 
+    # 구조화 술어 5종(승격된 기여 지식)
+    _CONTRIB_PREDICATES = (
+        "raas:contributedDefinition", "raas:contributedCorner",
+        "raas:contributedEpisodeNote", "raas:contributedAnalysis", "raas:contributedNote",
+    )
+
+    def get_contributed_for(self, target_kind: str, target_id=None) -> list:
+        """승격된(구조화) 기여 지식 중 (target_kind, target_id)에 연결된 것.
+           반환 [{type, predicate, label, content}]. grounding이 온톨로지 경로로 surfacing."""
+        out = []
+        tid_norm = (str(target_id) if target_id not in (None, "") else None)
+        for ck in self._onto.instances_of("raas:ContributedKnowledge"):
+            tk = self._onto.value_str(self._onto.get_one(ck, "raas:targetKind"))
+            tid = self._onto.value_str(self._onto.get_one(ck, "raas:targetId")) or None
+            if tk != target_kind or tid != tid_norm:
+                continue
+            typ = self._onto.value_str(self._onto.get_one(ck, "raas:knowledgeType"))
+            for p in self._CONTRIB_PREDICATES:
+                v = self._onto.get_one(ck, p)
+                if v:
+                    out.append({"type": typ, "predicate": p,
+                                "label": self._onto.label_ko(p),
+                                "content": self._onto.value_str(v)})
+                    break
+        return out
+
     def get_metadata_field_info(self, csv_column: str) -> Optional[dict]:
         """CSV 컬럼명 → 메타데이터 속성 정보 (raas:csvField 어노테이션 기반).
 

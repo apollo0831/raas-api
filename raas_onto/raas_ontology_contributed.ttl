@@ -1,7 +1,7 @@
 # =============================================================================
-# raas_ontology_contributed.ttl  —  기여 지식(승인) canonical 미러
-# 자동 생성 파일: raas_ontology_promote.promote_approved_to_ttl()이 재생성.
-# 직접 편집 금지(다음 승격 시 덮어씌워짐). 구조화는 core ttl로 수동 graduation.
+# raas_ontology_contributed.ttl  —  기여 지식(승인) canonical (구조화 graduation)
+# 자동 생성: raas_ontology_promote.promote_approved_to_ttl()이 재생성. 직접 편집 금지.
+# 각 기여는 raas:graduatedTo로 실제 대상 노드에 연결되고 타입별 술어로 구조화된다.
 # =============================================================================
 @prefix raas: <http://raas.sbs.co.kr/onto#> .
 @prefix owl:  <http://www.w3.org/2002/07/owl#> .
@@ -9,6 +9,16 @@
 
 raas:ContributedKnowledge a owl:Class ;
     rdfs:label "기여 지식(승인)"@ko ;
-    rdfs:comment "사용자 기여 → 검토 승인된 도메인 지식. 오버레이에서 승격된 canonical 기록."@ko .
+    rdfs:comment "사용자 기여 → 검토 승인된 도메인 지식. 대상 노드에 구조화 연결됨."@ko .
+
+raas:graduatedTo a owl:ObjectProperty ;
+    rdfs:label "졸업 대상"@ko ;
+    rdfs:comment "이 기여가 연결되는 실제 온톨로지 노드(프로그램·채널·지표)."@ko .
+
+raas:contributedDefinition a owl:AnnotationProperty ; rdfs:label "기여 정의 보정"@ko .
+raas:contributedCorner     a owl:AnnotationProperty ; rdfs:label "기여 코너·게스트 정보"@ko .
+raas:contributedEpisodeNote a owl:AnnotationProperty ; rdfs:label "기여 회차 특이사항"@ko .
+raas:contributedAnalysis   a owl:AnnotationProperty ; rdfs:label "기여 분석 기법"@ko .
+raas:contributedNote       a owl:AnnotationProperty ; rdfs:label "기여 기타 정보"@ko .
 
 # (승인된 기여 지식 없음)

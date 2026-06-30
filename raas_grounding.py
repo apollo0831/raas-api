@@ -490,31 +490,63 @@ _KTYPE_KO = {
     "corner_note": "코너 메모", "decomposition_hint": "분해 힌트", "fact": "사실",
 }
 
+def _fetch_contributed_struct(targets) -> str:
+    """승격된(구조화) 기여 지식을 온톨로지에서 대상별로 surfacing. 텍스트 오버레이와 별도 블록."""
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+    except Exception:
+        return ""
+    seen, lines = set(), []
+    full = list(targets or []) + [("global", None), ("unclassified", None)]
+    for kind, tid in full:
+        try:
+            facts = a.get_contributed_for(kind, tid)
+        except Exception:
+            facts = []
+        for f in facts:
+            key = (f.get("predicate"), f.get("content"))
+            if key in seen:
+                continue
+            seen.add(key)
+            lines.append(f"- [{f.get('label')}·{tid or '전역'}] {f.get('content')}")
+    if not lines:
+        return ""
+    return ("## 승인 기여 지식 (온톨로지 구조화 · canonical)\n"
+            "아래는 검토 승인되어 온톨로지에 졸업된 지식입니다. 사실로 신뢰해 답변에 반영하세요.\n"
+            + "\n".join(lines))
+
+
 def _fetch_overlay(targets, overlay_ctx) -> tuple:
-    """주어진 (kind, id) 타깃들에 매칭되는 지식 항목을 끌어와 context 블록 + id 목록 반환.
-       모든 scope(program/digest/channel/global …)에서 공유하는 단일 오버레이 게이트."""
+    """주어진 (kind, id) 타깃들에 매칭되는 지식을 context 블록 + id 목록으로. 단일 오버레이 게이트.
+       텍스트 오버레이(candidate·미승격 approved) + 구조화 기여(승격 approved, 온톨로지 경로).
+       승격분은 텍스트에서 제외 → 구조화 경로로만 1회 주입(중복 방지)."""
+    octx = overlay_ctx or {}
+    items = []
     try:
         import raas_history_db as HDB
-    except Exception:
-        return "", []
-    octx = overlay_ctx or {}
-    try:
         items = HDB.get_knowledge_items(
             targets, contributor_id=octx.get("user_id"),
             include_candidate=(octx.get("mode") == "requery"))
     except Exception as e:
         print(f"[grounding] overlay error: {e}")
-        items = []
-    if not items:
-        return "", []
-    lines = ["## 사용자·운영 도메인 지식 (오버레이)",
-             "아래는 사용자가 보강한 도메인 지식입니다. 답변에 적극 반영하세요."]
-    for it in items:
-        tag = "(본인 미승인)" if it.get("scope") == "candidate" else "(승인됨)"
-        tk = _KTYPE_KO.get(it.get("type"), it.get("type"))
-        tgt = it.get("target_id") or "전역"
-        lines.append(f"- [{tk}·{tgt}] {it.get('content')} {tag}")
-    return "\n".join(lines), [it["id"] for it in items]
+    # 승격된 approved(promoted_at 있음)는 텍스트에서 제외 — 구조화 블록이 대신 surfacing
+    text_items = [it for it in items
+                  if not (it.get("scope") == "approved" and it.get("promoted_at"))]
+    blocks = []
+    if text_items:
+        lines = ["## 사용자·운영 도메인 지식 (오버레이)",
+                 "아래는 사용자가 보강한 도메인 지식입니다. 답변에 적극 반영하세요."]
+        for it in text_items:
+            tag = "(본인 미승인)" if it.get("scope") == "candidate" else "(승인됨)"
+            tk = _KTYPE_KO.get(it.get("type"), it.get("type"))
+            tgt = it.get("target_id") or "전역"
+            lines.append(f"- [{tk}·{tgt}] {it.get('content')} {tag}")
+        blocks.append("\n".join(lines))
+    struct = _fetch_contributed_struct(targets)
+    if struct:
+        blocks.append(struct)
+    return "\n\n".join(blocks), [it["id"] for it in items]
 
 
 def _entity_targets(ent) -> list:
