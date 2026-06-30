@@ -347,11 +347,11 @@ class OntologyAdapter:
         LLM 시스템 프롬프트의 [지표 정의] 섹션을 대체한다."""
         GROUPS = [
             ("사용자 규모", [
-                ("raas:DAU_Day",   None),
-                ("raas:DAU_Week",  None),
-                ("raas:DAU_Month", None),
-                ("raas:DAU_R7",    None),
-                ("raas:DAU_R30",   None),
+                ("raas:AU_Day",   None),
+                ("raas:AU_Week",  None),
+                ("raas:AU_Month", None),
+                ("raas:AU_R7",    None),
+                ("raas:AU_R30",   None),
             ]),
             ("사용자 흐름 (신규/복귀/이탈)", [
                 ("raas:NewUser",         "raas:NewUser"),

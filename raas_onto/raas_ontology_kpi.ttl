@@ -333,7 +333,7 @@ raas:Rolling7Day a raas:RollingGranularity ;
     raas:windowDays 7 ;
     raas:windowType "rolling" ;
     raas:rollingFrom "today" ;
-    raas:appliesTo raas:DAU ;
+    raas:appliesTo raas:AU ;
     raas:order 4 .
 
 raas:Rolling30Day a raas:RollingGranularity ;
@@ -341,7 +341,7 @@ raas:Rolling30Day a raas:RollingGranularity ;
     raas:windowDays 30 ;
     raas:windowType "rolling" ;
     raas:rollingFrom "today" ;
-    raas:appliesTo raas:DAU ;
+    raas:appliesTo raas:AU ;
     raas:order 5 .
 
 # ─── 3.3b Period Average Granularity ─────────────────────────────────────────
@@ -375,7 +375,7 @@ raas:Yesterday a raas:Variant ;
     rdfs:label "어제값 (D-1)"@ko ;
     raas:variantSuffix "_d2" ;
     raas:dayOffset -1 ;
-    raas:appliesTo raas:DAU ;
+    raas:appliesTo raas:AU ;
     raas:purpose "사용자 흐름(funnel) 일간 비교"@ko ;
     raas:order 3 .
 
@@ -433,52 +433,52 @@ raas:Window_M1 a raas:RetentionWindow ;
 
 # ─── 4.1 그룹 A: 사용자 규모 ─────────────────────────────────────────────────
 
-raas:DAU a raas:Metric ;
+raas:AU a raas:Metric ;
     rdfs:label "활성 사용자 수"@ko ;
-    raas:altLabel "DAU"@en, "WAU"@en, "MAU"@en ;
+    raas:altLabel "AU"@en ;
     raas:unit "명" ;
     raas:hasMeasureType raas:Count ;
     raas:definition "특정 기간 내 청취시간이 0보다 큰 고유 사용자 수"@ko ;
     raas:formula "COUNT(DISTINCT user_id WHERE listen_duration > 0)" ;
     raas:dictionarySection "B. user_size" .
 
-raas:DAU_Day a raas:MetricVariant ;
+raas:AU_Day a raas:MetricVariant ;
     rdfs:label "DAU"@ko ;
     rdfs:comment "일간 활성사용자수"@ko ;
-    raas:ofMetric raas:DAU ;
+    raas:ofMetric raas:AU ;
     raas:granularity raas:Day ;
     raas:fieldName "dau" .
 
-raas:DAU_Week a raas:MetricVariant ;
+raas:AU_Week a raas:MetricVariant ;
     rdfs:label "WAU"@ko ;
     rdfs:comment "주간 활성사용자수"@ko ;
-    raas:ofMetric raas:DAU ;
+    raas:ofMetric raas:AU ;
     raas:granularity raas:Week ;
     raas:fieldName "wau" .
 
-raas:DAU_Month a raas:MetricVariant ;
+raas:AU_Month a raas:MetricVariant ;
     rdfs:label "MAU"@ko ;
     rdfs:comment "월간 활성사용자수"@ko ;
-    raas:ofMetric raas:DAU ;
+    raas:ofMetric raas:AU ;
     raas:granularity raas:Month ;
     raas:fieldName "mau" .
 
-raas:DAU_R7 a raas:MetricVariant ;
+raas:AU_R7 a raas:MetricVariant ;
     rdfs:label "롤링WAU"@ko ;
     rdfs:comment "최근 7일간 활성사용자수"@ko ;
-    raas:ofMetric raas:DAU ;
+    raas:ofMetric raas:AU ;
     raas:granularity raas:Rolling7Day ;
     raas:fieldName "dau_r7" .
 
-raas:DAU_R30 a raas:MetricVariant ;
+raas:AU_R30 a raas:MetricVariant ;
     rdfs:label "롤링MAU"@ko ;
     rdfs:comment "최근 30일간 활성사용자수"@ko ;
-    raas:ofMetric raas:DAU ;
+    raas:ofMetric raas:AU ;
     raas:granularity raas:Rolling30Day ;
     raas:fieldName "dau_r30" .
 
 
-raas:DAU_1min a raas:Metric ;
+raas:AU_1min a raas:Metric ;
     rdfs:label "1분 이상 청취자 수"@ko ;
     raas:altLabel "1분이상 사용자"@ko ;
     raas:unit "명" ;
@@ -487,23 +487,26 @@ raas:DAU_1min a raas:Metric ;
     raas:formula "COUNT(DISTINCT user_id WHERE listen_duration >= 60)" ;
     raas:dictionarySection "B. user_size" .
 
-raas:DAU_1min_Day a raas:MetricVariant ;
-    raas:ofMetric raas:DAU_1min ;
+raas:AU_1min_Day a raas:MetricVariant ;
+    rdfs:label "일간 1분이상 사용자"@ko ;
+    raas:ofMetric raas:AU_1min ;
     raas:granularity raas:Day ;
     raas:fieldName "dau_1min" .
 
-raas:DAU_1min_Week a raas:MetricVariant ;
-    raas:ofMetric raas:DAU_1min ;
+raas:AU_1min_Week a raas:MetricVariant ;
+    rdfs:label "주간 1분이상 사용자"@ko ;
+    raas:ofMetric raas:AU_1min ;
     raas:granularity raas:Week ;
     raas:fieldName "wau_1min" .
 
-raas:DAU_1min_Month a raas:MetricVariant ;
-    raas:ofMetric raas:DAU_1min ;
+raas:AU_1min_Month a raas:MetricVariant ;
+    rdfs:label "월간 1분이상 사용자"@ko ;
+    raas:ofMetric raas:AU_1min ;
     raas:granularity raas:Month ;
     raas:fieldName "mau_1min" .
 
 
-raas:DAU_10min a raas:Metric ;
+raas:AU_10min a raas:Metric ;
     rdfs:label "10분 이상 청취자 수"@ko ;
     raas:altLabel "깊은청취 사용자"@ko ;
     raas:unit "명" ;
@@ -512,18 +515,21 @@ raas:DAU_10min a raas:Metric ;
     raas:formula "COUNT(DISTINCT user_id WHERE listen_duration >= 600)" ;
     raas:dictionarySection "B. user_size" .
 
-raas:DAU_10min_Day a raas:MetricVariant ;
-    raas:ofMetric raas:DAU_10min ;
+raas:AU_10min_Day a raas:MetricVariant ;
+    rdfs:label "일간 깊은청취 사용자"@ko ;
+    raas:ofMetric raas:AU_10min ;
     raas:granularity raas:Day ;
     raas:fieldName "dau_10min" .
 
-raas:DAU_10min_Week a raas:MetricVariant ;
-    raas:ofMetric raas:DAU_10min ;
+raas:AU_10min_Week a raas:MetricVariant ;
+    rdfs:label "주간 깊은청취 사용자"@ko ;
+    raas:ofMetric raas:AU_10min ;
     raas:granularity raas:Week ;
     raas:fieldName "wau_10min" .
 
-raas:DAU_10min_Month a raas:MetricVariant ;
-    raas:ofMetric raas:DAU_10min ;
+raas:AU_10min_Month a raas:MetricVariant ;
+    rdfs:label "월간 깊은청취 사용자"@ko ;
+    raas:ofMetric raas:AU_10min ;
     raas:granularity raas:Month ;
     raas:fieldName "mau_10min" .
 
@@ -637,7 +643,7 @@ raas:DeepListenRate a raas:Metric ;
     raas:hasMeasureType raas:Percentage ;
     raas:definition "10분 이상 청취자 / 1분 이상 청취자 × 100"@ko ;
     raas:formula "DAU_10min / DAU_1min * 100" ;
-    raas:derivedFrom raas:DAU_10min, raas:DAU_1min ;
+    raas:derivedFrom raas:AU_10min, raas:AU_1min ;
     raas:dictionarySection "D. user_quality" .
 
 raas:DeepListenRate_Day a raas:MetricVariant ;
@@ -733,20 +739,20 @@ raas:RealListenRate_Month a raas:MetricVariant ;
 
 # ─── 4.3c 기간 평균 지표 ─────────────────────────────────────────────────────
 
-raas:DAU_WeekAvg a raas:MetricVariant ;
-    raas:ofMetric raas:DAU ;
+raas:AU_WeekAvg a raas:MetricVariant ;
+    raas:ofMetric raas:AU ;
     raas:granularity raas:PrevWeekAvg ;
     raas:fieldName "dau_week_avg" ;
     rdfs:comment "전주 월~일 7일간 DAU 일평균"@ko .
 
-raas:DAU_MonAvg a raas:MetricVariant ;
-    raas:ofMetric raas:DAU ;
+raas:AU_MonAvg a raas:MetricVariant ;
+    raas:ofMetric raas:AU ;
     raas:granularity raas:PrevMonAvg ;
     raas:fieldName "dau_mon_avg" ;
     rdfs:comment "전월 1일~말일 DAU 일평균"@ko .
 
 raas:WAU_MonAvg a raas:MetricVariant ;
-    raas:ofMetric raas:DAU ;
+    raas:ofMetric raas:AU ;
     raas:granularity raas:PrevMonAvg ;
     raas:fieldName "wau_mon_avg" ;
     rdfs:comment "전월 1일~말일 7D롤링 WAU 일평균"@ko .

@@ -206,7 +206,7 @@ raas:Monitor_DeepRate_Week a raas:MetricMonitorConfig ;
 raas:Alert_DauPlunge a raas:PlatformAlert ;
     rdfs:label "DAU 급락 알림"@ko ;
     raas:appliedTo raas:Platform, raas:Channel ;
-    raas:thresholdMetric raas:DAU ;
+    raas:thresholdMetric raas:AU ;
     raas:thresholdValue -10 ;
     raas:condition "dau_wow <= -10" ;
     raas:alertLevel "red" ;
@@ -219,7 +219,7 @@ raas:Alert_DauPlunge a raas:PlatformAlert ;
 raas:Alert_DauSurge a raas:PlatformAlert ;
     rdfs:label "DAU 급증 알림"@ko ;
     raas:appliedTo raas:Platform, raas:Channel ;
-    raas:thresholdMetric raas:DAU ;
+    raas:thresholdMetric raas:AU ;
     raas:thresholdValue 10 ;
     raas:condition "dau_wow >= 10" ;
     raas:alertLevel "green" ;
@@ -332,7 +332,7 @@ raas:Query_AtRiskProgram a raas:SparqlQuery ;
         WHERE {
           ?p a raas:Program .
           ?dau_m raas:subjectOf ?p ;
-                 raas:usesMetricVariant raas:DAU_Day ;
+                 raas:usesMetricVariant raas:AU_Day ;
                  raas:value ?dau .
           ?churn_m raas:subjectOf ?p ;
                    raas:usesMetricVariant raas:ChurnRate_Day ;

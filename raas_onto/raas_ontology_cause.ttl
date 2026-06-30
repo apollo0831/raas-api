@@ -5,7 +5,7 @@
 # 직무 무관(role-agnostic). CP·제작PD·편성PD·총괄관리가 같은 4축을 공유.
 #
 # 의존 온톨로지:
-#   raas_ontology_kpi.ttl — raas:DAU_Day, raas:NewUser_Day, raas:ChurnRate_Day 등
+#   raas_ontology_kpi.ttl — raas:AU_Day, raas:NewUser_Day, raas:ChurnRate_Day 등
 #
 # 사용처:
 #   storyline 5슬롯 중 2_cause (원인 설명) — raas_storyline_engine.py
@@ -212,7 +212,7 @@ raas:FlowDecomposition a raas:CauseDecomposition ;
     raas:purpose "ΔDAU를 신규·복귀·유지로 분해해 전주 동요일 대비 변동의 구조적 원인을 본다 (정확히 닫힘)"@ko ;
     raas:formula "ΔDAU = Δnew + Δreact + Δretain (retain = dau − new − react)" ;
     raas:priority 2 ;
-    raas:usesMetric raas:NewUser_Day, raas:ReactivatedUser_Day, raas:ChurnRate_Day, raas:DAU_Day ;
+    raas:usesMetric raas:NewUser_Day, raas:ReactivatedUser_Day, raas:ChurnRate_Day, raas:AU_Day ;
     raas:dataAvailability raas:DA_Available ;
     raas:hasInterpretationRule
         raas:Rule_NewDominant,
@@ -293,7 +293,7 @@ raas:StickinessDecomposition a raas:CauseDecomposition ;
     raas:purpose "확산형(MAU 증가) vs 집중형(기존 사용자 빈도 증가) 구분"@ko ;
     raas:formula "stickiness = dau / mau × 100" ;
     raas:priority 4 ;
-    raas:usesMetric raas:DAU_Day, raas:DAU_Month ;
+    raas:usesMetric raas:AU_Day, raas:AU_Month ;
     raas:dataAvailability raas:DA_Available ;
     raas:hasInterpretationRule
         raas:Rule_StickyUpFlat,
