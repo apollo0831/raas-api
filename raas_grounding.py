@@ -99,6 +99,30 @@ def _is_analytical(q: str) -> bool:
     return any(s in (q or "") for s in _ANALYTICAL_SIGNAL)
 
 
+# 캘린더 지표 → 롤링 등가 (하위기간 추이 요청 시): mau=월간확정 → 롤링MAU(일단위)
+_CAL_TO_ROLLING = {"mau": "dau_r30", "wau": "dau_r7"}
+
+def _disambiguate_rolling(question: str, fields: list, lookback: int) -> list:
+    """캘린더 지표(mau/wau)를 '하위 기간 추이' 요청이면 롤링 등가로 치환.
+       예: '4주간 MAU 그래프' → 롤링MAU(dau_r30). '6개월/월별 MAU 추이'는 그대로(진짜 월 추이)."""
+    t = question or ""
+    lb = lookback or 0
+    if any(s in t for s in ("개월", "월별", "분기")):      # 월 단위 추이 → 캘린더 유지
+        return fields
+    submonth = any(s in t for s in ("주별", "주간", "일별", "일간")) or (0 < lb <= 35)
+    subweek = any(s in t for s in ("일별", "일간", "매일")) or (0 < lb <= 8)
+    out, seen = [], set()
+    for f in fields:
+        nf = f
+        if f == "mau" and submonth:
+            nf = "dau_r30"
+        elif f == "wau" and subweek:
+            nf = "dau_r7"
+        if nf not in seen:
+            seen.add(nf); out.append(nf)
+    return out
+
+
 # 채널 감지 — 특정 프로그램이 아닌 채널/전사 단위 질의 식별 (scope 확장)
 _CH_NAME_BY_CODE = {v: k for k, v in S._CHANNEL_CODE.items()}
 _CH_NAME_BY_CODE["T00"] = "전체"
@@ -120,11 +144,15 @@ def resolve_entities(question: str) -> dict:
     """질문 → {program, code, name, channel, period, metric, lookback, row, history, date, scope_kind}.
        scope_kind: 'program'(특정 프로그램) | 'channel'(채널/전사) | None(미식별→기존 엔진)."""
     prog = extract_program(question)
+    lookback = _detect_lookback(question)
+    raw_focus = _focus_fields(question)                  # 질의어→필드(롤링MAU→dau_r30)
+    focus = _disambiguate_rolling(question, raw_focus, lookback)  # 캘린더→롤링(하위기간 추이)
     ent = {"program": prog, "period": _detect_period(question),
            "metric": S.extract_kpi_metric(question),
-           "lookback": _detect_lookback(question),
+           "lookback": lookback,
            "is_trend": _is_trend_query(question),
-           "focus_fields": _focus_fields(question),      # 질의어→필드(롤링MAU→dau_r30)
+           "focus_fields": focus,
+           "rolling_note": (focus != raw_focus),         # 캘린더→롤링 치환 발생(프레이밍용)
            "analytical": _is_analytical(question),       # 분석형이면 narrowing 끔
            "scope_kind": None}
     code = None
@@ -726,6 +754,9 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         _scope_str = f"{ent.get('name')} ({ent.get('code')}, {ent.get('channel')})"
     head = (f"분석 대상: {_scope_str} · "
             f"기간 힌트: {_PERIOD_KO.get(ent.get('period'), '일간')} · 기준일: {ent.get('date')}")
+    if ent.get("rolling_note"):
+        head += ("\n※ 해석: 'MAU/WAU'를 하위 기간(주·일) 추이로 요청 → 캘린더 지표는 월/주 확정값이라 "
+                 "같은 개념의 롤링 지표(롤링MAU=dau_r30 등)로 제시. 답변에 이 점을 짧게 안내할 것.")
     context = head + "\n\n" + "\n\n".join(blocks)
     if onto:
         context += "\n\n## 온톨로지 근거\n" + onto
@@ -920,6 +951,7 @@ def improve_context(question: str, user_id=None) -> dict:
     return {
         "ok": True,
         "program": {"code": ent["code"], "name": ent["name"], "channel": ent["channel"]},
+        "scope_kind": ent.get("scope_kind"),    # program|channel → 개선 모달 target 자동추론
         "used_fields": used_fields,
         "ontology_items": onto,
         "my_knowledge": my,

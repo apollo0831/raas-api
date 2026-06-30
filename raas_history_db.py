@@ -598,6 +598,16 @@ def mark_promoted(ids) -> int:
     return len(ids)
 
 
+def reclassify_knowledge(item_id, target_kind, target_id, reviewer) -> bool:
+    """관리자 재분류 — 미분류·global 지식의 target을 좁힘(narrow)."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE knowledge_items SET target_kind=?, target_id=?, reviewed_by=?, "
+            "reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
+            (target_kind, (target_id or None), str(reviewer), item_id))
+    return True
+
+
 def retire_knowledge_item(item_id, reviewer) -> bool:
     """승인된 지식 회수 — status='rejected'로 내려 오버레이에서 제외(롤백)."""
     with get_conn() as conn:
@@ -683,8 +693,9 @@ def update_data_request(req_id, status, reviewer) -> bool:
 
 def get_knowledge_items(targets, contributor_id=None, include_candidate=False) -> list:
     """grounding 읽기시 병합용. targets=[(target_kind, target_id), ...] (+ ('global', None)).
-    approved(공유) 전체 + (include_candidate면 본인 candidate) 중 대상 매칭 항목 반환."""
-    targets = list(targets or []) + [("global", None)]
+    approved(공유) 전체 + (include_candidate면 본인 candidate) 중 대상 매칭 항목 반환.
+    'global'(의도적 전역)·'unclassified'(미지정)는 항상 매칭 → 미분류 지식도 즉시 작동."""
+    targets = list(targets or []) + [("global", None), ("unclassified", None)]
     conds, params = [], []
     for kind, tid in targets:
         if tid in (None, ""):

@@ -5322,6 +5322,7 @@ async function _loadImproveContext() {
     const d = await r.json();
     if (!d.ok) { dataEl.innerHTML = ontoEl.innerHTML = '<div class="imp-mean">프로그램 미식별 — 개선 대상 아님</div>'; return; }
     _improveState.program = d.program;
+    _improveState.scopeKind = d.scope_kind || 'program';
     dataEl.innerHTML =
       '<div class="imp-sub">사용된 데이터 필드</div>' +
       (d.used_fields || []).map(f => `<div class="imp-item"><b>${escapeHtml(f.label || f.field)}</b> <code>${escapeHtml(f.field)}</code><div class="imp-mean">${escapeHtml(f.meaning || '')}</div>${f.source ? `<div class="imp-src">📄 ${escapeHtml(f.source)}</div>` : ''}</div>`).join('') +
@@ -5334,13 +5335,18 @@ async function _loadImproveContext() {
       (d.ontology_items || []).map(o => `<div class="imp-item"><b>${escapeHtml(o.label)}</b><div class="imp-mean">${escapeHtml(o.purpose || '')}</div>${o.source ? `<div class="imp-src">📄 ${escapeHtml(o.source)}</div>` : ''}</div>`).join('') +
       ((d.my_knowledge || []).length ? '<div class="imp-sub">내 기여 (미승인)</div>' + d.my_knowledge.map(k => `<div class="imp-item">• ${escapeHtml(k.content)}</div>`).join('') : '') +
       `<div class="imp-form"><div class="imp-sub">온톨로지 수정·추가 <span class="imp-tag imp-tag-now">즉시 · 내 재질의에 반영</span></div>
-        <select id="impKType">
-          <option value="program_note">프로그램 메모</option>
-          <option value="metric_definition">지표 정의 보정</option>
-          <option value="guest_policy">게스트 정책</option>
-          <option value="corner_note">코너 메모</option>
-          <option value="decomposition_hint">분해 힌트</option>
-          <option value="fact">사실</option></select>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <select id="impKTarget" style="flex:1;min-width:130px">
+            <option value="ent" selected>이 ${d.scope_kind === 'channel' ? '채널' : '프로그램'}: ${escapeHtml((d.program && d.program.name) || '')}(${escapeHtml((d.program && d.program.code) || '')})</option>
+            <option value="unclassified">미지정(관리자 분류)</option>
+            <option value="global">전역</option></select>
+          <select id="impKType" style="flex:1;min-width:120px">
+            <option value="program_note">프로그램 메모</option>
+            <option value="metric_definition">지표 정의 보정</option>
+            <option value="guest_policy">게스트 정책</option>
+            <option value="corner_note">코너 메모</option>
+            <option value="decomposition_hint">분해 힌트</option>
+            <option value="fact">사실</option></select></div>
         <textarea id="impKContent" placeholder="추가/수정할 도메인 지식"></textarea>
         <button class="imp-btn" onclick="_submitKnowledge()">지식 추가</button></div>`;
   } catch (e) { dataEl.innerHTML = ontoEl.innerHTML = '<div class="imp-mean">로드 실패</div>'; }
@@ -5349,11 +5355,17 @@ async function _loadImproveContext() {
 async function _submitKnowledge() {
   const content = (document.getElementById('impKContent').value || '').trim();
   if (!content) return;
+  // target: 'ent'(질의 scope 자동추론) | unclassified | global
+  const sel = (document.getElementById('impKTarget') || {}).value || 'ent';
+  let target_kind = sel, target_id = null;
+  if (sel === 'ent') {
+    target_kind = _improveState.scopeKind || 'program';   // program|channel
+    target_id = _improveState.program && _improveState.program.code;
+  }
   await _authedFetch('/api/improve/contribute', { method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ kind: 'knowledge', type: document.getElementById('impKType').value,
-      target_kind: 'program', target_id: _improveState.program && _improveState.program.code,
-      content, op: 'add' }) });
+      target_kind, target_id, content, op: 'add' }) });
   document.getElementById('impKContent').value = '';
   _loadImproveContext();
 }
@@ -5361,9 +5373,9 @@ async function _submitKnowledge() {
 function _akKindHint() {
   const k = document.getElementById('akKind').value;
   const t = document.getElementById('akTarget');
-  const ph = { program:'프로그램 코드 (F09)', channel:'채널 코드 (L00 / F00 / T00)',
-    field:'지표 필드 (deep_rate)', global:'전역 — 입력 불필요' };
-  t.placeholder = ph[k] || ''; t.disabled = (k === 'global');
+  const ph = { unclassified:'미지정 — 관리자가 분류(전역 작동)', program:'프로그램 코드 (F09)',
+    channel:'채널 코드 (L00 / F00 / T00)', field:'지표 필드 (deep_rate)', global:'전역 — 입력 불필요' };
+  t.placeholder = ph[k] || ''; t.disabled = (k === 'global' || k === 'unclassified');
 }
 async function _submitMyKnowledge() {
   const kind = document.getElementById('akKind').value;
@@ -5371,11 +5383,12 @@ async function _submitMyKnowledge() {
   const type = document.getElementById('akType').value;
   const content = (document.getElementById('akContent').value || '').trim();
   if (!content) { alert('내용을 입력하세요.'); return; }
-  if (kind !== 'global' && !target) { alert('대상 코드를 입력하세요 (전역이면 전역 선택).'); return; }
+  const needTarget = (kind === 'program' || kind === 'channel' || kind === 'field');
+  if (needTarget && !target) { alert('대상 코드를 입력하세요 (모르면 미지정 선택).'); return; }
   await _authedFetch('/api/improve/contribute', { method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ kind: 'knowledge', type, target_kind: kind,
-      target_id: kind === 'global' ? null : target, content, op: 'add' }) });
+      target_id: needTarget ? target : null, content, op: 'add' }) });
   _loadMyImprovements();
 }
 async function _retireMyKnowledge(id, btn) {
@@ -5527,6 +5540,7 @@ async function _loadMyImprovements() {
       <div class="imp-form" style="margin:0 14px">
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <select id="akKind" style="flex:1;min-width:110px" onchange="_akKindHint()">
+            <option value="unclassified" selected>미지정(권장)</option>
             <option value="program">프로그램</option><option value="channel">채널</option>
             <option value="field">지표(필드)</option><option value="global">전역</option></select>
           <input id="akTarget" style="flex:2;min-width:140px" placeholder="대상 코드 (F09 · L00 · deep_rate)">
@@ -5700,12 +5714,15 @@ async function _loadReviewQueue() {
         guest_policy:'게스트정책', corner_note:'코너메모', decomposition_hint:'분해힌트', fact:'사실' };
       html += `<div class="imp-sec-hd">📚 승인된 공유 지식 (본체) · ${ak.length}건 — 모든 답변 grounding에 주입 중
         <button class="imp-btn imp-mini" style="margin-left:8px" onclick="_promoteKnowledge(this)">📦 TTL 승격</button></div>` +
-        ak.map(k => `<div class="hm-row"><div class="hm-summary">
+        ak.map(k => { const unc = (k.target_kind === 'unclassified' || (!k.target_id && k.target_kind !== 'global'));
+          return `<div class="hm-row"><div class="hm-summary">
           <span class="wk-chip" style="margin:0">${escapeHtml(KT[k.type] || k.type || '')}</span>
-          <span class="wk-chip" style="margin:0">${escapeHtml(k.target_id || '전역')}</span>
-          <span class="hm-q">${escapeHtml((k.content || '').slice(0, 70))}</span>
-          <span class="hm-sess-meta"><button class="imp-btn imp-mini" onclick="_retireKnowledge(${k.id},this)">회수</button></span>
-        </div></div>`).join('');
+          <span class="wk-chip ${unc ? 'imp-st-wait' : ''}" style="margin:0">${unc ? '⚠ 미분류' : escapeHtml((k.target_kind || '') + (k.target_id ? ':' + k.target_id : '전역'))}</span>
+          <span class="hm-q">${escapeHtml((k.content || '').slice(0, 64))}</span>
+          <span class="hm-sess-meta">
+            <button class="imp-btn imp-mini" onclick="_reclassifyKnowledge(${k.id},this)">재분류</button>
+            <button class="imp-btn imp-mini" onclick="_retireKnowledge(${k.id},this)">회수</button></span>
+        </div></div>`; }).join('');
     }
     // ⬆ 업로드 데이터 승인 대기
     const pu = d.pending_uploads || [];
@@ -5721,6 +5738,24 @@ async function _loadReviewQueue() {
     }
     body.innerHTML = html;
   } catch (e) { body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`; }
+}
+async function _reclassifyKnowledge(id, btn) {
+  const kind = prompt('대상 종류를 입력: program / channel / field / global / unclassified', 'program');
+  if (!kind) return;
+  let tid = null;
+  if (['program', 'channel', 'field'].includes(kind)) {
+    tid = prompt('대상 코드 (예: F09 / L00 / deep_rate)', '');
+    if (!tid) return;
+  }
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/knowledge/reclassify', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, target_kind: kind, target_id: tid }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '실패');
+    _loadReviewQueue();
+  } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
 }
 async function _promoteKnowledge(btn) {
   if (!confirm('승인된 공유 지식을 TTL canonical(contributed.ttl)로 승격합니까?\n(git 버전관리되는 본체 기록으로 재생성)')) return;

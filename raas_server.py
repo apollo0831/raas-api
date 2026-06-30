@@ -43,7 +43,7 @@ from raas_history_db import (init_db, save_query, get_history, get_popular,
                              list_improvements, list_data_requests,
                              get_knowledge_items_by_ids, review_improvement, update_data_request,
                              feedback_weakness, feedback_negative_open, knowledge_effect,
-                             list_approved_knowledge, retire_knowledge_item,
+                             list_approved_knowledge, retire_knowledge_item, reclassify_knowledge,
                              list_my_knowledge, retire_my_knowledge,
                              add_uploaded_data, list_my_uploads, retire_my_upload,
                              list_pending_uploads, approve_upload)
@@ -1387,6 +1387,18 @@ class RAASHandler(BaseHTTPRequestHandler):
                 return
             try:
                 ok = retire_knowledge_item(body.get("id"), str(user["id"]))
+                self.send_json({"ok": ok})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
+        elif self.path == "/api/knowledge/reclassify":
+            # 관리자 재분류 — 미분류·global 지식 target 좁힘
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                ok = reclassify_knowledge(body.get("id"), body.get("target_kind") or "global",
+                                          body.get("target_id"), str(user["id"]))
                 self.send_json({"ok": ok})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
