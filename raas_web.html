@@ -5629,8 +5629,8 @@ async function _loadReviewQueue() {
     const wk = d.weakness || [], neg = d.negative_open || [];
     const _anyQueue = imps.length || reqs.length || wk.length || neg.length ||
       (d.approved_knowledge || []).length || (d.pending_uploads || []).length || (d.effect || []).length;
-    // ✍ 답변 스타일 정책 — 매 답변에 주입되는 단일 큐레이션 블록(거버넌스 편집). 큐가 비어도 항상 노출.
-    const styleHtml = `<div class="imp-sec-hd">✍ 답변 스타일 정책 — <b>모든 답변</b>에 주입되는 단일 블록(짧게 유지)</div>
+    // ✍ 답변 스타일 정책 — 매 답변에 주입되는 단일 큐레이션 블록. 관리자(is_admin) 전용 노출.
+    const styleHtml = RAAS_USER && RAAS_USER.is_admin ? `<div class="imp-sec-hd">✍ 답변 스타일 정책 — <b>모든 답변</b>에 주입되는 단일 블록(짧게 유지) · 관리자 전용</div>
       <div class="imp-form" style="margin:0 14px">
         <textarea id="stylePolicyText" style="min-height:120px" placeholder="불러오는 중…" oninput="_styleCount()"></textarea>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -5638,7 +5638,7 @@ async function _loadReviewQueue() {
           <span id="styleDefaultTag" class="imp-tag" style="display:none">기본값(미저장)</span>
           <button class="imp-btn imp-btn-primary" onclick="_saveStylePolicy(this)">정책 저장</button>
         </div>
-      </div>`;
+      </div>` : '';
     if (!_anyQueue) {
       body.innerHTML = styleHtml + '<div class="hist-empty-msg" style="margin-top:8px">검토 대기·약점 신호가 없습니다.</div>';
       _loadStylePolicy(); return;

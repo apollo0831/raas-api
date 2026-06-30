@@ -1420,8 +1420,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
         elif self.path == "/api/style/get":
-            # 답변 스타일 정책 조회(편집 화면용). 거버넌스 권한.
-            user = self._require_stats_viewer()
+            # 답변 스타일 정책 조회(편집 화면용). 관리자(is_admin) 전용.
+            user = self._require_admin()
             if not user:
                 return
             try:
@@ -1434,8 +1434,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
         elif self.path == "/api/style/set":
-            # 답변 스타일 정책 저장(새 버전). 거버넌스 권한 + 문자 상한.
-            user = self._require_stats_viewer()
+            # 답변 스타일 정책 저장(새 버전). 관리자(is_admin) 전용 + 문자 상한.
+            user = self._require_admin()
             if not user:
                 return
             try:
