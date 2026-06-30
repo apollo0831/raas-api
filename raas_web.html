@@ -4023,11 +4023,17 @@ async function _loadReviewQueue() {
         </div>
       </div>` : '';
     const dashHtml = _funnelDashboard(d.funnel);
+    // 관리자 전용 승격 바 — 항상 노출(승인 0건·큐 비어도 닿을 수 있게)
+    const promoteBar = (RAAS_USER && RAAS_USER.is_admin)
+      ? `<div style="margin:0 14px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="imp-btn imp-btn-primary imp-mini" onclick="_previewPromotion(this)">📦 TTL 승격(미리보기)</button>
+          <span class="imp-mean" style="margin:0">승인 지식 ${(d.funnel && d.funnel.total_approved) || 0}건 → 온톨로지 졸업 · 관리자 전용</span>
+        </div>` : '';
     if (!_anyQueue) {
-      body.innerHTML = styleHtml + dashHtml + '<div class="hist-empty-msg" style="margin-top:8px">검토 대기·약점 신호가 없습니다.</div>';
+      body.innerHTML = styleHtml + dashHtml + promoteBar + '<div class="hist-empty-msg" style="margin-top:8px">검토 대기·약점 신호가 없습니다.</div>';
       _loadStylePolicy(); return;
     }
-    let html = styleHtml + dashHtml;
+    let html = styleHtml + dashHtml + promoteBar;
     // 약점 신호 — 👎 집계 + 미개선 아쉬움 질의(클릭→바로 개선 착수)
     if (wk.length || neg.length) {
       html += '<div class="imp-sec-hd">⚠ 약점 신호 · 최근 30일 \'아쉬움\' 피드백 — 클릭해 바로 개선 착수</div>';
@@ -4108,9 +4114,7 @@ async function _loadReviewQueue() {
     if (ak.length) {
       const KT = { metric_definition:'지표정의', field_meaning:'필드의미', program_note:'프로그램메모',
         guest_policy:'게스트정책', corner_note:'코너메모', decomposition_hint:'분해힌트', fact:'사실' };
-      html += `<div class="imp-sec-hd">📚 승인된 공유 지식 (본체) · ${ak.length}건 — 모든 답변 grounding에 주입 중${
-        (RAAS_USER && RAAS_USER.is_admin)
-          ? `<button class="imp-btn imp-mini" style="margin-left:8px" onclick="_previewPromotion(this)">📦 TTL 승격(미리보기)</button>` : ''}</div>` +
+      html += `<div class="imp-sec-hd">📚 승인된 공유 지식 (본체) · ${ak.length}건 — 모든 답변 grounding에 주입 중</div>` +
         ak.map(k => { const unc = (k.target_kind === 'unclassified' || (!k.target_id && k.target_kind !== 'global'));
           return `<div class="hm-row"><div class="hm-summary">
           <span class="wk-chip" style="margin:0">${escapeHtml(KT[k.type] || k.type || '')}</span>
