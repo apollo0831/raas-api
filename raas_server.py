@@ -1130,6 +1130,9 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "error": "데이터를 사용할 수 없습니다."}, 500)
                     return
                 facts = facts or {}
+                # 채팅 차트 단일화: QE 폴백의 구 dataZoom 차트(chart_data) 비활성 —
+                #   채팅 답변 차트는 grounding ```chart 단일 경로만 사용(리모델링 정리).
+                chart_data = None
 
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -1472,7 +1475,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                         target_date=target_date,
                     )
                     answer     = result["answer"]
-                    chart_data = result.get("chart_data")
+                    chart_data = None   # 채팅 차트 단일화: 구 chart_data 비활성(grounding ```chart만)
                     in_tok     = result.get("input_tokens")
                     out_tok    = result.get("output_tokens")
                     facts      = result.get("facts") or {}
