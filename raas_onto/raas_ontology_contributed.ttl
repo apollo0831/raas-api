@@ -1,0 +1,14 @@
+# =============================================================================
+# raas_ontology_contributed.ttl  —  기여 지식(승인) canonical 미러
+# 자동 생성 파일: raas_ontology_promote.promote_approved_to_ttl()이 재생성.
+# 직접 편집 금지(다음 승격 시 덮어씌워짐). 구조화는 core ttl로 수동 graduation.
+# =============================================================================
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+raas:ContributedKnowledge a owl:Class ;
+    rdfs:label "기여 지식(승인)"@ko ;
+    rdfs:comment "사용자 기여 → 검토 승인된 도메인 지식. 오버레이에서 승격된 canonical 기록."@ko .
+
+# (승인된 기여 지식 없음)

@@ -1391,6 +1391,18 @@ class RAASHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
+        elif self.path == "/api/knowledge/promote":
+            # 승인 지식 → TTL canonical 승격 배치(contributed.ttl 재생성)
+            user = self._require_stats_viewer()
+            if not user:
+                return
+            try:
+                import raas_ontology_promote as PROMOTE
+                res = PROMOTE.promote_approved_to_ttl()
+                self.send_json(res)
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 500)
+
         elif self.path == "/api/query":
             try:
                 user = self._get_session_user()

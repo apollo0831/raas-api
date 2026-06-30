@@ -67,6 +67,7 @@ ONTOLOGY_FILES = [
     "raas_ontology_calendar.ttl",
     "raas_ontology_person.ttl",
     "raas_ontology_episode.ttl",
+    "raas_ontology_contributed.ttl",   # 승인 기여 지식(승격 배치 생성)
 ]
 
 

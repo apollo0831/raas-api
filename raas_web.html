@@ -5698,7 +5698,8 @@ async function _loadReviewQueue() {
     if (ak.length) {
       const KT = { metric_definition:'지표정의', field_meaning:'필드의미', program_note:'프로그램메모',
         guest_policy:'게스트정책', corner_note:'코너메모', decomposition_hint:'분해힌트', fact:'사실' };
-      html += `<div class="imp-sec-hd">📚 승인된 공유 지식 (본체) · ${ak.length}건 — 모든 답변 grounding에 주입 중</div>` +
+      html += `<div class="imp-sec-hd">📚 승인된 공유 지식 (본체) · ${ak.length}건 — 모든 답변 grounding에 주입 중
+        <button class="imp-btn imp-mini" style="margin-left:8px" onclick="_promoteKnowledge(this)">📦 TTL 승격</button></div>` +
         ak.map(k => `<div class="hm-row"><div class="hm-summary">
           <span class="wk-chip" style="margin:0">${escapeHtml(KT[k.type] || k.type || '')}</span>
           <span class="wk-chip" style="margin:0">${escapeHtml(k.target_id || '전역')}</span>
@@ -5720,6 +5721,17 @@ async function _loadReviewQueue() {
     }
     body.innerHTML = html;
   } catch (e) { body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`; }
+}
+async function _promoteKnowledge(btn) {
+  if (!confirm('승인된 공유 지식을 TTL canonical(contributed.ttl)로 승격합니까?\n(git 버전관리되는 본체 기록으로 재생성)')) return;
+  btn.disabled = true;
+  try {
+    const r = await _authedFetch('/api/knowledge/promote', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '실패');
+    alert(`TTL 승격 완료 — ${d.count}건을 contributed.ttl로 기록했습니다.\n(레포에 커밋하면 canonical 반영)`);
+  } catch (e) { alert('실패: ' + e.message); } finally { btn.disabled = false; }
 }
 async function _retireKnowledge(id, btn) {
   if (!confirm('이 공유 지식을 회수합니까? (모든 답변에서 제외됩니다)')) return;

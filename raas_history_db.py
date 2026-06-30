@@ -212,9 +212,15 @@ def init_db():
                 op           TEXT,    -- add|edit
                 status       TEXT,    -- draft|submitted|approved|rejected
                 improvement_id INTEGER,
-                reviewed_by  TEXT, reviewed_at TIMESTAMP
+                reviewed_by  TEXT, reviewed_at TIMESTAMP,
+                promoted_at  TIMESTAMP    -- TTL canonical 승격 시각(NULL=미승격)
             )
         """)
+        # 기존 DB 마이그레이션 — promoted_at 컬럼(이미 있으면 무시)
+        try:
+            conn.execute("ALTER TABLE knowledge_items ADD COLUMN promoted_at TIMESTAMP")
+        except Exception:
+            pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ki_target ON knowledge_items (target_kind, target_id, scope)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ki_contrib ON knowledge_items (contributor_id, scope)")
         # 데이터 요청(요청형 — 스플렁크 필드 추가)
@@ -566,6 +572,30 @@ def list_approved_knowledge(limit=200) -> list:
                 ORDER BY target_kind, target_id, reviewed_at DESC
                 LIMIT ?""", (limit,)).fetchall()
         return [dict(r) for r in rows]
+
+
+def list_approved_for_promotion(limit=2000) -> list:
+    """TTL 승격용 — 승인된 공유 지식 전체(canonical 미러 재생성 입력)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT id, type, target_kind, target_id, content, contributor_id,
+                      improvement_id, reviewed_at, promoted_at
+                 FROM knowledge_items
+                WHERE scope='approved' AND status='approved'
+                ORDER BY id LIMIT ?""", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_promoted(ids) -> int:
+    """승격 완료 표시(promoted_at)."""
+    if not ids:
+        return 0
+    qs = ",".join("?" * len(ids))
+    with get_conn() as conn:
+        conn.execute(
+            f"UPDATE knowledge_items SET promoted_at=CURRENT_TIMESTAMP WHERE id IN ({qs})",
+            tuple(ids))
+    return len(ids)
 
 
 def retire_knowledge_item(item_id, reviewer) -> bool:
