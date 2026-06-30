@@ -5556,7 +5556,9 @@ async function _loadMyImprovements() {
           <span class="wk-chip" style="margin:0">${escapeHtml(k.target_id || '전역')}</span>
           <span class="imp-st ${k.scope === 'approved' ? 'imp-st-ok' : 'imp-st-wait'}">${k.scope === 'approved' ? '승인·공유' : '내 후보'}</span>
           <span class="hm-q">${escapeHtml((k.content || '').slice(0, 56))}</span>
-          <span class="hm-sess-meta"><button class="imp-btn imp-mini" onclick="_retireMyKnowledge(${k.id},this)">삭제</button></span>
+          <span class="hm-sess-meta">${k.scope === 'approved'
+            ? '<span class="hm-sess-meta" style="opacity:.6">승인됨 · 관리자 회수만 가능</span>'
+            : `<button class="imp-btn imp-mini" onclick="_retireMyKnowledge(${k.id},this)">삭제</button>`}</span>
         </div></div>`).join('');
     }
     // 본인 데이터 업로드 — 소규모 표(CSV/탭 붙여넣기)

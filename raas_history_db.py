@@ -553,12 +553,14 @@ def list_my_knowledge(contributor_id, limit=100) -> list:
 
 
 def retire_my_knowledge(item_id, contributor_id) -> bool:
-    """본인 기여 지식 삭제(rejected). 소유자 확인."""
+    """본인 '후보(candidate)' 지식만 삭제. 승인·공유(approved)된 건 본인이 못 지움 —
+       공유 본체가 됐으므로 관리자 회수(retire_knowledge_item)로만 제외. 삭제 성공 시 True."""
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE knowledge_items SET status='rejected' "
-            "WHERE id=? AND contributor_id=?", (item_id, str(contributor_id)))
-    return True
+            "WHERE id=? AND contributor_id=? AND scope='candidate'",
+            (item_id, str(contributor_id)))
+        return cur.rowcount > 0
 
 
 def list_approved_knowledge(limit=200) -> list:

@@ -1325,7 +1325,11 @@ class RAASHandler(BaseHTTPRequestHandler):
                 if not user:
                     self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
                 ok = retire_my_knowledge(body.get("id"), str(user["id"]))
-                self.send_json({"ok": ok})
+                if ok:
+                    self.send_json({"ok": True})
+                else:
+                    # candidate가 아니면(=승인·공유됨) 본인 삭제 불가 — 관리자 회수만 가능
+                    self.send_json({"ok": False, "error": "승인·공유된 지식은 본인이 삭제할 수 없습니다(관리자 회수만 가능)."}, 403)
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 
