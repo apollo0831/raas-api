@@ -127,16 +127,23 @@ def _disambiguate_rolling(question: str, fields: list, lookback: int) -> list:
 _CH_NAME_BY_CODE = {v: k for k, v in S._CHANNEL_CODE.items()}
 _CH_NAME_BY_CODE["T00"] = "전체"
 
+# 짧은 별칭(채널명 축약) — 'M' 없는 '고릴라' 등. 정식 채널명·전체 규칙 사이에서 보강.
+_CHANNEL_ALIAS = {"고릴라": "G00"}
+
 def _detect_channel(q: str):
     t = q or ""
+    # '전사/전체/앱 전체/고릴라 전체' → 전체(T00)를 먼저 (별칭 '고릴라'보다 우선)
+    if any(k in t for k in ("전사", "전체 채널", "네트워크", "앱 전체", "고릴라 전체")):
+        return "T00", "전체"
     for name, code in S._CHANNEL_CODE.items():        # 파워FM/러브FM/고릴라M/픽채널
         if name in t:
             return code, name
+    for alias, code in _CHANNEL_ALIAS.items():        # '고릴라'(M 없이) 등 축약 별칭
+        if alias in t:
+            return code, _CH_NAME_BY_CODE.get(code, code)
     for code in ("F00", "L00", "G00", "P00"):          # 코드 직접 언급
         if code in t:
             return code, _CH_NAME_BY_CODE.get(code, code)
-    if any(k in t for k in ("전사", "전체 채널", "네트워크", "앱 전체", "고릴라 전체")):
-        return "T00", "전체"
     return None, None
 
 
