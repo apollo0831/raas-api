@@ -42,7 +42,7 @@ from raas_history_db import (init_db, save_query, get_history, get_popular,
                              add_data_request, add_improvement, set_improvement_verdict,
                              list_improvements, list_data_requests,
                              get_knowledge_items_by_ids, review_improvement, update_data_request,
-                             feedback_weakness, feedback_negative_open, knowledge_effect,
+                             feedback_weakness, feedback_negative_open, knowledge_effect, loop_funnel,
                              list_approved_knowledge, retire_knowledge_item, reclassify_knowledge,
                              list_my_knowledge, retire_my_knowledge,
                              add_uploaded_data, list_my_uploads, retire_my_upload,
@@ -1360,7 +1360,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                                 "negative_open": feedback_negative_open(days=30),
                                 "approved_knowledge": list_approved_knowledge(),
                                 "pending_uploads": list_pending_uploads(),
-                                "effect": knowledge_effect(days=30)})
+                                "effect": knowledge_effect(days=30),
+                                "funnel": loop_funnel(days=30)})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
 

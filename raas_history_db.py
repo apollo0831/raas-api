@@ -684,6 +684,35 @@ def knowledge_effect(days=30, limit=30) -> list:
         return out
 
 
+def loop_funnel(days=30) -> dict:
+    """개선 루프 효과 대시보드용 — 퍼널(👎→개선착수→승인→승격) + 주간 👎 추세 + 누계."""
+    cut = f"-{int(days)} days"
+    with get_conn() as conn:
+        def one(sql, params=()):
+            r = conn.execute(sql, params).fetchone()
+            return (r[0] or 0) if r else 0
+        neg = one("SELECT COUNT(*) FROM query_history WHERE feedback=-1 AND created_at>=datetime('now',?)", (cut,))
+        imps = one("SELECT COUNT(*) FROM improvements WHERE created_at>=datetime('now',?)", (cut,))
+        approved = one("SELECT COUNT(*) FROM knowledge_items WHERE scope='approved' AND status='approved' "
+                       "AND reviewed_at>=datetime('now',?)", (cut,))
+        promoted = one("SELECT COUNT(*) FROM knowledge_items WHERE promoted_at>=datetime('now',?) "
+                       "AND status='approved'", (cut,))
+        total_approved = one("SELECT COUNT(*) FROM knowledge_items WHERE scope='approved' AND status='approved'")
+        total_promoted = one("SELECT COUNT(*) FROM knowledge_items WHERE promoted_at IS NOT NULL "
+                             "AND status='approved'")
+        rows = conn.execute(
+            "SELECT strftime('%Y-%W', created_at) wk, "
+            "  SUM(CASE WHEN feedback=-1 THEN 1 ELSE 0 END) neg, COUNT(*) tot "
+            "FROM query_history WHERE created_at>=datetime('now','-42 days') "
+            "GROUP BY wk ORDER BY wk", ()).fetchall()
+        weekly = [{"week": r["wk"], "neg": r["neg"] or 0, "tot": r["tot"] or 0,
+                   "rate": round((r["neg"] or 0) / (r["tot"] or 1) * 100, 1)} for r in rows]
+    return {"window_days": days, "neg": neg, "improvements": imps,
+            "approved": approved, "promoted": promoted,
+            "total_approved": total_approved, "total_promoted": total_promoted,
+            "neg_weekly": weekly}
+
+
 def feedback_weakness(days=30, limit=15) -> list:
     """scope(프로그램/채널)별 👎 집계 — 약점 후보 랭킹. 👎 많은/비율 높은 순."""
     with get_conn() as conn:

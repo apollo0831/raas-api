@@ -4022,11 +4022,12 @@ async function _loadReviewQueue() {
           <button class="imp-btn imp-btn-primary" onclick="_saveStylePolicy(this)">정책 저장</button>
         </div>
       </div>` : '';
+    const dashHtml = _funnelDashboard(d.funnel);
     if (!_anyQueue) {
-      body.innerHTML = styleHtml + '<div class="hist-empty-msg" style="margin-top:8px">검토 대기·약점 신호가 없습니다.</div>';
+      body.innerHTML = styleHtml + dashHtml + '<div class="hist-empty-msg" style="margin-top:8px">검토 대기·약점 신호가 없습니다.</div>';
       _loadStylePolicy(); return;
     }
-    let html = styleHtml;
+    let html = styleHtml + dashHtml;
     // 약점 신호 — 👎 집계 + 미개선 아쉬움 질의(클릭→바로 개선 착수)
     if (wk.length || neg.length) {
       html += '<div class="imp-sec-hd">⚠ 약점 신호 · 최근 30일 \'아쉬움\' 피드백 — 클릭해 바로 개선 착수</div>';
@@ -4195,6 +4196,26 @@ async function _reclassifyKnowledge(id, btn) {
     _loadReviewQueue();
   } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
 }
+// 📊 개선 루프 효과 대시보드 — 퍼널(👎→개선→승인→승격) + 주간 👎율 추세
+function _funnelDashboard(f) {
+  if (!f) return '';
+  const conv = (a, b) => a > 0 ? Math.round(b / a * 100) + '%' : '—';
+  const stage = (icon, label, n, sub) => `<div style="text-align:center;min-width:62px">
+    <div style="font-size:22px;font-weight:700">${n}</div>
+    <div style="font-size:12px;color:var(--dim)">${icon} ${label}</div>
+    <div style="font-size:11px;color:var(--accent)">${sub || '&nbsp;'}</div></div>`;
+  const arrow = `<div style="color:var(--dim);font-size:18px;margin-top:6px">→</div>`;
+  const funnel = `<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg1)">
+    ${stage('👎', '아쉬움', f.neg, '')}${arrow}${stage('✦', '개선착수', f.improvements, conv(f.neg, f.improvements))}${arrow}${stage('✓', '승인', f.approved, conv(f.improvements, f.approved))}${arrow}${stage('📦', '승격', f.promoted, conv(f.approved, f.promoted))}</div>`;
+  const wk = f.neg_weekly || [];
+  const maxRate = Math.max(...wk.map(w => w.rate), 1);
+  const bars = wk.map(w => `<div title="${w.week}: 👎${w.neg}/${w.tot} (${w.rate}%)" style="flex:1;min-width:10px;background:var(--accent);opacity:.7;border-radius:2px 2px 0 0;height:${Math.max(6, Math.round(w.rate / maxRate * 100))}%"></div>`).join('');
+  const trend = `<div style="margin-top:8px"><div style="font-size:12px;color:var(--dim);margin-bottom:4px">주간 👎율 추세 (6주)</div>
+    <div style="display:flex;align-items:flex-end;gap:3px;height:46px">${bars || '<span class="imp-mean">데이터 없음</span>'}</div></div>`;
+  return `<div class="imp-sec-hd">📊 개선 루프 효과 · 최근 ${f.window_days}일 (누계 공유 ${f.total_approved} · 승격 ${f.total_promoted})</div>
+    <div style="margin:0 14px 10px">${funnel}${trend}</div>`;
+}
+
 // 📦 TTL 승격 — 미리보기(병합 전후·텍스트 변경) → 실행. 관리자 전용.
 async function _previewPromotion(btn) {
   btn.disabled = true;
