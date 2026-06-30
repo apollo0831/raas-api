@@ -127,8 +127,9 @@ def _disambiguate_rolling(question: str, fields: list, lookback: int) -> list:
 _CH_NAME_BY_CODE = {v: k for k, v in S._CHANNEL_CODE.items()}
 _CH_NAME_BY_CODE["T00"] = "전체"
 
-# 짧은 별칭(채널명 축약) — 'M' 없는 '고릴라' 등. 정식 채널명·전체 규칙 사이에서 보강.
-_CHANNEL_ALIAS = {"고릴라": "G00"}
+# 짧은 별칭 — 'M' 없는 '고릴라'는 채널(고릴라M)이 아니라 '고릴라 전체'(앱 전체=T00)를 의미.
+#   (정식 채널명 '고릴라M'→G00은 위 채널명 루프에서 먼저 매칭되어 그대로 유지)
+_CHANNEL_ALIAS = {"고릴라": "T00"}
 
 def _detect_channel(q: str):
     t = q or ""
