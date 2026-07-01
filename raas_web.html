@@ -2854,6 +2854,22 @@ function _setQueryGenerating(on) {
 function startTodayDigest() {
   submitQuery('어제 방송 특이사항', 'today_digest', { endpoint: '/api/storyline/today' });
 }
+// 🩺 데이터 확인하기 — 데이터 직무 전용 칩(웰컴 CTA에 주입)
+function startDataCheck() {
+  submitQuery('데이터 확인하기', 'data_check', { endpoint: '/api/data_check' });
+}
+function _injectDataCheckChip() {
+  if (!(RAAS_USER && (RAAS_USER.role === '데이터' || RAAS_USER.is_admin))) return;
+  document.querySelectorAll('.welcome-cta').forEach(cta => {
+    if (cta.querySelector('.data-check-btn')) return;
+    const b = document.createElement('button');
+    b.className = 'today-digest-btn data-check-btn';
+    b.style.cssText = 'margin-left:8px;background:#1ec9ff;border-color:#1ec9ff';
+    b.textContent = '🩺 데이터 확인하기';
+    b.addEventListener('click', startDataCheck);
+    cta.appendChild(b);
+  });
+}
 // 드릴다운 칩 — 특이 프로그램 → 그 프로그램 원인 자유질의(통합 grounding 경로)
 function _buildDrillChips(drill) {
   const chips = (drill || []).map(d =>
@@ -3080,6 +3096,7 @@ function _initWelcomeChips() { /* 보팅 시점엔 RAAS_TOKEN 가능 — _bootAu
 // 웰컴 추천 칩 — 스토리라인은 '어제 방송 특이사항' 단일 경로(웰컴 CTA 상시 노출)로 전환.
 //   구 CP 다중슬롯 스토리라인은 제거됨. 웰컴은 직무 기반 추천칩만 렌더.
 async function loadSuggestions() {
+  _injectDataCheckChip();
   await _loadLegacySuggestions();
 }
 

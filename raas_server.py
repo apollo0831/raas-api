@@ -1577,6 +1577,64 @@ class RAASHandler(BaseHTTPRequestHandler):
                     pass
                 return
 
+        elif self.path == "/api/data_check":
+            # 데이터 확인 — raas_kpi_latest.csv 규칙 점검(결정적) + Haiku 총평(하이브리드). 데이터 직무 전용.
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                if user.get("role") != "데이터" and not user.get("is_admin"):
+                    self.send_json({"ok": False, "error": "데이터 직무 전용입니다."}, 403); return
+                import raas_data_check as DC
+                report = DC.run_data_check(anomalies=get_cached_anomalies())
+                s = report.get("summary", {})
+                _emoji = {"red": "🔴", "yellow": "🟡", "green": "🟢"}
+                order = {"red": 0, "yellow": 1, "green": 2}
+                rows_sorted = sorted(report.get("checks", []), key=lambda c: order.get(c["severity"], 3))
+                head = (f"**📋 데이터 점검 · {report.get('data_date','?')}** "
+                        f"(파일 {report.get('mtime','?')} · {report.get('code_count','?')}코드 · "
+                        f"{report.get('field_count','?')}필드)\n"
+                        f"🔴 {s.get('red',0)} · 🟡 {s.get('yellow',0)} · 🟢 {s.get('green',0)}\n\n"
+                        "| 상태 | 항목 | 상세 |\n|---|---|---|\n")
+                table = "".join(
+                    f"| {_emoji.get(c['severity'],'')} | {c['title']} | {(c.get('detail') or '').replace('|','/')} |\n"
+                    for c in rows_sorted)
+                verdict = ""
+                try:
+                    _fnd = "\n".join(f"[{c['severity']}] {c['title']} {c.get('detail','')}"
+                                     for c in rows_sorted if c["severity"] != "green")
+                    _sys = ("당신은 데이터 품질 점검 담당입니다. 아래 점검 결과를 1~2문장으로 총평하세요. "
+                            "심각(red)이 있으면 무엇이 문제인지 먼저 경고, 없으면 정상임을 간결히 안내. 군더더기 금지.")
+                    _u = (f"요약: red {s.get('red',0)} / yellow {s.get('yellow',0)} / green {s.get('green',0)}\n"
+                          f"주요 항목:\n{_fnd or '(이상 없음)'}")
+                    verdict, _ = QE.call_claude(_sys, _u, max_tokens=200, model=QE.HAIKU_MODEL)
+                except Exception as _e:
+                    verdict = (f"🔴 심각 이상 {s.get('red',0)}건 — 적재·무결성 점검 필요." if s.get("red")
+                               else (f"🟡 주의 {s.get('yellow',0)}건 확인." if s.get("yellow") else "🟢 데이터 정상."))
+                full = (verdict or "").strip() + "\n\n" + head + table
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                def sse_d(d):
+                    self.wfile.write(("data: " + json.dumps(d, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                    self.wfile.flush()
+                sse_d({"type": "token", "text": full})
+                _qid = save_query(str(user["id"]), "데이터 확인하기", full, ip=self._get_client_ip(),
+                                  user_name=user["name"], user_role=user["role"],
+                                  intent="data_check", source="general")
+                sse_d({"type": "done", "query_id": _qid, "routing_badge": "🩺 데이터 점검"})
+                self.close_connection = True
+                return
+            except Exception as e:
+                try:
+                    self.send_json({"ok": False, "error": str(e)}, 500)
+                except Exception:
+                    pass
+                return
+
 if __name__ == "__main__":
     init_db()
     bootstrap_admins()  # .env ADMIN_LOGIN_IDS 기반 관리자 자동 승격
