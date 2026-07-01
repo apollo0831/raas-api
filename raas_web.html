@@ -2928,7 +2928,8 @@ async function submitQuery(question, source, opts) {
           _initLLMCharts(msgBody);   // ```chart 블록 → ECharts 렌더
           // 드릴다운(어제 특이사항 → 프로그램별 원인) — 클릭 시 일반 자유질의(통합 grounding 경로)로
           if (ev.drill && ev.drill.length) msgBody.insertAdjacentHTML('beforeend', _buildDrillChips(ev.drill));
-          _saveCachedAnswer(question, msgBody.innerHTML);
+          // 원문 텍스트를 캐시(렌더된 HTML 아님) — 복원 시 재렌더로 차트를 다시 그림(canvas는 innerHTML에 안 담겨서).
+          _saveCachedAnswer(question, rawText);
           if (qid) msgBody.insertAdjacentHTML('beforeend', _buildFeedbackBar(qid));
           refreshHistory();
           _scrollBottom();
@@ -3469,11 +3470,20 @@ function restoreFromCache(question, answerHTML) {
       <div class="msg-avatar">나</div>
       <div class="msg-body"><div class="msg-user-text">${escapeHtml(question)}</div></div>
     </div>`);
+  // cached가 원문 텍스트면 재렌더(차트 재생성), 레거시 렌더HTML이면 그대로 삽입.
+  const isLegacyHTML = /<div class="msg-ai-(name|text)"/.test(answerHTML || '');
+  const bodyHTML = isLegacyHTML
+    ? answerHTML
+    : `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text">${renderAiText(answerHTML || '')}</div>`;
   ti.insertAdjacentHTML('beforeend', `
     <div class="msg msg-ai" id="msg-${++_msgCount}">
       <div class="msg-avatar">R</div>
-      <div class="msg-body">${answerHTML}</div>
+      <div class="msg-body">${bodyHTML}</div>
     </div>`);
+  if (!isLegacyHTML) {
+    const mb = ti.querySelector('.msg-ai:last-child .msg-body');
+    if (mb) _initLLMCharts(mb);   // ```chart → ECharts 재렌더(리로드에도 안전)
+  }
   _scrollBottom();
 }
 
