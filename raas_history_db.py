@@ -980,7 +980,7 @@ def get_history(user_id: str, limit: int = 20, days: int = 7) -> list:
     스토리라인 분석 여정(칩·라우팅 질의)은 '최근 분석 여정'에서 별도 표시하므로 제외."""
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT id, question, answer, chart_data, feedback,
+            """SELECT id, question, answer, chart_data, feedback, feedback_reason,
                       input_tokens, output_tokens, created_at, source
                FROM query_history
                WHERE user_id = ?
@@ -998,6 +998,7 @@ def get_history(user_id: str, limit: int = 20, days: int = 7) -> list:
             "answer":        r["answer"],
             "chart_data":    json.loads(r["chart_data"]) if r["chart_data"] else None,
             "feedback":      r["feedback"],
+            "feedback_reason": r["feedback_reason"],
             "input_tokens":  r["input_tokens"],
             "output_tokens": r["output_tokens"],
             "created_at":    r["created_at"],
@@ -1024,7 +1025,7 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0) -> dict:
         total = conn.execute(f"SELECT COUNT(*) FROM query_history {where}", params_count).fetchone()[0]
         rows  = conn.execute(
             f"""SELECT id, user_id, user_name, ip, question, answer, chart_data,
-                       feedback, input_tokens, output_tokens, created_at, source
+                       feedback, feedback_reason, input_tokens, output_tokens, created_at, source
                 FROM query_history {where}
                 ORDER BY created_at DESC
                 LIMIT ? OFFSET ?""",
@@ -1042,6 +1043,7 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0) -> dict:
                 "answer":        r["answer"],
                 "chart_data":    json.loads(r["chart_data"]) if r["chart_data"] else None,
                 "feedback":      r["feedback"],
+                "feedback_reason": r["feedback_reason"],
                 "input_tokens":  r["input_tokens"],
                 "output_tokens": r["output_tokens"],
                 "created_at":    r["created_at"],
