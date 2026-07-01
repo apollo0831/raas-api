@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """데이터 확인 — 매일 아침 스플렁크에서 가져오는 집계 타임라인 점검(데이터 직무용).
 
-run_data_check(timeline, anomalies=None) → {ok, source, data_date, code_count, field_count, summary, checks[]}.
+run_data_check(timeline) → {ok, source, data_date, code_count, field_count, summary, checks[]}.
 timeline = get_cached_timeline() 형태 {PGM_CODE: {DATE: row}} (스플렁크). 폴백 CSV 파일이 아니라
 실제 서비스가 쓰는 스플렁크 데이터를 검사. 스플렁크 집계는 최신 DATE = 어제(D-1)가 정상.
-검사는 결정적(규칙). 총평은 서버가 LLM으로 짧게 덧붙임(하이브리드).
+목적: '스플렁크가 집계를 잘 만들었나 + RAAS가 잘 가져왔나'만 검사(데이터 품질).
+사용자 행동 변화 이상탐지(z-score)는 여기서 하지 않음. 검사는 결정적(규칙),
+총평은 서버가 LLM으로 짧게 덧붙임(하이브리드).
 """
 from __future__ import annotations
 import datetime
@@ -65,7 +67,7 @@ def _flatten(timeline) -> list:
     return rows
 
 
-def run_data_check(timeline, anomalies=None) -> dict:
+def run_data_check(timeline) -> dict:
     checks = []
     def add(sev, title, detail=""):
         checks.append({"severity": sev, "title": title, "detail": detail})
@@ -129,8 +131,9 @@ def run_data_check(timeline, anomalies=None) -> dict:
                 if pr and str(pr.get(c) or "").strip() != "":
                     dropped[c].append(r.get("PGM_CODE"))
     if dropped:
-        add("yellow", f"전일 대비 결측 발생 {sum(len(v) for v in dropped.values())}건",
-            "필드: " + ", ".join(f"{k}({len(v)})" for k, v in list(dropped.items())[:8]))
+        flds = sorted(dropped.items(), key=lambda kv: -len(kv[1]))
+        add("yellow", f"전일 대비 결측 발생 · {len(dropped)}개 필드",
+            ", ".join(f"{k}({len(v)})" for k, v in flds))   # 필드(결측 코드 수) 전체 나열
     if empty_total:
         add("green", f"빈 값 총 {empty_total}건", "(대부분 정상 결측 — 전일 대비 신규 결측은 위 항목 참고)")
 
@@ -189,15 +192,6 @@ def run_data_check(timeline, anomalies=None) -> dict:
         add("yellow", f"범위 이상 {len(bad_range)}건",
             "; ".join(f"{code}·{c}={v}({why})" for code, c, v, why in bad_range[:6]))
 
-    if anomalies:
-        reds = [a for a in anomalies if (a.get("level") or a.get("severity")) == "red"]
-        yels = [a for a in anomalies if (a.get("level") or a.get("severity")) == "yellow"]
-        sig = reds + yels
-        if sig:
-            add("red" if reds else "yellow",
-                f"이상탐지(z-score) {len(sig)}건" + (f" · 심각 {len(reds)}" if reds else ""),
-                "; ".join(f"{a.get('code','?')} {a.get('label','')}".strip() for a in sig[:6]))
-
     summary = {
         "red": sum(1 for c in checks if c["severity"] == "red"),
         "yellow": sum(1 for c in checks if c["severity"] == "yellow"),
@@ -212,3 +206,4 @@ if __name__ == "__main__":
     import json
     import raas_server as SRV
     print(json.dumps(run_data_check(SRV.get_cached_timeline()), ensure_ascii=False, indent=2))
+

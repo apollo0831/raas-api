@@ -1586,7 +1586,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                 if user.get("role") != "데이터" and not user.get("is_admin"):
                     self.send_json({"ok": False, "error": "데이터 직무 전용입니다."}, 403); return
                 import raas_data_check as DC
-                report = DC.run_data_check(get_cached_timeline(), anomalies=get_cached_anomalies())
+                report = DC.run_data_check(get_cached_timeline())
                 s = report.get("summary", {})
                 _emoji = {"red": "🔴", "yellow": "🟡", "green": "🟢"}
                 order = {"red": 0, "yellow": 1, "green": 2}
