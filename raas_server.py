@@ -1586,13 +1586,13 @@ class RAASHandler(BaseHTTPRequestHandler):
                 if user.get("role") != "데이터" and not user.get("is_admin"):
                     self.send_json({"ok": False, "error": "데이터 직무 전용입니다."}, 403); return
                 import raas_data_check as DC
-                report = DC.run_data_check(anomalies=get_cached_anomalies())
+                report = DC.run_data_check(get_cached_timeline(), anomalies=get_cached_anomalies())
                 s = report.get("summary", {})
                 _emoji = {"red": "🔴", "yellow": "🟡", "green": "🟢"}
                 order = {"red": 0, "yellow": 1, "green": 2}
                 rows_sorted = sorted(report.get("checks", []), key=lambda c: order.get(c["severity"], 3))
                 head = (f"**📋 데이터 점검 · {report.get('data_date','?')}** "
-                        f"(파일 {report.get('mtime','?')} · {report.get('code_count','?')}코드 · "
+                        f"(스플렁크 · {report.get('code_count','?')}코드 · "
                         f"{report.get('field_count','?')}필드)\n"
                         f"🔴 {s.get('red',0)} · 🟡 {s.get('yellow',0)} · 🟢 {s.get('green',0)}\n\n"
                         "| 상태 | 항목 | 상세 |\n|---|---|---|\n")

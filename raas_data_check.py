@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
-"""데이터 확인 — raas_kpi_latest.csv 최신성·무결성 규칙 점검(데이터 직무용).
+"""데이터 확인 — 매일 아침 스플렁크에서 가져오는 집계 타임라인 점검(데이터 직무용).
 
-run_data_check(anomalies=None) → {ok, data_date, mtime, code_count, summary, checks[]}.
-검사는 결정적(규칙). 서술(총평)은 서버가 LLM으로 짧게 덧붙임(하이브리드).
+run_data_check(timeline, anomalies=None) → {ok, source, data_date, code_count, field_count, summary, checks[]}.
+timeline = get_cached_timeline() 형태 {PGM_CODE: {DATE: row}} (스플렁크). 폴백 CSV 파일이 아니라
+실제 서비스가 쓰는 스플렁크 데이터를 검사. 스플렁크 집계는 최신 DATE = 어제(D-1)가 정상.
+검사는 결정적(규칙). 총평은 서버가 LLM으로 짧게 덧붙임(하이브리드).
 """
 from __future__ import annotations
-import csv
-import os
 import datetime
 from collections import defaultdict
-
-_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "raas_kpi_latest.csv")
 
 # 메타(비수치) 컬럼 — 수치 파싱·빈값 검사에서 제외
 _META_COLS = {
@@ -18,7 +16,6 @@ _META_COLS = {
     "guestname", "daily_corner", "weekly_corner", "view_radio_yn", "live_yn",
 }
 _EXPECTED_CODES = 37
-_REFRESH_HOUR = 6          # 매일 06:50 갱신 → 오늘 06시 이후 mtime 기대
 _STALE_RED_FRAC = 0.5      # 정체 코드가 절반 초과면 red
 
 
@@ -52,29 +49,37 @@ def _parse_date(s):
     return None
 
 
-def run_data_check(anomalies=None) -> dict:
+def _flatten(timeline) -> list:
+    """{PGM_CODE:{DATE:row}} (스플렁크 타임라인) → flat row list."""
+    rows = []
+    for code, date_rows in (timeline or {}).items():
+        if not isinstance(date_rows, dict):
+            continue
+        for date, row in date_rows.items():
+            if not isinstance(row, dict):
+                continue
+            r = dict(row)
+            r["PGM_CODE"] = row.get("PGM_CODE") or code
+            r["DATE"] = row.get("DATE") or date
+            rows.append(r)
+    return rows
+
+
+def run_data_check(timeline, anomalies=None) -> dict:
     checks = []
     def add(sev, title, detail=""):
         checks.append({"severity": sev, "title": title, "detail": detail})
 
-    if not os.path.exists(_CSV):
-        add("red", "CSV 파일 없음", _CSV)
-        return {"ok": False, "summary": {"red": 1, "yellow": 0, "green": 0}, "checks": checks}
-
-    mtime = datetime.datetime.fromtimestamp(os.path.getmtime(_CSV))
-    try:
-        with open(_CSV, encoding="utf-8-sig", newline="") as f:
-            rows = list(csv.DictReader(f))
-    except Exception as e:
-        add("red", "CSV 로드 실패", str(e))
-        return {"ok": False, "summary": {"red": 1, "yellow": 0, "green": 0}, "checks": checks}
-
+    rows = _flatten(timeline)
     if not rows:
-        add("red", "데이터 없음(0행)", _CSV)
-        return {"ok": False, "summary": {"red": 1, "yellow": 0, "green": 0}, "checks": checks}
+        add("red", "스플렁크 데이터 없음", "타임라인이 비어 있음 — 아침 적재 실패 의심")
+        return {"ok": False, "source": "splunk", "summary": {"red": 1, "yellow": 0, "green": 0}, "checks": checks}
 
-    cols = list(rows[0].keys())
-    numeric_cols = [c for c in cols if c not in _META_COLS]
+    # 컬럼 집합(행마다 키가 다를 수 있어 union)
+    keyset = set()
+    for r in rows[:100]:
+        keyset.update(r.keys())
+    numeric_cols = [c for c in keyset if c not in _META_COLS]
     daily_cols = [c for c in numeric_cols if not _is_weekly(c) and not _is_monthly(c)]
 
     today = datetime.date.today()
@@ -87,21 +92,15 @@ def run_data_check(anomalies=None) -> dict:
     latest_rows = [r for r in rows if (r.get("DATE") or "").strip() == latest]
     prior_rows = {r.get("PGM_CODE"): r for r in rows if (r.get("DATE") or "").strip() == prior}
 
-    # ── A. 최신성·적재 ──────────────────────────────────────────────
-    if mtime.date() < today or (mtime.date() == today and mtime.hour < _REFRESH_HOUR):
-        add("red", "파일이 오늘 갱신되지 않음",
-            f"CSV mtime = {mtime:%Y-%m-%d %H:%M} (오늘 06:50 이후 갱신 기대)")
-    else:
-        add("green", "파일 갱신 확인", f"mtime = {mtime:%Y-%m-%d %H:%M}")
-
+    # ── A. 최신성 (스플렁크 집계 최신 DATE = 어제 D-1이 정상) ─────────
     if latest_d and latest_d < yesterday:
         gap = (yesterday - latest_d).days
         add("red", "데이터가 최신이 아님",
-            f"최신 데이터 {latest} · 기대 {yesterday:%Y/%m/%d}(어제) · {gap}일 지연")
+            f"최신 데이터 {latest} · 기대 {yesterday:%Y/%m/%d}(어제) · {gap}일 지연 — 아침 적재 실패/지연 의심")
     elif latest_d == yesterday:
-        add("green", "최신 데이터 확인", f"최신 {latest} (어제)")
+        add("green", "최신 데이터 확인(어제)", f"최신 {latest}")
     else:
-        add("yellow", "최신 데이터 날짜 확인 필요", f"최신 {latest}")
+        add("yellow", "최신 데이터 날짜 확인 필요", f"최신 {latest} · 기대 어제 {yesterday:%Y/%m/%d}")
 
     if len(latest_rows) < _EXPECTED_CODES:
         add("yellow", "코드 수 부족", f"최신일 {len(latest_rows)} / 기대 {_EXPECTED_CODES}개")
@@ -109,29 +108,26 @@ def run_data_check(anomalies=None) -> dict:
         add("green", "코드 수 확인", f"{len(latest_rows)}개")
 
     # ── B. 무결성 ──────────────────────────────────────────────────
-    # 비수치(이상문자) — 수치 컬럼에 숫자 아닌 값
     bad_type = []
     for r in latest_rows:
         for c in numeric_cols:
             if _num(r.get(c)) is False:
-                bad_type.append((r.get("PGM_CODE"), c, (r.get(c) or "").strip()))
+                bad_type.append((r.get("PGM_CODE"), c, str(r.get(c)).strip()))
     if bad_type:
         add("red", f"비수치 값 {len(bad_type)}건",
             "; ".join(f"{code}·{c}={val!r}" for code, c, val in bad_type[:6]))
     else:
         add("green", "수치 필드 형식 정상", "이상문자 없음")
 
-    # 빈 값 — 최신일에 결측인데 전일엔 값이 있던 필드(=필드가 끊긴 신호) 우선
     dropped = defaultdict(list)   # 전일 있었는데 최신 결측
     empty_total = 0
     for r in latest_rows:
-        code = r.get("PGM_CODE")
-        pr = prior_rows.get(code)
+        pr = prior_rows.get(r.get("PGM_CODE"))
         for c in numeric_cols:
-            if (r.get(c) or "").strip() == "":
+            if str(r.get(c) or "").strip() == "":
                 empty_total += 1
-                if pr and (pr.get(c) or "").strip() != "":
-                    dropped[c].append(code)
+                if pr and str(pr.get(c) or "").strip() != "":
+                    dropped[c].append(r.get("PGM_CODE"))
     if dropped:
         add("yellow", f"전일 대비 결측 발생 {sum(len(v) for v in dropped.values())}건",
             "필드: " + ", ".join(f"{k}({len(v)})" for k, v in list(dropped.items())[:8]))
@@ -139,13 +135,12 @@ def run_data_check(anomalies=None) -> dict:
         add("green", f"빈 값 총 {empty_total}건", "(대부분 정상 결측 — 전일 대비 신규 결측은 위 항목 참고)")
 
     # ── C. 신규값 생성(어제/지난주/지난달과 다른 값인지) ──────────────
-    # 정체값: 최신행의 '일간 지표 전체'가 전일과 완전 동일 → 신규값 미생성 의심
     stale = []
     for r in latest_rows:
         pr = prior_rows.get(r.get("PGM_CODE"))
         if not pr:
             continue
-        if daily_cols and all((r.get(c) or "") == (pr.get(c) or "") for c in daily_cols):
+        if daily_cols and all(str(r.get(c) or "") == str(pr.get(c) or "") for c in daily_cols):
             stale.append(r.get("PGM_CODE"))
     if stale:
         sev = "red" if len(stale) > len(latest_rows) * _STALE_RED_FRAC else "yellow"
@@ -154,17 +149,20 @@ def run_data_check(anomalies=None) -> dict:
     else:
         add("green", "일간 신규값 생성 확인", "전일과 다른 값이 생성됨")
 
-    # 주간/월간 cadence: 같은 주/월인데 값 변경 / 새 주·월인데 값 그대로
     for label, key_col, val_col in [("주간", "DATE_WEEK", "wau"), ("월간", "DATE_MON", "mau")]:
-        if key_col not in cols or val_col not in cols:
+        if key_col not in numeric_cols and key_col not in _META_COLS:
+            # key_col은 메타라 numeric_cols에 없음 — 존재만 확인
+            if key_col not in keyset:
+                continue
+        if val_col not in keyset:
             continue
         within_change, boundary_stale = 0, 0
         for r in latest_rows:
             pr = prior_rows.get(r.get("PGM_CODE"))
             if not pr:
                 continue
-            same_period = (r.get(key_col) or "") == (pr.get(key_col) or "")
-            same_val = (r.get(val_col) or "") == (pr.get(val_col) or "")
+            same_period = str(r.get(key_col) or "") == str(pr.get(key_col) or "")
+            same_val = str(r.get(val_col) or "") == str(pr.get(val_col) or "")
             if same_period and not same_val:
                 within_change += 1
             if (not same_period) and same_val:
@@ -192,21 +190,25 @@ def run_data_check(anomalies=None) -> dict:
             "; ".join(f"{code}·{c}={v}({why})" for code, c, v, why in bad_range[:6]))
 
     if anomalies:
-        sig = [a for a in anomalies if (a.get("level") or a.get("severity")) in ("red", "yellow")]
+        reds = [a for a in anomalies if (a.get("level") or a.get("severity")) == "red"]
+        yels = [a for a in anomalies if (a.get("level") or a.get("severity")) == "yellow"]
+        sig = reds + yels
         if sig:
-            add("yellow", f"이상탐지(z-score) {len(sig)}건",
-                "; ".join(str(a.get("program") or a.get("name") or a.get("scope") or "?") for a in sig[:6]))
+            add("red" if reds else "yellow",
+                f"이상탐지(z-score) {len(sig)}건" + (f" · 심각 {len(reds)}" if reds else ""),
+                "; ".join(f"{a.get('code','?')} {a.get('label','')}".strip() for a in sig[:6]))
 
     summary = {
         "red": sum(1 for c in checks if c["severity"] == "red"),
         "yellow": sum(1 for c in checks if c["severity"] == "yellow"),
         "green": sum(1 for c in checks if c["severity"] == "green"),
     }
-    return {"ok": True, "data_date": latest, "prior_date": prior,
-            "mtime": mtime.strftime("%Y-%m-%d %H:%M"), "code_count": len(latest_rows),
-            "field_count": len(numeric_cols), "summary": summary, "checks": checks}
+    return {"ok": True, "source": "splunk", "data_date": latest, "prior_date": prior,
+            "code_count": len(latest_rows), "field_count": len(numeric_cols),
+            "summary": summary, "checks": checks}
 
 
 if __name__ == "__main__":
     import json
-    print(json.dumps(run_data_check(), ensure_ascii=False, indent=2))
+    import raas_server as SRV
+    print(json.dumps(run_data_check(SRV.get_cached_timeline()), ensure_ascii=False, indent=2))
