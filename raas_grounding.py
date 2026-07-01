@@ -174,6 +174,12 @@ def resolve_entities(question: str) -> dict:
             ent["scope_kind"] = "channel"
             code = ch_code
             ent.update(code=code, name=ch_name, channel=ch_code)
+        elif ent["is_trend"] and (ent.get("focus_fields") or ent.get("metric")):
+            # 엔티티 없는 지표 추이/그래프 질의(예: 'DAU 최근 4주간 그래프') → 전체(T00)로 해석
+            #   → grounding 채널 scope가 시계열+```chart를 그림(QE 폴백 시 차트 없이 '차트 있다'는 오안내 방지).
+            ent["scope_kind"] = "channel"
+            code = "T00"
+            ent.update(code=code, name="전체", channel="T00")
     if code:
         ent["row"] = S._load_program_latest_row(code)
         # 질문 의도 범위만큼(기본 전체) 로드. 분해·baseline provider도 이 history 공유.
