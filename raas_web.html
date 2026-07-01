@@ -3739,9 +3739,19 @@ function _openImproveWith(question, answer, qid, reason) {
   document.getElementById('improveOrig').innerHTML = renderAiText(answer || '');
   const ri = document.getElementById('improveReason');
   if (ri) ri.value = reason || '';   // 👎 인라인에서 남긴 사유 pre-fill
+  _updateReasonBtn();
   const res = document.getElementById('improveResult');
   res.style.display = 'none'; res.innerHTML = '';
   _loadImproveContext();
+}
+// 사유 버튼 라벨 — 저장된 사유가 있고 (포커스 또는 값 변경) 이면 '수정하기', 아니면 '사유 저장'
+function _updateReasonBtn() {
+  const inp = document.getElementById('improveReason');
+  const btn = document.getElementById('improveReasonBtn');
+  if (!inp || !btn) return;
+  const saved = (_improveState && _improveState.reason) || '';
+  const editing = (document.activeElement === inp) || (inp.value !== saved);
+  btn.textContent = (saved && editing) ? '수정하기' : '사유 저장';
 }
 async function _saveImproveReason() {
   const qid = _improveState && _improveState.qid;
@@ -3751,8 +3761,13 @@ async function _saveImproveReason() {
     const r = await fetch('/api/query/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: qid, feedback: -1, reason }) });
     const d = await r.json();
-    if (d.ok) { _improveState.reason = reason; alert('아쉬운 점 저장됨 — 약점 신호에 함께 표시됩니다.'); }
-    else throw new Error(d.error || '실패');
+    if (d.ok) {
+      _improveState.reason = reason;
+      const inp = document.getElementById('improveReason');
+      if (inp) inp.blur();
+      _updateReasonBtn();
+      alert('아쉬운 점 저장됨 — 약점 신호에 함께 표시됩니다.');
+    } else throw new Error(d.error || '실패');
   } catch (e) { alert('실패: ' + e.message); }
 }
 function _closeImprove() { document.getElementById('improveModal').classList.remove('open'); }
@@ -4607,8 +4622,9 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
       <div class="imp-form" style="margin:8px 0">
         <div class="imp-sub">💬 아쉬운 점 (무엇이 부족했나요 · 선택)</div>
         <div style="display:flex;gap:6px">
-          <input id="improveReason" maxlength="200" style="flex:1" placeholder="예: WoW 비교가 빠졌음 / 수치가 실제와 다름">
-          <button class="imp-btn" onclick="_saveImproveReason()">사유 저장</button>
+          <input id="improveReason" maxlength="200" style="flex:1" placeholder="예: WoW 비교가 빠졌음 / 수치가 실제와 다름"
+            onfocus="_updateReasonBtn()" oninput="_updateReasonBtn()" onblur="_updateReasonBtn()">
+          <button class="imp-btn" id="improveReasonBtn" onclick="_saveImproveReason()">사유 저장</button>
         </div>
       </div>
       <div class="imp-cols">
