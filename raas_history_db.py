@@ -43,6 +43,7 @@ def init_db():
             ("metrics_json",  "TEXT"),   # list → JSON
             ("topic_key",     "TEXT"),   # f"{intent}:{scope}:{metric}" 그룹핑/인기 집계용
             ("source",        "TEXT"),   # 'general'(일반 질의) | 'storyline'(스토리라인 칩)
+            ("feedback_reason", "TEXT"), # 👎 아쉬움 사유(사용자 서술) — 약점 신호에 함께 노출
         ]:
             try:
                 conn.execute(f"ALTER TABLE query_history ADD COLUMN {col} {typedef}")
@@ -741,7 +742,8 @@ def feedback_negative_open(days=30, limit=25) -> list:
     """개선 시도가 아직 없는 '아쉬움' 질의 — 검토자가 바로 착수할 수 있는 약점 신호."""
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT q.id, q.question, q.answer, q.scope, q.user_name, q.created_at
+            """SELECT q.id, q.question, q.answer, q.scope, q.user_name, q.created_at,
+                      q.feedback_reason
                  FROM query_history q
                 WHERE q.feedback = -1
                   AND q.created_at >= datetime('now', ?)
@@ -959,13 +961,17 @@ def _append_log(row_id, user_id, question, answer, ip, user_name,
         pass
 
 
-def save_feedback(query_id: int, feedback: int) -> bool:
-    """질의 1건에 피드백 저장. feedback: 1(좋음) / -1(나쁨)."""
+def save_feedback(query_id: int, feedback: int, reason: str = None) -> bool:
+    """질의 1건에 피드백 저장. feedback: 1(좋음) / -1(나쁨). reason: 👎 아쉬움 사유(선택).
+       reason이 None이면 사유는 건드리지 않음(기존 유지) → 값/사유 각각 갱신 가능."""
     with get_conn() as conn:
-        cur = conn.execute(
-            "UPDATE query_history SET feedback = ? WHERE id = ?",
-            (feedback, query_id)
-        )
+        if reason is None:
+            cur = conn.execute(
+                "UPDATE query_history SET feedback = ? WHERE id = ?", (feedback, query_id))
+        else:
+            cur = conn.execute(
+                "UPDATE query_history SET feedback = ?, feedback_reason = ? WHERE id = ?",
+                (feedback, (reason or "").strip() or None, query_id))
     return cur.rowcount > 0
 
 

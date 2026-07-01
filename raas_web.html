@@ -251,6 +251,14 @@ body{
 .fb-btn:hover{background:var(--bg3);color:var(--text)}
 .fb-btn.fb-good.active{background:rgba(52,199,138,.15);border-color:var(--green);color:var(--green)}
 .fb-btn.fb-bad.active{background:rgba(242,107,107,.15);border-color:var(--red);color:var(--red)}
+.fb-active{font-size:var(--fs-sm);color:var(--red);font-weight:600}
+.fb-reason{
+  flex:1;min-width:120px;max-width:360px;
+  padding:5px 10px;border-radius:6px;
+  border:1px solid var(--line2);background:var(--bg1);
+  color:var(--text);font-size:var(--fs-sm);font-family:var(--sans);
+}
+.fb-reason:focus{outline:none;border-color:var(--accent)}
 
 /* ── HISTORY MODAL ── */
 .hist-modal{
@@ -3556,8 +3564,32 @@ async function sendFeedback(queryId, val, btn) {
     if (data.ok) {
       bar.querySelectorAll('.fb-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      if (val === -1) _showReasonInput(queryId, bar);   // 👎 → 인라인 사유 입력(선택)
     }
   } catch (_) {}
+}
+// 👎 아쉬움 사유 — 누른 자리에서 인라인으로(모달 아님), 선택 입력
+function _showReasonInput(queryId, bar) {
+  bar.innerHTML = `<span class="fb-active">👎 아쉬움</span>
+    <input class="fb-reason" id="fbr-${queryId}" maxlength="200" placeholder="무엇이 아쉬웠나요? (선택)"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();_sendReason(${queryId});}">
+    <button class="fb-btn" onclick="_sendReason(${queryId})">보내기</button>
+    <button class="fb-btn" onclick="_thankReason(${queryId},'')">건너뛰기</button>`;
+  const inp = document.getElementById('fbr-' + queryId);
+  if (inp) inp.focus();
+}
+async function _sendReason(queryId) {
+  const inp = document.getElementById('fbr-' + queryId);
+  const reason = inp ? inp.value.trim() : '';
+  try {
+    await fetch('/api/query/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: queryId, feedback: -1, reason }) });
+  } catch (_) {}
+  _thankReason(queryId, reason);
+}
+function _thankReason(queryId, reason) {
+  const bar = document.getElementById('fb-' + queryId);
+  if (bar) bar.innerHTML = `<span class="fb-active">👎 기록됨${reason ? ' · 감사합니다' : ''}</span>`;
 }
 
 // ────────────────────────────────────────────────
@@ -3692,22 +3724,36 @@ let _improveState = null;
 function _openImprove(id) {
   const it = (window._histIndex || {})[id];
   if (!it) return;
-  _openImproveWith(it.question, it.answer || '', id);
+  _openImproveWith(it.question, it.answer || '', id, it.feedback_reason || '');
 }
-// 약점 신호(미개선 👎 질의)에서 직접 개선 착수
+// 약점 신호(미개선 👎 질의)에서 직접 개선 착수 — 사유 pre-fill
 function _openImproveFromNeg(id) {
   const q = (window._reviewNegIndex || {})[id];
-  if (q) _openImproveWith(q.question, q.answer || '', q.id);
+  if (q) _openImproveWith(q.question, q.answer || '', q.id, q.feedback_reason || '');
 }
 // 직접 진입 — 질의·답변을 직접 받아 개선 모달 오픈
-function _openImproveWith(question, answer, qid) {
-  _improveState = { question: question, answer: answer || '', qid: qid };
+function _openImproveWith(question, answer, qid, reason) {
+  _improveState = { question: question, answer: answer || '', qid: qid, reason: reason || '' };
   document.getElementById('improveModal').classList.add('open');
   document.getElementById('improveQ').textContent = question;
   document.getElementById('improveOrig').innerHTML = renderAiText(answer || '');
+  const ri = document.getElementById('improveReason');
+  if (ri) ri.value = reason || '';   // 👎 인라인에서 남긴 사유 pre-fill
   const res = document.getElementById('improveResult');
   res.style.display = 'none'; res.innerHTML = '';
   _loadImproveContext();
+}
+async function _saveImproveReason() {
+  const qid = _improveState && _improveState.qid;
+  if (!qid) { alert('대상 질의를 찾을 수 없습니다.'); return; }
+  const reason = (document.getElementById('improveReason').value || '').trim();
+  try {
+    const r = await fetch('/api/query/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: qid, feedback: -1, reason }) });
+    const d = await r.json();
+    if (d.ok) { _improveState.reason = reason; alert('아쉬운 점 저장됨 — 약점 신호에 함께 표시됩니다.'); }
+    else throw new Error(d.error || '실패');
+  } catch (e) { alert('실패: ' + e.message); }
 }
 function _closeImprove() { document.getElementById('improveModal').classList.remove('open'); }
 
@@ -4068,7 +4114,7 @@ async function _loadReviewQueue() {
             <span class="wk-badge">👎</span>
             <span class="hm-q">${escapeHtml((q.question || '').slice(0, 54))}</span>
             <span class="hm-sess-meta">${escapeHtml(q.scope || '')} · ✦ 개선하기</span>
-          </div></div>`;
+          </div>${q.feedback_reason ? `<div class="hm-q" style="margin:2px 0 0 4px;color:var(--red);opacity:.9">💬 ${escapeHtml(q.feedback_reason)}</div>` : ''}</div>`;
       }).join('');
     }
     if (imps.length) {
@@ -4558,6 +4604,13 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
       <div class="imp-q">Q. <span id="improveQ"></span></div>
       <div class="imp-sub">원래 답변 (A)</div>
       <div class="imp-orig" id="improveOrig"></div>
+      <div class="imp-form" style="margin:8px 0">
+        <div class="imp-sub">💬 아쉬운 점 (무엇이 부족했나요 · 선택)</div>
+        <div style="display:flex;gap:6px">
+          <input id="improveReason" maxlength="200" style="flex:1" placeholder="예: WoW 비교가 빠졌음 / 수치가 실제와 다름">
+          <button class="imp-btn" onclick="_saveImproveReason()">사유 저장</button>
+        </div>
+      </div>
       <div class="imp-cols">
         <div class="imp-col"><div class="imp-coltitle">📊 데이터</div><div id="improveData"></div></div>
         <div class="imp-col"><div class="imp-coltitle">🧩 온톨로지</div><div id="improveOnto"></div></div>

@@ -995,7 +995,9 @@ class RAASHandler(BaseHTTPRequestHandler):
                 if query_id is None or feedback not in (1, -1):
                     self.send_json({"ok": False, "error": "id와 feedback(1/-1) 필요"}, 400)
                     return
-                ok = save_feedback(int(query_id), int(feedback))
+                reason = body.get("reason")   # 👎 아쉬움 사유(선택) — 있으면 함께 저장
+                ok = save_feedback(int(query_id), int(feedback),
+                                   reason=(reason if reason is not None else None))
                 self.send_json({"ok": ok})
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)}, 500)
