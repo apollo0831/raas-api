@@ -409,14 +409,18 @@ def build_graph(days: int = 30, max_users: int = 30,
 
     with get_conn() as conn:
         # ── 사용자: fact 보유 distinct user_id 중 상위 max_users (질의수 기준) ──
+        # 직무는 '현재 직무'(users.role) 우선 — 사용자별 통계와 동일 기준(라벨은 현재 소속).
+        _uw = "WHERE qh.created_at >= ? AND " if since else "WHERE "
         user_rows = conn.execute(
-            f"SELECT user_id, MAX(user_name) AS name, MAX(user_role) AS role, "
+            f"SELECT qh.user_id, MAX(qh.user_name) AS name, "
+            f"       COALESCE(MAX(u.role), MAX(qh.user_role)) AS role, "
             f"       COUNT(*) AS q "
-            f"FROM query_history "
-            f"{df}{'AND' if df else 'WHERE'} intent IS NOT NULL AND user_role IS NOT NULL "
-            f"AND user_id IS NOT NULL "
-            f"GROUP BY user_id ORDER BY q DESC LIMIT ?",
-            params + [max_users]
+            f"FROM query_history qh "
+            f"LEFT JOIN users u ON qh.user_id GLOB '[0-9]*' AND u.id = CAST(qh.user_id AS INTEGER) "
+            f"{_uw}qh.intent IS NOT NULL AND qh.user_role IS NOT NULL "
+            f"AND qh.user_id IS NOT NULL "
+            f"GROUP BY qh.user_id ORDER BY q DESC LIMIT ?",
+            ([since] if since else []) + [max_users]
         ).fetchall()
         users = [{"user_id": str(r["user_id"]), "name": r["name"] or str(r["user_id"]),
                   "role": r["role"], "q": r["q"]} for r in user_rows]
