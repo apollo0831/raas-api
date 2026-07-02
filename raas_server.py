@@ -36,8 +36,6 @@ from datetime import datetime, timedelta
 from raas_history_db import (init_db, save_query, get_history, get_popular,
                              set_ip_user, delete_ip_user, get_all_ip_users,
                              save_feedback, get_all_history,
-                             log_event, get_session_events, get_recent_sessions,
-                             get_frequent_next,
                              add_knowledge_item, get_knowledge_items,
                              add_data_request, add_improvement, set_improvement_verdict,
                              list_improvements, list_data_requests,
@@ -56,7 +54,6 @@ from raas_onboarding import list_active_profiles, build_suggestions
 import raas_storyline_engine as STORY
 import raas_storyline_router as ROUTER
 import raas_grounding as GROUND
-import raas_report_engine as REPORT
 from raas_querymap import (stats_overview, stats_by_role,
                            stats_by_user, stats_topics,
                            stats_role_metric_matrix,
@@ -932,30 +929,6 @@ class RAASHandler(BaseHTTPRequestHandler):
                 "host":    POSTHOG_HOST,
             })
 
-        elif self.path.startswith("/api/storyline/exports/"):
-            # 일회용 토큰으로 산출물(PPT/텍스트) 다운로드 (D-014)
-            try:
-                token = self.path.split("/api/storyline/exports/", 1)[1].strip()
-                token = token.split("?", 1)[0].split("#", 1)[0]
-                result = REPORT.fetch_for_download(token)
-                if not result:
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                body_bytes = result["bytes"]
-                self.send_response(200)
-                self.send_header("Content-Type", result.get("content_type", "application/octet-stream"))
-                self.send_header("Content-Length", str(len(body_bytes)))
-                self.send_header(
-                    "Content-Disposition",
-                    f"attachment; filename*=UTF-8''{urllib.parse.quote(result['filename'])}",
-                )
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(body_bytes)
-            except Exception as e:
-                self.send_json({"ok": False, "error": str(e)}, 500)
-
         elif self.path == "/api/status":
             self.send_json({"ok": True, "server": "RAAS",
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
@@ -1136,26 +1109,13 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "error": "Query engine unavailable"}, 500)
                     return
 
-                # 스토리라인 라우터 — 자유 질의에서 '특정 프로그램 원인 분석' 의도가
-                # 분명하면 2_cause 슬롯 답변을 SSE로 한 번에 송출 (칩 클릭과 동일 구조)
-                # 1_anchor_more 흐름이면 'lenient'로 의도 키워드 검사 생략 → 프로그램명만 적어도 라우팅
-                storyline_role = body.get("storyline_role") or "cp_v2"
-                storyline_slot = body.get("storyline_slot")
-                storyline_ctx  = body.get("storyline_context") or {}
-                _v2 = storyline_role in ("cp", "cp_v2", "CP")   # CP는 cp_v2 단일 버전
-                # LLM 우선: 자유 질의는 모두 일반 LLM(데이터+온톨로지)이 답한다.
-                #   원인 종합 등 스토리라인 페이지는 '칩'으로만 진입. 자유 질의는 cause 라우팅 안 함.
-                #   라우터는 편성표 의도의 프로그램 탐지에만 사용.
-                routing = None
                 # 편성표 의도 — '코너 편성/편성표'는 원인 분석이 아니라 주간 편성표(룩업 데이터).
-                #   스토리라인 맥락과 무관한 자유 질의로 동작 — 프로그램명만 있으면 lenient로 탐지.
+                #   프로그램명만 있으면 lenient로 탐지(라우터는 편성표 의도의 프로그램 탐지에만 사용).
                 if STORY.is_schedule_query(question):
-                    _sr = routing
-                    if not _sr:
-                        try:
-                            _sr = ROUTER.route(question, lenient=True)
-                        except Exception:
-                            _sr = None
+                    try:
+                        _sr = ROUTER.route(question, lenient=True)
+                    except Exception:
+                        _sr = None
                     prog = (_sr or {}).get("program")
                     sched = None
                     if prog:
@@ -1183,13 +1143,6 @@ class RAASHandler(BaseHTTPRequestHandler):
                                "routing_badge": "🗓 주간 편성표"})
                         self.close_connection = True
                         return
-                # 명시적 원인 의도(cause_dau)일 때만 원인 종합으로. 그 외는 일반 LLM(아래로 진행).
-                # 자유질의 — 활성 스토리라인 세션이 있으면 종료 신호로 기록
-                _sess_free = storyline_ctx.get("session") or body.get("storyline_session")
-                if _sess_free and storyline_role in ("cp", "cp_v2", "CP"):
-                    log_event(_sess_free, "exit", user_id=user_id, user_role="cp_v2",
-                              slot_from=storyline_slot, end_reason="free_query")
-
                 # 검색·Grounding 레이어 — 프로그램 관련 자유 질의는 관련 데이터·온톨로지를 골라 LLM에 넣고
                 #   LLM이 본연의 성능으로 답한다(고정 템플릿 없음). 비-프로그램 질의는 기존 엔진으로.
                 _ground = None

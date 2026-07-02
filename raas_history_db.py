@@ -320,52 +320,6 @@ def cache_put(analysis_key: str, data_date: str, payload: str,
         )
 
 
-# ── 스토리라인 경로 로그 (이력 DB 재설계 §A) ─────────────────────
-def log_event(session_id: str, event_type: str, *, user_id=None, user_role=None,
-              slot_from=None, slot_to=None, chip_intent=None, chip_label=None,
-              program_code=None, program_name=None, channel_code=None,
-              metric=None, period=None, window=None, end_reason=None,
-              analysis_key=None, cache_hit=None, latency_ms=None,
-              output_tokens=None) -> int:
-    """전이 1건 적재. seq는 세션 내 자동 증가. 실패해도 본 흐름 방해 안 함."""
-    if not session_id or not event_type:
-        return -1
-    try:
-        with get_conn() as conn:
-            row = conn.execute(
-                "SELECT COALESCE(MAX(seq), -1) + 1 AS nxt FROM storyline_events WHERE session_id = ?",
-                (session_id,)
-            ).fetchone()
-            seq = row["nxt"] if row else 0
-            cur = conn.execute(
-                "INSERT INTO storyline_events "
-                "(session_id, seq, user_id, user_role, event_type, slot_from, slot_to, "
-                " chip_intent, chip_label, program_code, program_name, channel_code, metric, period, "
-                " window, end_reason, analysis_key, cache_hit, latency_ms, output_tokens) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (session_id, seq, user_id, user_role, event_type, slot_from, slot_to,
-                 chip_intent, chip_label, program_code, program_name, channel_code, metric, period,
-                 window, end_reason, analysis_key,
-                 (1 if cache_hit else 0) if cache_hit is not None else None,
-                 latency_ms, output_tokens)
-            )
-            return cur.lastrowid
-    except Exception as e:
-        print(f"[storyline] log_event 실패(무시): {e}", flush=True)
-        return -1
-
-
-def get_session_events(session_id: str) -> list:
-    """세션의 전이 목록(순서대로) — 이력 보기/여정 복원용."""
-    if not session_id:
-        return []
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM storyline_events WHERE session_id = ? ORDER BY seq",
-            (session_id,)
-        ).fetchall()
-        return [dict(r) for r in rows]
-
 
 # ── 지식 개선 루프 (docs/knowledge_loop_design.md) ───────────────────────────
 def add_knowledge_item(contributor_id, type, target_kind, target_id, content,
@@ -783,76 +737,6 @@ def get_knowledge_items(targets, contributor_id=None, include_candidate=False) -
             f"AND status != 'rejected' ORDER BY created_at DESC LIMIT 50",
             tuple(params + sp)).fetchall()
         return [dict(r) for r in rows]
-
-
-def get_frequent_next(user_role: str, slot_from: str, limit: int = 4) -> list:
-    """이 시점(role, slot_from)에서 사용자들이 자주 간 다음 단계 — 빈출 다음행동 추천."""
-    if not (user_role and slot_from):
-        return []
-    with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT slot_to, chip_intent, COUNT(*) AS c
-            FROM storyline_events
-            WHERE user_role = ? AND slot_from = ?
-              AND event_type IN ('chip', 'freetext') AND slot_to IS NOT NULL
-            GROUP BY slot_to, chip_intent
-            ORDER BY c DESC
-            LIMIT ?
-            """,
-            (user_role, slot_from, limit)
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def get_recent_sessions(user_id: str = None, days: int = 7, limit: int = 30,
-                        offset: int = 0, all_users: bool = False) -> list:
-    """세션 요약 — 세션별 첫 분석대상/첫 진입 칩 + 전이 수 + 토큰 합계 (+사용자명).
-    all_users=True면 전체 사용자(이력 보기용), 아니면 user_id 본인(사이드바용).
-    days=0이면 전체 기간."""
-    if not all_users and not user_id:
-        return []
-    user_clause = "" if all_users else "AND e.user_id = ?"
-    date_clause = "" if int(days) <= 0 else "AND e.created_at >= datetime('now', ?, 'localtime')"
-    params: list = []
-    if not all_users:
-        params.append(str(user_id))
-    if int(days) > 0:
-        params.append(f"-{int(days)} days")
-    params += [limit, offset]
-    with get_conn() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT e.session_id,
-                   MIN(e.created_at) AS started_at,
-                   MAX(e.created_at) AS ended_at,
-                   COUNT(*)          AS steps,
-                   -- 세션 사용자명 (전체 사용자 모드 표시용)
-                   (SELECT u.name FROM users u WHERE u.id = CAST(e.user_id AS INTEGER) LIMIT 1) AS user_name,
-                   -- 첫(앵커) 분석 대상 프로그램 (seq 최소의 non-null)
-                   (SELECT e2.program_name FROM storyline_events e2
-                    WHERE e2.session_id = e.session_id AND e2.program_name IS NOT NULL
-                    ORDER BY e2.seq LIMIT 1) AS program_name,
-                   -- 첫 진입 칩 이름 (seq 최소의 non-null chip_label) — '이력 보기' 제목용
-                   (SELECT e3.chip_label FROM storyline_events e3
-                    WHERE e3.session_id = e.session_id AND e3.chip_label IS NOT NULL
-                    ORDER BY e3.seq LIMIT 1) AS first_chip_label,
-                   COUNT(DISTINCT e.program_name) AS program_count,
-                   MAX(e.channel_code) AS channel_code,
-                   COALESCE(SUM(e.output_tokens), 0) AS total_tokens,
-                   MAX(CASE WHEN e.end_reason IS NOT NULL THEN e.end_reason END) AS end_reason
-            FROM storyline_events e
-            WHERE 1=1
-              {user_clause}
-              {date_clause}
-            GROUP BY e.session_id
-            ORDER BY started_at DESC
-            LIMIT ? OFFSET ?
-            """,
-            tuple(params)
-        ).fetchall()
-        return [dict(r) for r in rows]
-
 
 # ── IP 사용자 매핑 ─────────────────────────────────────
 

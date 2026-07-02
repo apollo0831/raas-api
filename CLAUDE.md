@@ -188,7 +188,8 @@ s3_engagement 추가:
 - `docs/`: grounding_retrieval_design · knowledge_loop_design · ab_harness_design ·
   storyline_cp_v2_schema · storyline_history_db_design (설계 근거)
 - 서버 재시작(윈도우): 포트 5000 종료 후 `nohup python raas_server.py > server_restart.log 2>&1 &`,
-  config(cp_v2.json 등) 캐시 때문에 변경 시 재시작 필요. HTML은 디스크 서빙이라 재시작 불필요.
+  py 코드 변경 시 재시작 필요. HTML/JS는 디스크 서빙이라 재시작 불필요.
+  (구 CP 스토리라인 잔재 — simulator·report_engine·tobe_sim·data/storylines/ — 는 2026-07 폐기 삭제됨)
 - grounding 헤드리스 테스트: `import raas_grounding as G` → `G.assemble(q)`(LLM 없이 데이터 경로 확인은
   `G.call_claude=None`). `_kpi_rows()`가 timeline 쓰려면 `G.S.set_timeline_provider(SRV.get_cached_timeline)`.
 - JS 검증: `node --check raas_web.js` 직접 실행(html에서 분리됨). 큰 dead-code 제거는 ast 콜그래프 도달성으로 안전 판정.

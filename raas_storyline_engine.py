@@ -1,18 +1,11 @@
-"""raas_storyline_engine.py — 직무별 대화형 스토리라인 백엔드 엔진.
+"""raas_storyline_engine.py — grounding이 재사용하는 데이터 computer 모음.
 
-`data/storylines/{role}.json` 5슬롯 정의를 읽고 실제 KPI 데이터로 답변 렌더링.
-
-엔드포인트 4종(raas_server.py)에서 호출:
-    GET  /api/storyline/role-detect    → role_detect(user)
-    GET  /api/storyline/entry          → StorylineEngine.entry()
-    POST /api/storyline/advance        → StorylineEngine.advance(...)
-    POST /api/storyline/export         → export_stub(...)  (Phase 3 ⑥에서 본격 구현)
-
-설계 원칙:
-    - JSON이 단일 출처. 코드는 데이터 채우기 + 렌더링만.
-    - 슬롯별 데이터 계산은 _compute_slot_data() 디스패치 — 데이터 적재되면 함수만 채우면 됨.
-    - 데이터 부족 시 자동 fallback_answer_template 사용.
-    - 시뮬레이터(raas_storyline_simulator.py)의 render() 로직과 동일.
+구 CP 다중슬롯 스토리라인 오케스트레이션은 은퇴·제거됨. 현재 역할:
+    - 데이터 계산: _compute_flow_decomposition / _compute_cohort / _compute_stickiness /
+      _compute_programming_impact / _compute_weekday_pattern_check / _detect_program_revision
+    - 룩업·유틸: _kpi_rows / _load_program_latest_row / _load_program_history /
+      build_program_schedule / build_query_provenance / is_schedule_query / _CHANNEL_CODE
+호출자: raas_grounding(provider fetch), raas_server(편성표·provenance), raas_query_engine.
 """
 from __future__ import annotations
 
@@ -24,34 +17,10 @@ from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).parent
-STORYLINES_DIR = ROOT / "data" / "storylines"
 ONTO_DIR = ROOT / "raas_onto"   # 형식 TTL 온톨로지 (raas_ontology_*.ttl)
 KPI_CSV = ROOT / "data" / "raas_kpi_latest.csv"
 
-# ─── 직무 매핑 ──────────────────────────────────────────────────────────
-# (1) role 식별자 → JSON 파일명
-ROLE_TO_FILE = {
-    "cp": "cp_v2.json",      # v1(cp.json) 폐기 — cp는 cp_v2로 단일화
-    "cp_v2": "cp_v2.json",
-    "pd_program": "pd_program.json",
-    "제작pd": "pd_program.json",
-    "pd_schedule": "pd_schedule.json",
-    "편성pd": "pd_schedule.json",
-}
-
-# (2) 한국어 role(raas_auth.ALLOWED_ROLES) → 영문 role ID
-KOREAN_ROLE_TO_ID = {
-    "cp": "cp",
-    "CP": "cp",
-    "제작": "pd_program",       # raas_auth ALLOWED_ROLES와 일치
-    "제작pd": "pd_program",     # 호환
-    "제작PD": "pd_program",     # 호환
-    "편성": "pd_schedule",       # raas_auth ALLOWED_ROLES와 일치
-    "편성pd": "pd_schedule",     # 호환
-    "편성PD": "pd_schedule",     # 호환
-}
-
-# (3) CP 채널 매핑 — 사용자 프로파일에 channel 필드 없으면 my_programs 첫 글자로 추론
+# 프로그램 코드 첫 글자 → 채널명
 PROGRAM_PREFIX_TO_CHANNEL = {
     "F": "파워FM",
     "L": "러브FM",
@@ -61,18 +30,6 @@ PROGRAM_PREFIX_TO_CHANNEL = {
     "T": "전체",
 }
 
-CHANNEL_TO_PROGRAM_PREFIXES = {
-    "파워FM": ["F"],          # F01~F13 (F00 제외)
-    "러브FM": ["L", "M"],     # L01~L15, M05~M11 (L00 제외)
-    "고릴라M": ["G"],
-    "픽채널": ["P"],
-}
-
-# ─── 템플릿 렌더링 ──────────────────────────────────────────────────────
-
-
-# ─── JSON 설정 로더 (캐시) ──────────────────────────────────────────────
-_CONFIG_CACHE: dict[str, dict] = {}
 
 
 
