@@ -109,7 +109,7 @@
     "templates": [
       "전 지표 현황표 보여줘",
       "채널별 핵심 지표 비교",
-      "최근 질의 트렌드 요약"
+      "최근 지표 트렌드 요약"
     ],
     "alert_match": {
       "categories": ["platform", "channel", "program"],
