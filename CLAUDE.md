@@ -96,9 +96,10 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 - 검토 큐: 개선 승인·반려, 데이터 요청 처리, **약점 신호**(👎 집계·미개선 질의),
   **승인된 공유 지식(본체)** 관리·회수.
 
-## 프론트엔드 구조 (raas_web.html)
+## 프론트엔드 구조 (raas_web.html + raas_web.js)
 
-단일 HTML(내부 `<script>`) — **챗 인터페이스** (구 5페이지 SPA는 제거됨):
+HTML(마크업+CSS) + 분리된 메인 JS(`raas_web.js`, 서버가 `/raas_web.js?v=버전`으로 서빙) — **챗 인터페이스**
+(구 5페이지 SPA는 제거됨). 둘 다 디스크 서빙이라 수정 시 서버 재시작 불필요. `_app_version()`=두 파일 mtime 중 최신:
 
 ```
 사이드바          | 빠른 질의(QUICK_QUERIES) · 최근 질의 · 내 정보 · 이력 보기
@@ -190,7 +191,7 @@ s3_engagement 추가:
   config(cp_v2.json 등) 캐시 때문에 변경 시 재시작 필요. HTML은 디스크 서빙이라 재시작 불필요.
 - grounding 헤드리스 테스트: `import raas_grounding as G` → `G.assemble(q)`(LLM 없이 데이터 경로 확인은
   `G.call_claude=None`). `_kpi_rows()`가 timeline 쓰려면 `G.S.set_timeline_provider(SRV.get_cached_timeline)`.
-- JS 검증: 최대 `<script>` 추출 후 `node --check`. 큰 dead-code 제거는 ast 콜그래프 도달성으로 안전 판정.
+- JS 검증: `node --check raas_web.js` 직접 실행(html에서 분리됨). 큰 dead-code 제거는 ast 콜그래프 도달성으로 안전 판정.
 
 ## 접속 환경
 - 회사 윈도우PC: localhost:5000 직접 접속, Splunk(10.10.15.31) 접근 가능

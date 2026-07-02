@@ -426,14 +426,16 @@ def call_claude_stream(system: str, user: str, max_tokens: int = 4000):
 
 # HTML 파일 경로 (서버와 같은 폴더)
 HTML_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.html")
+JS_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.js")
 
 
 def _app_version() -> str:
-    """프론트 버전 = raas_web.html 수정시각(mtime). 파일이 바뀌면 값이 바뀐다.
-    홈화면 바로가기가 새 버전을 감지해 자동 새로고침하는 데 사용."""
+    """프론트 버전 = raas_web.html/raas_web.js 수정시각(mtime) 중 최신. 파일이 바뀌면 값이 바뀐다.
+    홈화면 바로가기의 자동 새로고침 감지 + /raas_web.js?v= 캐시버스터에 사용."""
     try:
-        return str(int(os.path.getmtime(HTML_FILE)))
-    except OSError:
+        mt = max(os.path.getmtime(p) for p in (HTML_FILE, JS_FILE) if os.path.exists(p))
+        return str(int(mt))
+    except (OSError, ValueError):
         return "0"
 
 
@@ -548,6 +550,20 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_html(html)
             else:
                 self.send_html("<h2>raas_web.html 파일을 같은 폴더에 두세요</h2>")
+
+        elif self.path.startswith("/raas_web.js"):
+            # 메인 프론트 JS (html에서 분리). ?v=버전 캐시버스터와 함께 서빙 — 디스크 서빙이라 재시작 불필요.
+            if os.path.exists(JS_FILE):
+                with open(JS_FILE, "rb") as f:
+                    body = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_json({"ok": False, "error": "raas_web.js 없음"}, 404)
 
         elif self.path == "/api/version":
             self.send_json({"version": _app_version()})
