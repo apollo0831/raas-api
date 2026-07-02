@@ -14,7 +14,7 @@ import random
 from typing import Optional
 
 import raas_storyline_engine as S
-from raas_storyline_router import extract_program
+from raas_storyline_router import extract_program, PROGRAM_DIRECTORY
 
 try:
     from raas_query_engine import call_claude, HAIKU_MODEL
@@ -58,6 +58,24 @@ def _is_trend_query(q: str) -> bool:
     return any(s in (q or "") for s in _TREND_SIGNAL)
 
 
+# 절대 날짜 파싱 — '6/17', '6월 17일', '2026-06-17' 등 → (year|None, month, day) / None
+def _parse_abs_date(q: str):
+    t = q or ""
+    m = re.search(r"(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})", t)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        m = re.search(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일", t)
+        if not m:
+            m = re.search(r"(?<!\d)(\d{1,2})\s*/\s*(\d{1,2})(?!\d)", t)
+        if not m:
+            return None
+        y, mo, d = None, int(m.group(1)), int(m.group(2))
+    if not (1 <= mo <= 12 and 1 <= d <= 31):
+        return None
+    return (y, mo, d)
+
+
 # ── 용어→필드 해석 (1A-P1): 온톨로지 변형 라벨로 질의어를 필드로 매핑 ──
 #    예: '롤링MAU'→dau_r30, 'MAU'→mau. 온톨로지가 채워지면 자동 확장.
 _TERM2FIELD = None
@@ -97,6 +115,20 @@ _ANALYTICAL_SIGNAL = ("원인", "왜", "이유", "때문", "분석", "하락", "
 def _is_analytical(q: str) -> bool:
     """원인·분석형 질의 — 필드 narrowing을 끄고 주변 지표까지 넓게 유지."""
     return any(s in (q or "") for s in _ANALYTICAL_SIGNAL)
+
+
+# 개념·조언형 신호 — '데이터 값 조회'가 아닌 정의/전략/방법 질의. 엔티티 자동확정(완화) 제외용.
+#   (명시적 프로그램/채널이 있는 질의는 완화 분기가 아니므로 영향 없음)
+_CONCEPT_SIGNAL = (
+    "전략", "방안", "방법", "아이디어", "제안", "노하우", "활용법", "활용 방안", "팁",
+    "려면", "하려면",                       # 늘리려면/높이려면/개선하려면
+    "어떻게 하면", "어떻게 늘", "어떻게 높", "어떻게 줄", "어떻게 개선",
+    "뭐야", "뭔가요", "무엇", "정의", "무슨 뜻", "뜻이 뭐", "개념", "의미가 뭐",
+)
+
+def _is_concept(q: str) -> bool:
+    """정의·전략·방법 등 개념/조언형 질의 — 엔티티 없는 지표 폴백에서 데이터 스코프 강제하지 않음."""
+    return any(s in (q or "") for s in _CONCEPT_SIGNAL)
 
 
 # 캘린더 지표 → 롤링 등가 (하위기간 추이 요청 시): mau=월간확정 → 롤링MAU(일단위)
@@ -148,7 +180,21 @@ def _detect_channel(q: str):
     return None, None
 
 
-def resolve_entities(question: str) -> dict:
+_CHANNEL_SET = {"T00", "F00", "L00", "G00", "P00"}
+
+def _default_entity(default_code):
+    """엔티티 없는 지표 질의의 기본 대상. 사용자 관심 코드(default_code) 있으면 그걸로, 없으면 전사(T00).
+       반환: (code, scope_kind, name, channel)."""
+    dc = (default_code or "").strip() or "T00"
+    if dc in _CHANNEL_SET:
+        return dc, "channel", _CH_NAME_BY_CODE.get(dc, dc), dc
+    info = PROGRAM_DIRECTORY.get(dc)
+    if info:
+        return dc, "program", info.get("name", dc), info.get("channel")
+    return "T00", "channel", "전체", "T00"   # 알 수 없는 코드는 전사로
+
+
+def resolve_entities(question: str, default_code: str = None) -> dict:
     """질문 → {program, code, name, channel, period, metric, lookback, row, history, date, scope_kind}.
        scope_kind: 'program'(특정 프로그램) | 'channel'(채널/전사) | None(미식별→기존 엔진)."""
     prog = extract_program(question)
@@ -174,17 +220,25 @@ def resolve_entities(question: str) -> dict:
             ent["scope_kind"] = "channel"
             code = ch_code
             ent.update(code=code, name=ch_name, channel=ch_code)
-        elif ent["is_trend"] and (ent.get("focus_fields") or ent.get("metric")):
-            # 엔티티 없는 지표 추이/그래프 질의(예: 'DAU 최근 4주간 그래프') → 전체(T00)로 해석
-            #   → grounding 채널 scope가 시계열+```chart를 그림(QE 폴백 시 차트 없이 '차트 있다'는 오안내 방지).
-            ent["scope_kind"] = "channel"
-            code = "T00"
-            ent.update(code=code, name="전체", channel="T00")
+        elif (ent.get("focus_fields") or ent.get("metric")) and not _is_concept(question):
+            # 엔티티 없는 지표 질의(추이·단순조회) → 사용자 관심 엔티티(default_code) 또는 전사(T00)
+            #   단, 정의·전략·방법형(개념신호)은 데이터 스코프를 강제하지 않고 통과(과잉 캡처 방지).
+            code, _sk, _nm, _chn = _default_entity(default_code)
+            ent["scope_kind"] = _sk
+            ent.update(code=code, name=_nm, channel=_chn)
+    cand = _parse_abs_date(question)   # 특정 날짜 지정 여부
     if code:
         ent["row"] = S._load_program_latest_row(code)
-        # 질문 의도 범위만큼(기본 전체) 로드. 분해·baseline provider도 이 history 공유.
-        ent["history"] = S._load_program_history(code, ent["lookback"])
+        # 질문 의도 범위만큼(기본 전체) 로드. 날짜 지정이면 전체 로드해 그 날짜 포함 보장.
+        ent["history"] = S._load_program_history(code, 0 if cand else ent["lookback"])
         ent["date"] = ((ent["row"] or {}).get("DATE") or "").replace("/", "-")
+        if cand:
+            _yr = cand[0] or int(((ent["row"] or {}).get("DATE") or "2026/01/01")[:4])
+            _cd = "%04d/%02d/%02d" % (_yr, cand[1], cand[2])
+            # 실제 그 엔티티 데이터에 존재하는 날짜일 때만 지정(오탐·범위밖 무시 → 최신일로 답)
+            if _cd in {(h.get("DATE") or "").strip() for h in (ent["history"] or [])}:
+                ent["as_of_date"] = _cd
+    ent["_question"] = question   # 범용 provider(field_projection)가 질문 원문 참조
     return ent
 
 
@@ -200,6 +254,39 @@ _KPI_BROAD = ["DATE", "STIME", "dau", "dau_chg", "wau", "wau_chg", "mau", "mau_c
               "react_rate", "react_rate_week", "react_rate_mon",
               "habit_rate_week", "habit_rate_mon", "w1_ret", "m1_ret"]
 
+# 일자별 편성·속성(텍스트) 필드 — 집계행(채널/전사)엔 대개 비어있음. 프로그램 행에서 유효.
+_ATTR_FIELDS = ["guestname", "program_title", "daily_corner", "weekly_corner", "live_yn", "view_radio_yn"]
+
+# 속성 키워드 → 필드(범용 프로젝션 + 스키마 인지 플래너용)
+_ATTR_KEYWORDS = [
+    ("게스트", ["guestname"]), ("guest", ["guestname"]), ("초대", ["guestname"]),
+    ("코너", ["daily_corner", "weekly_corner"]),
+    ("제목", ["program_title"]), ("회차", ["program_title"]), ("특집", ["program_title"]),
+    ("생방송", ["live_yn"]), ("녹음", ["live_yn"]), ("라이브", ["live_yn"]),
+    ("보이는 라디오", ["view_radio_yn"]), ("보라", ["view_radio_yn"]),
+]
+
+def _requested_attr_fields(q: str) -> list:
+    t = q or ""
+    out = []
+    for kw, fs in _ATTR_KEYWORDS:
+        if kw in t:
+            for f in fs:
+                if f not in out:
+                    out.append(f)
+    return out
+
+def _window_slice(hist: list, ent: dict) -> list:
+    """의도 기반 기간 슬라이스(속성 provider용) — 명시기간>그만큼 / 추이>최근 90일 / 기본>최근 4주.
+    게스트·코너 등 텍스트 행은 토큰이 커서 숫자 시계열(400)보다 상한을 낮게 잡음."""
+    lb = ent.get("lookback") or 0
+    if lb > 0:
+        return hist[-min(lb, 120):]
+    if ent.get("is_trend"):
+        return hist[-90:]
+    return hist[-28:]
+
+
 def _p_program_kpi(ent):
     """[P1] 의도 기반 필드 선택. 집중 질의(특정 지표·비분석)는 핵심+포커스만(좁힘),
        분석형·일반은 넓게 + 포커스 보강(롤링MAU=dau_r30 같은 용어 필드를 반드시 포함)."""
@@ -210,6 +297,59 @@ def _p_program_kpi(ent):
     else:
         keys = _KPI_BROAD + [f for f in focus if f not in _KPI_BROAD]
     return {k: r.get(k) for k in keys if r.get(k) not in (None, "")}
+
+
+def _p_point_snapshot(ent):
+    """특정 날짜 지정 질의(예: '6/17 신규 몇명') — 그 날짜의 지표 스냅샷을 history에서 조회."""
+    d = ent.get("as_of_date")
+    if not d:
+        return None
+    row = next((h for h in (ent.get("history") or []) if (h.get("DATE") or "").strip() == d), None)
+    if not row:
+        return None
+    focus = ent.get("focus_fields") or []
+    keys = _KPI_BROAD + [f for f in focus if f not in _KPI_BROAD]
+    vals = {k: row.get(k) for k in keys if row.get(k) not in (None, "")}
+    vals["DATE"] = d
+    return {"as_of": d, "values": vals}
+
+
+def _p_daily_lineup(ent):
+    """[범용·a] 일자별 편성·출연 상세 — 게스트·회차제목·일일/주간 코너·생방송·보이는라디오를 날짜별로.
+       '지난주 게스트 일자별로'처럼 속성/편성 필드를 기간만큼 조회하는 질의를 커버."""
+    hist = _window_slice(ent.get("history") or [], ent)
+    rows = []
+    for h in hist:
+        rec = {"DATE": (h.get("DATE") or "").strip()}
+        for f in _ATTR_FIELDS:
+            v = h.get(f)
+            if v not in (None, ""):
+                rec[f] = v
+        if len(rec) > 1:                       # DATE 외 값이 하나라도 있을 때만(집계행·빈날 제외)
+            rows.append(rec)
+    return rows or None
+
+
+def _p_field_projection(ent):
+    """[범용·c] 질문이 지목한 필드(지표+속성)를 일자별 표로 묶음 — 혼합/임의 필드 조회 대응
+       (예: 'DAU와 게스트 일자별'). 다른 provider가 못 담는 필드 조합의 안전망."""
+    fields = list(ent.get("focus_fields") or [])
+    for a in _requested_attr_fields(ent.get("_question") or ""):
+        if a not in fields:
+            fields.append(a)
+    if not fields:
+        return None
+    hist = _window_slice(ent.get("history") or [], ent)
+    rows = []
+    for h in hist:
+        rec = {"DATE": (h.get("DATE") or "").strip()}
+        for f in fields:
+            v = h.get(f)
+            if v not in (None, ""):
+                rec[f] = v
+        if len(rec) > 1:
+            rows.append(rec)
+    return {"fields": fields, "rows": rows} if rows else None
 
 
 def _p_metric_timeseries(ent):
@@ -316,6 +456,15 @@ PROVIDERS = [
     {"name": "program_kpi", "needs": "program",
      "desc": "프로그램의 최신 핵심 KPI 스냅샷(DAU/WAU/MAU·신규·복귀·이탈·실청취·깊은청취·유지율과 증감)",
      "fetch": _p_program_kpi},
+    {"name": "point_snapshot", "needs": "program",
+     "desc": "특정 날짜 지정 질의(예: '6/17 신규 몇명') — 그 날짜의 지표 스냅샷",
+     "fetch": _p_point_snapshot},
+    {"name": "daily_lineup", "needs": "program",
+     "desc": "일자별 편성·출연 상세(날짜별 게스트·회차제목·일일/주간 코너·생방송여부·보이는라디오) — '지난주 게스트 일자별로' 등 날짜별 편성/출연 조회",
+     "fetch": _p_daily_lineup},
+    {"name": "field_projection", "needs": "program",
+     "desc": "질문이 지목한 필드(지표+속성)를 일자별 표로 묶음 — 특정 필드 콕 집기/지표+속성 혼합('DAU와 게스트 일자별') 대응",
+     "fetch": _p_field_projection},
     {"name": "metric_timeseries", "needs": "program",
      "desc": "주요 지표 시계열(의도 기반: 추이 질의는 전체, 원인·포인트 질의는 최근 4주)",
      "fetch": _p_metric_timeseries},
@@ -386,7 +535,16 @@ def select_providers(question: str, ent: dict) -> list:
     if not call_claude:
         return names  # LLM 불가 시 전체(보수적)
     catalog = "\n".join(f"- {p['name']}: {p['desc']}" for p in cands)
-    user = f"질문: {question}\n\n사용 가능한 provider:\n{catalog}"
+    # 스키마 인지 — 데이터에 어떤 필드가 있는지 플래너에게 알려 올바른 provider를 고르게 함
+    field_hint = (
+        "\n\n[데이터에 존재하는 필드]\n"
+        "· 편성/속성(날짜별): guestname(게스트), program_title(회차·특집 제목), "
+        "daily_corner(매일 코너), weekly_corner(주간 코너), live_yn(생방송/녹음), view_radio_yn(보이는 라디오)\n"
+        "· 지표(날짜별): dau/wau/mau·신규·복귀·이탈율·실청취율·깊은청취율·참여율·습관형성률·유지율(D1/D7/W1/M1) 등\n"
+        "지침: 게스트·코너·제목 같은 '날짜별 편성/출연'은 daily_lineup, 지표+속성 혼합이나 특정 필드 지정은 "
+        "field_projection을 고르세요(이 필드들은 실제 데이터에 있으니 '없음'으로 넘기지 말 것)."
+    )
+    user = f"질문: {question}\n\n사용 가능한 provider:\n{catalog}{field_hint}"
     try:
         text, _ = call_claude(_SELECT_SYSTEM, user, max_tokens=200, model=HAIKU_MODEL)
         s = text[text.find("{"): text.rfind("}") + 1]
@@ -819,10 +977,12 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         _r = _assemble_ranking(question, rank_spec, overlay_ctx)
         if _r.get("ok"):
             return _r
-    ent = resolve_entities(question)
+    ent = resolve_entities(question, (overlay_ctx or {}).get("default_code"))
     if not ent.get("code"):
         return {"ok": False, "reason": "프로그램 미식별"}   # 비-프로그램 질의는 기존 엔진으로
     names = select_providers(question, ent)
+    if ent.get("as_of_date") and "point_snapshot" not in names:
+        names = ["point_snapshot"] + names   # 특정 날짜 지정이면 그 날짜 스냅샷 반드시 포함
     blocks = []
     used = []
     for n in names:
@@ -846,6 +1006,9 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         _scope_str = f"{ent.get('name')} ({ent.get('code')}, {ent.get('channel')})"
     head = (f"분석 대상: {_scope_str} · "
             f"기간 힌트: {_PERIOD_KO.get(ent.get('period'), '일간')} · 기준일: {ent.get('date')}")
+    if ent.get("as_of_date"):
+        head += (f"\n※ 요청 특정일: {ent['as_of_date']} — 이 날짜의 값(point_snapshot)으로 답하세요"
+                 f"(최신일 스냅샷 아님).")
     if ent.get("rolling_note"):
         head += ("\n※ 해석: 'MAU/WAU'를 하위 기간(주·일) 추이로 요청 → 캘린더 지표는 월/주 확정값이라 "
                  "같은 개념의 롤링 지표(롤링MAU=dau_r30 등)로 제시. 답변에 이 점을 짧게 안내할 것.")

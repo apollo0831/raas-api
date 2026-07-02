@@ -199,9 +199,10 @@ body{
   font-size:var(--fs-md);font-family:var(--sans);font-weight:400;
   cursor:pointer;text-align:left;
   transition:background .12s;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   line-height:1.4;
 }
+/* ellipsis는 flex 자식(텍스트 span)에 걸어야 동작 — 좁은 화면 클리핑 방지 */
+.quick-query-btn .qq-text{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quick-query-btn:hover{background:var(--bg3)}
 .history-list{
   padding:2px 8px;
@@ -765,9 +766,9 @@ body{
   box-shadow:0 1px 6px rgba(127,119,221,.28);transition:transform .08s,box-shadow .15s;
 }
 .today-digest-btn:hover{transform:translateY(-1px);box-shadow:0 3px 12px rgba(127,119,221,.4)}
-/* 와이드 KPI 표 — 좌우 스크롤 + 열 클릭 정렬 */
+/* 표 — 긴 셀은 좌우로 늘이지 말고 여러 줄로 줄바꿈(가로 스크롤 최소화). 넘칠 때만 스크롤. */
 .story-table-scroll{overflow-x:auto;max-width:100%;margin:6px 0}
-.story-table-scroll .story-table{white-space:nowrap}
+.story-table-scroll .story-table{white-space:normal}
 .story-table.sortable th{cursor:pointer;user-select:none}
 .story-table.sortable th:hover{color:var(--color-accent,#7f77dd)}
 .story-small-note{font-size:var(--fs-xs);color:var(--color-text-tertiary);line-height:1.55;margin:6px 0;opacity:.85}
@@ -786,6 +787,10 @@ table.story-table td{
   border:1px solid var(--color-border-subtle);
   padding:6px 10px;
   text-align:left;
+  vertical-align:top;                 /* 여러 줄 셀 정렬 */
+  word-break:keep-all;                /* 한글 단어 단위 줄바꿈 */
+  overflow-wrap:anywhere;             /* 긴 토큰(정제작업명 등)은 필요 시 강제 줄바꿈 */
+  line-height:1.5;
 }
 table.story-table th{
   background:var(--color-bg-elevated-2);
@@ -1534,10 +1539,20 @@ async function _bootAuth() {
 // ── 관리자 모달 ──
 function openAdminModal() {
   document.getElementById('adminModal').classList.add('open');
+  // 데이터 유지보수(재적재) 버튼 — 데이터 직무 AND 관리자만 노출
+  document.getElementById('adminMaintenance').style.display =
+    (RAAS_USER && RAAS_USER.is_admin && RAAS_USER.role === '데이터') ? 'block' : 'none';
   _loadAdminUsers();
 }
 function closeAdminModal() {
   document.getElementById('adminModal').classList.remove('open');
+}
+
+// 🔄 최신 데이터 다시 가져오기 — 캐시 무효화+재적재+자동 재점검(SSE). 데이터 직무 관리자 전용.
+function startDataRefresh() {
+  if (!(RAAS_USER && RAAS_USER.is_admin && RAAS_USER.role === '데이터')) return;
+  closeAdminModal();
+  submitQuery('최신 데이터 다시 가져오기', 'data_refresh', { endpoint: '/api/data_refresh' });
 }
 
 async function _loadAdminUsers() {
@@ -2327,9 +2342,14 @@ async function _loadProgramsForProfile() {
       }).join('');
       return `<optgroup label="${escapeHtml(ch.label)}">${opts}</optgroup>`;
     }).join('');
+    // 채널 단위 관심 — 리스트 상단에 추가(선택 시 해당 채널 전체가 기본 대상이 됨)
+    const _chOpts = [['F00', '파워FM 채널'], ['L00', '러브FM 채널']].map(([c, l]) =>
+      `<option value="${c}"${c === current ? ' selected' : ''}>${l}</option>`).join('');
+    const channelGroup = `<optgroup label="채널">${_chOpts}</optgroup>`;
     host.innerHTML = `
       <select class="pf-select" id="pfMyProgram">
         <option value=""${current ? '' : ' selected'}>선택 없음</option>
+        ${channelGroup}
         ${groups}
       </select>`;
   } catch (e) {
@@ -3450,7 +3470,7 @@ function _initSidebarQueries() {
   el.innerHTML = QUICK_QUERIES.map((q, i) =>
     `<button class="quick-query-btn" onclick="_onQuickQuery(${i})">
       <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      ${escapeHtml(q)}</button>`
+      <span class="qq-text">${escapeHtml(q)}</span></button>`
   ).join('');
 }
 
@@ -4666,6 +4686,14 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
+    </div>
+    <!-- 데이터 유지보수 — 데이터 직무 관리자(apollo) 전용. 캐시 무효화+재적재+자동 재점검. -->
+    <div id="adminMaintenance" style="display:none;padding:0 4px 14px;border-bottom:1px solid var(--line);margin-bottom:14px">
+      <div class="adm-section-title">데이터 유지보수</div>
+      <button class="today-digest-btn" onclick="startDataRefresh()">🔄 최신 데이터 다시 가져오기</button>
+      <div style="font-size:var(--fs-xs);color:var(--dim);margin-top:6px">
+        Splunk 캐시를 비우고 즉시 재적재한 뒤 데이터 점검을 자동 실행합니다. (데이터 직무 관리자 전용)
+      </div>
     </div>
     <div class="hist-modal-body" id="adminModalBody">
       <div class="hist-empty-msg">로드 중...</div>

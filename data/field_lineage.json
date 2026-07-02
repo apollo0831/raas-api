@@ -1,0 +1,866 @@
+{
+  "_meta": {
+    "purpose": "raas_kpi_latest.csv 필드 → 소스 룩업 → 정제작업/서머리인덱스 계보. 데이터 확인 기능이 결측/이상 필드의 원인 배치를 안내하는 데 사용.",
+    "layer_a": "raas_kpi_save.spl (필드↔룩업, authority)",
+    "layer_b": "RAAS온톨로지.xlsx / 'SummaryIndex 및 룩업_생성정보' (룩업↔정제작업·실행시간·서머리인덱스)",
+    "key_rule": "키=최종 CSV 컬럼명(일간 접미사 없음). _prev/_chg/_diff/_share 변형은 base로 해석.",
+    "job_note": "job = 스케줄러 로그 sourcetype=scheduler 의 savedsearch_name 과 대조할 정제작업명."
+  },
+  "suffix_variants": [
+    "_prev",
+    "_chg",
+    "_diff",
+    "_share"
+  ],
+  "fields": {
+    "dau": {
+      "label": "일간 활성사용자(DAU)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "cond": "TYPE=ALL PERIOD=1D"
+        }
+      ]
+    },
+    "dau_d2": {
+      "label": "전일 DAU(흐름계산용)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "cond": "TYPE=ALL PERIOD=1D (+1d 시프트)"
+        }
+      ]
+    },
+    "dau_r7": {
+      "label": "WAU 롤링(7일)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_주_롤링",
+          "exec": "01:35",
+          "freq": "일",
+          "cond": "TYPE=ALL PERIOD=7D"
+        }
+      ]
+    },
+    "dau_r30": {
+      "label": "MAU 롤링(30일)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_월_롤링",
+          "exec": "02:50",
+          "freq": "일",
+          "cond": "TYPE=ALL PERIOD=30D"
+        }
+      ]
+    },
+    "dau_1min": {
+      "label": "1분이상 청취자(일)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "cond": "TYPE=1MIN PERIOD=1D"
+        }
+      ]
+    },
+    "dau_10min": {
+      "label": "10분이상 청취자(일)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "cond": "TYPE=10MIN PERIOD=1D"
+        }
+      ]
+    },
+    "real_rate": {
+      "label": "실청취율(일)=1분이상/DAU",
+      "period": "day",
+      "role": "derived",
+      "derived_from": [
+        "dau_1min",
+        "dau"
+      ],
+      "sources": [
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "cond": "TYPE=1MIN·ALL PERIOD=1D"
+        }
+      ]
+    },
+    "deep_rate": {
+      "label": "깊은청취율(일)=10분이상/1분이상",
+      "period": "day",
+      "role": "derived",
+      "derived_from": [
+        "dau_10min",
+        "dau_1min"
+      ],
+      "sources": [
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "cond": "TYPE=10MIN·1MIN PERIOD=1D"
+        }
+      ]
+    },
+    "new": {
+      "label": "신규 사용자(일)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_newuser_funnel_day.csv",
+          "job": "프로그램별_신규사용자_퍼널_통계_일",
+          "exec": "01:20",
+          "freq": "일",
+          "cond": "TYPE=ALL PERIOD=1D"
+        }
+      ]
+    },
+    "react": {
+      "label": "복귀 사용자(일)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_reactuser_funnel_day.csv",
+          "job": "프로그램_복귀사용자_퍼널_통계_일",
+          "exec": "02:10",
+          "freq": "일",
+          "cond": "TYPE=ALL PERIOD=1D"
+        }
+      ]
+    },
+    "react_rate": {
+      "label": "복귀율(일)=복귀/휴면풀",
+      "period": "day",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_reactuser_funnel_day.csv",
+          "job": "프로그램_복귀사용자_퍼널_통계_일",
+          "exec": "02:10",
+          "freq": "일",
+          "part": "분자(복귀사용자)"
+        },
+        {
+          "lookup": "program_dormant_pool_day.csv",
+          "job": "프로그램별_휴면사용자풀_통계_일",
+          "exec": "01:40",
+          "freq": "일",
+          "part": "분모(휴면풀)"
+        }
+      ]
+    },
+    "churn_rate": {
+      "label": "이탈율(일)=이탈/전일DAU",
+      "period": "day",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_churnuser_funnel_day.csv",
+          "job": "프로그램_이탈사용자_퍼널_통계_일",
+          "exec": "01:58",
+          "freq": "일",
+          "part": "분자(이탈사용자)"
+        },
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "part": "분모(전일 DAU)"
+        }
+      ]
+    },
+    "d1_ret": {
+      "label": "D1 유지율(전체코호트)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_retention_day.csv",
+          "job": "프로그램별_사용자_유지율_통계_일",
+          "exec": "01:13",
+          "freq": "일",
+          "cond": "TYPE=D1 COHORT=all"
+        }
+      ]
+    },
+    "d7_ret": {
+      "label": "D7 유지율(전체코호트)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_retention_day.csv",
+          "job": "프로그램별_사용자_유지율_통계_일",
+          "exec": "01:13",
+          "freq": "일",
+          "cond": "TYPE=D7 COHORT=all"
+        }
+      ]
+    },
+    "new_d1_ret": {
+      "label": "신규 D1 유지율(신규코호트)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_newuser_retention_day.csv",
+          "job": "프로그램별_신규사용자_유지율_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "cond": "TYPE=D1 COHORT=all"
+        }
+      ]
+    },
+    "new_d7_ret": {
+      "label": "신규 D7 유지율(신규코호트)",
+      "period": "day",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_newuser_retention_day.csv",
+          "job": "프로그램별_신규사용자_유지율_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "cond": "TYPE=D7 COHORT=all"
+        }
+      ]
+    },
+    "engage_rate": {
+      "label": "참여율(일)=참여/DAU",
+      "period": "day",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_user_engage_day.csv",
+          "job": "프로그램별_사용자_참여_통계_일",
+          "exec": "01:07",
+          "freq": "일",
+          "summary_index": "summary_index_14 (프로그램별_참여_일)",
+          "part": "분자(참여사용자)"
+        },
+        {
+          "lookup": "program_user_funnel_day.csv",
+          "job": "프로그램별_사용자_퍼널_통계_일",
+          "exec": "01:21",
+          "freq": "일",
+          "part": "분모(DAU)"
+        }
+      ]
+    },
+    "habit_rate": {
+      "label": "습관형성률(일)=3D7D_1M/ALL",
+      "period": "day",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_newuser_funnel_day.csv",
+          "job": "프로그램별_신규사용자_퍼널_통계_일",
+          "exec": "01:20",
+          "freq": "일",
+          "part": "분자/분모(TYPE=3D7D_1M / TYPE=ALL)"
+        }
+      ]
+    },
+    "wau": {
+      "label": "주간 활성사용자(WAU)",
+      "period": "week",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_week.csv",
+          "job": "프로그램별_사용자_퍼널_통계_주",
+          "exec": "월 1:35",
+          "freq": "주",
+          "cond": "TYPE=ALL PERIOD=1W"
+        }
+      ]
+    },
+    "wau_1min": {
+      "label": "1분이상 청취자(주)",
+      "period": "week",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_week.csv",
+          "job": "프로그램별_사용자_퍼널_통계_주",
+          "exec": "월 1:35",
+          "freq": "주",
+          "cond": "TYPE=1MIN PERIOD=1W"
+        }
+      ]
+    },
+    "wau_10min": {
+      "label": "10분이상 청취자(주)",
+      "period": "week",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_week.csv",
+          "job": "프로그램별_사용자_퍼널_통계_주",
+          "exec": "월 1:35",
+          "freq": "주",
+          "cond": "TYPE=10MIN PERIOD=1W"
+        }
+      ]
+    },
+    "real_rate_week": {
+      "label": "실청취율(주)",
+      "period": "week",
+      "role": "derived",
+      "derived_from": [
+        "wau_1min",
+        "wau"
+      ],
+      "sources": [
+        {
+          "lookup": "program_user_funnel_week.csv",
+          "job": "프로그램별_사용자_퍼널_통계_주",
+          "exec": "월 1:35",
+          "freq": "주"
+        }
+      ]
+    },
+    "deep_rate_week": {
+      "label": "깊은청취율(주)",
+      "period": "week",
+      "role": "derived",
+      "derived_from": [
+        "wau_10min",
+        "wau_1min"
+      ],
+      "sources": [
+        {
+          "lookup": "program_user_funnel_week.csv",
+          "job": "프로그램별_사용자_퍼널_통계_주",
+          "exec": "월 1:35",
+          "freq": "주"
+        }
+      ]
+    },
+    "new_week": {
+      "label": "신규 사용자(주)",
+      "period": "week",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_newuser_funnel_week.csv",
+          "job": "프로그램별_신규사용자_퍼널_통계_주",
+          "exec": "월 1:41",
+          "freq": "주",
+          "cond": "TYPE=ALL"
+        }
+      ]
+    },
+    "react_week": {
+      "label": "복귀 사용자(주)",
+      "period": "week",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_reactuser_funnel_week.csv",
+          "job": "프로그램_복귀사용자_퍼널_통계_주",
+          "exec": "월 2:30",
+          "freq": "주",
+          "cond": "TYPE=ALL"
+        }
+      ]
+    },
+    "react_rate_week": {
+      "label": "복귀율(주)",
+      "period": "week",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_reactuser_funnel_week.csv",
+          "job": "프로그램_복귀사용자_퍼널_통계_주",
+          "exec": "월 2:30",
+          "freq": "주",
+          "part": "분자(복귀)"
+        },
+        {
+          "lookup": "program_dormant_pool_week.csv",
+          "job": "프로그램별_휴면사용자풀_통계_주",
+          "exec": "월 1:45",
+          "freq": "주",
+          "part": "분모(휴면풀)"
+        }
+      ]
+    },
+    "churn_rate_week": {
+      "label": "이탈율(주)",
+      "period": "week",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_churnuser_funnel_week.csv",
+          "job": "프로그램_이탈사용자_퍼널_통계_주",
+          "exec": "월 2:05",
+          "freq": "주",
+          "part": "분자(이탈)"
+        },
+        {
+          "lookup": "program_user_funnel_week.csv",
+          "job": "프로그램별_사용자_퍼널_통계_주",
+          "exec": "월 1:35",
+          "freq": "주",
+          "part": "분모(전주 WAU)"
+        }
+      ]
+    },
+    "w1_ret": {
+      "label": "W1 유지율(전체코호트)",
+      "period": "week",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_retention_week.csv",
+          "job": "프로그램별_사용자_유지율_통계_주",
+          "exec": "월 1:22",
+          "freq": "주",
+          "cond": "TYPE=W1 COHORT=all"
+        }
+      ]
+    },
+    "new_w1_ret": {
+      "label": "신규 W1 유지율(신규코호트)",
+      "period": "week",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_newuser_retention_week.csv",
+          "job": "프로그램별_신규사용자_유지율_통계_주",
+          "exec": "월 1:23",
+          "freq": "주",
+          "cond": "TYPE=W1 COHORT=all"
+        }
+      ]
+    },
+    "engage_rate_week": {
+      "label": "참여율(주)",
+      "period": "week",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_user_engage_week.csv",
+          "job": "프로그램별_사용자_참여_통계_주",
+          "exec": "월 1:08",
+          "freq": "주",
+          "summary_index": "summary_index_21 (프로그램별_참여_주)",
+          "part": "분자(참여)"
+        },
+        {
+          "lookup": "program_user_funnel_week.csv",
+          "job": "프로그램별_사용자_퍼널_통계_주",
+          "exec": "월 1:35",
+          "freq": "주",
+          "part": "분모(WAU)"
+        }
+      ]
+    },
+    "habit_rate_week": {
+      "label": "습관형성률(주)",
+      "period": "week",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_newuser_funnel_week.csv",
+          "job": "프로그램별_신규사용자_퍼널_통계_주",
+          "exec": "월 1:41",
+          "freq": "주",
+          "part": "분자/분모(TYPE=3D7D_1M / ALL)"
+        }
+      ]
+    },
+    "mau": {
+      "label": "월간 활성사용자(MAU)",
+      "period": "mon",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_mon.csv",
+          "job": "프로그램별_사용자_퍼널_통계_월",
+          "exec": "1일 02:50",
+          "freq": "월",
+          "cond": "TYPE=ALL PERIOD=1M"
+        }
+      ]
+    },
+    "mau_1min": {
+      "label": "1분이상 청취자(월)",
+      "period": "mon",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_mon.csv",
+          "job": "프로그램별_사용자_퍼널_통계_월",
+          "exec": "1일 02:50",
+          "freq": "월",
+          "cond": "TYPE=1MIN PERIOD=1M"
+        }
+      ]
+    },
+    "mau_10min": {
+      "label": "10분이상 청취자(월)",
+      "period": "mon",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_funnel_mon.csv",
+          "job": "프로그램별_사용자_퍼널_통계_월",
+          "exec": "1일 02:50",
+          "freq": "월",
+          "cond": "TYPE=10MIN PERIOD=1M"
+        }
+      ]
+    },
+    "real_rate_mon": {
+      "label": "실청취율(월)",
+      "period": "mon",
+      "role": "derived",
+      "derived_from": [
+        "mau_1min",
+        "mau"
+      ],
+      "sources": [
+        {
+          "lookup": "program_user_funnel_mon.csv",
+          "job": "프로그램별_사용자_퍼널_통계_월",
+          "exec": "1일 02:50",
+          "freq": "월"
+        }
+      ]
+    },
+    "deep_rate_mon": {
+      "label": "깊은청취율(월)",
+      "period": "mon",
+      "role": "derived",
+      "derived_from": [
+        "mau_10min",
+        "mau_1min"
+      ],
+      "sources": [
+        {
+          "lookup": "program_user_funnel_mon.csv",
+          "job": "프로그램별_사용자_퍼널_통계_월",
+          "exec": "1일 02:50",
+          "freq": "월"
+        }
+      ]
+    },
+    "new_mon": {
+      "label": "신규 사용자(월)",
+      "period": "mon",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_newuser_funnel_mon.csv",
+          "job": "프로그램별_신규사용자_퍼널_통계_월",
+          "exec": "1일 02:31",
+          "freq": "월",
+          "cond": "TYPE=ALL"
+        }
+      ]
+    },
+    "react_mon": {
+      "label": "복귀 사용자(월)",
+      "period": "mon",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_reactuser_funnel_mon.csv",
+          "job": "프로그램_복귀사용자_퍼널_통계_월",
+          "exec": "1일 3:10",
+          "freq": "월",
+          "cond": "TYPE=ALL"
+        }
+      ]
+    },
+    "react_rate_mon": {
+      "label": "복귀율(월)",
+      "period": "mon",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_reactuser_funnel_mon.csv",
+          "job": "프로그램_복귀사용자_퍼널_통계_월",
+          "exec": "1일 3:10",
+          "freq": "월",
+          "part": "분자(복귀)"
+        },
+        {
+          "lookup": "program_dormant_pool_mon.csv",
+          "job": "프로그램별_휴면사용자풀_통계_월",
+          "exec": "1일 1:50",
+          "freq": "월",
+          "part": "분모(휴면풀)"
+        }
+      ]
+    },
+    "churn_rate_mon": {
+      "label": "이탈율(월)",
+      "period": "mon",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_churnuser_funnel_mon.csv",
+          "job": "프로그램_이탈사용자_퍼널_통계_월",
+          "exec": "1일 2:50",
+          "freq": "월",
+          "part": "분자(이탈)"
+        },
+        {
+          "lookup": "program_user_funnel_mon.csv",
+          "job": "프로그램별_사용자_퍼널_통계_월",
+          "exec": "1일 02:50",
+          "freq": "월",
+          "part": "분모(전월 MAU)"
+        }
+      ]
+    },
+    "m1_ret": {
+      "label": "M1 유지율(전체코호트)",
+      "period": "mon",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_user_retention_mon.csv",
+          "job": "프로그램별_사용자_유지율_통계_월",
+          "exec": "1일 3:10",
+          "freq": "월",
+          "cond": "TYPE=M1 COHORT=all"
+        }
+      ]
+    },
+    "new_m1_ret": {
+      "label": "신규 M1 유지율(신규코호트)",
+      "period": "mon",
+      "role": "base",
+      "sources": [
+        {
+          "lookup": "program_newuser_retention_mon.csv",
+          "job": "프로그램별_신규사용자_유지율_통계_월",
+          "exec": "1일 1:50",
+          "freq": "월",
+          "cond": "TYPE=M1 COHORT=all"
+        }
+      ]
+    },
+    "engage_rate_mon": {
+      "label": "참여율(월)",
+      "period": "mon",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_user_engage_mon.csv",
+          "job": "프로그램별_사용자_참여_통계_월",
+          "exec": "1일 01:09",
+          "freq": "월",
+          "summary_index": "summary_index_26 (프로그램별_참여_월)",
+          "part": "분자(참여)"
+        },
+        {
+          "lookup": "program_user_funnel_mon.csv",
+          "job": "프로그램별_사용자_퍼널_통계_월",
+          "exec": "1일 02:50",
+          "freq": "월",
+          "part": "분모(MAU)"
+        }
+      ]
+    },
+    "habit_rate_mon": {
+      "label": "습관형성률(월)",
+      "period": "mon",
+      "role": "ratio",
+      "sources": [
+        {
+          "lookup": "program_newuser_funnel_mon.csv",
+          "job": "프로그램별_신규사용자_습관형성률_통계_월",
+          "exec": "7일 3:30",
+          "freq": "월",
+          "part": "분자/분모(습관형성률 배치)"
+        },
+        {
+          "lookup": "program_newuser_funnel_mon.csv",
+          "job": "프로그램별_신규사용자_퍼널_통계_월",
+          "exec": "1일 02:31",
+          "freq": "월",
+          "part": "신규퍼널(ALL 분모)"
+        }
+      ]
+    },
+    "PGM_NAME": {
+      "label": "프로그램명",
+      "period": "meta",
+      "role": "meta",
+      "sources": [
+        {
+          "lookup": "BROADPLAN.csv",
+          "job": "(정적 룩업 — 스케줄 배치 아님, 수동/편성 관리)",
+          "exec": null,
+          "freq": null
+        }
+      ]
+    },
+    "STIME": {
+      "label": "방송 시작시각",
+      "period": "meta",
+      "role": "meta",
+      "sources": [
+        {
+          "lookup": "BROADPLAN.csv",
+          "job": "(정적 룩업 — 스케줄 배치 아님, 수동/편성 관리)",
+          "exec": null,
+          "freq": null
+        }
+      ]
+    },
+    "program_title": {
+      "label": "회차/특집 제목",
+      "period": "meta",
+      "role": "meta",
+      "sources": [
+        {
+          "lookup": "index=broadplan",
+          "job": "프로그램편성정보(원천 인덱스 적재)",
+          "exec": "매시간",
+          "freq": "시간"
+        },
+        {
+          "lookup": "BROADPLAN.csv",
+          "job": "(정적 룩업 — 스케줄 배치 아님, 수동/편성 관리)",
+          "exec": null,
+          "freq": null
+        }
+      ]
+    },
+    "guestname": {
+      "label": "게스트",
+      "period": "meta",
+      "role": "meta",
+      "sources": [
+        {
+          "lookup": "index=broadplan",
+          "job": "프로그램편성정보(원천 인덱스 적재)",
+          "exec": "매시간",
+          "freq": "시간"
+        },
+        {
+          "lookup": "BROADPLAN.csv",
+          "job": "(정적 룩업 — 스케줄 배치 아님, 수동/편성 관리)",
+          "exec": null,
+          "freq": null
+        }
+      ]
+    },
+    "daily_corner": {
+      "label": "매일 코너",
+      "period": "meta",
+      "role": "meta",
+      "sources": [
+        {
+          "lookup": "index=broadplan",
+          "job": "프로그램편성정보(원천 인덱스 적재)",
+          "exec": "매시간",
+          "freq": "시간"
+        },
+        {
+          "lookup": "BROADPLAN.csv",
+          "job": "(정적 룩업 — 스케줄 배치 아님, 수동/편성 관리)",
+          "exec": null,
+          "freq": null
+        }
+      ]
+    },
+    "weekly_corner": {
+      "label": "주간 코너",
+      "period": "meta",
+      "role": "meta",
+      "sources": [
+        {
+          "lookup": "index=broadplan",
+          "job": "프로그램편성정보(원천 인덱스 적재)",
+          "exec": "매시간",
+          "freq": "시간"
+        },
+        {
+          "lookup": "BROADPLAN.csv",
+          "job": "(정적 룩업 — 스케줄 배치 아님, 수동/편성 관리)",
+          "exec": null,
+          "freq": null
+        }
+      ]
+    },
+    "view_radio_yn": {
+      "label": "보이는 라디오 여부",
+      "period": "meta",
+      "role": "meta",
+      "sources": [
+        {
+          "lookup": "index=broadplan",
+          "job": "프로그램편성정보(원천 인덱스 적재)",
+          "exec": "매시간",
+          "freq": "시간"
+        },
+        {
+          "lookup": "BROADPLAN.csv",
+          "job": "(정적 룩업 — 스케줄 배치 아님, 수동/편성 관리)",
+          "exec": null,
+          "freq": null
+        }
+      ]
+    },
+    "live_yn": {
+      "label": "생방송/녹음 여부",
+      "period": "meta",
+      "role": "meta",
+      "sources": [
+        {
+          "lookup": "index=nike",
+          "job": "편성정보(원천 인덱스 적재)",
+          "exec": "매시간",
+          "freq": "시간"
+        },
+        {
+          "lookup": "BROADPLAN.csv",
+          "job": "(정적 룩업 — 스케줄 배치 아님, 수동/편성 관리)",
+          "exec": null,
+          "freq": null
+        }
+      ]
+    }
+  }
+}

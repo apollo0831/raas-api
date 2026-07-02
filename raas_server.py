@@ -100,6 +100,18 @@ def cache_set(key, data):
     with _cache_lock:
         _cache[key] = {"data": data, "ts": datetime.now()}
 
+def cache_clear(*keys):
+    """지정 키 제거(없으면 전체 비움). Splunk 파생 캐시 강제 무효화용(수동 재적재)."""
+    with _cache_lock:
+        if keys:
+            for k in keys:
+                _cache.pop(k, None)
+        else:
+            _cache.clear()
+
+# 수동 재적재 동시 실행 방지(더블클릭·중복 요청 → Splunk 이중 풀 차단)
+_refresh_lock = threading.Lock()
+
 def _supplement_timeline_from_csv(timeline: dict) -> None:
     """Splunk 룩업에 없는 필드를 로컬 CSV로 보완 (react_week, react_rate_week 등).
     날짜가 일치하는 행은 직접 보완하고, 로컬 CSV의 마지막 날짜 이후 Splunk 행은
@@ -218,6 +230,52 @@ def _latest_data_date() -> str:
         return ""
 # ──────────────────────────────────────────────────────────
 
+def _build_data_check_text(report: dict, prefix_line: str = "") -> str:
+    """데이터 점검 report → 답변 마크다운. 데이터 점검 표 + '정제 배치·스케줄 상태' 표(분리)."""
+    s = report.get("summary", {})
+    _emoji = {"red": "🔴", "yellow": "🟡", "green": "🟢"}
+    order = {"red": 0, "yellow": 1, "green": 2}
+    checks = report.get("checks", [])
+    main = [c for c in checks if c.get("group") != "schedule"]
+    sched = [c for c in checks if c.get("group") == "schedule"]
+
+    def _table(rows):
+        rows = sorted(rows, key=lambda c: order.get(c["severity"], 3))
+        return ("| 상태 | 항목 | 상세 |\n|---|---|---|\n" + "".join(
+            f"| {_emoji.get(c['severity'],'')} | {c['title']} | {(c.get('detail') or '').replace('|','/')} |\n"
+            for c in rows))
+
+    def _tally(rows):   # 표별 자체 카운트 — 종합 숫자와 표 내용이 어긋나지 않도록
+        return (f"🔴 {sum(1 for c in rows if c['severity']=='red')} · "
+                f"🟡 {sum(1 for c in rows if c['severity']=='yellow')} · "
+                f"🟢 {sum(1 for c in rows if c['severity']=='green')}")
+
+    head = (f"**📋 데이터 점검 · {report.get('data_date','?')}** "
+            f"(스플렁크 · {report.get('code_count','?')}코드 · "
+            f"{report.get('field_count','?')}필드)\n"
+            f"{_tally(main)}\n\n")
+    body = head + _table(main)
+    if sched:
+        body += (f"\n**🗓 정제 배치 · 스케줄 상태** (이상 필드별 관련 배치) · {_tally(sched)}\n\n"
+                 + _table(sched))
+
+    try:
+        _fnd = "\n".join(f"[{c['severity']}] {c['title']} {c.get('detail','')}"
+                         for c in checks if c["severity"] != "green")
+        _sys = ("당신은 데이터 품질 점검 담당입니다. 아래 점검 결과를 1~2문장으로 총평하세요. "
+                "심각(red)이 있으면 무엇이 문제인지 먼저 경고, 없으면 정상임을 간결히 안내. 군더더기 금지.")
+        _u = (f"요약: red {s.get('red',0)} / yellow {s.get('yellow',0)} / green {s.get('green',0)}\n"
+              f"주요 항목:\n{_fnd or '(이상 없음)'}")
+        verdict, _ = QE.call_claude(_sys, _u, max_tokens=200, model=QE.HAIKU_MODEL)
+    except Exception:
+        verdict = (f"🔴 심각 이상 {s.get('red',0)}건 — 적재·무결성 점검 필요." if s.get("red")
+                   else (f"🟡 주의 {s.get('yellow',0)}건 확인." if s.get("yellow") else "🟢 데이터 정상."))
+    full = (verdict or "").strip() + "\n\n"
+    if prefix_line:
+        full += prefix_line + "\n\n"
+    return full + body
+
+
 def splunk_auth():
     return "Basic " + base64.b64encode(
         f"{SPLUNK_USER}:{SPLUNK_PASSWORD}".encode()).decode()
@@ -245,6 +303,46 @@ def splunk_search(spl: str) -> list:
         raise Exception(f"Splunk {e.code}: {e.read().decode()[:200]}")
     except Exception as e:
         raise Exception(f"Splunk 오류: {e}")
+
+
+def fetch_schedule_status(hours: int = 192):
+    """스케줄 배치별 최신 상태 맵 조회(_internal sourcetype=scheduler, 5분 캐시).
+    8일 윈도우(기본)로 주간/월간 배치까지 포착. 필드별 스케줄 상태 표시에 사용.
+    반환: {savedsearch_name: {status, last, reason}} / 조회 실패 시 None(판정 보류)."""
+    cached = cache_get("sched_status")
+    if cached is not None:
+        return cached
+    spl = ('search index=_internal sourcetype=scheduler '
+           f'earliest=-{hours}h '
+           '| stats latest(status) as status latest(_time) as last_epoch latest(reason) as reason '
+           'latest(run_time) as run_time latest(result_count) as result_count '
+           'by savedsearch_name '
+           '| eval last=strftime(last_epoch,"%m/%d %H:%M") '
+           '| fields savedsearch_name status last reason run_time result_count')
+    try:
+        rows = splunk_search(spl)
+    except Exception as e:
+        print(f"[sched] scheduler 조회 실패: {e}", flush=True)
+        return None
+    status_map = {}
+    for r in rows:
+        nm = r.get("savedsearch_name") or ""
+        if nm:
+            status_map[nm] = {"status": r.get("status"), "last": r.get("last"),
+                              "reason": r.get("reason"), "run_time": r.get("run_time"),
+                              "result_count": r.get("result_count")}
+    cache_set("sched_status", status_map)
+    return status_map
+
+
+def _run_data_check(timeline):
+    """데이터 점검 + (이상이 있을 때만) 이상 필드별 스케줄 상태 교차확인. data_check·data_refresh 공용."""
+    import raas_data_check as DC
+    report = DC.run_data_check(timeline)
+    s = report.get("summary", {})
+    if s.get("red") or s.get("yellow"):        # 이상이 있을 때만 스케줄러 추가 조회(건강한 날은 스킵)
+        DC.cross_check_schedules(report, fetch_schedule_status())
+    return report
 
 _CACHE_HEADERS = {
     "Content-Type": "application/json",
@@ -1080,7 +1178,10 @@ class RAASHandler(BaseHTTPRequestHandler):
                 #   LLM이 본연의 성능으로 답한다(고정 템플릿 없음). 비-프로그램 질의는 기존 엔진으로.
                 _ground = None
                 try:
-                    _ground = GROUND.assemble(question, overlay_ctx={"user_id": user_id, "mode": "normal"})
+                    _my = user.get("my_programs") or []
+                    _dflt = _my[0] if _my else None   # 관심 프로그램/채널(최상단) → 엔티티 없는 지표질의 기본 대상
+                    _ground = GROUND.assemble(question, overlay_ctx={"user_id": user_id, "mode": "normal",
+                                                                     "default_code": _dflt})
                 except Exception as _e:
                     print(f"[grounding] assemble error: {_e}")
                 if _ground and _ground.get("ok"):
@@ -1114,7 +1215,15 @@ class RAASHandler(BaseHTTPRequestHandler):
                             _vr = GROUND.verify_numbers(_ground["context"], _ganswer)
                         except Exception as _e:
                             print(f"[verify] {_e}")
-                        _gp = ("[small]\n**검색 grounding** — 사용 provider: "
+                        # 적용 스코프·기준일 — 참고([small]) 토글 켤 때만 노출(엔티티 완화·특정일 답변의 기준 명시)
+                        _eb_lines = (_ground.get("entities_brief") or "").splitlines()
+                        _scope_parts = _eb_lines[:1] + [
+                            l.strip().lstrip("※ ").split(" — ")[0]   # 'X 요청 특정일: 날짜'만(내부 지시문 제거)
+                            for l in _eb_lines[1:] if "요청 특정일" in l]
+                        _scope_line = " · ".join(p for p in _scope_parts if p)
+                        _gp = ("[small]\n**검색 grounding**"
+                               + (f" — {_scope_line}" if _scope_line else "")
+                               + "\n사용 provider: "
                                + ", ".join(_ground["providers_used"])
                                + (f"\n적용된 지식 오버레이: {len(_ov)}건" if _ov else "")
                                + _verify_line(_vr)
@@ -1585,33 +1694,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
                 if user.get("role") != "데이터" and not user.get("is_admin"):
                     self.send_json({"ok": False, "error": "데이터 직무 전용입니다."}, 403); return
-                import raas_data_check as DC
-                report = DC.run_data_check(get_cached_timeline())
-                s = report.get("summary", {})
-                _emoji = {"red": "🔴", "yellow": "🟡", "green": "🟢"}
-                order = {"red": 0, "yellow": 1, "green": 2}
-                rows_sorted = sorted(report.get("checks", []), key=lambda c: order.get(c["severity"], 3))
-                head = (f"**📋 데이터 점검 · {report.get('data_date','?')}** "
-                        f"(스플렁크 · {report.get('code_count','?')}코드 · "
-                        f"{report.get('field_count','?')}필드)\n"
-                        f"🔴 {s.get('red',0)} · 🟡 {s.get('yellow',0)} · 🟢 {s.get('green',0)}\n\n"
-                        "| 상태 | 항목 | 상세 |\n|---|---|---|\n")
-                table = "".join(
-                    f"| {_emoji.get(c['severity'],'')} | {c['title']} | {(c.get('detail') or '').replace('|','/')} |\n"
-                    for c in rows_sorted)
-                verdict = ""
-                try:
-                    _fnd = "\n".join(f"[{c['severity']}] {c['title']} {c.get('detail','')}"
-                                     for c in rows_sorted if c["severity"] != "green")
-                    _sys = ("당신은 데이터 품질 점검 담당입니다. 아래 점검 결과를 1~2문장으로 총평하세요. "
-                            "심각(red)이 있으면 무엇이 문제인지 먼저 경고, 없으면 정상임을 간결히 안내. 군더더기 금지.")
-                    _u = (f"요약: red {s.get('red',0)} / yellow {s.get('yellow',0)} / green {s.get('green',0)}\n"
-                          f"주요 항목:\n{_fnd or '(이상 없음)'}")
-                    verdict, _ = QE.call_claude(_sys, _u, max_tokens=200, model=QE.HAIKU_MODEL)
-                except Exception as _e:
-                    verdict = (f"🔴 심각 이상 {s.get('red',0)}건 — 적재·무결성 점검 필요." if s.get("red")
-                               else (f"🟡 주의 {s.get('yellow',0)}건 확인." if s.get("yellow") else "🟢 데이터 정상."))
-                full = (verdict or "").strip() + "\n\n" + head + table
+                report = _run_data_check(get_cached_timeline())
+                full = _build_data_check_text(report)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 self.send_header("Cache-Control", "no-cache")
@@ -1626,6 +1710,55 @@ class RAASHandler(BaseHTTPRequestHandler):
                                   user_name=user["name"], user_role=user["role"],
                                   intent="data_check", source="general")
                 sse_d({"type": "done", "query_id": _qid, "routing_badge": "🩺 데이터 점검"})
+                self.close_connection = True
+                return
+            except Exception as e:
+                try:
+                    self.send_json({"ok": False, "error": str(e)}, 500)
+                except Exception:
+                    pass
+                return
+
+        elif self.path == "/api/data_refresh":
+            # 수동 재적재 — Splunk 캐시 무효화 + 즉시 재풀 + 자동 재점검. 데이터 직무 관리자(apollo) 전용.
+            try:
+                user = self._get_session_user()
+                if not user:
+                    self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
+                if not (user.get("is_admin") and user.get("role") == "데이터"):
+                    self.send_json({"ok": False, "error": "데이터 직무 관리자 전용입니다."}, 403); return
+                # 동시 재적재 방지 — 진행 중이면 즉시 반려(Splunk 이중 풀 차단)
+                if not _refresh_lock.acquire(blocking=False):
+                    self.send_json({"ok": False, "error": "이미 데이터를 가져오는 중입니다. 잠시 후 다시 시도하세요."}, 429); return
+                try:
+                    import time as _time
+                    cache_clear()                    # timeline·anomalies 등 Splunk 파생 캐시 전체 무효화
+                    _t0 = _time.time()
+                    tl = get_cached_timeline()       # 그 자리에서 Splunk 재적재(실패 시 빈 타임라인 → red로 표면화)
+                    _elapsed = _time.time() - _t0
+                    src = get_timeline_source()
+                    latest = _latest_data_date()
+                    report = _run_data_check(tl)
+                finally:
+                    _refresh_lock.release()
+                _src_kr = {"splunk": "스플렁크", "csv": "로컬 CSV(폴백)"}.get(src, src or "unknown")
+                prefix = (f"🔄 **최신 데이터 다시 가져옴** — 출처 {_src_kr} · "
+                          f"최신일 {latest or '?'} · {_elapsed:.1f}초 소요")
+                full = _build_data_check_text(report, prefix_line=prefix)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                def sse_r(d):
+                    self.wfile.write(("data: " + json.dumps(d, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                    self.wfile.flush()
+                sse_r({"type": "token", "text": full})
+                _qid = save_query(str(user["id"]), "최신 데이터 다시 가져오기", full, ip=self._get_client_ip(),
+                                  user_name=user["name"], user_role=user["role"],
+                                  intent="data_refresh", source="general")
+                sse_r({"type": "done", "query_id": _qid, "routing_badge": "🔄 데이터 재적재"})
                 self.close_connection = True
                 return
             except Exception as e:
