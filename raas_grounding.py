@@ -352,6 +352,50 @@ def _p_field_projection(ent):
     return {"fields": fields, "rows": rows} if rows else None
 
 
+# 채널 코드 → 소속 프로그램 코드 프리픽스 (X00 집계코드는 제외 처리)
+_CH_PREFIX = {"F00": ("F",), "L00": ("L", "M"), "G00": ("G",), "P00": ("P",),
+              "T00": ("F", "L", "M", "G", "P")}
+
+
+def _p_channel_programs(ent):
+    """[채널 전용·범용] 채널 소속 프로그램별 최신 KPI — '채널 내 프로그램 비교·순위·하락' 질의를
+       LLM이 직접 계산하도록 프로그램 행 제공(집계행 F00만으로는 소속 프로그램 질문에 답 불가)."""
+    if ent.get("scope_kind") != "channel":
+        return None
+    prefixes = _CH_PREFIX.get(ent.get("code") or "")
+    if not prefixes:
+        return None
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        return None
+    latest = max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
+    if not latest:
+        return None
+    # 핵심 지표 + 포커스(변형 포함) — 프로그램당 필드 수 제한으로 토큰 관리
+    keys = ["dau", "dau_chg", "deep_rate", "deep_rate_diff", "real_rate", "real_rate_diff",
+            "engage_rate", "engage_rate_diff", "churn_rate", "churn_rate_diff"]
+    for f in (ent.get("focus_fields") or []):
+        for k in (f, f + "_prev", f + "_diff", f + "_chg"):
+            if k not in keys:
+                keys.append(k)
+    out, seen = [], set()
+    for r in rows:
+        if r.get("DATE") != latest:
+            continue
+        code = (r.get("PGM_CODE") or "").upper()
+        if not code or code.endswith("00") or code in seen or not code.startswith(prefixes):
+            continue
+        seen.add(code)
+        rec = {"code": code, "name": r.get("PGM_NAME") or _resolve_name(code)}
+        for k in keys:
+            v = r.get(k)
+            if v not in (None, ""):
+                rec[k] = v
+        out.append(rec)
+    return {"as_of": latest, "programs": out} if out else None
+
+
 def _p_metric_timeseries(ent):
     """의도 기반 슬라이싱(1D): 명시 기간>그만큼 / 추이 질의>전체(상한) / 원인·포인트 질의>최근 4주.
        전체 노이즈·토큰을 줄여 핵심 근거에 집중."""
@@ -465,6 +509,9 @@ PROVIDERS = [
     {"name": "field_projection", "needs": "program",
      "desc": "질문이 지목한 필드(지표+속성)를 일자별 표로 묶음 — 특정 필드 콕 집기/지표+속성 혼합('DAU와 게스트 일자별') 대응",
      "fetch": _p_field_projection},
+    {"name": "channel_programs", "needs": "channel",
+     "desc": "채널 소속 프로그램별 최신 KPI 나열 — '채널 내 프로그램 비교·순위·많이 하락한 프로그램' 질의(집계행만으론 답 불가)",
+     "fetch": _p_channel_programs},
     {"name": "metric_timeseries", "needs": "program",
      "desc": "주요 지표 시계열(의도 기반: 추이 질의는 전체, 원인·포인트 질의는 최근 4주)",
      "fetch": _p_metric_timeseries},
@@ -511,6 +558,8 @@ def _applicable(ent) -> list:
         if need == "program" and not ent.get("code"):
             continue
         if need == "date" and not ent.get("date"):
+            continue
+        if need == "channel" and not is_channel:
             continue
         if is_channel and p["name"] in _PROGRAM_ONLY:
             continue
@@ -983,6 +1032,9 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     names = select_providers(question, ent)
     if ent.get("as_of_date") and "point_snapshot" not in names:
         names = ["point_snapshot"] + names   # 특정 날짜 지정이면 그 날짜 스냅샷 반드시 포함
+    if (ent.get("scope_kind") == "channel" and "프로그램" in question
+            and "channel_programs" not in names):
+        names = ["channel_programs"] + names   # 채널 내 '프로그램' 질의는 소속 프로그램 행 반드시 포함
     blocks = []
     used = []
     for n in names:

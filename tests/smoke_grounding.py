@@ -88,6 +88,13 @@ check_true("daily_lineup 상한(≤120)", len(rows) <= 120, f"rows={len(rows)}")
 fp = G._p_field_projection(G.resolve_entities("컬투쇼 DAU와 게스트 일자별로")) or {}
 check_true("field_projection 혼합 필드", set(fp.get("fields", [])) >= {"dau", "guestname"},
            f"fields={fp.get('fields')}")
+# 채널 내 소속 프로그램 질의 — '파워FM 내 깊은청취율 하락 프로그램' 이 집계행만 받아 답 못하던 버그
+cp = G._p_channel_programs(G.resolve_entities("파워FM 내 깊은청취율이 많이 하락하고 있는 프로그램 2개는 뭐야?")) or {}
+check_true("channel_programs 프로그램 행 반환",
+           len(cp.get("programs", [])) >= 10 and all(p.get("deep_rate") for p in cp.get("programs", [])[:3]),
+           f"n={len(cp.get('programs', []))}")
+check_true("channel_programs는 채널 scope 전용",
+           G._p_channel_programs(G.resolve_entities("컬투쇼 DAU는?")) is None)
 
 print("── 5. 비교/순위/편성표 분기 ─────────────────────────")
 check_true("compare 감지: 파워FM vs 러브FM", bool(G._detect_compare("파워FM vs 러브FM 비교")))
