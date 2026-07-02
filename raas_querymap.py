@@ -170,7 +170,7 @@ def stats_by_user(days: int = 30, limit: int = 50) -> list:
                 f"SELECT topic_key, COUNT(*) AS c "
                 f"FROM query_history "
                 f"WHERE user_id = ? AND topic_key IS NOT NULL"
-                f"{('AND created_at >= ?' if since else '')}"
+                f"{(' AND created_at >= ?' if since else '')}"
                 f" GROUP BY topic_key ORDER BY c DESC LIMIT 1",
                 [uid] + ([since] if since else [])
             ).fetchone()

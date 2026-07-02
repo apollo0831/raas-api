@@ -385,13 +385,14 @@ async function _loadStmTab() {
     'heatmap':  '/api/admin/stats/heatmap',
     'graph':    '/api/admin/stats/graph',
   })[_STM.tab];
-  // 히트맵 차원 (기본 metric, 토글로 scope)
+  // 쿼리 파라미터 — URLSearchParams로 조립('?' 전에 '&'를 붙여 404 나던 버그 방지)
+  const qs = new URLSearchParams({ days: _STM.days, limit: 50 });
   if (_STM.tab === 'heatmap') {
-    _STM.dim = _STM.dim || 'metric';
-    path += `&dimension=${_STM.dim}`;
+    _STM.dim = _STM.dim || 'metric';   // 히트맵 차원 (기본 metric, 토글로 scope)
+    qs.set('dimension', _STM.dim);
   }
   try {
-    const res = await _authedFetch(`${path}?days=${_STM.days}&limit=50`);
+    const res = await _authedFetch(`${path}?${qs.toString()}`);
     if (res.status === 403) {
       body.innerHTML = `<div class="stm-empty" style="color:var(--red)">통계 열람 권한이 없습니다.</div>`;
       return;
