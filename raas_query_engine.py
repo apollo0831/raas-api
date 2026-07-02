@@ -922,6 +922,17 @@ def _evaluate_alerts(row: dict, timeline_snap: dict, latest_dt: str) -> dict:
 
         alerts = adapter.evaluate_zscore_alerts(timeline_snap, latest_dt)
 
+        # 프로그램명을 알림에 결정적으로 주입 — 코드만 있으면 LLM이 표 렌더 중
+        # 코드→이름 조인을 스스로 하다 오귀속(예: F05를 씨네타운으로) 발생.
+        for a in alerts:
+            _c = a.get('code')
+            if _c and not a.get('program'):
+                _nm = _pgm_name(_c)
+                if _nm and _nm != _c:
+                    a['program'] = _nm
+                    if a.get('msg') and f"[{_c}]" in a['msg']:
+                        a['msg'] = a['msg'].replace(f"[{_c}]", f"[{_nm}({_c})]")
+
         zscore_fields = {a['field'] for a in alerts}
         if not alerts or len(alerts) < 2:
             kpi = _build_alert_kpi(row)
