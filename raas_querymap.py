@@ -142,25 +142,30 @@ def stats_by_role(days: int = 30) -> list:
 def stats_by_user(days: int = 30, limit: int = 50) -> list:
     """사용자 × 질문수/토큰/피드백/마지막활동/대표 주제. user_role IS NOT NULL 우선."""
     since = _since(days)
-    df, params = _date_filter(since)
     with get_conn() as conn:
-        # 사용자 기본 집계
+        # 사용자 기본 집계 — 직무는 '현재 직무'(users.role) 우선.
+        # MAX(user_role)은 과거 질의 role들의 유니코드 최대값이라 사실상 무작위였음(예: '제작' 오표기).
+        # 계정 미연결(레거시/IP) 행만 질의 당시 role로 폴백.
+        _where = "WHERE q.created_at >= ? " if since else ""
+        _params = [since] if since else []
         rows = conn.execute(
-            f"SELECT user_id, "
+            f"SELECT q.user_id, "
             f"       COUNT(*)                                AS queries, "
-            f"       MAX(user_name)                          AS user_name, "
-            f"       MAX(user_role)                          AS role, "
-            f"       COALESCE(SUM(input_tokens),0)           AS tok_in, "
-            f"       COALESCE(SUM(output_tokens),0)          AS tok_out, "
-            f"       SUM(CASE WHEN feedback=1  THEN 1 ELSE 0 END) AS fb_pos, "
-            f"       SUM(CASE WHEN feedback=-1 THEN 1 ELSE 0 END) AS fb_neg, "
-            f"       MAX(created_at)                         AS last_active "
-            f"FROM query_history {df}"
-            f"GROUP BY user_id "
-            f"ORDER BY (CASE WHEN MAX(user_role) IS NULL THEN 1 ELSE 0 END), "
+            f"       MAX(q.user_name)                        AS user_name, "
+            f"       COALESCE(MAX(u.role), MAX(q.user_role)) AS role, "
+            f"       COALESCE(SUM(q.input_tokens),0)         AS tok_in, "
+            f"       COALESCE(SUM(q.output_tokens),0)        AS tok_out, "
+            f"       SUM(CASE WHEN q.feedback=1  THEN 1 ELSE 0 END) AS fb_pos, "
+            f"       SUM(CASE WHEN q.feedback=-1 THEN 1 ELSE 0 END) AS fb_neg, "
+            f"       MAX(q.created_at)                       AS last_active "
+            f"FROM query_history q "
+            f"LEFT JOIN users u ON q.user_id GLOB '[0-9]*' AND u.id = CAST(q.user_id AS INTEGER) "
+            f"{_where}"
+            f"GROUP BY q.user_id "
+            f"ORDER BY (CASE WHEN MAX(q.user_role) IS NULL THEN 1 ELSE 0 END), "
             f"         COUNT(*) DESC "
             f"LIMIT ?",
-            params + [limit]
+            _params + [limit]
         ).fetchall()
         # 사용자별 top_topic_key 별도 조회
         top_by_user: dict = {}
