@@ -191,6 +191,8 @@ s3_engagement 추가:
   py 코드 변경 시 재시작 필요. HTML/JS는 디스크 서빙이라 재시작 불필요.
 - 서버 라우팅: RAASHandler의 `GET_EXACT`/`GET_PREFIX`/`POST_EXACT` 테이블 — 엔드포인트 추가는
   핸들러 메서드(`_get_*`/`_post_*`) 정의 + 테이블 한 줄. 회귀 확인: `python tests/smoke_routes.py`.
+- grounding 회귀 확인: `python tests/smoke_grounding.py` — 질의 해석·provider 경로 스모크(LLM 호출 0).
+  **채팅에서 이상한 답을 고치면 그 질문을 케이스로 한 줄 추가**(고친 버그는 다시 안 생긴다).
   (구 CP 스토리라인 잔재 — simulator·report_engine·tobe_sim·data/storylines/ — 는 2026-07 폐기 삭제됨)
 - grounding 헤드리스 테스트: `import raas_grounding as G` → `G.assemble(q)`(LLM 없이 데이터 경로 확인은
   `G.call_claude=None`). `_kpi_rows()`가 timeline 쓰려면 `G.S.set_timeline_provider(SRV.get_cached_timeline)`.
