@@ -1608,7 +1608,9 @@ function _injectDataCheckChip() {
     if (cta.querySelector('.data-check-btn')) return;
     const b = document.createElement('button');
     b.className = 'today-digest-btn data-check-btn';
-    b.style.cssText = 'margin-left:8px;background:#1ec9ff;border-color:#1ec9ff';
+    // 보조 CTA — 주 CTA(특이사항)와 위계 분리: 고스트(외곽선) 스타일
+    b.style.cssText = 'margin-left:8px;background:transparent;color:var(--purple);' +
+                      'border-color:rgba(167,139,250,.55);box-shadow:none';
     b.textContent = '🩺 데이터 확인하기';
     b.addEventListener('click', startDataCheck);
     cta.appendChild(b);
