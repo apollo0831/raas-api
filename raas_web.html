@@ -101,6 +101,8 @@
     --fs-xl:  25px;
     --fs-2xl: 36px;
   }
+  /* 사이드바 목록 — 터치 타깃 보호(데스크톱만 촘촘하게) */
+  .quick-query-btn, .history-item { padding: 10px 12px; }
 }
 
 [data-theme="light"] {
@@ -199,15 +201,15 @@ body{
 }
 .btn-new-chat:hover{background:var(--bg3)}
 .sidebar-section{
-  padding:16px 16px 6px;
+  padding:12px 16px 4px;
   font-size:var(--fs-xs);font-weight:500;color:var(--dim);
   flex-shrink:0;
 }
 .sidebar-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
-.quick-queries{padding:2px 8px;display:flex;flex-direction:column;gap:2px}
+.quick-queries{padding:2px 8px;display:flex;flex-direction:column;gap:1px}
 .quick-query-btn{
   display:flex;align-items:center;gap:9px;
-  padding:10px 12px;border-radius:8px;border:none;
+  padding:6px 12px;border-radius:8px;border:none;
   background:transparent;color:var(--text);
   font-size:var(--fs-md);font-family:var(--sans);font-weight:400;
   cursor:pointer;text-align:left;
@@ -219,10 +221,10 @@ body{
 .quick-query-btn:hover{background:var(--bg3)}
 .history-list{
   padding:2px 8px;
-  display:flex;flex-direction:column;gap:2px;
+  display:flex;flex-direction:column;gap:1px;
 }
 .history-item{
-  padding:10px 12px;border-radius:8px;cursor:pointer;
+  padding:6px 12px;border-radius:8px;cursor:pointer;
   font-size:var(--fs-md);color:var(--text);font-weight:400;
   transition:background .12s;
   overflow:hidden;display:flex;align-items:center;gap:4px;
