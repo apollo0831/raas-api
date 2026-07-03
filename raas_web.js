@@ -3256,7 +3256,77 @@ function _kpiAiBrief() {
   submitQuery(`${prefix}${phrase} 핵심 지표 브리핑해줘`, 'kpi_panel');
 }
 
+// ── 카드 탭 → 인라인 미니 꺾은선 (아코디언, 동시 1개) ──────────────────
+let _kpiOpenField = null;
+let _kpiMiniChart = null;
+
+function _kpiCloseChart() {
+  if (_kpiMiniChart) { try { _kpiMiniChart.dispose(); } catch (_) {} }
+  _kpiMiniChart = null;
+  const el = document.getElementById('kpiMiniChartBox');
+  if (el) el.remove();
+  _kpiOpenField = null;
+}
+
+function _kpiScopeName() {
+  const sc = _KPI_SCOPES.find(x => x[0] === _KPI.scope);
+  return (_KPI.scope !== 'T00') ? ((sc ? sc[1] : _KPI.scope) + ' ') : '';
+}
+
+function _kpiTrendAsk(label) {
+  const per = { day: '최근 4주', week: '최근 3개월 주간', mon: '월간' }[_KPI.period];
+  if (isMobile()) closeKpi();
+  submitQuery(`${_kpiScopeName()}${per} ${label} 추이 분석해줘`, 'kpi_panel');
+}
+
+async function _kpiToggleChart(card) {
+  const f = card.dataset.f, label = card.dataset.l, pct = card.dataset.pct === '1';
+  if (_kpiOpenField === f) { _kpiCloseChart(); return; }
+  _kpiCloseChart();
+  _kpiOpenField = f;
+  const box = document.createElement('div');
+  box.id = 'kpiMiniChartBox';
+  box.className = 'kpi-mini-chart';
+  box.innerHTML = '<div class="kpi-loading">추이 로드 중…</div>';
+  card.insertAdjacentElement('afterend', box);
+  try {
+    const res = await fetch(`/api/kpi-series?scope=${encodeURIComponent(_KPI.scope)}&metric=${encodeURIComponent(f)}&period=${_KPI.period}`);
+    const j = await res.json();
+    const pts = (j.points || []).filter(p => p[1] != null);
+    if (!j.ok || !pts.length) { box.innerHTML = '<div class="kpi-loading">추이 데이터 없음</div>'; return; }
+    box.innerHTML = `<div class="kpi-mini-head">${escapeHtml(label)} 추이</div>
+      <div class="kpi-mini-canvas" style="width:100%;height:120px"></div>
+      <button class="kpi-chart-link" onclick="_kpiTrendAsk('${escapeHtml(label)}')">이 추이 분석 →</button>`;
+    const echarts = await _loadECharts();
+    const css = getComputedStyle(document.documentElement);
+    const col = v => css.getPropertyValue(v).trim();
+    const dates = pts.map(p => String(p[0]).slice(5));   // MM/DD
+    const vals = pts.map(p => p[1]);
+    const few = vals.length <= 16;                        // 주간·월간 → 포인트 마커 강조
+    _kpiMiniChart = echarts.init(box.querySelector('.kpi-mini-canvas'), null, { renderer: 'canvas' });
+    _kpiMiniChart.setOption({
+      grid: { left: 6, right: 12, top: 10, bottom: 4, containLabel: true },
+      xAxis: { type: 'category', data: dates, axisTick: { show: false },
+               axisLabel: { fontSize: 9, color: col('--sub'), interval: few ? 0 : 'auto' },
+               axisLine: { lineStyle: { color: col('--line2') } } },
+      yAxis: { type: 'value', scale: true, splitNumber: 3,
+               axisLabel: { fontSize: 9, color: col('--sub'),
+                            formatter: v => pct ? v + '%' : (v >= 10000 ? Math.round(v / 1000) + 'k' : v) },
+               splitLine: { lineStyle: { color: col('--line') } } },
+      tooltip: { trigger: 'axis', confine: true,
+                 valueFormatter: v => pct ? (v == null ? '—' : v + '%') : (v == null ? '—' : Number(v).toLocaleString()) },
+      series: [{ type: 'line', data: vals, smooth: !few, showSymbol: few, symbolSize: 5,
+                 lineStyle: { width: 2, color: col('--accent') },
+                 itemStyle: { color: col('--accent') },
+                 areaStyle: { opacity: 0.08, color: col('--accent') } }],
+    });
+  } catch (e) {
+    box.innerHTML = '<div class="kpi-loading">추이 로드 실패</div>';
+  }
+}
+
 async function loadKpiPanel() {
+  _kpiCloseChart();   // 열린 미니차트 dispose (innerHTML 교체 전 인스턴스 정리)
   const scroll = document.getElementById('kpiScroll');
   scroll.innerHTML = '<div class="kpi-loading">로드 중…</div>';
   try {
@@ -3291,7 +3361,9 @@ async function loadKpiPanel() {
     for (const [title, cards] of (_KPI_CARDS[_KPI.period] || [])) {
       html += `<div class="kpi-section"><div class="kpi-section-title">${title}</div><div class="kpi-grid">`;
       html += cards.map(cd =>
-        `<div class="kpi-card"><div class="kpi-card-label">${cd.l}</div>` +
+        `<div class="kpi-card clickable" data-f="${cd.f}" data-l="${cd.l}" data-pct="${cd.pct ? 1 : 0}"` +
+        ` onclick="_kpiToggleChart(this)" title="탭하면 추이 그래프">` +
+        `<div class="kpi-card-label">${cd.l}<span class="kpi-spark-hint">〰</span></div>` +
         `<div class="kpi-card-value">${fmtVal(row[cd.f], cd.pct)}</div>${fmtChg(row[cd.c], cd.pp)}</div>`).join('');
       html += '</div></div>';
     }

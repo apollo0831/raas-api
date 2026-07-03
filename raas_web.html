@@ -1002,6 +1002,21 @@ table.story-table th{
   transition:background .12s;
 }
 .kpi-ai-btn:hover{background:rgba(167,139,250,.12)}
+/* 카드 탭 → 미니 추이 차트 (아코디언) */
+.kpi-card.clickable{cursor:pointer;transition:background .12s}
+.kpi-card.clickable:hover{background:var(--bg3)}
+.kpi-spark-hint{margin-left:5px;color:var(--dim);font-size:10px;opacity:.7}
+.kpi-mini-chart{
+  grid-column:1/-1;background:var(--bg2);border:1px solid var(--line);
+  border-radius:10px;padding:8px 6px 2px;
+}
+.kpi-mini-head{font-size:var(--fs-xs);color:var(--sub);font-weight:600;padding:0 6px 2px}
+.kpi-chart-link{
+  display:block;margin:0 2px 4px auto;padding:2px 6px;
+  background:none;border:none;color:var(--accent);
+  font-size:var(--fs-xs);font-family:var(--sans);cursor:pointer;
+}
+.kpi-chart-link:hover{text-decoration:underline}
 .kpi-section{margin-bottom:18px}
 .kpi-section-title{
   font-size:var(--fs-xs);font-weight:600;color:var(--dim);

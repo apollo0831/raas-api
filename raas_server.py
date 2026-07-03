@@ -859,6 +859,44 @@ class RAASHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
 
+    def _get_kpi_series(self):
+        # KPI 패널 미니 꺾은선용 시계열 — 기간별 dedup(주간=DATE_WEEK, 월간=DATE_MON 단위 1포인트).
+        try:
+            params = {}
+            if "?" in self.path:
+                params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+            scope  = (params.get("scope") or "T00").strip().upper()
+            metric = params.get("metric", "dau")
+            period = params.get("period", "day")
+            if period not in ("day", "week", "mon"):
+                period = "day"
+            def _f(v):
+                try:
+                    x = float(str(v).replace(",", ""))
+                    return x
+                except (TypeError, ValueError):
+                    return None
+            date_rows = (get_cached_timeline() or {}).get(scope) or {}
+            pts = []
+            if period == "day":
+                for d in sorted(date_rows)[-28:]:
+                    pts.append([d, _f(date_rows[d].get(metric))])
+            else:
+                key = "DATE_WEEK" if period == "week" else "DATE_MON"
+                best = {}   # 기간 시작일 → 값 (기간 내 최신 일자 행의 값이 남음)
+                for d in sorted(date_rows):
+                    row = date_rows[d]
+                    pd = (row.get(key) or "").strip()
+                    v = row.get(metric)
+                    if pd and v not in (None, ""):
+                        best[pd] = v
+                lim = 16 if period == "week" else 12
+                pts = [[k, _f(best[k])] for k in sorted(best)[-lim:]]
+            self.send_json({"ok": True, "scope": scope, "metric": metric,
+                            "period": period, "points": pts})
+        except Exception as e:
+            self.send_json({"ok": False, "error": str(e)}, 500)
+
     def _get_admin_users(self):
         admin = self._require_admin()
         if not admin:
@@ -1795,6 +1833,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         ("/api/my/interest-map", _get_my_interest_map),
         ("/api/admin/stats/", _get_admin_stats),
         ("/api/kpi-panel", _get_kpi_panel),
+        ("/api/kpi-series", _get_kpi_series),
     ]
     POST_EXACT = {
         "/api/register": _post_register,
