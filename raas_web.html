@@ -311,7 +311,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 .hist-modal-title{font-size:var(--fs-lg);font-weight:600;flex-shrink:0}
 .hist-tabs{display:flex;gap:4px;flex-shrink:0}
 .hf-tab{
-  padding:5px 12px;border-radius:6px;
+  padding:5px 12px;border-radius:6px;white-space:nowrap;
   border:1px solid var(--line2);background:transparent;
   color:var(--sub);font-size:var(--fs-sm);font-family:var(--sans);
   cursor:pointer;transition:all .12s;
@@ -324,13 +324,27 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   color:var(--text);font-size:var(--fs-sm);font-family:var(--sans);outline:none;
 }
 .hf-search:focus{border-color:rgba(79,142,247,.5)}
-.hist-modal-body{flex:1;overflow-y:auto}
+.hist-modal-body{flex:1;overflow-y:auto;overflow-x:hidden}
+/* 모바일 — 모달 표(승인관리·질의맵)는 자체 가로 스크롤, 본문은 팬 금지(좌우로 끌리는 현상 방지) */
+@media (max-width:720px){
+  .hist-modal-body .adm-table,
+  .hist-modal-body .stm-table{
+    display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    white-space:nowrap;max-width:100%;
+  }
+  .hm-summary{padding-left:14px;padding-right:14px}
+  .hm-user{min-width:70px;max-width:90px}
+  .hm-time{min-width:auto}
+  /* 탭이 6개라 좁은 폭에서 글자 세로로 깨지던 것 → 탭 줄 자체 가로 스크롤 */
+  .stm-tabs,.hist-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .stm-tab,.hf-tab{flex-shrink:0}
+}
 .hm-row{border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s}
 .hm-row:hover .hm-summary{background:var(--bg2)}
 .hm-summary{display:flex;align-items:center;gap:10px;padding:11px 18px}
 .hm-time{font-size:var(--fs-xs);color:var(--dim);font-family:var(--mono);white-space:nowrap;flex-shrink:0;min-width:90px}
 .hm-user{font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;flex-shrink:0;min-width:100px;overflow:hidden;text-overflow:ellipsis}
-.hm-q{flex:1;font-size:var(--fs-md);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hm-q{flex:1;min-width:0;font-size:var(--fs-md);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hm-fb-icon{font-size:var(--fs-sm);flex-shrink:0;width:24px;text-align:center}
 .hm-detail{display:none;padding:0 18px 14px;border-top:1px solid var(--line);background:var(--bg0)}
 .hm-detail.open{display:block}
@@ -499,7 +513,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 }
 .stm-tabs{display:flex;gap:4px;flex:1}
 .stm-tab{
-  padding:6px 14px;border-radius:6px;
+  padding:6px 14px;border-radius:6px;white-space:nowrap;
   border:1px solid var(--line2);background:transparent;
   color:var(--sub);font-size:var(--fs-sm);font-family:var(--sans);cursor:pointer;
   transition:all .12s;
