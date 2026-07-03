@@ -1159,6 +1159,34 @@ class OntologyAdapter:
             self._special_days_cache = dates
         return self._special_days_cache
 
+    def get_calendar_annotations(self, start: str, end: str) -> list:
+        """기간 내 방송 이벤트(BroadcastEvent)·공휴일(CalendarDay) 주석 목록 — 추이 분석에서
+        급등/급락 시점을 특일로 설명하기 위한 근거. start/end: 'YYYY-MM-DD' 또는 'YYYY/MM/DD'."""
+        s = (start or "").replace("/", "-")
+        e = (end or "").replace("/", "-")
+        out = []
+        try:
+            for ev in self._onto.instances_of("raas:BroadcastEvent"):
+                d = (self._onto.value_str(self._onto.get_one(ev, "raas:eventDate")) or "").replace("/", "-")
+                if not d or not (s <= d <= e):
+                    continue
+                out.append({
+                    "date": d, "type": "이벤트",
+                    "label": self._onto.label_ko(ev) or str(ev),
+                    "related_program": self._onto.value_str(self._onto.get_one(ev, "raas:relatedProgram")),
+                    "note": self._onto.value_str(self._onto.get_one(ev, "rdfs:comment")),
+                })
+            for cd in self._onto.instances_of("raas:CalendarDay"):
+                d = (self._onto.value_str(self._onto.get_one(cd, "raas:dateValue")) or "").replace("/", "-")
+                if not d or not (s <= d <= e):
+                    continue
+                name = self._onto.value_str(self._onto.get_one(cd, "raas:holidayName"))
+                if name:
+                    out.append({"date": d, "type": "공휴일", "label": name})
+        except Exception:
+            pass
+        return sorted(out, key=lambda x: x["date"])
+
     def is_workday(self, date_str: str) -> bool:
         """평일(주말X·공휴일X) 여부. 파싱 실패 시 True(보수적으로 포함)."""
         norm = (date_str or "").replace("/", "-")

@@ -496,6 +496,24 @@ def _p_calendar(ent):
         return None
 
 
+def _p_period_events(ent):
+    """[범용] 분석 기간 내 이벤트·공휴일 주석 — 추이의 급등/급락 시점을 특일(예: 고릴라데이)로
+       설명할 근거. 기준일 하루만 보는 calendar와 달리 시계열 창 전체를 스캔."""
+    hist = _window_slice(ent.get("history") or [], ent)
+    if len(hist) < 2:
+        return None
+    d0 = (hist[0].get("DATE") or "").strip()
+    d1 = (hist[-1].get("DATE") or "").strip()
+    if not (d0 and d1):
+        return None
+    try:
+        from raas_onto import get_adapter
+        items = get_adapter().get_calendar_annotations(d0, d1)
+    except Exception:
+        return None
+    return {"window": f"{d0}~{d1}", "annotations": items} if items else None
+
+
 PROVIDERS = [
     {"name": "program_kpi", "needs": "program",
      "desc": "프로그램의 최신 핵심 KPI 스냅샷(DAU/WAU/MAU·신규·복귀·이탈·실청취·깊은청취·유지율과 증감)",
@@ -542,6 +560,9 @@ PROVIDERS = [
     {"name": "calendar", "needs": "date",
      "desc": "분석 일자의 유형 판정(평일/주말/공휴일·특일) — 청취 패턴에 영향",
      "fetch": _p_calendar},
+    {"name": "period_events", "needs": "program",
+     "desc": "분석 기간 내 이벤트·공휴일 주석(예: 고릴라데이) — 추이의 급등/급락 시점 설명 근거",
+     "fetch": _p_period_events},
 ]
 _PROVIDER_BY_NAME = {p["name"]: p for p in PROVIDERS}
 
@@ -1035,6 +1056,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     if (ent.get("scope_kind") == "channel" and "프로그램" in question
             and "channel_programs" not in names):
         names = ["channel_programs"] + names   # 채널 내 '프로그램' 질의는 소속 프로그램 행 반드시 포함
+    if ((ent.get("is_trend") or ent.get("analytical")) and "period_events" not in names):
+        names = names + ["period_events"]      # 추이·분석 질의엔 기간 내 이벤트·특일 주석 반드시 첨부
     blocks = []
     used = []
     for n in names:

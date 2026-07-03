@@ -106,6 +106,17 @@ check_true("편성표 의도", STORY.is_schedule_query("컬투쇼 코너 편성 
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")
 
+print("── 5.5 기간 내 이벤트·특일 주석(period_events) ───────")
+# '신규 추이 분석'이 6/16 고릴라데이(온톨로지 기록)를 활용 못 하던 버그 — 어댑터 범위조회 박제
+from raas_onto import get_adapter
+_ann = get_adapter().get_calendar_annotations("2026-06-01", "2026-06-30")
+check_true("6월 주석에 고릴라 데이 포함", any("고릴라" in (a.get("label") or "") for a in _ann),
+           f"labels={[a.get('label') for a in _ann]}")
+check_true("공휴일도 포함(현충일)", any("현충일" in (a.get("label") or "") for a in _ann))
+_pe = G._p_period_events(G.resolve_entities("고릴라 플랫폼 전체 최근 4주 신규 추이 분석해줘"))
+check_true("period_events provider 동작(dict|None)", _pe is None or isinstance(_pe, dict),
+           f"type={type(_pe).__name__}")
+
 print("── 6. 필드 계보(데이터 점검 연동) ────────────────────")
 check_true("lineage 로드", len(DC._load_lineage()) >= 50, f"n={len(DC._load_lineage())}")
 lin = DC.lineage_for("habit_rate_prev")
