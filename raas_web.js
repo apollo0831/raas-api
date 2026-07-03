@@ -3538,7 +3538,11 @@ function _initPanelResize() {
 function _initKeyboardDock() {
   const vv = window.visualViewport;
   if (!vv) return;
+  // 드래그(터치) 중엔 재배치 금지 — iOS가 손가락 따라 팬하는 걸 우리가 매 프레임 되돌리면
+  // 커서·입력창이 따로 노는 현상이 생김. 손을 뗀 뒤 한 번만 재동기화.
+  let touching = false;
   const adjust = () => {
+    if (touching) return;
     const iw = document.querySelector('.input-wrap');
     if (!iw) return;
     // 키패드 높이 = 레이아웃 뷰포트 - 보이는 뷰포트
@@ -3568,9 +3572,12 @@ function _initKeyboardDock() {
   document.addEventListener('focusout', e => {
     if (e.target && e.target.id === 'chatInput') { running = false; setTimeout(adjust, 120); }
   });
+  // 터치 시작~종료 동안은 재배치 정지 → iOS 기본 동작에 맡김(커서 분리 방지). 떼면 재동기화.
+  document.addEventListener('touchstart',  () => { touching = true; }, { passive: true });
+  document.addEventListener('touchend',    () => { touching = false; requestAnimationFrame(adjust); }, { passive: true });
+  document.addEventListener('touchcancel', () => { touching = false; requestAnimationFrame(adjust); }, { passive: true });
   vv.addEventListener('resize', adjust);
-  vv.addEventListener('scroll', adjust);
-  window.addEventListener('scroll', adjust);
+  // 주의: visualViewport 'scroll'(=팬)엔 반응하지 않음 — 드래그 중 재배치가 커서 분리 현상을 유발
 }
 
 // INIT
