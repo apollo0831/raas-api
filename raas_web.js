@@ -3439,16 +3439,37 @@ document.getElementById('btnTheme').addEventListener('click', function(){
 // localStorage 기억. 드래그 중 transition off, 종료 시 ECharts resize.
 function _initPanelResize() {
   const DEF   = { sidebar: 256, kpi: 308 };
-  const CLAMP = { sidebar: [200, 400], kpi: [260, 480] };
+  const CHAT_MIN = 480;   // 채팅 본문 최소 보장폭 — 우측 패널 상한은 이걸 뺀 나머지(클로드 앱 방식 비례 상한)
   const LSKEY = { sidebar: 'raas_sidebar_w', kpi: 'raas_kpi_w' };
   const CSSVAR = { sidebar: '--sidebar-w', kpi: '--kpi-w' };
+  const bounds = {
+    sidebar: () => [200, 440],
+    kpi: () => {
+      const sb = document.getElementById('sidebar');
+      const sbw = (sb && !sb.classList.contains('collapsed') && !isMobile())
+        ? sb.getBoundingClientRect().width : 0;
+      return [260, Math.max(320, Math.round(window.innerWidth - sbw - CHAT_MIN))];
+    },
+  };
   const apply = (k, w) => document.documentElement.style.setProperty(CSSVAR[k], w + 'px');
-  const clamp = (k, w) => Math.min(Math.max(w, CLAMP[k][0]), CLAMP[k][1]);
+  const clamp = (k, w) => {
+    const [lo, hi] = bounds[k]();
+    return Math.min(Math.max(w, lo), hi);
+  };
   // 저장된 폭 복원
   for (const k of ['sidebar', 'kpi']) {
     const sv = parseInt(localStorage.getItem(LSKEY[k]), 10);
     if (sv) apply(k, clamp(k, sv));
   }
+  // 창 크기 변화 시 우측 패널 재클램프 (넓혀둔 상태에서 창을 줄여도 채팅 최소폭 보장)
+  window.addEventListener('resize', () => {
+    if (isMobile()) return;
+    const kp = document.getElementById('kpiPanel');
+    if (!kp || kp.classList.contains('collapsed')) return;
+    const w = Math.round(kp.getBoundingClientRect().width);
+    const c = clamp('kpi', w);
+    if (c !== w) apply('kpi', c);
+  });
   function attach(handleId, key, panelSel, dir) {   // dir: 사이드바=+1(오른쪽으로 넓힘), KPI=-1
     const h = document.getElementById(handleId);
     const panel = document.querySelector(panelSel);
