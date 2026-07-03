@@ -793,6 +793,11 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   display:flex;flex-direction:column;align-items:center;
   justify-content:center;min-height:55vh;text-align:center;gap:16px;
 }
+/* 모바일: 세로 간격을 조여 마지막 칩이 입력창(오버레이)과 겹치지 않게 */
+@media (max-width:720px){
+  .welcome{gap:12px;min-height:48vh}
+  .welcome-cta{margin:10px 0 2px}
+}
 .welcome-logo{
   font-size:var(--fs-2xl);font-weight:700;
   background:linear-gradient(135deg,var(--accent),var(--purple));
@@ -965,17 +970,23 @@ table.story-table th{
    safe-area: 아이폰 홈바·둥근 모서리만큼 자동으로 띄움(다른 기기·PC는 영향 없음) */
 .input-wrap{
   position:absolute;left:0;right:0;bottom:0;z-index:50;
-  padding:34px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  /* 하단: safe-area(홈바)만으로 충분한 여유가 생기므로 기본 여백은 8px만 —
+     아이폰에서 입력창이 과하게 올라와 보이던 것 완화. 상단 페이드 밴드도 26px로 축소. */
+  padding:26px 16px calc(8px + env(safe-area-inset-bottom, 0px));
   pointer-events:none;   /* 페이드 밴드는 클릭 통과 — 입력창만 반응 */
 }
 .input-wrap::before{
   content:"";position:absolute;inset:0;pointer-events:none;
-  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
-  background:color-mix(in srgb, var(--bg0) 55%, transparent);
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  background:color-mix(in srgb, var(--bg0) 50%, transparent);
   /* 마스크로 틴트+블러를 위쪽으로 페이드 — 경계선 없이 자연스럽게 */
   -webkit-mask-image:linear-gradient(to top,#000 62%,transparent);
   mask-image:linear-gradient(to top,#000 62%,transparent);
 }
+/* 키패드 열림(JS visualViewport 감지): 키보드가 홈바 영역을 덮으므로 safe-area 여백 불필요 —
+   입력창을 키패드 바로 위에 붙이고 페이드 밴드도 얇게.
+   position:fixed — iOS가 포커스 시 chat-main 등 조상 컨테이너를 스크롤시켜도 위치가 안 밀리게 */
+.input-wrap.kb-open{position:fixed;left:0;right:0;padding:18px 16px 8px}
 .input-inner{
   max-width:840px;margin:0 auto;width:100%;
   position:relative;z-index:1;

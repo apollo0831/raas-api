@@ -3531,9 +3531,52 @@ function _initPanelResize() {
   attach('kpiResize', 'kpi', '#kpiPanel', -1);
 }
 
+// 모바일 키패드 감지(visualViewport) — 키패드가 열리면 입력창을 키패드 바로 위로 붙이고
+// safe-area 여백을 제거해 간격 최소화. 닫히면 원복. (PC·키패드 없는 환경은 no-op)
+// 주의: iOS는 포커스 시 문서를 자동 팬(window.scrollY)까지 하므로, 그대로 두면 우리 lift와
+// 겹쳐 입력창이 키패드보다 한참 위로 떠 간격이 벌어짐 → 팬을 취소하고 위치를 직접 제어.
+function _initKeyboardDock() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const adjust = () => {
+    const iw = document.querySelector('.input-wrap');
+    if (!iw) return;
+    // 키패드 높이 = 레이아웃 뷰포트 - 보이는 뷰포트
+    const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    if (kb > 80) {
+      if (window.scrollY) window.scrollTo(0, 0);   // iOS 자동 팬 취소(이중 보정 방지)
+      // iOS는 window가 아니라 조상 컨테이너(scrollingElement·chat-main)의 scrollTop을
+      // 밀어올리기도 함(overflow:hidden이어도) → 유령 스크롤 리셋. chat-thread(대화 스크롤)는 보존.
+      const se = document.scrollingElement;
+      if (se && se.scrollTop) se.scrollTop = 0;
+      const cm = document.querySelector('.chat-main');
+      if (cm && cm.scrollTop) cm.scrollTop = 0;
+      iw.style.bottom = kb + 'px';
+      iw.classList.add('kb-open');
+    } else {
+      iw.style.bottom = '';
+      iw.classList.remove('kb-open');
+    }
+  };
+  // iOS는 키패드 애니메이션 중 resize/scroll 이벤트가 늦거나 안 와서 첫 도킹이 어긋남
+  // → 질의창 포커스 동안 매 프레임 보정(이벤트 타이밍 무관). 블러 후 잠깐 더 돌리고 원복.
+  let running = false;
+  const loop = () => { adjust(); if (running) requestAnimationFrame(loop); };
+  document.addEventListener('focusin',  e => {
+    if (e.target && e.target.id === 'chatInput' && !running) { running = true; requestAnimationFrame(loop); }
+  });
+  document.addEventListener('focusout', e => {
+    if (e.target && e.target.id === 'chatInput') { running = false; setTimeout(adjust, 120); }
+  });
+  vv.addEventListener('resize', adjust);
+  vv.addEventListener('scroll', adjust);
+  window.addEventListener('scroll', adjust);
+}
+
 // INIT
 // ────────────────────────────────────────────────
 _cleanQCache();
+_initKeyboardDock();
 _initWelcomeChips();
 _initSidebarQueries();
 _initPanelResize();
