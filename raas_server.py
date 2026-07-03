@@ -824,6 +824,41 @@ class RAASHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
 
+    def _get_kpi_panel(self):
+        # KPI 패널(우측 사이드바) — 기간(day/week/mon)·스코프(T00/채널/프로그램)별 경량 스냅샷.
+        # /api/briefing(s1~s7 전체 계산)보다 훨씬 가볍게 타임라인 행만 읽는다.
+        try:
+            params = {}
+            if "?" in self.path:
+                params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+            period = params.get("period", "day")
+            if period not in ("day", "week", "mon"):
+                period = "day"
+            scope = (params.get("scope") or "T00").strip().upper()
+            row = STORY._load_program_latest_row(scope)
+            if not row:
+                self.send_json({"ok": False, "error": f"'{scope}' 데이터 없음"}, 404)
+                return
+            date_key = {"day": "DATE", "week": "DATE_WEEK", "mon": "DATE_MON"}[period]
+            val_field, chg_field = {"day": ("dau", "dau_chg"),
+                                    "week": ("wau", "wau_chg"),
+                                    "mon": ("mau", "mau_chg")}[period]
+            channels = []
+            for c in ("F00", "L00", "G00", "P00"):
+                cr = STORY._load_program_latest_row(c) or {}
+                if cr.get(val_field) not in (None, ""):
+                    channels.append({"code": c, "name": QE._pgm_name(c, row=cr),
+                                     "value": cr.get(val_field), "chg": cr.get(chg_field)})
+            out = {"ok": True, "period": period,
+                   "scope": {"code": scope, "name": QE._pgm_name(scope, row=row)},
+                   "date": row.get(date_key) or row.get("DATE"),
+                   "row": row, "channels": channels}
+            if period == "day" and scope == "T00":
+                out["alerts"] = (get_cached_anomalies() or [])[:6]   # 이상 알림은 일간·전사 뷰에서만
+            self.send_json(out)
+        except Exception as e:
+            self.send_json({"ok": False, "error": str(e)}, 500)
+
     def _get_admin_users(self):
         admin = self._require_admin()
         if not admin:
@@ -1759,6 +1794,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         ("/api/rawdata", _get_rawdata),
         ("/api/my/interest-map", _get_my_interest_map),
         ("/api/admin/stats/", _get_admin_stats),
+        ("/api/kpi-panel", _get_kpi_panel),
     ]
     POST_EXACT = {
         "/api/register": _post_register,

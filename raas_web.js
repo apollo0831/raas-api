@@ -1168,10 +1168,10 @@ async function changePw(ev) {
   return false;
 }
 
-// 첫 항목은 특수 처리됨 — _onQuickQuery에서 BRIEFING_QUERY_TEXT 감지 시 카드 임베드
+// BRIEFING_QUERY_TEXT는 이력 재생(카드 임베드) 호환용으로 유지 — 칩에서는 제거됨
 const BRIEFING_QUERY_TEXT = '이번 주 브리핑 보여줘';
 const QUICK_QUERIES = [
-  BRIEFING_QUERY_TEXT,
+  // '이번 주 브리핑'은 우측 KPI 패널(주간 탭 + ✨ AI 요약)로 이전
   'RAAS에는 어떤 지표들이 있나',
   '어제 MAU는?',
   '이번 주 DAU 추이',
@@ -3175,58 +3175,149 @@ document.addEventListener('keydown', e => {
 // ────────────────────────────────────────────────
 // KPI PANEL
 // ────────────────────────────────────────────────
+// ── KPI 패널 — 기간(일/주/월)·스코프(전체/채널/관심) 스냅샷 ──────────────
+// 구 '이번 주 브리핑' 칩의 숫자 기능을 흡수. 서술은 하단 ✨ AI 요약 버튼으로.
+const _KPI = {
+  period: localStorage.getItem('raas_kpi_period') || 'day',
+  scope:  localStorage.getItem('raas_kpi_scope')  || 'T00',
+};
+const _KPI_SCOPES = [
+  ['T00', '고릴라 전체'], ['F00', '파워FM'], ['L00', '러브FM'],
+  ['G00', '고릴라M'], ['P00', '픽채널'],
+];
+// 카드 정의 — f:값필드, c:증감필드, pp:증감이 %p(비율), pct:값 자체가 %
+const _KPI_CARDS = {
+  day: [
+    ['규모', [
+      {l:'DAU', f:'dau', c:'dau_chg'},
+      {l:'롤링WAU', f:'dau_r7', c:'dau_r7_chg'},
+      {l:'롤링MAU', f:'dau_r30', c:'dau_r30_chg'},
+    ]],
+    ['사용자 흐름', [
+      {l:'신규', f:'new', c:'new_chg'},
+      {l:'복귀', f:'react', c:'react_chg'},
+      {l:'이탈율', f:'churn_rate', c:'churn_rate_diff', pp:1, pct:1},
+      {l:'복귀율', f:'react_rate', c:'react_rate_diff', pp:1, pct:1},
+    ]],
+    ['청취 품질', [
+      {l:'실청취율', f:'real_rate', c:'real_rate_diff', pp:1, pct:1},
+      {l:'깊은청취율', f:'deep_rate', c:'deep_rate_diff', pp:1, pct:1},
+      {l:'참여율', f:'engage_rate', c:'engage_rate_diff', pp:1, pct:1},
+      {l:'습관형성률', f:'habit_rate', c:'habit_rate_diff', pp:1, pct:1},
+      {l:'D7 유지율', f:'d7_ret', c:'d7_ret_diff', pp:1, pct:1},
+    ]],
+  ],
+  week: [
+    ['규모', [ {l:'WAU', f:'wau', c:'wau_chg'} ]],
+    ['사용자 흐름', [
+      {l:'신규', f:'new_week', c:'new_week_chg'},
+      {l:'복귀', f:'react_week', c:'react_week_chg'},
+      {l:'이탈율', f:'churn_rate_week', c:'churn_rate_week_diff', pp:1, pct:1},
+      {l:'복귀율', f:'react_rate_week', c:'react_rate_week_diff', pp:1, pct:1},
+    ]],
+    ['청취 품질', [
+      {l:'실청취율', f:'real_rate_week', c:'real_rate_week_diff', pp:1, pct:1},
+      {l:'깊은청취율', f:'deep_rate_week', c:'deep_rate_week_diff', pp:1, pct:1},
+      {l:'참여율', f:'engage_rate_week', c:'engage_rate_week_diff', pp:1, pct:1},
+      {l:'습관형성률', f:'habit_rate_week', c:'habit_rate_week_diff', pp:1, pct:1},
+      {l:'W1 유지율', f:'w1_ret', c:'w1_ret_diff', pp:1, pct:1},
+    ]],
+  ],
+  mon: [
+    ['규모', [ {l:'MAU', f:'mau', c:'mau_chg'} ]],
+    ['사용자 흐름', [
+      {l:'신규', f:'new_mon', c:'new_mon_chg'},
+      {l:'복귀', f:'react_mon', c:'react_mon_chg'},
+      {l:'이탈율', f:'churn_rate_mon', c:'churn_rate_mon_diff', pp:1, pct:1},
+      {l:'복귀율', f:'react_rate_mon', c:'react_rate_mon_diff', pp:1, pct:1},
+    ]],
+    ['청취 품질', [
+      {l:'실청취율', f:'real_rate_mon', c:'real_rate_mon_diff', pp:1, pct:1},
+      {l:'깊은청취율', f:'deep_rate_mon', c:'deep_rate_mon_diff', pp:1, pct:1},
+      {l:'참여율', f:'engage_rate_mon', c:'engage_rate_mon_diff', pp:1, pct:1},
+      {l:'습관형성률', f:'habit_rate_mon', c:'habit_rate_mon_diff', pp:1, pct:1},
+      {l:'M1 유지율', f:'m1_ret', c:'m1_ret_diff', pp:1, pct:1},
+    ]],
+  ],
+};
+const _KPI_PERIOD_KO = { day: '일간', week: '주간', mon: '월간' };
+
+function _kpiSetPeriod(p) {
+  _KPI.period = p; localStorage.setItem('raas_kpi_period', p); loadKpiPanel();
+}
+function _kpiSetScope(s) {
+  _KPI.scope = s; localStorage.setItem('raas_kpi_scope', s); loadKpiPanel();
+}
+function _kpiAiBrief() {
+  const phrase = { day: '어제', week: '이번 주', mon: '이번 달' }[_KPI.period];
+  const sc = _KPI_SCOPES.find(x => x[0] === _KPI.scope);
+  const prefix = (_KPI.scope !== 'T00') ? ((sc ? sc[1] : _KPI.scope) + ' ') : '';
+  if (isMobile()) closeKpi();
+  submitQuery(`${prefix}${phrase} 핵심 지표 브리핑해줘`, 'kpi_panel');
+}
+
 async function loadKpiPanel() {
   const scroll = document.getElementById('kpiScroll');
   scroll.innerHTML = '<div class="kpi-loading">로드 중…</div>';
   try {
-    const res = await fetch('/api/briefing');
+    const res = await fetch(`/api/kpi-panel?period=${_KPI.period}&scope=${encodeURIComponent(_KPI.scope)}`);
     const json = await res.json();
     if (!json.ok) {
       scroll.innerHTML = `<div class="kpi-loading">데이터 없음: ${escapeHtml(json.error||'')}</div>`;
       return;
     }
-    const d = json.data;
-    const s1 = d.s1_executive||{}, s7 = d.s7_anomalies||{}, s6 = d.s6_channels||{};
-    const fn = v => v != null ? v.toLocaleString() : '—';
-    const fw = (v, suf='%') => {
-      if (v == null) return '';
-      const cls = v > 0 ? 'up' : v < 0 ? 'dn' : 'flat';
-      return `<div class="kpi-card-wow ${cls}">${v>=0?'+':''}${v.toFixed(1)}${suf}</div>`;
-    };
-    let html = `<div class="kpi-section">
-      <div class="kpi-section-title">핵심 지표 · 일간</div>
-      <div class="kpi-grid">
-        <div class="kpi-card"><div class="kpi-card-label">DAU</div><div class="kpi-card-value">${fn(s1.dau)}</div>${fw(s1.dau_wow)}</div>
-        <div class="kpi-card"><div class="kpi-card-label">WAU</div><div class="kpi-card-value">${fn(s1.wau)}</div>${fw(s1.wau_chg)}</div>
-        <div class="kpi-card"><div class="kpi-card-label">MAU</div><div class="kpi-card-value">${fn(s1.mau)}</div>${fw(s1.mau_chg)}</div>
-        <div class="kpi-card"><div class="kpi-card-label">신규</div><div class="kpi-card-value">${fn(s1.new_user)}</div><div class="kpi-card-wow flat">${s1.new_pct!=null?s1.new_pct.toFixed(1)+'%':''}</div></div>
-      </div>
-    </div>`;
+    const row = json.row || {};
+    const num = v => { const x = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isNaN(x) ? null : x; };
+    const fmtVal = (v, pct) => { const x = num(v); if (x == null) return '—';
+      return pct ? (x.toFixed(1) + '%') : Math.round(x).toLocaleString(); };
+    const fmtChg = (v, pp) => { const x = num(v); if (x == null) return '';
+      const cls = x > 0 ? 'up' : x < 0 ? 'dn' : 'flat';
+      return `<div class="kpi-card-wow ${cls}">${x >= 0 ? '+' : ''}${x.toFixed(1)}${pp ? '%p' : '%'}</div>`; };
 
-    const alerts = [
-      ...(s7.alerts||[]).filter(a=>a.level==='RED').map(a=>[a,'red']),
-      ...(s7.alerts||[]).filter(a=>a.level==='YELLOW').map(a=>[a,'yellow']),
-      ...(s7.alerts||[]).filter(a=>a.level==='GREEN').slice(0,2).map(a=>[a,'green']),
-    ];
-    if (alerts.length) {
-      html += `<div class="kpi-section"><div class="kpi-section-title">이상 알림</div>`;
-      html += alerts.map(([a,cls])=>
-        `<div class="alert-item ${cls}">
-          <div class="alert-dot ${cls}"></div>
-          <div class="alert-text">${escapeHtml(a.message||a.metric||'')}</div>
-        </div>`).join('');
-      html += '</div>';
-    }
+    // 툴바 — 스코프 선택 + 기간 세그먼트 (선택은 localStorage 기억, 기본 전체·일간)
+    const myCode = (typeof RAAS_USER !== 'undefined' && RAAS_USER && (RAAS_USER.my_programs || [])[0]) || '';
+    const scopeOpts = _KPI_SCOPES.map(([c, l]) =>
+      `<option value="${c}"${c === _KPI.scope ? ' selected' : ''}>${l}</option>`).join('')
+      + (myCode && !_KPI_SCOPES.some(([c]) => c === myCode)
+         ? `<option value="${escapeHtml(myCode)}"${myCode === _KPI.scope ? ' selected' : ''}>⭐ 내 관심</option>` : '');
+    let html = `<div class="kpi-toolbar">
+      <select class="kpi-scope-select" onchange="_kpiSetScope(this.value)">${scopeOpts}</select>
+      <div class="kpi-period-seg">${['day','week','mon'].map(p =>
+        `<button class="kpi-period-btn${p === _KPI.period ? ' active' : ''}" onclick="_kpiSetPeriod('${p}')">${_KPI_PERIOD_KO[p]}</button>`).join('')}</div>
+    </div>
+    <div class="kpi-date">${escapeHtml((json.scope || {}).name || '')} · 기준일 ${escapeHtml(json.date || '—')}</div>`;
 
-    const channels = s6.channels||[];
-    if (channels.length) {
-      html += `<div class="kpi-section"><div class="kpi-section-title">채널별 DAU</div><div class="channel-chips">`;
-      html += channels.map(ch =>
-        `<div class="channel-chip">${escapeHtml(ch.name||ch.code)}<strong>${fn(ch.dau)}</strong></div>`
-      ).join('');
+    // 지표 그룹 카드
+    for (const [title, cards] of (_KPI_CARDS[_KPI.period] || [])) {
+      html += `<div class="kpi-section"><div class="kpi-section-title">${title}</div><div class="kpi-grid">`;
+      html += cards.map(cd =>
+        `<div class="kpi-card"><div class="kpi-card-label">${cd.l}</div>` +
+        `<div class="kpi-card-value">${fmtVal(row[cd.f], cd.pct)}</div>${fmtChg(row[cd.c], cd.pp)}</div>`).join('');
       html += '</div></div>';
     }
 
+    // 이상 알림 (일간·전사 뷰에서만 서버가 내려줌)
+    const alerts = json.alerts || [];
+    if (alerts.length) {
+      html += `<div class="kpi-section"><div class="kpi-section-title">이상 알림</div>`;
+      html += alerts.map(a => {
+        const cls = (a.level || '').toLowerCase() || 'green';
+        return `<div class="alert-item ${cls}"><div class="alert-dot ${cls}"></div>
+          <div class="alert-text">${escapeHtml(a.msg || a.message || '')}</div></div>`;
+      }).join('');
+      html += '</div>';
+    }
+
+    // 채널별 활성사용자 (기간에 맞는 dau/wau/mau)
+    const channels = json.channels || [];
+    if (channels.length) {
+      html += `<div class="kpi-section"><div class="kpi-section-title">채널별 활성사용자 · ${_KPI_PERIOD_KO[_KPI.period]}</div><div class="channel-chips">`;
+      html += channels.map(ch =>
+        `<div class="channel-chip">${escapeHtml(ch.name || ch.code)}<strong>${fmtVal(ch.value)}</strong></div>`).join('');
+      html += '</div></div>';
+    }
+
+    html += `<button class="kpi-ai-btn" onclick="_kpiAiBrief()">✨ AI 요약</button>`;
     scroll.innerHTML = html;
   } catch (err) {
     scroll.innerHTML = `<div class="kpi-loading">로드 실패: ${escapeHtml(err.message)}</div>`;
