@@ -324,7 +324,7 @@ raas:E_2026_06_16_GorillaDay a raas:BroadcastEvent ;
     rdfs:label "고릴라 데이 (20주년)"@ko ;
     raas:eventDate "2026-06-16" ;
     raas:dayOfWeek raas:Tuesday ;
-    raas:relatedProgram "F05" ;
+    raas:relatedProgram "T00" ;
     raas:eventAnniversary 20 ;
     raas:eventCampaign "노인학대 예방 캠페인 나비새김"@ko ;
     raas:eventReferenceImage "data/image/gorilla_day_2026-06-16.png" ;
