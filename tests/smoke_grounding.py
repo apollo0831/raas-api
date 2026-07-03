@@ -117,6 +117,11 @@ check_true("주간 분석 시계열에 engage_rate_week 포함", "engage_rate_we
 check_true("주간 분석 시계열에 w1_ret 포함", "w1_ret" in _ts)
 _ts_m = G._p_metric_timeseries(G.resolve_entities("고릴라 플랫폼 전체 월간 복귀율 추이 분석해줘")) or ""
 check_true("월간 분석 시계열에 react_rate_mon 포함", "react_rate_mon" in _ts_m)
+# 요일은 코드가 계산해 주입(LLM 계산 금지) — 6/8·15·22·29는 월요일
+check("요일 계산 정확", [G._dow_ko(d) for d in ["2026-06-08", "2026-06-22", "2026-06-28"]], ["월", "월", "일"])
+_ts_w = G._p_metric_timeseries(G.resolve_entities("고릴라 플랫폼 전체 최근 3개월 주간 참여율 추이 분석해줘")) or ""
+check_true("주별 행에 요일(월) 표기", "2026-06-22(월)" in _ts_w)
+check_true("주별 앵커 헤더 명시", "주 시작(월요일)" in _ts_w)
 
 print("── 5.5 기간 내 이벤트·특일 주석(period_events) ───────")
 # '신규 추이 분석'이 6/16 고릴라데이(온톨로지 기록)를 활용 못 하던 버그 — 어댑터 범위조회 박제

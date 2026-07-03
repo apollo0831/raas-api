@@ -11,7 +11,18 @@ from __future__ import annotations
 import json
 import re
 import random
+import datetime as _dt
 from typing import Optional
+
+_DOW_KO = ["월", "화", "수", "목", "금", "토", "일"]
+
+def _dow_ko(date_str: str) -> str:
+    """'YYYY-MM-DD'/'YYYY/MM/DD' → 한국 요일(월~일). 요일 계산은 코드가 하고 LLM엔 결과만 준다."""
+    try:
+        s = (date_str or "").replace("/", "-")[:10]
+        return _DOW_KO[_dt.datetime.strptime(s, "%Y-%m-%d").weekday()]
+    except Exception:
+        return ""
 
 import raas_storyline_engine as S
 from raas_storyline_router import extract_program, PROGRAM_DIRECTORY
@@ -318,7 +329,7 @@ def _p_point_snapshot(ent):
     keys = _KPI_BROAD + [f for f in focus if f not in _KPI_BROAD]
     vals = {k: row.get(k) for k in keys if row.get(k) not in (None, "")}
     vals["DATE"] = d
-    return {"as_of": d, "values": vals}
+    return {"as_of": d, "요일": _dow_ko(d), "values": vals}
 
 
 def _p_daily_lineup(ent):
@@ -327,12 +338,13 @@ def _p_daily_lineup(ent):
     hist = _window_slice(ent.get("history") or [], ent)
     rows = []
     for h in hist:
-        rec = {"DATE": (h.get("DATE") or "").strip()}
+        d = (h.get("DATE") or "").strip()
+        rec = {"DATE": d, "요일": _dow_ko(d)}
         for f in _ATTR_FIELDS:
             v = h.get(f)
             if v not in (None, ""):
                 rec[f] = v
-        if len(rec) > 1:                       # DATE 외 값이 하나라도 있을 때만(집계행·빈날 제외)
+        if len(rec) > 2:                       # DATE·요일 외 값이 하나라도 있을 때만(집계행·빈날 제외)
             rows.append(rec)
     return rows or None
 
@@ -909,7 +921,10 @@ def _ts_csv(hist, fields=None) -> str:
        기간 내 중복 값 제거로 토큰 대폭 절감. 행 구조 보존(날짜+값 한 줄)이라 정합성 안전."""
     hist = hist or []
     fields = fields or _TS_FIELDS
-    def _d(h): return (h.get("DATE") or "").replace("/", "-")
+    def _d(h):
+        raw = (h.get("DATE") or "").replace("/", "-")
+        dw = _dow_ko(raw)
+        return raw + (f"({dw})" if dw else "")   # 요일을 데이터에 명시 — LLM이 요일 계산해 틀리는 것 방지
     def _v(h, f):
         x = h.get(f)
         return "" if x in (None, "") else str(x)
@@ -922,21 +937,25 @@ def _ts_csv(hist, fields=None) -> str:
     if daily:
         out.append("[일별] date," + ",".join(daily))
         out += [_d(h) + "," + ",".join(_v(h, f) for f in daily) for h in hist]
-    def _step(label, flds):
+    def _period(label, flds, date_key):
+        # 주간/월간은 앵커 날짜(DATE_WEEK=월요일 / DATE_MON=1일)로 1행씩 — 일별 변동점(지연저장)이 아님.
         if not flds:
             return
-        rows, prev = [], None
+        by = {}
         for h in hist:
-            key = tuple(h.get(f) for f in flds)
-            if key != prev:
-                prev = key
-                if any(h.get(f) not in (None, "") for f in flds):  # 빈 값 변동점은 생략
-                    rows.append(_d(h) + "," + ",".join(_v(h, f) for f in flds))
-        if rows:
-            out.append(f"[{label}] date,{','.join(flds)}  (기간 내 매일 동일 — 변동 시점만)")
-            out.extend(rows)
-    _step("주별", weekly)
-    _step("월별", monthly)
+            a = (h.get(date_key) or "").strip()
+            if a and any(h.get(f) not in (None, "") for f in flds):
+                by[a] = h   # 같은 주/월 내 값 동일 → 대표 1행
+        if not by:
+            return
+        anchor_txt = "주 시작(월요일)" if label == "주별" else "월 시작(1일)"
+        out.append(f"[{label}] date={anchor_txt},{','.join(flds)}")
+        for a in sorted(by):
+            araw = a.replace("/", "-")
+            dw = _dow_ko(araw)
+            out.append(araw + (f"({dw})" if dw else "") + "," + ",".join(_v(by[a], f) for f in flds))
+    _period("주별", weekly, "DATE_WEEK")
+    _period("월별", monthly, "DATE_MON")
     return "\n".join(out)
 
 
@@ -1434,6 +1453,8 @@ GROUNDING_SYSTEM = (
     "당신은 SBS 고릴라 라디오의 데이터 분석 어시스턴트입니다.\n"
     "아래 '근거 데이터'와 '온톨로지 근거'만을 사용해 사용자 질문에 **정확하고 분석적으로** 답하세요.\n"
     "- 근거에 없는 수치를 지어내지 말 것. 부족하면 '데이터 없음'을 명시.\n"
+    "- 날짜의 요일은 데이터에 표기된 것(예: 2026-06-08(월), '요일' 필드)을 그대로 쓰고 **직접 계산하지 말 것**. "
+    "표기가 없으면 요일을 언급하지 말 것. 주별 데이터의 날짜는 '주 시작(월요일)' 앵커임.\n"
     "- 인과·원인 질문이면 흐름(신규/복귀/이탈)·편성·특일 등 제공된 근거로 구조적으로 설명.\n"
     + _CHART_HINT
     # 표현·형식(마크다운·간결성 등) 지침은 system_with_style()이 붙이는 [답변 스타일 정책]이 단일 소스.
