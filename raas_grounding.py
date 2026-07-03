@@ -149,6 +149,14 @@ def _is_concept(q: str) -> bool:
     return any(s in (q or "") for s in _CONCEPT_SIGNAL)
 
 
+# '모든 프로그램/프로그램별/각 프로그램' — 전 프로그램 나열 의도(순위 아님). 관심 기본값보다 우선.
+_ALL_PROG_SIGNAL = ("모든 프로그램", "전 프로그램", "전체 프로그램", "각 프로그램",
+                    "프로그램별", "프로그램 별", "프로그램마다", "프로그램마", "전프로그램")
+
+def _is_all_programs(q: str) -> bool:
+    return any(s in (q or "") for s in _ALL_PROG_SIGNAL)
+
+
 # 캘린더 지표 → 롤링 등가 (하위기간 추이 요청 시): mau=월간확정 → 롤링MAU(일단위)
 _CAL_TO_ROLLING = {"mau": "dau_r30", "wau": "dau_r7"}
 
@@ -234,10 +242,19 @@ def resolve_entities(question: str, default_code: str = None) -> dict:
         ent.update(code=code, name=prog["name"], channel=prog["channel"])
     else:
         ch_code, ch_name = _detect_channel(question)
+        _allp = _is_all_programs(question)
         if ch_code:
             ent["scope_kind"] = "channel"
             code = ch_code
             ent.update(code=code, name=ch_name, channel=ch_code)
+            if _allp:
+                ent["all_programs"] = True     # '파워FM 모든 프로그램' → 해당 채널 소속 전체
+        elif _allp:
+            # '모든 프로그램/프로그램별' 명시 → 전사(T00) + 소속 프로그램 전체 나열(관심 기본값보다 우선)
+            ent["scope_kind"] = "channel"
+            code = "T00"
+            ent.update(code=code, name="전체", channel="T00")
+            ent["all_programs"] = True
         elif (ent.get("focus_fields") or ent.get("metric")) and not _is_concept(question):
             # 엔티티 없는 지표 질의(추이·단순조회) → 사용자 관심 엔티티(default_code) 또는 전사(T00)
             #   단, 정의·전략·방법형(개념신호)은 데이터 스코프를 강제하지 않고 통과(과잉 캡처 방지).
@@ -391,7 +408,7 @@ def _p_channel_programs(ent):
         rows = S._kpi_rows() or []
     except Exception:
         return None
-    latest = max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
+    latest = ent.get("as_of_date") or max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
     if not latest:
         return None
     # 핵심 지표 + 포커스(변형 포함) — 프로그램당 필드 수 제한으로 토큰 관리
@@ -1102,9 +1119,9 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     names = select_providers(question, ent)
     if ent.get("as_of_date") and "point_snapshot" not in names:
         names = ["point_snapshot"] + names   # 특정 날짜 지정이면 그 날짜 스냅샷 반드시 포함
-    if (ent.get("scope_kind") == "channel" and "프로그램" in question
+    if (ent.get("scope_kind") == "channel" and ("프로그램" in question or ent.get("all_programs"))
             and "channel_programs" not in names):
-        names = ["channel_programs"] + names   # 채널 내 '프로그램' 질의는 소속 프로그램 행 반드시 포함
+        names = ["channel_programs"] + names   # 채널 내 '프로그램'/'모든 프로그램' 질의는 소속 프로그램 행 반드시 포함
     if ((ent.get("is_trend") or ent.get("analytical")) and "period_events" not in names):
         names = names + ["period_events"]      # 추이·분석 질의엔 기간 내 이벤트·특일 주석 반드시 첨부
     blocks = []

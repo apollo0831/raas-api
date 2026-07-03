@@ -98,6 +98,12 @@ check_true("channel_programs 프로그램 행 반환",
            f"n={len(cp.get('programs', []))}")
 check_true("channel_programs는 채널 scope 전용",
            G._p_channel_programs(G.resolve_entities("컬투쇼 DAU는?")) is None)
+# '모든 프로그램'은 관심 기본값(F09)을 무시하고 전사(T00)로 — 특정일도 존중
+e_all = G.resolve_entities("7월1일 모든 프로그램 복귀율 어땠어?", "F09")
+check("'모든 프로그램'은 관심 무시→T00", (e_all.get("code"), e_all.get("all_programs")), ("T00", True))
+_cpall = G._p_channel_programs(e_all) or {}
+check_true("모든 프로그램 30+개 반환", len(_cpall.get("programs", [])) >= 20, f"n={len(_cpall.get('programs', []))}")
+check_true("특정일(as_of) 반영", _cpall.get("as_of") == "2026/07/01")
 
 print("── 5. 비교/순위/편성표 분기 ─────────────────────────")
 check_true("compare 감지: 파워FM vs 러브FM", bool(G._detect_compare("파워FM vs 러브FM 비교")))
