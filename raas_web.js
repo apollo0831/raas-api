@@ -3250,10 +3250,8 @@ function _kpiSetScope(s) {
 }
 function _kpiAiBrief() {
   const phrase = { day: '어제', week: '이번 주', mon: '이번 달' }[_KPI.period];
-  const sc = _KPI_SCOPES.find(x => x[0] === _KPI.scope);
-  const prefix = (_KPI.scope !== 'T00') ? ((sc ? sc[1] : _KPI.scope) + ' ') : '';
   if (isMobile()) closeKpi();
-  submitQuery(`${prefix}${phrase} 핵심 지표 브리핑해줘`, 'kpi_panel');
+  submitQuery(`${_kpiScopeName()}${phrase} 핵심 지표 브리핑해줘`, 'kpi_panel');
 }
 
 // ── 카드 탭 → 인라인 미니 꺾은선 (아코디언, 동시 1개) ──────────────────
@@ -3269,8 +3267,11 @@ function _kpiCloseChart() {
 }
 
 function _kpiScopeName() {
+  // 패널발 질의는 T00 포함 항상 스코프명 명시 — 엔티티 없는 질의가 채팅의
+  // '내 관심' 기본값으로 넘어가 다른 대상(예: 컬투쇼)으로 답하는 오귀속 방지.
+  if (_KPI.scopeName) return _KPI.scopeName + ' ';
   const sc = _KPI_SCOPES.find(x => x[0] === _KPI.scope);
-  return (_KPI.scope !== 'T00') ? ((sc ? sc[1] : _KPI.scope) + ' ') : '';
+  return (sc ? sc[1] : _KPI.scope) + ' ';
 }
 
 function _kpiTrendAsk(label) {
@@ -3337,6 +3338,7 @@ async function loadKpiPanel() {
       return;
     }
     const row = json.row || {};
+    _KPI.scopeName = (json.scope || {}).name || '';   // 패널발 질의(_kpiScopeName)의 스코프 명시에 사용
     const num = v => { const x = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isNaN(x) ? null : x; };
     const fmtVal = (v, pct) => { const x = num(v); if (x == null) return '—';
       return pct ? (x.toFixed(1) + '%') : Math.round(x).toLocaleString(); };

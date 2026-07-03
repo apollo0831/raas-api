@@ -65,6 +65,9 @@ e = G.resolve_entities("컬투쇼 어제 왜 빠졌어?")
 check("프로그램 명시", (e.get("code"), e.get("scope_kind")), ("F09", "program"))
 e = G.resolve_entities("어제 MAU는?")
 check("MAU 지표만 → 전사", e.get("code"), "T00")
+# KPI 패널발 질의 — 스코프명(T00='고릴라 플랫폼 전체')을 명시하면 관심 기본값이 가로채면 안 됨
+e = G.resolve_entities("고릴라 플랫폼 전체 최근 4주 DAU 추이 분석해줘", "F09")
+check("패널 T00 질의, 관심 무시", (e.get("code"), e.get("scope_kind")), ("T00", "channel"))
 
 print("── 2. 개념신호 가드(과잉 캡처 방지) ─────────────────")
 for q in ["신규사용자 유치 전략 알려줘", "DAU가 뭐야?", "신규 늘리려면 어떻게 해?", "MAU 높이는 방법", "안녕하세요"]:
