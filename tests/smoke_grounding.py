@@ -104,6 +104,10 @@ check("'모든 프로그램'은 관심 무시→T00", (e_all.get("code"), e_all.
 _cpall = G._p_channel_programs(e_all) or {}
 check_true("모든 프로그램 30+개 반환", len(_cpall.get("programs", [])) >= 20, f"n={len(_cpall.get('programs', []))}")
 check_true("특정일(as_of) 반영", _cpall.get("as_of") == "2026/07/01")
+# channel_programs가 특정 지표만 아니라 표준 지표(복귀·신규 등) 전체를 담아야 함
+_p0 = (_cpall.get("programs") or [{}])[0]
+check_true("프로그램별 복귀·신규 포함", all(k in _p0 for k in ("react", "new", "churn_rate")),
+           f"keys={[k for k in ('react','new','churn_rate') if k not in _p0]} 누락")
 
 print("── 5. 비교/순위/편성표 분기 ─────────────────────────")
 check_true("compare 감지: 파워FM vs 러브FM", bool(G._detect_compare("파워FM vs 러브FM 비교")))

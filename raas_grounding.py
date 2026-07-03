@@ -411,9 +411,13 @@ def _p_channel_programs(ent):
     latest = ent.get("as_of_date") or max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
     if not latest:
         return None
-    # 핵심 지표 + 포커스(변형 포함) — 프로그램당 필드 수 제한으로 토큰 관리
-    keys = ["dau", "dau_chg", "deep_rate", "deep_rate_diff", "real_rate", "real_rate_diff",
-            "engage_rate", "engage_rate_diff", "churn_rate", "churn_rate_diff"]
+    # 프로그램 행의 표준 일간 지표 전체(규모·흐름·품질·유지) — 특정 지표만 하드코딩해 빠지는 것 방지.
+    #   빈 값은 아래 루프에서 자동 제외되므로 없는 지표는 알아서 안 실림.
+    keys = ["dau", "dau_chg", "new", "new_chg", "react", "react_chg",
+            "react_rate", "react_rate_diff", "churn_rate", "churn_rate_diff",
+            "real_rate", "real_rate_diff", "deep_rate", "deep_rate_diff",
+            "engage_rate", "engage_rate_diff", "habit_rate", "habit_rate_diff",
+            "d1_ret", "d7_ret", "dau_1min", "dau_10min"]
     for f in (ent.get("focus_fields") or []):
         for k in (f, f + "_prev", f + "_diff", f + "_chg"):
             if k not in keys:
