@@ -1610,7 +1610,7 @@ function _injectDataCheckChip() {
     const b = document.createElement('button');
     b.className = 'today-digest-btn data-check-btn';
     // 보조 CTA — 주 CTA(특이사항)와 위계 분리: 고스트(외곽선) 스타일
-    b.style.cssText = 'margin-left:8px;background:transparent;color:var(--purple);' +
+    b.style.cssText = 'background:transparent;color:var(--purple);' +
                       'border-color:rgba(167,139,250,.55);box-shadow:none';
     b.textContent = '🩺 데이터 확인하기';
     b.addEventListener('click', startDataCheck);

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" id="metaThemeColor" content="#0d1117">
 <meta name="color-scheme" content="dark light">
 <script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.documentElement.setAttribute('data-theme',t);var m=document.getElementById('metaThemeColor');if(m)m.setAttribute('content',t==='dark'?'#0d1117':'#fbfcfd');}());</script>
@@ -335,8 +335,9 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   .hm-summary{padding-left:14px;padding-right:14px}
   .hm-user{min-width:70px;max-width:90px}
   .hm-time{min-width:auto}
-  /* 탭이 6개라 좁은 폭에서 글자 세로로 깨지던 것 → 탭 줄 자체 가로 스크롤 */
-  .stm-tabs,.hist-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* 탭이 헤더에서 짓눌려 숨던 것 → 탭 줄을 전체폭으로 내려 여러 줄로 wrap(모든 탭 보이게).
+     부모 클래스로 specificity를 올려 소스 뒤쪽의 기본 flex 규칙(.stm-tabs{flex:1})도 이기게 함. */
+  .stm-toolbar .stm-tabs,.stm-toolbar .hist-tabs{flex:0 0 100%;flex-wrap:wrap;overflow-x:visible}
   .stm-tab,.hf-tab{flex-shrink:0}
 }
 .hm-row{border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s}
@@ -670,7 +671,14 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 
 /* 내 관심 맵 (profileModal 내부 섹션) */
 .im-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
-@media (max-width: 720px){.im-grid{grid-template-columns:1fr}}
+@media (max-width: 720px){
+  .im-grid{grid-template-columns:1fr}
+  /* 요약 KPI: 최근질의+직무는 한 줄에 나란히(내용 길면 각 박스 안에서 줄바꿈),
+     주요 주제는 값이 길어 아래 줄 전체폭으로 */
+  .im-summary{flex-wrap:wrap}
+  .im-summary .kpi{flex:1 1 auto}
+  .im-summary .kpi:nth-child(3){flex:0 0 100%}   /* 축소 방지 → 확실히 아래 줄 전체폭 */
+}
 .im-block{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
 .im-block-title{font-size:var(--fs-xs);color:var(--sub);font-weight:600;margin-bottom:8px}
 .im-bar-row{display:flex;align-items:center;gap:8px;font-size:var(--fs-sm);margin-bottom:5px}
@@ -697,10 +705,11 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 .im-peer-row .k{color:var(--sub)}
 .im-summary{display:flex;gap:10px;margin-bottom:12px}
 .im-summary .kpi{
-  flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+  flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line);border-radius:8px;
   padding:10px 12px;display:flex;flex-direction:column;gap:2px;
 }
 .im-summary .kpi .label{font-size:var(--fs-xs);color:var(--sub)}
+.im-summary .kpi .val{overflow-wrap:anywhere;word-break:break-word}
 .im-summary .kpi .val{font-size:var(--fs-xl);color:var(--text);font-weight:700;font-family:var(--mono)}
 
 /* ── PROFILE MODAL (내 정보) ── */
@@ -713,10 +722,13 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 .pf-grid{
   display:grid;grid-template-columns:repeat(2,1fr);gap:10px 14px;
 }
+/* 모바일: 2열 유지 시 입력칸이 오른쪽으로 넘쳐 잘림 → 1열로 */
+@media (max-width: 720px){.pf-grid{grid-template-columns:1fr}}
 .pf-grid .pf-field.full{grid-column:1 / -1}
 .pf-field{display:flex;flex-direction:column;gap:5px}
 .pf-label{font-size:var(--fs-xs);color:var(--sub);font-weight:500}
 .pf-input,.pf-select{
+  width:100%;             /* 그리드 밖(관심 프로그램)의 select가 최장 옵션폭으로 튀어나오지 않게 */
   padding:9px 12px;border-radius:8px;
   border:1px solid var(--line2);background:var(--bg2);
   color:var(--text);font-size:var(--fs-md);font-family:var(--sans);outline:none;
@@ -747,6 +759,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 .chat-main{
   flex:1;height:100%;display:flex;flex-direction:column;
   overflow:hidden;min-width:0;
+  position:relative;   /* 입력창 오버레이(absolute) 기준 */
 }
 .chat-header{
   display:flex;align-items:center;gap:8px;
@@ -767,7 +780,8 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 }
 
 /* ── THREAD ── */
-.chat-thread{flex:1;overflow-y:auto;padding:20px 0}
+/* 하단 padding: 입력창(오버레이) 뒤로 스크롤되는 공간 — 마지막 답변이 가려지지 않게 */
+.chat-thread{flex:1;overflow-y:auto;padding:20px 0 150px}
 .thread-inner{
   max-width:840px;margin:0 auto;padding:0 32px;
   display:flex;flex-direction:column;gap:0;
@@ -799,7 +813,8 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 }
 .story-chips-inline .sgst-chip{font-size:var(--fs-sm)}
 .drill-label{width:100%;font-size:var(--fs-xs);color:var(--dim);margin-bottom:2px}
-.welcome-cta{margin:16px 0 4px}
+/* CTA 두 버튼: 좁으면 줄바꿈되며 딱 붙지 않게 작은 gap(칩 8px보다 좁은 6px). */
+.welcome-cta{margin:16px 0 4px;display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
 .today-digest-btn{
   font-size:var(--fs-md);font-weight:600;padding:11px 20px;border-radius:12px;cursor:pointer;
   background:var(--purple);color:#fff;border:1px solid var(--purple);
@@ -945,14 +960,26 @@ table.story-table th{
 .typing-dot:nth-child(3){animation-delay:.4s}
 @keyframes tbounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
 
-/* ── INPUT BAR ── */
+/* ── INPUT BAR — 대화 위에 겹치는 오버레이. 답변 텍스트가 입력창 주변부에서 반투명+블러(frosted)로
+   흐릿하게 비치고 위로 갈수록 사라짐(클로드 앱 스타일). 입력창 자체는 불투명(bg2) 유지.
+   safe-area: 아이폰 홈바·둥근 모서리만큼 자동으로 띄움(다른 기기·PC는 영향 없음) */
 .input-wrap{
-  padding:12px 16px 16px;background:var(--bg0);
-  flex-shrink:0;
+  position:absolute;left:0;right:0;bottom:0;z-index:50;
+  padding:34px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  pointer-events:none;   /* 페이드 밴드는 클릭 통과 — 입력창만 반응 */
+}
+.input-wrap::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  background:color-mix(in srgb, var(--bg0) 55%, transparent);
+  /* 마스크로 틴트+블러를 위쪽으로 페이드 — 경계선 없이 자연스럽게 */
+  -webkit-mask-image:linear-gradient(to top,#000 62%,transparent);
+  mask-image:linear-gradient(to top,#000 62%,transparent);
 }
 .input-inner{
   max-width:840px;margin:0 auto;width:100%;
-  position:relative;
+  position:relative;z-index:1;
+  pointer-events:auto;
 }
 .input-box{
   width:100%;background:var(--bg2);border:1px solid var(--line2);
@@ -1128,19 +1155,21 @@ table.story-table th{
   .sidebar{
     position:fixed;left:-80vw;top:0;
     width:80vw !important;min-width:80vw !important;
-    z-index:300;box-shadow:4px 0 24px rgba(0,0,0,.55);
+    z-index:300;
     transition:left .22s ease;
   }
-  .sidebar.mobile-open{left:0}
+  /* 그림자는 열렸을 때만 — 닫힘 상태 그림자가 화면 좌측 끝으로 새어나오는 흐릿한 띠 방지 */
+  .sidebar.mobile-open{left:0;box-shadow:4px 0 24px rgba(0,0,0,.55)}
   .sidebar-close-btn{display:flex}
   .sidebar-backdrop{display:block;pointer-events:none}
   .kpi-panel{
     position:fixed;right:-80vw;top:0;
     width:80vw !important;min-width:80vw !important;
-    z-index:300;box-shadow:-4px 0 24px rgba(0,0,0,.55);
+    z-index:300;
     transition:right .22s ease;
   }
-  .kpi-panel.mobile-open{right:0}
+  /* 그림자는 열렸을 때만 — 닫힘 상태 그림자가 화면 우측 끝으로 새어나오는 흐릿한 띠 방지 */
+  .kpi-panel.mobile-open{right:0;box-shadow:-4px 0 24px rgba(0,0,0,.55)}
   .kpi-close-mobile{display:flex}
 }
 @media(max-width:900px){
@@ -1530,6 +1559,13 @@ table.story-table th{
   <div class="hist-modal-inner">
     <div class="hist-modal-hd">
       <span class="hist-modal-title">질의 이력</span>
+      <button class="btn-icon" onclick="closeHistModal()" title="닫기" style="margin-left:auto">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="stm-toolbar">
       <div class="hist-tabs">
         <button class="hf-tab active" onclick="setHistMode('all',this)">전체</button>
         <button class="hf-tab" onclick="setHistMode('query',this)">일반 질의</button>
@@ -1542,11 +1578,6 @@ table.story-table th{
         <button class="hf-tab" onclick="setHistDays(1,this)">오늘</button>
       </div>
       <input class="hf-search" id="histSearch" placeholder="질문 검색..." oninput="_filterHistRows()">
-      <button class="btn-icon" onclick="closeHistModal()" title="닫기">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
     </div>
     <div class="hist-modal-body" id="histModalBody">
       <div class="hist-empty-msg">로드 중...</div>
