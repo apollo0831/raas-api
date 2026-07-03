@@ -3434,11 +3434,63 @@ document.getElementById('btnTheme').addEventListener('click', function(){
 });
 
 // ────────────────────────────────────────────────
+// ── 사이드바 폭 드래그 리사이즈 (데스크톱 전용) ──────────────────────────
+// 6px 핸들 드래그로 조절, 클램프(좌 200–400 / 우 260–480), 더블클릭=기본폭,
+// localStorage 기억. 드래그 중 transition off, 종료 시 ECharts resize.
+function _initPanelResize() {
+  const DEF   = { sidebar: 256, kpi: 308 };
+  const CLAMP = { sidebar: [200, 400], kpi: [260, 480] };
+  const LSKEY = { sidebar: 'raas_sidebar_w', kpi: 'raas_kpi_w' };
+  const CSSVAR = { sidebar: '--sidebar-w', kpi: '--kpi-w' };
+  const apply = (k, w) => document.documentElement.style.setProperty(CSSVAR[k], w + 'px');
+  const clamp = (k, w) => Math.min(Math.max(w, CLAMP[k][0]), CLAMP[k][1]);
+  // 저장된 폭 복원
+  for (const k of ['sidebar', 'kpi']) {
+    const sv = parseInt(localStorage.getItem(LSKEY[k]), 10);
+    if (sv) apply(k, clamp(k, sv));
+  }
+  function attach(handleId, key, panelSel, dir) {   // dir: 사이드바=+1(오른쪽으로 넓힘), KPI=-1
+    const h = document.getElementById(handleId);
+    const panel = document.querySelector(panelSel);
+    if (!h || !panel) return;
+    let dragging = false, startX = 0, startW = 0;
+    h.addEventListener('pointerdown', e => {
+      if (isMobile()) return;
+      dragging = true; startX = e.clientX;
+      startW = panel.getBoundingClientRect().width;
+      document.body.classList.add('panel-resizing');
+      h.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    h.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      apply(key, clamp(key, Math.round(startW + dir * (e.clientX - startX))));
+    });
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('panel-resizing');
+      localStorage.setItem(LSKEY[key], String(Math.round(panel.getBoundingClientRect().width)));
+      if (key === 'kpi' && _kpiMiniChart) { try { _kpiMiniChart.resize(); } catch (_) {} }
+    };
+    h.addEventListener('pointerup', end);
+    h.addEventListener('pointercancel', end);
+    h.addEventListener('dblclick', () => {
+      apply(key, DEF[key]);
+      localStorage.removeItem(LSKEY[key]);
+      if (key === 'kpi' && _kpiMiniChart) { try { _kpiMiniChart.resize(); } catch (_) {} }
+    });
+  }
+  attach('sidebarResize', 'sidebar', '#sidebar', +1);
+  attach('kpiResize', 'kpi', '#kpiPanel', -1);
+}
+
 // INIT
 // ────────────────────────────────────────────────
 _cleanQCache();
 _initWelcomeChips();
 _initSidebarQueries();
+_initPanelResize();
 _populateRoleDropdowns();   // 가입 폼 드롭다운 즉시 채움 (인증 불필요)
 _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
 

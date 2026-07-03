@@ -163,8 +163,19 @@ body{
   border-right:1px solid var(--line);
   display:flex;flex-direction:column;overflow:hidden;
   transition:width .22s ease,min-width .22s ease;
-  flex-shrink:0;
+  flex-shrink:0;position:relative;
 }
+/* 패널 폭 드래그 핸들 — hover 하이라이트, 더블클릭 기본폭, 데스크톱 전용 */
+.panel-resize-handle{
+  position:absolute;top:0;bottom:0;width:6px;cursor:col-resize;z-index:30;
+  transition:background .12s;touch-action:none;
+}
+.sidebar .panel-resize-handle{right:0}
+.kpi-panel .panel-resize-handle{left:0}
+.panel-resize-handle:hover,body.panel-resizing .panel-resize-handle{background:var(--accent-soft)}
+body.panel-resizing{cursor:col-resize;user-select:none}
+body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
+@media(max-width:900px){.panel-resize-handle{display:none}}
 .sidebar.collapsed{width:0;min-width:0}
 .sidebar-backdrop{
   display:none;position:fixed;inset:0;
@@ -961,6 +972,7 @@ table.story-table th{
   background:var(--bg1);border-left:1px solid var(--line);
   display:flex;flex-direction:column;overflow:hidden;
   transition:width .22s ease,min-width .22s ease;flex-shrink:0;
+  position:relative;
 }
 .kpi-panel.collapsed{width:0;min-width:0}
 .kpi-close-mobile{
@@ -1235,6 +1247,7 @@ table.story-table th{
       <div class="history-empty">아직 질의 내역이 없습니다.</div>
     </div>
   </div>
+  <div class="panel-resize-handle" id="sidebarResize" title="드래그로 폭 조절 · 더블클릭 기본폭"></div>
 </aside>
 
 <!-- ── MAIN CHAT ── -->
@@ -1322,6 +1335,7 @@ table.story-table th{
       <button class="sidebar-user-btn" onclick="doLogout()">로그아웃</button>
     </div>
   </div>
+  <div class="panel-resize-handle" id="kpiResize" title="드래그로 폭 조절 · 더블클릭 기본폭"></div>
 </aside>
 
 <script src="/raas_web.js?v=%%APP_VER%%"></script>
