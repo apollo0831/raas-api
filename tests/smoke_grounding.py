@@ -123,6 +123,19 @@ _ts_w = G._p_metric_timeseries(G.resolve_entities("고릴라 플랫폼 전체 �
 check_true("주별 행에 요일(월) 표기", "2026-06-22(월)" in _ts_w)
 check_true("주별 앵커 헤더 명시", "주 시작(월요일)" in _ts_w)
 
+print("── 4.7 오타 퍼지매칭 · 특정일 속성 · 게스트 역검색 ────")
+from raas_storyline_router import extract_program as _xp
+check("오타 '주현연' → F08", (_xp("12시엔 주현연") or {}).get("code"), "F08")
+check("오타 '컬투쑈' → F09", (_xp("컬투쑈") or {}).get("code"), "F09")
+check("비프로그램 문장 → None", _xp("안녕하세요 반가워요"), None)
+_ps = G._p_point_snapshot(G.resolve_entities("7월1일 12시엔 주현영 게스트 누구야?")) or {}
+check_true("point_snapshot에 guestname 포함", "guestname" in _ps.get("values", {}),
+           f"keys={list(_ps.get('values',{}))[:8]}")
+check_true("절대날짜 시 lookback 억제", G.resolve_entities("7월1일 12시엔 주현영 게스트").get("lookback") == 0)
+check_true("게스트 역검색 감지", G._detect_guest_search("임지연 게스트 어느 프로그램에 출연했어?"))
+_gs = G._assemble_guest_search("임지연 게스트 어느 프로그램에 출연했어?")
+check_true("게스트 역검색 결과", bool(_gs and "임지연" in _gs.get("context", "")))
+
 print("── 5.5 기간 내 이벤트·특일 주석(period_events) ───────")
 # '신규 추이 분석'이 6/16 고릴라데이(온톨로지 기록)를 활용 못 하던 버그 — 어댑터 범위조회 박제
 from raas_onto import get_adapter

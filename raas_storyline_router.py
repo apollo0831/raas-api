@@ -115,6 +115,52 @@ def extract_program(text: str) -> Optional[dict]:
             info = PROGRAM_DIRECTORY.get(code)
             if info:
                 return {"code": code, "name": info["name"], "channel": info["channel"]}
+    # 4) 퍼지 매칭 — 오타 허용('주현연'→'12시엔 주현영'). 정확/부분 매칭 실패 시에만.
+    fz = _fuzzy_program(text)
+    if fz:
+        return fz
+    return None
+
+
+import difflib
+
+# 프로그램명에서 의미 토큰(진행자/타이틀 등, 2자 이상)만 뽑아 오타 후보로. 흔한 접미는 제외.
+# 채널명은 반드시 제외 — '파워FM'은 '김영철의 파워FM'의 토큰이라, 채널 질의를 프로그램으로 오검색함.
+_FZ_STOP = {"라디오", "쇼", "타운", "게임", "오늘", "이야기",
+            "파워FM", "러브FM", "고릴라M", "픽채널", "파워", "러브", "고릴라"}
+
+def _program_tokens():
+    global _PROGRAM_TOKENS
+    try:
+        return _PROGRAM_TOKENS
+    except NameError:
+        pass
+    toks = {}
+    for code, info in PROGRAM_DIRECTORY.items():
+        for t in re.split(r"[\s의]+", info["name"]):
+            t = t.strip()
+            if len(t) >= 2 and t not in _FZ_STOP:
+                toks.setdefault(t, code)
+    _PROGRAM_TOKENS = toks
+    return toks
+
+def _fuzzy_program(text: str):
+    """질의 토큰 중 프로그램명 토큰과 편집거리≥0.8로 유사한 것 → 그 프로그램. 오타 1글자 정도 허용."""
+    cands = _program_tokens()
+    words = [w for w in re.split(r"[\s,?!.]+", text or "") if len(w) >= 2]
+    best, best_code = 0.0, None
+    for w in words:
+        for tok, code in cands.items():
+            if abs(len(w) - len(tok)) > 1:
+                continue
+            # 2글자 토큰은 오검색 위험이 커 정확일치만, 3글자+는 편집거리 허용(1글자 오타 ≈ 0.67)
+            thr = 1.0 if len(tok) <= 2 else 0.66
+            r = difflib.SequenceMatcher(None, w, tok).ratio()
+            if r >= thr and r > best:
+                best, best_code = r, code
+    if best_code:
+        info = PROGRAM_DIRECTORY[best_code]
+        return {"code": best_code, "name": info["name"], "channel": info["channel"], "fuzzy": True}
     return None
 
 

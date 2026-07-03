@@ -245,6 +245,8 @@ def resolve_entities(question: str, default_code: str = None) -> dict:
             ent["scope_kind"] = _sk
             ent.update(code=code, name=_nm, channel=_chn)
     cand = _parse_abs_date(question)   # 특정 날짜 지정 여부
+    if cand:
+        ent["lookback"] = 0            # '7월1일'의 '1일'이 lookback=1로 오파싱돼 창을 쪼그라뜨리는 것 방지
     if code:
         ent["row"] = S._load_program_latest_row(code)
         # 질문 의도 범위만큼(기본 전체) 로드. 날짜 지정이면 전체 로드해 그 날짜 포함 보장.
@@ -326,7 +328,8 @@ def _p_point_snapshot(ent):
     if not row:
         return None
     focus = ent.get("focus_fields") or []
-    keys = _KPI_BROAD + [f for f in focus if f not in _KPI_BROAD]
+    # 지표 + 속성(게스트·제목·코너·생방송) 모두 — '그 날짜 스냅샷'이 편성/출연까지 답하도록
+    keys = _KPI_BROAD + _ATTR_FIELDS + [f for f in focus if f not in _KPI_BROAD]
     vals = {k: row.get(k) for k in keys if row.get(k) not in (None, "")}
     vals["DATE"] = d
     return {"as_of": d, "요일": _dow_ko(d), "values": vals}
@@ -1089,6 +1092,10 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         _r = _assemble_ranking(question, rank_spec, overlay_ctx)
         if _r.get("ok"):
             return _r
+    if _detect_guest_search(question):        # '임지연 어느 프로그램 출연?' 역검색(값→프로그램)
+        _g = _assemble_guest_search(question)
+        if _g:
+            return _g
     ent = resolve_entities(question, (overlay_ctx or {}).get("default_code"))
     if not ent.get("code"):
         return {"ok": False, "reason": "프로그램 미식별"}   # 비-프로그램 질의는 기존 엔진으로
@@ -1152,6 +1159,57 @@ def assemble(question: str, overlay_ctx=None) -> dict:
 # ─── Digest scope — 어제 방송 특이사항 (비-프로그램, 전사 이상탐지 기반) ───
 #    엔진 일원화: 프로그램 1개에 묶이지 않는 scope도 같은 GROUNDING_SYSTEM·온톨로지·
 #    오버레이로 답한다. anomalies는 서버(get_cached_anomalies)가 주입 — grounding은 순수.
+# ─── 게스트/속성 → 프로그램 역검색 (값으로 엔티티 찾기) ─────────────────────
+_GS_STOP = {"게스트", "출연", "출연자", "프로그램", "어느", "어떤", "무슨", "어디", "누구", "누가",
+            "나온", "나왔", "나오는", "했어", "한", "하는", "알려줘", "보여줘", "누구야",
+            "최근", "일주일간", "이번주", "지난주", "어제", "오늘", "출연했어", "출연한"}
+
+def _detect_guest_search(q: str) -> bool:
+    """게스트/출연 값으로 프로그램을 거꾸로 찾는 질의 — 질문에 프로그램이 없을 때만 이 경로로 온다."""
+    t = q or ""
+    return (("게스트" in t or "출연" in t)
+            and any(k in t for k in ("어느", "어떤", "무슨", "어디", "프로그램에", "프로그램은", "프로그램 ")))
+
+def _assemble_guest_search(question: str, overlay_ctx=None):
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        rows = []
+    if not rows:
+        return None
+    words = [w for w in re.split(r"[\s,?!.]+", question or "")
+             if len(w) >= 2 and w not in _GS_STOP]
+    if not words:
+        return None
+    dates = sorted({(r.get("DATE") or "") for r in rows if r.get("DATE")})
+    recent = set(dates[-30:])
+    hits, seen = [], set()
+    for r in rows:
+        if (r.get("DATE") or "") not in recent:
+            continue
+        g = r.get("guestname") or ""
+        if not g:
+            continue
+        if any(w in g for w in words):
+            key = (r.get("PGM_CODE"), r.get("DATE"))
+            if key in seen:
+                continue
+            seen.add(key)
+            hits.append({"date": (r.get("DATE") or "").replace("/", "-"),
+                         "요일": _dow_ko(r.get("DATE")),
+                         "program": r.get("PGM_NAME") or _resolve_name(r.get("PGM_CODE")),
+                         "code": r.get("PGM_CODE"), "guest": g, "live": r.get("live_yn")})
+    if not hits:
+        return None
+    hits.sort(key=lambda h: h["date"], reverse=True)
+    body = json.dumps({"검색어": words, "matches": hits[:40]}, ensure_ascii=False, default=str)
+    context = (f"분석 대상: 게스트/출연 역검색 · 검색어: {', '.join(words)} · 최근 30일\n\n"
+               f"### guest_search — 검색어가 게스트명에 포함된 프로그램·날짜(요일)\n{body}")
+    return {"ok": True, "context": context, "providers_used": ["guest_search"],
+            "entities_brief": f"분석 대상: 게스트 역검색({', '.join(words)}) · 최근 30일",
+            "provenance": {"providers": ["guest_search"], "scope": "guest_search"}}
+
+
 def _resolve_name(code) -> str:
     if not code:
         return ""
