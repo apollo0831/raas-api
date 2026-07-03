@@ -1023,6 +1023,8 @@ table.story-table th{
   border-radius:10px;padding:8px 6px 2px;
 }
 .kpi-mini-head{font-size:var(--fs-xs);color:var(--sub);font-weight:600;padding:0 6px 2px}
+/* 주의: .kpi-mini-canvas에 height transition 금지 — transition 중 속성변경을 무시하는 렌더러가 있어
+   폭/높이 변경이 아예 적용되지 않는 문제 관측됨(패널 width도 같은 이유로 apply()에서 transition off) */
 .kpi-chart-link{
   display:block;margin:0 2px 4px auto;padding:2px 6px;
   background:none;border:none;color:var(--accent);

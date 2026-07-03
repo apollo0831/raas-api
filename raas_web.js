@@ -3266,6 +3266,22 @@ function _kpiCloseChart() {
   _kpiOpenField = null;
 }
 
+// 차트 높이 = clamp(112, 폭×0.4, 300) — 패널을 넓히면 높이도 비례(팬케이크 왜곡 방지)
+function _kpiChartHeight(w) {
+  return Math.round(Math.min(300, Math.max(112, (w || 0) * 0.4)));
+}
+// 패널 폭 변경(드래그 종료/더블클릭) 후 호출 — 높이 재설정 뒤 ECharts 리사이즈
+function _kpiSyncChartHeight() {
+  const box = document.getElementById('kpiMiniChartBox');
+  if (!box || !_kpiMiniChart) return;
+  const cv = box.querySelector('.kpi-mini-canvas');
+  if (!cv) return;
+  const hh = _kpiChartHeight(box.clientWidth);
+  cv.style.height = hh + 'px';
+  // rAF/타이머 의존 없이 명시적 크기로 즉시 리사이즈(스로틀 환경에서도 확실)
+  try { _kpiMiniChart.resize({ width: cv.clientWidth, height: hh }); } catch (_) {}
+}
+
 function _kpiScopeName() {
   // 패널발 질의는 T00 포함 항상 스코프명 명시 — 엔티티 없는 질의가 채팅의
   // '내 관심' 기본값으로 넘어가 다른 대상(예: 컬투쇼)으로 답하는 오귀속 방지.
@@ -3295,8 +3311,9 @@ async function _kpiToggleChart(card) {
     const j = await res.json();
     const pts = (j.points || []).filter(p => p[1] != null);
     if (!j.ok || !pts.length) { box.innerHTML = '<div class="kpi-loading">추이 데이터 없음</div>'; return; }
+    const _ch = _kpiChartHeight(box.clientWidth);   // 열 때부터 현재 패널 폭에 맞는 높이
     box.innerHTML = `<div class="kpi-mini-head">${escapeHtml(label)} 추이</div>
-      <div class="kpi-mini-canvas" style="width:100%;height:120px"></div>
+      <div class="kpi-mini-canvas" style="width:100%;height:${_ch}px"></div>
       <button class="kpi-chart-link" onclick="_kpiTrendAsk('${escapeHtml(label)}')">이 추이 분석 →</button>`;
     const echarts = await _loadECharts();
     const css = getComputedStyle(document.documentElement);
@@ -3451,7 +3468,15 @@ function _initPanelResize() {
       return [260, Math.max(320, Math.round(window.innerWidth - sbw - CHAT_MIN))];
     },
   };
-  const apply = (k, w) => document.documentElement.style.setProperty(CSSVAR[k], w + 'px');
+  const PANEL = { sidebar: '#sidebar', kpi: '#kpiPanel' };
+  const apply = (k, w) => {
+    // width transition이 있으면 var 기반 폭 변경이 적용되지 않는 엔진이 있어(관측됨)
+    // 프로그램적 변경은 항상 transition을 끄고 적용 후 다음 프레임에 복원.
+    const el = document.querySelector(PANEL[k]);
+    if (el) el.style.transition = 'none';
+    document.documentElement.style.setProperty(CSSVAR[k], w + 'px');
+    if (el) requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transition = ''; }));
+  };
   const clamp = (k, w) => {
     const [lo, hi] = bounds[k]();
     return Math.min(Math.max(w, lo), hi);
@@ -3480,7 +3505,7 @@ function _initPanelResize() {
       dragging = true; startX = e.clientX;
       startW = panel.getBoundingClientRect().width;
       document.body.classList.add('panel-resizing');
-      h.setPointerCapture(e.pointerId);
+      try { h.setPointerCapture(e.pointerId); } catch (_) {}
       e.preventDefault();
     });
     h.addEventListener('pointermove', e => {
@@ -3492,14 +3517,14 @@ function _initPanelResize() {
       dragging = false;
       document.body.classList.remove('panel-resizing');
       localStorage.setItem(LSKEY[key], String(Math.round(panel.getBoundingClientRect().width)));
-      if (key === 'kpi' && _kpiMiniChart) { try { _kpiMiniChart.resize(); } catch (_) {} }
+      if (key === 'kpi') _kpiSyncChartHeight();   // 높이 비례 재설정 + 차트 resize
     };
     h.addEventListener('pointerup', end);
     h.addEventListener('pointercancel', end);
     h.addEventListener('dblclick', () => {
       apply(key, DEF[key]);
       localStorage.removeItem(LSKEY[key]);
-      if (key === 'kpi' && _kpiMiniChart) { try { _kpiMiniChart.resize(); } catch (_) {} }
+      if (key === 'kpi') setTimeout(_kpiSyncChartHeight, 240);   // 기본폭 transition(0.22s) 후
     });
   }
   attach('sidebarResize', 'sidebar', '#sidebar', +1);
