@@ -106,6 +106,18 @@ check_true("편성표 의도", STORY.is_schedule_query("컬투쇼 코너 편성 
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")
 
+print("── 4.5 지표 용어→필드 + 기간 인지 시계열 ────────────")
+# '주간 참여율/유지율/습관형성률 추이 분석'이 시계열에 해당 필드가 없어 '데이터 없음'으로 답하던 버그
+for term, fld in [("참여율", "engage_rate"), ("습관형성률", "habit_rate"),
+                  ("W1 유지율", "w1_ret"), ("복귀율", "react_rate")]:
+    e = G.resolve_entities(f"고릴라 플랫폼 전체 주간 {term} 추이 분석해줘")
+    check(f"용어 '{term}' → {fld}", e.get("focus_fields"), [fld])
+_ts = G._p_metric_timeseries(G.resolve_entities("고릴라 플랫폼 전체 최근 3개월 주간 참여율 추이 분석해줘")) or ""
+check_true("주간 분석 시계열에 engage_rate_week 포함", "engage_rate_week" in _ts)
+check_true("주간 분석 시계열에 w1_ret 포함", "w1_ret" in _ts)
+_ts_m = G._p_metric_timeseries(G.resolve_entities("고릴라 플랫폼 전체 월간 복귀율 추이 분석해줘")) or ""
+check_true("월간 분석 시계열에 react_rate_mon 포함", "react_rate_mon" in _ts_m)
+
 print("── 5.5 기간 내 이벤트·특일 주석(period_events) ───────")
 # '신규 추이 분석'이 6/16 고릴라데이(온톨로지 기록)를 활용 못 하던 버그 — 어댑터 범위조회 박제
 from raas_onto import get_adapter

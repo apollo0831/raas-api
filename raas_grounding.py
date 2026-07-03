@@ -93,6 +93,13 @@ def _term_field_map():
                 m.setdefault((t or "").lower(), field)
     except Exception as e:
         print(f"[grounding] term map error: {e}")
+    # 실용 별칭 보강 — 온톨로지 용어가 장황('전체코호트 d7유지율')하거나 없어서('참여율')
+    # 실제 말씨와 불일치하던 지표들. setdefault라 온톨로지 정의가 항상 우선.
+    for t, f in [("참여율", "engage_rate"), ("습관형성률", "habit_rate"), ("습관형성율", "habit_rate"),
+                 ("복귀율", "react_rate"), ("이탈율", "churn_rate"), ("이탈률", "churn_rate"),
+                 ("d1 유지율", "d1_ret"), ("d7 유지율", "d7_ret"),
+                 ("w1 유지율", "w1_ret"), ("m1 유지율", "m1_ret"), ("유지율", "d7_ret")]:
+        m.setdefault(t, f)
     _TERM2FIELD = sorted(((t, f) for t, f in m.items() if t), key=lambda kv: -len(kv[0]))
     return _TERM2FIELD
 
@@ -408,12 +415,28 @@ def _p_metric_timeseries(ent):
             hist = hist[-400:]                 # 추이·추세 질의 → 전체(안전 상한)
     else:
         hist = hist[-28:]                      # 원인·포인트·기본 → 최근 4주(같은요일 비교 충분)
-    base = ["dau", "wau", "mau", "deep_rate", "real_rate", "new", "churn_rate"]
+    # base — 기간 인지형: 어떤 지표를 물어도 그 기간의 핵심지표가 실리도록(용어 매칭 실패에도 강건).
+    # 직렬화가 주간/월간 필드를 변동 시점만 쓰므로 필드 추가의 토큰 비용은 작음.
+    base = ["dau", "wau", "mau", "deep_rate", "real_rate", "new", "churn_rate",
+            "react", "react_rate", "engage_rate", "habit_rate", "d7_ret"]
+    per = ent.get("period")
+    if per == "week":
+        base += ["new_week", "react_week", "churn_rate_week", "react_rate_week",
+                 "real_rate_week", "deep_rate_week", "engage_rate_week", "habit_rate_week", "w1_ret"]
+    elif per == "month":
+        base += ["new_mon", "react_mon", "churn_rate_mon", "react_rate_mon",
+                 "real_rate_mon", "deep_rate_mon", "engage_rate_mon", "habit_rate_mon", "m1_ret"]
     focus = ent.get("focus_fields") or []
     if focus and not ent.get("analytical"):
         flds = ["dau"] + [f for f in focus if f != "dau"]   # 집중 → 핵심+포커스(롤링MAU=dau_r30)
     else:
         flds = base + [f for f in focus if f not in base]   # 넓게 + 포커스 보강
+    # 포커스의 기간 변형 자동 추가(참여율+주간 → engage_rate_week)
+    suf = {"week": "_week", "month": "_mon"}.get(per)
+    if suf:
+        last = hist[-1] if hist else {}
+        flds += [f + suf for f in list(flds)
+                 if not f.endswith(("_week", "_mon")) and (f + suf) in last and (f + suf) not in flds]
     return _ts_csv(hist, flds)   # CSV(키 1회) + 주간/월간 변동시점-only 직렬화
 
 
