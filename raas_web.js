@@ -1169,6 +1169,7 @@ async function changePw(ev) {
 
 const QUICK_QUERIES = [
   // '이번 주 브리핑'은 우측 KPI 패널(주간 탭 + ✨ AI 요약)로 이전
+  '지금 동시 청취자 몇 명이야?',
   'RAAS에는 어떤 지표들이 있나',
   '어제 MAU는?',
   '이번 주 DAU 추이',
@@ -3091,7 +3092,8 @@ async function loadKpiPanel() {
       <div class="kpi-period-seg">${['day','week','mon'].map(p =>
         `<button class="kpi-period-btn${p === _KPI.period ? ' active' : ''}" onclick="_kpiSetPeriod('${p}')">${_KPI_PERIOD_KO[p]}</button>`).join('')}</div>
     </div>
-    <div class="kpi-date">${escapeHtml((json.scope || {}).name || '')} · 기준일 ${escapeHtml(json.date || '—')}</div>`;
+    <div class="kpi-date">${escapeHtml((json.scope || {}).name || '')} · 기준일 ${escapeHtml(json.date || '—')}</div>
+    <div id="rtCard"></div>`;
 
     // 지표 그룹 카드
     for (const [title, cards] of (_KPI_CARDS[_KPI.period] || [])) {
@@ -3127,9 +3129,51 @@ async function loadKpiPanel() {
 
     html += `<button class="kpi-ai-btn" onclick="_kpiAiBrief()">✨ AI 요약</button>`;
     scroll.innerHTML = html;
+    _loadRtCard();                      // 실시간 카드 비동기 채움 + 60초 자동 갱신
+    if (_RT_TIMER) clearInterval(_RT_TIMER);
+    _RT_TIMER = setInterval(_loadRtCard, 60000);
   } catch (err) {
     scroll.innerHTML = `<div class="kpi-loading">로드 실패: ${escapeHtml(err.message)}</div>`;
   }
+}
+
+// ── 실시간 동시청취 카드 (tempsummary 1분 집계, 서버 60초 캐시 공유) ──
+let _RT_TIMER = null;
+
+function _rtPctBadge(label, o) {
+  const p = o && o.pct;
+  if (p == null) return '';
+  const cls = p > 0 ? 'up' : p < 0 ? 'dn' : 'flat';
+  return `<span class="rt-cmp ${cls}">${label} ${p >= 0 ? '+' : ''}${p.toFixed(1)}%</span>`;
+}
+
+async function _loadRtCard() {
+  const el = document.getElementById('rtCard');
+  if (!el) return;
+  const kp = document.getElementById('kpiPanel');
+  // 패널이 닫혀 있으면(데스크톱 collapsed·모바일 미오픈) 폴링 중단 — 불필요한 서버 호출 방지
+  if (kp && kp.classList.contains('collapsed') && !kp.classList.contains('mobile-open')) return;
+  try {
+    const res = await fetch('/api/realtime/panel');
+    const j = await res.json();
+    if (!j.ok) { el.innerHTML = ''; return; }
+    const n = v => (v == null ? '—' : Math.round(v).toLocaleString());
+    const maxV = Math.max(...(j.series || []).map(s => s[1] || 0), 1);
+    const bars = (j.series || []).map(s =>
+      `<div class="rt-spark-bar" style="height:${Math.max(2, Math.round((s[1] || 0) / maxV * 100))}%"
+            title="${escapeHtml(s[0])}: ${n(s[1])}명"></div>`).join('');
+    const chips = (j.channels || []).map(c =>
+      `<div class="channel-chip">${escapeHtml(c.name)}<strong>${n(c.value)}</strong></div>`).join('');
+    const pk = j.peak_today || {};
+    el.innerHTML = `<div class="kpi-section rt-card">
+      <div class="kpi-section-title">🔴 실시간 동시청취 · ${escapeHtml(j.asof || '')} 기준</div>
+      <div class="rt-hero"><span class="rt-total">${n(j.total)}</span><span class="rt-unit">명</span>
+        ${_rtPctBadge('어제', j.yesterday)}${_rtPctBadge('지난주', j.lastweek)}</div>
+      <div class="rt-spark">${bars}</div>
+      <div class="channel-chips">${chips}</div>
+      <div class="rt-foot">오늘 피크 ${n(pk.value)}명 (${escapeHtml(pk.time || '—')})</div>
+    </div>`;
+  } catch (e) { /* 실시간 미접속 환경 — 카드 비표시로 조용히 강등 */ el.innerHTML = ''; }
 }
 
 document.getElementById('btnRefreshKpi').addEventListener('click', loadKpiPanel);

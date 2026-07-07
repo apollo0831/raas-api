@@ -776,6 +776,42 @@ class RAASHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
 
+    def _get_realtime_panel(self):
+        # KPI 패널 실시간 카드 — 현재 동시청취(전체·채널)+어제/지난주 동시각·오늘 피크·스파크라인.
+        # 데이터는 DS 실시간 Feed(60초 캐시) 공유 — 브라우저 60초 폴링이 그대로 1분 주기가 됨.
+        try:
+            today = DS.get_realtime_today()
+            if not today:
+                self.send_json({"ok": False, "error": "실시간 데이터 없음(스플렁크 미접속?)"}, 503)
+                return
+            latest = today[-1]
+            asof = GROUND._rt_hhmm(latest)
+            total = GROUND._rt_int(latest.get("T00"))
+            channels = [{"code": f, "name": nm, "value": GROUND._rt_int(latest.get(f))}
+                        for nm, f in GROUND._RT_CHANNELS]
+            def _at(rows):
+                for r in rows:
+                    if GROUND._rt_hhmm(r) == asof:
+                        return GROUND._rt_int(r.get("T00"))
+                return None
+            def _peak(rows):
+                bv, bt = None, None
+                for r in rows:
+                    v = GROUND._rt_int(r.get("T00"))
+                    if v is not None and (bv is None or v > bv):
+                        bv, bt = v, GROUND._rt_hhmm(r)
+                return {"value": bv, "time": bt}
+            y = _at(DS.get_realtime_yesterday())
+            w = _at(DS.get_realtime_lastweek())
+            series = [[GROUND._rt_hhmm(r), GROUND._rt_int(r.get("T00"))]
+                      for r in today if GROUND._rt_hhmm(r)[4:5] == "0"]
+            self.send_json({"ok": True, "asof": asof, "total": total, "channels": channels,
+                            "yesterday": {"value": y, "pct": GROUND._rt_pct(total, y)},
+                            "lastweek": {"value": w, "pct": GROUND._rt_pct(total, w)},
+                            "peak_today": _peak(today), "series": series})
+        except Exception as e:
+            self.send_json({"ok": False, "error": str(e)}, 500)
+
     def _get_admin_users(self):
         admin = self._require_admin()
         if not admin:
@@ -1700,6 +1736,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         ("/api/admin/stats/", _get_admin_stats),
         ("/api/kpi-panel", _get_kpi_panel),
         ("/api/kpi-series", _get_kpi_series),
+        ("/api/realtime/panel", _get_realtime_panel),
     ]
     POST_EXACT = {
         "/api/register": _post_register,

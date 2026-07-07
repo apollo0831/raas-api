@@ -1179,6 +1179,11 @@ def _rt_pct(cur, base):
         return None
     return round((cur - base) / base * 100, 1)
 
+def _rt_stime_fmt(raw) -> str:
+    """STIME 'HHMM' → 'HH:MM'. 형식 밖이면 원문."""
+    s = str(raw or "").strip()
+    return f"{s[:2]}:{s[2:]}" if len(s) == 4 and s.isdigit() else s
+
 def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
     import raas_datasource as DSRC
     today = DSRC.get_realtime_today()
@@ -1233,7 +1238,21 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
             ser.append(",".join([hh] + [str(_rt_int(r.get(f)) or "") for f in
                                         ("T00", "F00", "L00", "G00", "P00")]))
 
+    # 편성표 조인 — 프로그램 언급 시('지금 컬투쇼 몇 명?') 소속 채널 + 방송시각 컨텍스트 첨부.
+    #   실시간 집계는 채널 단위뿐이라, 방송 중 여부 판단 재료(시작시각·편성 요일)를 결정적으로 제공.
+    prog = extract_program(question)
+    prog_block = None
+    if prog:
+        _prow = S._load_program_latest_row(prog["code"]) or {}
+        prog_block = {
+            "프로그램": prog["name"], "코드": prog["code"],
+            "소속 채널": _CH_NAME_BY_CODE.get(prog["channel"], prog["channel"]),
+            "방송 시작시각": _rt_stime_fmt(_prow.get("STIME")) or "미상",
+            "편성": "주말" if prog["code"].startswith("M") else "평일 중심",
+        }
     ch_code, ch_name = _detect_channel(question)
+    if prog:                                   # 프로그램이 있으면 그 소속 채널을 관심 채널로
+        ch_code, ch_name = prog["channel"], _CH_NAME_BY_CODE.get(prog["channel"], prog["channel"])
     head = (f"분석 대상: 실시간 동시사용자(1분 집계) · 기준시각 오늘 {now_hhmm}"
             + (f" · 관심 채널: {ch_name}" if ch_code and ch_code != "T00" else ""))
     defs = ("[용어 정의]\n"
@@ -1246,13 +1265,23 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
                + json.dumps(snap, ensure_ascii=False)
                + "\n\n### realtime_compare — 어제/지난주 동시각·피크 비교\n"
                + json.dumps(compare, ensure_ascii=False)
-               + "\n\n### realtime_series — 오늘 추이(10분 간격)\n" + "\n".join(ser)
-               + "\n\n" + defs)
+               + "\n\n### realtime_series — 오늘 추이(10분 간격)\n" + "\n".join(ser))
+    providers = ["realtime_now", "realtime_compare", "realtime_series"]
+    if prog_block:
+        context += ("\n\n### realtime_program — 질의 프로그램 편성 컨텍스트\n"
+                    + json.dumps(prog_block, ensure_ascii=False)
+                    + "\n※ 실시간 집계는 채널 단위뿐(프로그램 단위 없음). 현재 시각과 방송 "
+                      "시작시각·편성을 대조해, 방송 중이면 소속 채널 동시사용자를 해당 프로그램 "
+                      "청취 규모로 해석하되 '채널 합계 기준'임을 반드시 밝힐 것. 방송 종료시각 "
+                      "데이터는 없으므로 방송 중 여부가 애매하면 그 점을 함께 안내.")
+        providers.append("realtime_program")
+    context += "\n\n" + defs
     return {"ok": True, "context": context,
-            "providers_used": ["realtime_now", "realtime_compare", "realtime_series"],
+            "providers_used": providers,
             "entities_brief": head,
-            "provenance": {"providers": ["realtime_now", "realtime_compare", "realtime_series"],
-                           "scope": "realtime", "channel": ch_code}}
+            "provenance": {"providers": providers,
+                           "scope": "realtime", "channel": ch_code,
+                           "program": prog["code"] if prog else None}}
 
 
 # ─── Meta scope — 지표 카탈로그(시스템이 제공하는 지표 목록·정의) ─────────────
