@@ -241,6 +241,14 @@ _META_COLS = {
 _EXPECTED_CODES = 37
 _STALE_RED_FRAC = 0.5      # 정체 코드가 절반 초과면 red
 
+# 매핑된 프로그램이 없는 미사용 코드 — 코드 수 카운트엔 존재하나 값 기반 점검에선 제외.
+_EXCLUDED_CODES = {"L04"}
+
+
+def _is_weekend_program(code: str) -> bool:
+    """주말 편성 프로그램(M* 코드). 평일엔 방송이 없어 값이 비는 게 정상(결측 아님)."""
+    return (code or "").startswith("M")
+
 
 def _is_weekly(f: str) -> bool:
     return ("week" in f) or f.startswith("wau") or f.startswith("w1_")
@@ -317,6 +325,10 @@ def run_data_check(timeline) -> dict:
 
     latest_rows = [r for r in rows if (r.get("DATE") or "").strip() == latest]
     prior_rows = {r.get("PGM_CODE"): r for r in rows if (r.get("DATE") or "").strip() == prior}
+    # 값 기반 점검용 — 미사용 코드(L04 등) 제외. 코드 수 카운트는 latest_rows 그대로 사용.
+    checkable_rows = [r for r in latest_rows if r.get("PGM_CODE") not in _EXCLUDED_CODES]
+    # 최신 데이터 일자가 평일이면 주말 프로그램(M*) 결측은 정상 → 결측 판정에서 제외.
+    latest_is_weekday = bool(latest_d and latest_d.weekday() < 5)
 
     # ── A. 최신성 (스플렁크 집계 최신 DATE = 어제 D-1이 정상) ─────────
     if latest_d and latest_d < yesterday:
@@ -335,7 +347,7 @@ def run_data_check(timeline) -> dict:
 
     # ── B. 무결성 ──────────────────────────────────────────────────
     bad_type = []
-    for r in latest_rows:
+    for r in checkable_rows:
         for c in numeric_cols:
             if _num(r.get(c)) is False:
                 bad_type.append((r.get("PGM_CODE"), c, str(r.get(c)).strip()))
@@ -347,13 +359,18 @@ def run_data_check(timeline) -> dict:
 
     dropped = defaultdict(list)   # 전일 있었는데 최신 결측
     empty_total = 0
-    for r in latest_rows:
-        pr = prior_rows.get(r.get("PGM_CODE"))
+    for r in checkable_rows:
+        code = r.get("PGM_CODE")
+        pr = prior_rows.get(code)
+        # 평일의 주말 프로그램(M*) 빈 값은 정상(방송 없음) → 결측 판정 제외
+        weekend_prog_on_weekday = _is_weekend_program(code) and latest_is_weekday
         for c in numeric_cols:
             if str(r.get(c) or "").strip() == "":
                 empty_total += 1
+                if weekend_prog_on_weekday:
+                    continue
                 if pr and str(pr.get(c) or "").strip() != "":
-                    dropped[c].append(r.get("PGM_CODE"))
+                    dropped[c].append(code)
     if dropped:
         flds = sorted(dropped.items(), key=lambda kv: -len(kv[1]))
         add("yellow", f"전일 대비 결측 발생 · {len(dropped)}개 필드",
@@ -363,7 +380,7 @@ def run_data_check(timeline) -> dict:
 
     # ── C. 신규값 생성(어제/지난주/지난달과 다른 값인지) ──────────────
     stale = []
-    for r in latest_rows:
+    for r in checkable_rows:
         pr = prior_rows.get(r.get("PGM_CODE"))
         if not pr:
             continue
@@ -386,7 +403,7 @@ def run_data_check(timeline) -> dict:
         if val_col not in keyset:
             continue
         within_change, boundary_stale = 0, 0
-        for r in latest_rows:
+        for r in checkable_rows:
             pr = prior_rows.get(r.get("PGM_CODE"))
             if not pr:
                 continue
@@ -408,7 +425,7 @@ def run_data_check(timeline) -> dict:
 
     # ── D. 범위·이상치 ──────────────────────────────────────────────
     bad_range = []
-    for r in latest_rows:
+    for r in checkable_rows:
         for c in numeric_cols:
             v = _num(r.get(c))
             if v is None or v is False:
@@ -426,7 +443,7 @@ def run_data_check(timeline) -> dict:
     # → 전일 대비 델타로는 못 잡는 오래된 지속 결측(예: 주간 배치가 몇 주째 값 미생성).
     def _has(v):
         return str(v or "").strip() not in ("", "None")
-    zero_cols = [c for c in numeric_cols if not any(_has(r.get(c)) for r in latest_rows)]
+    zero_cols = [c for c in numeric_cols if not any(_has(r.get(c)) for r in checkable_rows)]
     full_missing = []
     for c in zero_cols:
         last_had = None
