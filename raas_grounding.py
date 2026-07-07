@@ -1153,12 +1153,15 @@ def _detect_realtime(question: str) -> bool:
         return True
     return ("지금" in t or "현재" in t) and any(s in t for s in _RT_NOW_HINT)
 
-# 실시간 채널 접두사 ↔ 한글 채널명 (AM=러브FM 오귀속 방지 — 코드가 결정적으로 매핑)
-_RT_CHANNELS = [("파워FM", "FM_SUM", "F00"), ("러브FM", "AM_SUM", "L00"),
-                ("고릴라M", "GM_SUM", "G00"), ("픽채널", "PM_SUM", "P00")]
-_RT_DEVICES = [("스마트폰(파생: 전체-PC-AI)", "TOTAL_SUM_SP"), ("PC클라이언트", "TOTAL_SUM_PC"),
-               ("웹브라우저(SBS홈페이지)", "TOTAL_SUM_PW"), ("AI스피커", "TOTAL_SUM_AI"),
-               ("보는라디오", "TOTAL_SUM_BA")]
+# 실시간 필드 ↔ 한글명 (tempsummary — 채널 필드가 곧 RAAS 코드라 오귀속 여지 없음)
+_RT_CHANNELS = [("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"), ("픽채널", "P00")]
+_RT_DEVICES = [("스마트폰(태블릿 포함)", "DV_SP"), ("PC클라이언트", "DV_PC"),
+               ("웹브라우저(SBS홈페이지)", "DV_PW"), ("모바일웹", "DV_MWEB"),
+               ("워치", "DV_WATCH"), ("자동차", "DV_CAR"), ("AI스피커(7사 합산)", "DV_AI")]
+_RT_AGES = [("0-19", "AGE_T0_19"), ("20-24", "AGE_T20_24"), ("25-29", "AGE_T25_29"),
+            ("30-34", "AGE_T30_34"), ("35-39", "AGE_T35_39"), ("40-44", "AGE_T40_44"),
+            ("45-49", "AGE_T45_49"), ("50-54", "AGE_T50_54"), ("55-59", "AGE_T55_59"),
+            ("60+", "AGE_T60")]
 
 def _rt_hhmm(row) -> str:
     """행 _time(ISO) → 'HH:MM'."""
@@ -1189,23 +1192,29 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
                 "provenance": {"providers": ["realtime_now"], "scope": "realtime"}}
     latest = today[-1]
     now_hhmm = _rt_hhmm(latest)
-    total_now = _rt_int(latest.get("TOTAL_SUM"))
+    total_now = _rt_int(latest.get("T00"))
 
-    # 스냅샷 — 채널·디바이스 분해 (키를 한글명으로 결정적 변환)
+    # 스냅샷 — 채널·디바이스·성별·연령 분해 (키를 한글명으로 결정적 변환)
     snap = {"기준시각": now_hhmm, "전체": total_now,
-            "채널별": {nm: _rt_int(latest.get(f)) for nm, f, _ in _RT_CHANNELS},
-            "디바이스별": {nm: _rt_int(latest.get(f)) for nm, f in _RT_DEVICES}}
+            "채널별": {nm: _rt_int(latest.get(f)) for nm, f in _RT_CHANNELS},
+            "디바이스별": {nm: _rt_int(latest.get(f)) for nm, f in _RT_DEVICES},
+            "보는라디오": _rt_int(latest.get("BA")),
+            "성별(본인인증자만)": {"남": _rt_int(latest.get("SEX_M")),
+                              "여": _rt_int(latest.get("SEX_F")),
+                              "인증자합계": _rt_int(latest.get("SEX_TM"))},
+            "연령대(본인인증자만)": {**{nm: _rt_int(latest.get(f)) for nm, f in _RT_AGES},
+                               "인증자합계": _rt_int(latest.get("AGE_TM"))}}
 
     # 어제/지난주 같은 시각 비교 + 피크 (계산은 코드가, LLM은 읽기만)
     def _at(rows, hhmm):
         for r in rows:
             if _rt_hhmm(r) == hhmm:
-                return _rt_int(r.get("TOTAL_SUM"))
+                return _rt_int(r.get("T00"))
         return None
     def _peak(rows):
         best_v, best_t = None, None
         for r in rows:
-            v = _rt_int(r.get("TOTAL_SUM"))
+            v = _rt_int(r.get("T00"))
             if v is not None and (best_v is None or v > best_v):
                 best_v, best_t = v, _rt_hhmm(r)
         return {"값": best_v, "시각": best_t}
@@ -1222,15 +1231,16 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
         hh = _rt_hhmm(r)
         if hh[4:5] == "0":                      # 매 10분(HH:M0)만 추림
             ser.append(",".join([hh] + [str(_rt_int(r.get(f)) or "") for f in
-                                        ("TOTAL_SUM", "FM_SUM", "AM_SUM", "GM_SUM", "PM_SUM")]))
+                                        ("T00", "F00", "L00", "G00", "P00")]))
 
     ch_code, ch_name = _detect_channel(question)
     head = (f"분석 대상: 실시간 동시사용자(1분 집계) · 기준시각 오늘 {now_hhmm}"
             + (f" · 관심 채널: {ch_name}" if ch_code and ch_code != "T00" else ""))
     defs = ("[용어 정의]\n"
-            "- 동시사용자: 해당 1분에 청취 중인 사용자 수(SUM 계열). COUNT 계열은 미사용.\n"
-            "- 채널 매핑: FM=파워FM, AM=러브FM, GM=고릴라M, PM=픽채널 (위 데이터는 이미 한글명으로 변환됨)\n"
-            "- 디바이스: 스마트폰=전체-PC클라이언트-AI스피커(파생) · 보는라디오=앱 내 시청 모드\n"
+            "- 동시사용자: 1분 버킷 내 활성 세션의 고유 사용자 수(dc UUID, 세션 겹침 기반)\n"
+            "- 성별·연령은 본인인증 사용자만 집계 — 전체보다 작은 부분집합이므로 비율은 "
+            "'인증자합계'를 분모로만 말할 것(전체 대비 비율 금지)\n"
+            "- 보는라디오는 시청 모드(카테고리) — 디바이스 분해와 별개 축이라 합산 금지\n"
             "- 비교값·증감%·피크는 코드가 계산한 값 — 그대로 사용하고 재계산하지 말 것")
     context = (head + "\n\n### realtime_now — 현재 동시사용자 스냅샷\n"
                + json.dumps(snap, ensure_ascii=False)

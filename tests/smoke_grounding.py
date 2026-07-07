@@ -147,9 +147,9 @@ check_true("실시간 감지: '지금 동시 청취자 몇 명'", G._detect_real
 check_true("실시간 감지: '실시간 현황'", G._detect_realtime("실시간 현황 보여줘"))
 check_true("오탐 방지: '지금 이상 있어?' 실시간 아님", not G._detect_realtime("지금 이상 있어?"))
 check_true("오탐 방지: '어제 DAU는?' 실시간 아님", not G._detect_realtime("어제 DAU는?"))
-# 채널 매핑 결정성 — AM=러브FM(L00) 오귀속 방지의 근원
-check("실시간 채널 매핑(AM=러브FM)",
-      [(nm, code) for nm, f, code in G._RT_CHANNELS],
+# 채널 매핑 결정성 — tempsummary는 필드명이 곧 RAAS 코드
+check("실시간 채널 매핑(필드=코드)",
+      G._RT_CHANNELS,
       [("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"), ("픽채널", "P00")])
 check("실시간 증감% 계산", G._rt_pct(110, 100), 10.0)
 check("실시간 시각 파싱", G._rt_hhmm({"_time": "2026-07-07T08:09:00.000+09:00"}), "08:09")

@@ -266,34 +266,44 @@ def invalidate_timeline() -> None:
     _timeline_feed.invalidate()
 
 
-# ── 실시간 동시사용자 (summary_gorealra_1m, 1분 집계) ─────
-# 필드 규칙(2026-07 확인): 채널별 *_COUNT는 값 없음 → *_SUM만 사용.
-#   접미사: _BA=보는라디오 / _PW=웹브라우저(SBS홈페이지) / _PC=PC클라이언트 / _AI=AI스피커
-#   스마트폰은 필드가 없어 파생: TOTAL_SUM_SP = TOTAL_SUM - TOTAL_SUM_PC - TOTAL_SUM_AI
-#   채널 접두사 ↔ RAAS 코드: FM=파워FM(F00) / AM=러브FM(L00) / GM=고릴라M(G00) / PM=픽채널(P00)
-RT_INDEX = "summary_gorealra_1m"
-_RT_FIELDS = ("_time TOTAL_SUM AM_SUM FM_SUM GM_SUM PM_SUM "
-              "TOTAL_SUM_SP TOTAL_SUM_PC TOTAL_SUM_PW TOTAL_SUM_AI TOTAL_SUM_BA")
+# ── 실시간 동시사용자 (tempsummary, 1분 집계) ─────────────
+# 원천: gorealra_app_log 세션(RA/BA/RS)을 1분 버킷 겹침 판정 → dc(UUID) → collect.
+# 필드 규칙(2026-07 확정 — 구 summary_gorealra_1m 스키마는 폐기):
+#   채널: T00/F00/L00/G00/P00 — RAAS 코드와 동일(별도 매핑 불필요)
+#   디바이스: DV_SP(스마트폰·태블릿)/DV_PC/DV_PW(웹)/DV_MWEB/DV_WATCH/DV_CAR/DV_AI_*(7사)
+#   BA = 보는라디오(CATEGORY 축 — 디바이스 분해와 별개, BA_F00/BA_L00 채널 분해 존재)
+#   성별(SEX_M/F)·연령(AGE_T*)은 본인인증(AUTH=1) 사용자만 — 분모 SEX_TM/AGE_TM 제공
+RT_INDEX = os.getenv("RAAS_RT_INDEX", "tempsummary")   # 인덱스명 변경 대비 env 오버라이드
+_RT_AI_FIELDS = "DV_AI_SKT DV_AI_TMAP DV_AI_BTV DV_AI_BIXBY DV_AI_LGU DV_AI_KT DV_AI_KKO"
+# 오늘(스냅샷·프로파일용) — 채널+디바이스+성별+연령. 과거일(비교용)은 채널만(narrow).
+_RT_WIDE = ("_time T00 F00 L00 G00 P00 "
+            "DV_SP DV_PC DV_PW DV_MWEB DV_WATCH DV_CAR DV_AI BA "
+            "SEX_M SEX_F SEX_TM "
+            "AGE_T0_19 AGE_T20_24 AGE_T25_29 AGE_T30_34 AGE_T35_39 "
+            "AGE_T40_44 AGE_T45_49 AGE_T50_54 AGE_T55_59 AGE_T60 AGE_TM")
+_RT_NARROW = "_time T00 F00 L00 G00 P00"
 
-def _rt_spl(earliest: str, latest: str) -> str:
-    return (f"search index={RT_INDEX} earliest={earliest} latest={latest} "
-            "| eval TOTAL_SUM_SP=TOTAL_SUM-TOTAL_SUM_PC-TOTAL_SUM_AI "
-            f"| table {_RT_FIELDS} | sort 0 _time")
+def _rt_spl(earliest: str, latest: str, fields: str) -> str:
+    spl = f"search index={RT_INDEX} earliest={earliest} latest={latest} "
+    if "DV_AI" in fields:   # AI스피커 합계 필드는 원천에 없어 7사 합산으로 파생
+        spl += (f"| fillnull value=0 {_RT_AI_FIELDS} "
+                "| eval DV_AI=DV_AI_SKT+DV_AI_TMAP+DV_AI_BTV+DV_AI_BIXBY+DV_AI_LGU+DV_AI_KT+DV_AI_KKO ")
+    return spl + f"| table {fields} | sort 0 _time"
 
-def _rt_loader(earliest: str, latest: str):
+def _rt_loader(earliest: str, latest: str, fields: str):
     """실시간 행 로더 — 실패 시 빈 리스트 + source='error' (Feed가 짧은 주기로 재시도)."""
     def load():
         try:
-            return splunk_search(_rt_spl(earliest, latest)), "splunk"
+            return splunk_search(_rt_spl(earliest, latest, fields)), "splunk"
         except Exception as e:
             print(f"  [realtime] 조회 실패({earliest}~{latest}): {e}")
             return [], "error"
     return load
 
 # 오늘: 60초 캐시(사실상 1분 주기). 어제/지난주 동요일: 과거 불변 → 자정 경계 일일 캐시.
-_rt_today_feed    = Feed("realtime_today",    _rt_loader("@d", "now"),      ttl_sec=60)
-_rt_yday_feed     = Feed("realtime_yesterday", _rt_loader("-1d@d", "@d"),   daily_at="00:05")
-_rt_lastweek_feed = Feed("realtime_lastweek",  _rt_loader("-7d@d", "-6d@d"), daily_at="00:05")
+_rt_today_feed    = Feed("realtime_today",    _rt_loader("@d", "now", _RT_WIDE),        ttl_sec=60)
+_rt_yday_feed     = Feed("realtime_yesterday", _rt_loader("-1d@d", "@d", _RT_NARROW),   daily_at="00:05")
+_rt_lastweek_feed = Feed("realtime_lastweek",  _rt_loader("-7d@d", "-6d@d", _RT_NARROW), daily_at="00:05")
 
 def get_realtime_today() -> list:
     """오늘 0시~현재 1분 단위 동시사용자 행 목록 (60초 캐시)."""

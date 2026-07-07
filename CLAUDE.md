@@ -77,7 +77,7 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 | **compare** | "파워FM vs 러브FM 비교", "채널별 핵심 지표 비교"(→4채널) | 엔티티 2~4개 KPI·시계열 나란히 |
 | **ranking** | "프로그램별 DAU 순위", "가장 많이 증가한 프로그램"(변화량 순위) | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬(`_chg`도 지원) |
 | **meta** | "어떤 지표 있나", "뭘 볼 수 있어" | 온톨로지 지표 카탈로그(`get_metric_definitions_block`) — `_detect_meta`/`_assemble_meta` |
-| **realtime** | "지금 동시 청취자 몇 명", "실시간 현황" | `summary_gorealra_1m` 1분 집계 — 스냅샷·어제/지난주 동시각 비교·오늘 추이(10분 다운샘플). `_detect_realtime`/`_assemble_realtime` |
+| **realtime** | "지금 동시 청취자 몇 명", "실시간 현황" | `tempsummary` 1분 집계 — 스냅샷(채널·디바이스·성별·연령)·어제/지난주 동시각 비교·오늘 추이(10분 다운샘플). `_detect_realtime`/`_assemble_realtime` |
 | **digest** | "어제 방송 특이사항"(스토리라인 단일경로) | z-score 이상탐지(get_cached_anomalies) |
 | **general** | 위 어디에도 안 걸린 잔여(현황·건강도·이상·인사이트·개념) | T00 광역 스냅샷+시계열+온톨로지 (catch-all — `assemble`이 항상 ok) |
 
@@ -137,17 +137,19 @@ s7 이상탐지 하나 — `collect_anomalies(timeline)`이 ZScoreDetector 기�
 (red/yellow/green)를 반환하고, 서버 `get_cached_anomalies`(5분 캐시)를 통해
 `/api/suggestions` 어제 이상신호 칩과 grounding digest가 공유한다.
 
-## 실시간 동시사용자 (summary_gorealra_1m)
+## 실시간 동시사용자 (tempsummary)
 
-1분 단위 동시사용자 집계 서머리인덱스. RAAS는 로컬에 쌓지 않고(저장소=Splunk)
-`raas_datasource`의 실시간 Feed로 창(window) 단위 조회만 한다.
+1분 단위 동시사용자 집계 서머리인덱스(구 summary_gorealra_1m 스키마는 폐기).
+원천: `gorealra_app_log` 세션(RA/BA/RS)을 1분 버킷 겹침 판정 → `dc(UUID)` → collect.
+RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간 Feed로 창 단위 조회만 한다.
+인덱스명은 `RAAS_RT_INDEX` env로 오버라이드 가능(임시 이름 변경 대비).
 
-필드 규칙 (2026-07 확인, 온톨로지 미등재 — 여기가 정의 원본):
-- 채널별 `*_COUNT`는 **값 없음 → `*_SUM`만 사용**
-- 채널 접두사 매핑: `FM`=파워FM(F00) / **`AM`=러브FM(L00)** / `GM`=고릴라M(G00) / `PM`=픽채널(P00)
-- 디바이스 접미사: `_BA`=보는라디오 / `_PW`=웹브라우저(SBS홈페이지) / `_PC`=PC클라이언트 / `_AI`=AI스피커
-- 스마트폰은 파생: `TOTAL_SUM_SP = TOTAL_SUM - TOTAL_SUM_PC - TOTAL_SUM_AI`
-- Tier 2(성별·연령·청취지속)·Tier 3(지역·직업군·제조사·통신사)는 미사용 — 수요 확인 후 확장
+필드 규칙 (2026-07 확정, 온톨로지 미등재 — 여기가 정의 원본):
+- 채널: `T00/F00/L00/G00/P00` — **RAAS 코드와 동일**(별도 매핑 불필요)
+- 디바이스: `DV_SP`(스마트폰·태블릿)/`DV_PC`/`DV_PW`(웹)/`DV_MWEB`/`DV_WATCH`/`DV_CAR`/`DV_AI_*`(7사, RAAS가 합산 파생 `DV_AI`)
+- `BA` = 보는라디오(CATEGORY 축 — 디바이스와 별개, `BA_F00`/`BA_L00` 채널 분해)
+- 성별(`SEX_M/F`)·연령(`AGE_T*` 10구간)은 **본인인증(AUTH=1) 사용자만** — 분모 `SEX_TM`/`AGE_TM` 제공, 비율은 인증자합계 기준으로만
+- 채널 세부 분해 접미사: `_F`(파워FM)/`_L`(러브FM)/`_G`(고릴라M)/`_P`(픽채널) — Tier 2 확장용, 현재 T레벨만 사용
 
 ## Program Code Conventions
 
