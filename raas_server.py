@@ -777,38 +777,91 @@ class RAASHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(e)}, 500)
 
     def _get_realtime_panel(self):
-        # KPI 패널 실시간 카드 — 현재 동시청취(전체·채널)+어제/지난주 동시각·오늘 피크·스파크라인.
+        # KPI 패널 실시간 섹션 — 채널 선택(scope)에 맞는 동시청취 + 어제/지난주 동시각·피크·시리즈.
+        # scope가 프로그램 코드('내 관심')면 소속 채널 값 사용; 방송 시작 전이면 어제 데이터로 전환.
         # 데이터는 DS 실시간 Feed(60초 캐시) 공유 — 브라우저 60초 폴링이 그대로 1분 주기가 됨.
         try:
+            params = {}
+            if "?" in self.path:
+                params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
+            scope = (params.get("scope") or "T00").strip().upper()
+
             today = DS.get_realtime_today()
             if not today:
                 self.send_json({"ok": False, "error": "실시간 데이터 없음(스플렁크 미접속?)"}, 503)
                 return
-            latest = today[-1]
-            asof = GROUND._rt_hhmm(latest)
-            total = GROUND._rt_int(latest.get("T00"))
-            channels = [{"code": f, "name": nm, "value": GROUND._rt_int(latest.get(f))}
-                        for nm, f in GROUND._RT_CHANNELS]
-            def _at(rows):
+            yday, lastwk = DS.get_realtime_yesterday(), DS.get_realtime_lastweek()
+
+            _CH_SET = {"T00", "F00", "L00", "G00", "P00"}
+            program = None          # 프로그램 scope('내 관심') 정보
+            field = scope if scope in _CH_SET else None
+            if field is None:
+                # 프로그램 코드 → 소속 채널 필드. PROGRAM_DIRECTORY.channel은 한글명이라
+                # _CHANNEL_CODE로 코드 변환, 미등재 코드는 접두사로 유추(M*=러브FM 주말).
+                info = ROUTER.PROGRAM_DIRECTORY.get(scope) or {}
+                field = (METRICS._CHANNEL_CODE.get(info.get("channel"))
+                         or {"F": "F00", "L": "L00", "M": "L00",
+                             "G": "G00", "P": "P00"}.get(scope[:1], "T00"))
+                _stime = ((METRICS._load_program_latest_row(scope) or {}).get("STIME") or "").strip()
+                _now_hm = datetime.now().strftime("%H%M")
+                program = {"code": scope,
+                           "name": info.get("name") or METRICS._pgm_name(scope),
+                           "channel": field,
+                           "channel_name": METRICS._pgm_name(field),
+                           "stime": f"{_stime[:2]}:{_stime[2:]}" if len(_stime) == 4 else _stime,
+                           "started": bool(_stime and _now_hm >= _stime)}
+
+            def _val(row):
+                return GROUND._rt_int(row.get(field))
+            def _at(rows, hhmm):
                 for r in rows:
-                    if GROUND._rt_hhmm(r) == asof:
-                        return GROUND._rt_int(r.get("T00"))
+                    if GROUND._rt_hhmm(r) == hhmm:
+                        return _val(r)
                 return None
             def _peak(rows):
                 bv, bt = None, None
                 for r in rows:
-                    v = GROUND._rt_int(r.get("T00"))
+                    v = _val(r)
                     if v is not None and (bv is None or v > bv):
                         bv, bt = v, GROUND._rt_hhmm(r)
                 return {"value": bv, "time": bt}
-            y = _at(DS.get_realtime_yesterday())
-            w = _at(DS.get_realtime_lastweek())
-            series = [[GROUND._rt_hhmm(r), GROUND._rt_int(r.get("T00"))]
-                      for r in today if GROUND._rt_hhmm(r)[4:5] == "0"]
-            self.send_json({"ok": True, "asof": asof, "total": total, "channels": channels,
-                            "yesterday": {"value": y, "pct": GROUND._rt_pct(total, y)},
-                            "lastweek": {"value": w, "pct": GROUND._rt_pct(total, w)},
-                            "peak_today": _peak(today), "series": series})
+            def _ser(rows):
+                return [[GROUND._rt_hhmm(r), _val(r)] for r in rows
+                        if GROUND._rt_hhmm(r)[4:5] == "0"]
+
+            # 방송 전 프로그램('내 관심') → 어제 방송분 기준으로 전환
+            preair = bool(program and not program["started"])
+            if preair:
+                base_rows, base_day = yday, "어제"
+                anchor = program["stime"].replace(":", "")       # 어제 방송 시작시각 시점
+                anchor_hhmm = f"{anchor[:2]}:{anchor[2:]}" if len(anchor) == 4 else GROUND._rt_hhmm(yday[-1] if yday else {})
+                value = _at(yday, anchor_hhmm)
+                cmp_a = {"label": "지난주 동시각", "value": _at(lastwk, anchor_hhmm)}
+                asof = anchor_hhmm
+            else:
+                base_rows, base_day = today, "오늘"
+                latest = today[-1]
+                asof = GROUND._rt_hhmm(latest)
+                value = _val(latest)
+                cmp_a = {"label": "지난주 동시각", "value": _at(lastwk, asof)}
+            y_same = _at(yday, asof)
+            cmp_a["pct"] = GROUND._rt_pct(value, cmp_a["value"])
+
+            out = {"ok": True, "asof": asof, "mode": "yesterday_preair" if preair else "live",
+                   "scope": {"code": scope,
+                             "name": (program or {}).get("name") or METRICS._pgm_name(field),
+                             "field": field},
+                   "value": value,
+                   "yesterday": {"value": y_same, "pct": GROUND._rt_pct(value, y_same)},
+                   "lastweek": cmp_a,
+                   "peak": _peak(base_rows), "peak_day": base_day,
+                   "series": _ser(base_rows), "series_day": base_day,
+                   "program": program}
+            if field == "T00" and not program:   # 전사 뷰에서만 채널 분해 칩
+                latest = today[-1]
+                out["channels"] = [{"code": f, "name": nm, "value": GROUND._rt_int(latest.get(f))}
+                                   for nm, f in GROUND._RT_CHANNELS]
+            self.send_json(out)
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
 
