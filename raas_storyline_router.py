@@ -15,7 +15,7 @@ import json
 import re
 from typing import Optional
 
-from raas_query_engine import call_claude, HAIKU_MODEL
+from raas_llm import call_claude, HAIKU_MODEL
 
 
 # ─────────────────────────────────────────────────────────────

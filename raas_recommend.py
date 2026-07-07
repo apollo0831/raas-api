@@ -28,7 +28,7 @@ from raas_querymap import get_popular_by_role
 
 
 # ── 지표 라벨 → 내부 metric 코드 매핑 ────────────────────────
-# classify_intent가 채우는 metric 값 (raas_query_engine INTENT_SYSTEM 참고).
+# metric 값 라벨 (구 classify_intent INTENT_SYSTEM 계열 — 폴백 은퇴 후 참고용).
 # 매핑 불가한 라벨(예: '게스트/선곡 효과', '전 직무 요약')은 skip — 차라리 추천 안 함.
 _LABEL_TO_METRIC: dict = {
     "DAU": {"dau"},

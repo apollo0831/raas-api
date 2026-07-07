@@ -15,16 +15,11 @@ import sys
 import os
 import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import raas_query_engine as QE
-    QUERY_ENGINE_AVAILABLE = True
-except ImportError:
-    QUERY_ENGINE_AVAILABLE = False
+import raas_llm as LLM
+import raas_datasource as DS
 import urllib.request
 import urllib.parse
 import urllib.error
-import base64
-import ssl
 import sys
 import os
 import threading
@@ -51,7 +46,7 @@ from raas_auth import (register_user, authenticate, create_session,
                        bootstrap_admins, ALLOWED_ROLES,
                        update_profile, change_password)
 from raas_onboarding import list_active_profiles, build_suggestions
-import raas_storyline_engine as STORY
+import raas_metrics_engine as METRICS
 import raas_storyline_router as ROUTER
 import raas_grounding as GROUND
 from raas_querymap import (stats_overview, stats_by_role,
@@ -63,23 +58,15 @@ from raas_briefing_context import build_query_context
 
 # ── 설정 ─────────────────────────────────────────────
 PORT            = 5000
-SPLUNK_HOST       = os.getenv("SPLUNK_HOST")
-SPLUNK_USER       = os.getenv("SPLUNK_USER")
-SPLUNK_PASSWORD   = os.getenv("SPLUNK_PASSWORD")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL      = os.getenv("CLAUDE_MODEL")
 # 답변 생성 max_tokens 상한(천장) — 짤림 방지. .env의 MAX_ANSWER_TOKENS로 조절(기본 8000).
 MAX_ANSWER_TOKENS = int(os.getenv("MAX_ANSWER_TOKENS", "8000"))
-SPLUNK_APP        = os.getenv("SPLUNK_APP")        # ← Splunk 앱 내부 ID
-SPLUNK_TIMEOUT    = int(os.getenv("SPLUNK_TIMEOUT", "10"))  # 초. 미도달 환경에서 빠른 CSV 폴백을 위해 짧게
+# Splunk 접속 설정·REST 실행기는 raas_datasource(DS)로 이동 — 서버는 사용만 한다.
 # PostHog (4주 PoC 측정) — 공개 키이므로 브라우저 노출 OK
 POSTHOG_KEY       = os.getenv("POSTHOG_KEY", "")
 POSTHOG_HOST      = os.getenv("POSTHOG_HOST", "https://eu.posthog.com")
 # ─────────────────────────────────────────────────────
-
-SSL_CONTEXT = ssl.create_default_context()
-SSL_CONTEXT.check_hostname = False
-SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
 # ── 캐시 (Splunk 동시 검색 529 방지) ─────────────────────
 CACHE_TTL = timedelta(minutes=5)
@@ -109,93 +96,28 @@ def cache_clear(*keys):
 # 수동 재적재 동시 실행 방지(더블클릭·중복 요청 → Splunk 이중 풀 차단)
 _refresh_lock = threading.Lock()
 
-def _supplement_timeline_from_csv(timeline: dict) -> None:
-    """Splunk 룩업에 없는 필드를 로컬 CSV로 보완 (react_week, react_rate_week 등).
-    날짜가 일치하는 행은 직접 보완하고, 로컬 CSV의 마지막 날짜 이후 Splunk 행은
-    마지막 로컬 행 값을 근사치로 사용 (weekly 집계 등 느리게 변하는 지표 대상)."""
-    _base = os.path.dirname(os.path.abspath(__file__))
-    _candidates = [
-        os.path.join(_base, 'data', 'raas_kpi_latest.csv'),
-        os.path.join(_base, 'raas_kpi_latest.csv'),
-    ]
-    local_path = next((p for p in _candidates if os.path.exists(p)), None)
-    if not local_path:
-        return
-    try:
-        import pandas as pd
-        df = pd.read_csv(local_path, dtype=str, keep_default_na=False)
-        # code → {date → row} mapping
-        local_by_code: dict = {}
-        for r in df.to_dict(orient='records'):
-            code = r.get('PGM_CODE')
-            date = r.get('DATE')
-            if code and date:
-                local_by_code.setdefault(code, {})[date] = r
-        # 1) 날짜 일치 행 직접 보완 ('0' 도 미계산으로 간주)
-        def _missing(v): return not v or v in ('0', '0.0', '.0')
-        for code, date_map in local_by_code.items():
-            if code not in timeline:
-                continue
-            for date, local_row in date_map.items():
-                if date not in timeline[code]:
-                    continue
-                splunk_row = timeline[code][date]
-                for k, v in local_row.items():
-                    if v and _missing(splunk_row.get(k, '')):
-                        splunk_row[k] = v
-        # 2) 로컬 CSV 마지막 날짜 이후 Splunk 행 → 마지막 로컬 행 값으로 보완
-        # '0' 도 "미계산" 으로 간주하여 덮어쓴다 (weekly/monthly 집계는 0이면 미계산)
-        _FORWARD_FIELDS = {
-            'react_week', 'react_week_prev', 'react_week_chg', 'react_week_share',
-            'react_rate_week', 'react_rate_week_prev', 'react_rate_week_diff',
-            'react_mon', 'react_mon_prev', 'react_mon_chg', 'react_mon_share',
-            'react_rate_mon', 'react_rate_mon_prev', 'react_rate_mon_diff',
-        }
-        for code, date_map in local_by_code.items():
-            if code not in timeline:
-                continue
-            last_local_date = max(date_map.keys())
-            last_local_row = date_map[last_local_date]
-            for d, splunk_row in timeline[code].items():
-                if d <= last_local_date:
-                    continue
-                for k in _FORWARD_FIELDS:
-                    v = last_local_row.get(k, '')
-                    if v and _missing(splunk_row.get(k, '')):
-                        splunk_row[k] = v
-    except Exception as e:
-        print(f"  [supplement] local CSV merge failed: {e}")
-
 def get_cached_timeline():
-    cached = cache_get("timeline")
-    if cached:
-        return cached
-    timeline, source = QE._load_timeline(splunk_search)
-    if source == 'splunk':
-        _supplement_timeline_from_csv(timeline)
-    cache_set("timeline", timeline)
-    cache_set("timeline_source", source)
-    return timeline
+    """KPI 타임라인 — 캐시·적재는 raas_datasource 소유 (일 1회, 07:00 경계 갱신)."""
+    return DS.get_timeline()
 
 def get_timeline_source() -> str:
-    return cache_get("timeline_source") or "unknown"
+    return DS.get_timeline_source()
 
 
 # 스토리라인 엔진이 일반 채팅과 동일한 Splunk 파이프라인을 쓰도록 주입
 # (CSV 직접 읽기는 더 이상 사용 X)
-STORY.set_timeline_provider(get_cached_timeline)
+METRICS.set_timeline_provider(get_cached_timeline)
 
 
 def get_cached_anomalies() -> list:
-    """s7_anomalies['alerts']만 별도 캐시 (5분 TTL).
-    /api/briefing과 /api/suggestions가 같은 결과를 공유 — 중복 계산 방지."""
+    """이상탐지 alerts 별도 캐시 (5분 TTL) — /api/suggestions·digest가 공유.
+    (구 collect_briefing_data s7 → collect_anomalies로 분리, 브리핑 카드는 은퇴)"""
     cached = cache_get("anomalies")
     if cached is not None:
         return cached
     try:
         tl = get_cached_timeline()
-        brief = QE.collect_briefing_data(tl)
-        alerts = (brief.get('s7_anomalies') or {}).get('alerts', []) or []
+        alerts = (METRICS.collect_anomalies(tl) or {}).get('alerts', []) or []
     except Exception as e:
         print(f"[anomalies] 캐시 빌드 실패: {e}", flush=True)
         alerts = []
@@ -263,7 +185,7 @@ def _build_data_check_text(report: dict, prefix_line: str = "") -> str:
                 "심각(red)이 있으면 무엇이 문제인지 먼저 경고, 없으면 정상임을 간결히 안내. 군더더기 금지.")
         _u = (f"요약: red {s.get('red',0)} / yellow {s.get('yellow',0)} / green {s.get('green',0)}\n"
               f"주요 항목:\n{_fnd or '(이상 없음)'}")
-        verdict, _ = QE.call_claude(_sys, _u, max_tokens=200, model=QE.HAIKU_MODEL)
+        verdict, _ = LLM.call_claude(_sys, _u, max_tokens=200, model=LLM.HAIKU_MODEL)
     except Exception:
         verdict = (f"🔴 심각 이상 {s.get('red',0)}건 — 적재·무결성 점검 필요." if s.get("red")
                    else (f"🟡 주의 {s.get('yellow',0)}건 확인." if s.get("yellow") else "🟢 데이터 정상."))
@@ -271,35 +193,6 @@ def _build_data_check_text(report: dict, prefix_line: str = "") -> str:
     if prefix_line:
         full += prefix_line + "\n\n"
     return full + body
-
-
-def splunk_auth():
-    return "Basic " + base64.b64encode(
-        f"{SPLUNK_USER}:{SPLUNK_PASSWORD}".encode()).decode()
-
-def splunk_search(spl: str) -> list:
-    url = f"{SPLUNK_HOST}/servicesNS/nobody/{SPLUNK_APP}/search/jobs/export"
-    data = urllib.parse.urlencode({
-        "search": spl, "output_mode": "json", "count": 0
-    }).encode()
-    req = urllib.request.Request(url, data=data)
-    req.add_header("Authorization", splunk_auth())
-    req.add_header("Content-Type", "application/x-www-form-urlencoded")
-    try:
-        with urllib.request.urlopen(req, context=SSL_CONTEXT, timeout=SPLUNK_TIMEOUT) as resp:
-            rows = []
-            for line in resp:
-                line = line.decode("utf-8").strip()
-                if not line: continue
-                try:
-                    obj = json.loads(line)
-                    if obj.get("result"): rows.append(obj["result"])
-                except: pass
-            return rows
-    except urllib.error.HTTPError as e:
-        raise Exception(f"Splunk {e.code}: {e.read().decode()[:200]}")
-    except Exception as e:
-        raise Exception(f"Splunk 오류: {e}")
 
 
 def fetch_schedule_status(hours: int = 192):
@@ -317,7 +210,7 @@ def fetch_schedule_status(hours: int = 192):
            '| eval last=strftime(last_epoch,"%m/%d %H:%M") '
            '| fields savedsearch_name status last reason run_time result_count')
     try:
-        rows = splunk_search(spl)
+        rows = DS.splunk_search(spl)
     except Exception as e:
         print(f"[sched] scheduler 조회 실패: {e}", flush=True)
         return None
@@ -578,11 +471,11 @@ class RAASHandler(BaseHTTPRequestHandler):
             if code not in timeline:
                 self.send_json({"ok": False, "error": f"코드 '{code}' 데이터 없음"}, 404)
                 return
-            trend = QE.get_metric_trend(timeline, code, metric, days=days)
+            trend = DS.get_metric_trend(timeline, code, metric, days=days)
             latest_row = timeline[code].get(max(timeline[code].keys()), {})
             self.send_json({
                 "ok": True, "code": code,
-                "name": latest_row.get("PGM_NAME", "") or QE._pgm_name(code),
+                "name": latest_row.get("PGM_NAME", "") or METRICS._pgm_name(code),
                 "metric": metric, "days": days,
                 "data": [{"date": d, "value": v} for d, v in trend]
             })
@@ -596,28 +489,28 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "날짜가 필요합니다 (YYYY/MM/DD)"}, 400)
                 return
             timeline = get_cached_timeline()
-            snapshot = QE.get_snapshot_at(timeline, target_date)
+            snapshot = DS.get_snapshot_at(timeline, target_date)
             if not snapshot:
                 self.send_json({
                     "ok": False, "error": f"'{target_date}' 데이터 없음",
-                    "available_dates": QE.get_available_dates(timeline)
+                    "available_dates": DS.get_available_dates(timeline)
                 }, 404)
                 return
             result = {}
             for code, row in snapshot.items():
                 result[code] = {
                     "code": code,
-                    "name": row.get("PGM_NAME", "") or QE._pgm_name(code),
-                    "dau": QE._i(row.get("dau_today")),
-                    "dau_wow": QE._fn(row.get("dau_wow")),
-                    "dau_week": QE._i(row.get("dau_week")),
-                    "dau_mon": QE._i(row.get("dau_mon")),
-                    "deep_rate": QE._fn(row.get("deep_rate")),
-                    "engage_rate": QE._fn(row.get("engage_rate")),
-                    "habit_rate": QE._fn(row.get("habit_rate")),
-                    "new_user": QE._i(row.get("new_today")),
-                    "react_user": QE._i(row.get("react_today")),
-                    "churn_rate": QE._fn(row.get("churn_rate"))
+                    "name": row.get("PGM_NAME", "") or METRICS._pgm_name(code),
+                    "dau": DS._i(row.get("dau_today")),
+                    "dau_wow": DS._fn(row.get("dau_wow")),
+                    "dau_week": DS._i(row.get("dau_week")),
+                    "dau_mon": DS._i(row.get("dau_mon")),
+                    "deep_rate": DS._fn(row.get("deep_rate")),
+                    "engage_rate": DS._fn(row.get("engage_rate")),
+                    "habit_rate": DS._fn(row.get("habit_rate")),
+                    "new_user": DS._i(row.get("new_today")),
+                    "react_user": DS._i(row.get("react_today")),
+                    "churn_rate": DS._fn(row.get("churn_rate"))
                 }
             self.send_json({"ok": True, "date": target_date,
                             "codes_count": len(result), "data": result})
@@ -637,10 +530,10 @@ class RAASHandler(BaseHTTPRequestHandler):
             if scope not in timeline:
                 self.send_json({"ok": False, "error": f"스코프 '{scope}' 데이터 없음"}, 404)
                 return
-            trend = QE.get_metric_trend(timeline, scope, metric, days=days, date_field=date_key)
+            trend = DS.get_metric_trend(timeline, scope, metric, days=days, date_field=date_key)
             self.send_json({
                 "ok": True, "scope": scope,
-                "name": QE._pgm_name(scope),
+                "name": METRICS._pgm_name(scope),
                 "metric": metric, "days": days,
                 "data": [{"date": d, "value": v} for d, v in trend]
             })
@@ -650,7 +543,7 @@ class RAASHandler(BaseHTTPRequestHandler):
     def _get_timeline_meta(self):
         try:
             timeline = get_cached_timeline()
-            dates = QE.get_available_dates(timeline)
+            dates = DS.get_available_dates(timeline)
             source = get_timeline_source()
             resp = {
                 "ok": True,
@@ -757,20 +650,6 @@ class RAASHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
 
-    def _get_briefing(self):
-        try:
-            params = {}
-            if "?" in self.path:
-                params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
-            timeline = get_cached_timeline()
-            data = QE.collect_briefing_data(timeline)
-            if 'error' in data:
-                self.send_json({"ok": False, "error": data['error']}, 503)
-                return
-            self.send_json({"ok": True, "data": data})
-        except Exception as e:
-            self.send_json({"ok": False, "error": str(e)}, 500)
-
     def _get_rawdata(self):
         try:
             params = {}
@@ -784,7 +663,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                 return
             sorted_rows = sorted(date_rows.values(),
                                  key=lambda r: r.get("DATE", ""), reverse=True)
-            name = QE._pgm_name(code)
+            name = METRICS._pgm_name(code)
             self.send_json({"ok": True, "code": code, "name": name,
                             "count": len(sorted_rows), "rows": sorted_rows})
         except Exception as e:
@@ -826,7 +705,7 @@ class RAASHandler(BaseHTTPRequestHandler):
 
     def _get_kpi_panel(self):
         # KPI 패널(우측 사이드바) — 기간(day/week/mon)·스코프(T00/채널/프로그램)별 경량 스냅샷.
-        # /api/briefing(s1~s7 전체 계산)보다 훨씬 가볍게 타임라인 행만 읽는다.
+        # 타임라인 행만 읽는 경량 스냅샷 (구 /api/briefing s1~s7 전체 계산은 은퇴).
         try:
             params = {}
             if "?" in self.path:
@@ -835,7 +714,7 @@ class RAASHandler(BaseHTTPRequestHandler):
             if period not in ("day", "week", "mon"):
                 period = "day"
             scope = (params.get("scope") or "T00").strip().upper()
-            row = STORY._load_program_latest_row(scope)
+            row = METRICS._load_program_latest_row(scope)
             if not row:
                 self.send_json({"ok": False, "error": f"'{scope}' 데이터 없음"}, 404)
                 return
@@ -845,12 +724,12 @@ class RAASHandler(BaseHTTPRequestHandler):
                                     "mon": ("mau", "mau_chg")}[period]
             channels = []
             for c in ("F00", "L00", "G00", "P00"):
-                cr = STORY._load_program_latest_row(c) or {}
+                cr = METRICS._load_program_latest_row(c) or {}
                 if cr.get(val_field) not in (None, ""):
-                    channels.append({"code": c, "name": QE._pgm_name(c, row=cr),
+                    channels.append({"code": c, "name": METRICS._pgm_name(c, row=cr),
                                      "value": cr.get(val_field), "chg": cr.get(chg_field)})
             out = {"ok": True, "period": period,
-                   "scope": {"code": scope, "name": QE._pgm_name(scope, row=row)},
+                   "scope": {"code": scope, "name": METRICS._pgm_name(scope, row=row)},
                    "date": row.get(date_key) or row.get("DATE"),
                    "row": row, "channels": channels}
             if period == "day" and scope == "T00":
@@ -1170,13 +1049,10 @@ class RAASHandler(BaseHTTPRequestHandler):
             if not question:
                 self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
                 return
-            if not QUERY_ENGINE_AVAILABLE:
-                self.send_json({"ok": False, "error": "Query engine unavailable"}, 500)
-                return
 
             # 편성표 의도 — '코너 편성/편성표'는 원인 분석이 아니라 주간 편성표(룩업 데이터).
             #   프로그램명만 있으면 lenient로 탐지(라우터는 편성표 의도의 프로그램 탐지에만 사용).
-            if STORY.is_schedule_query(question):
+            if METRICS.is_schedule_query(question):
                 try:
                     _sr = ROUTER.route(question, lenient=True)
                 except Exception:
@@ -1185,7 +1061,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                 sched = None
                 if prog:
                     try:
-                        sched = STORY.build_program_schedule(prog["code"])
+                        sched = METRICS.build_program_schedule(prog["code"])
                     except Exception as e:
                         print(f"[schedule] build error: {e}")
                         sched = None
@@ -1267,14 +1143,14 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
 
-            timeline = get_cached_timeline()
-            sys_prompt, ctx, max_tok, chart_data, facts = QE.query_with_timeline_stream(
-                question, timeline, target_date=target_date
-            )
-            if sys_prompt is None:
-                self.send_json({"ok": False, "error": "데이터를 사용할 수 없습니다."}, 500)
-                return
-            facts = facts or {}
+            # 안전망: grounding이 예외로 실패한 드문 경우 — 온톨로지 컨텍스트 + 일반 LLM 답변.
+            #   (구 raas_fallback_engine QA 엔진 은퇴 — grounding general scope가 정상 경로를 커버)
+            enriched = build_query_context(question, "")
+            sys_prompt = QUERY_SYSTEM_PROMPT
+            ctx = f"데이터 컨텍스트:\n{enriched}\n\n사용자 질문: {question}"
+            max_tok = MAX_ANSWER_TOKENS
+            chart_data = None
+            facts = {}
             # 채팅 차트 단일화: QE 폴백의 구 dataZoom 차트(chart_data) 비활성 —
             #   채팅 답변 차트는 grounding ```chart 단일 경로만 사용(리모델링 정리).
             chart_data = None
@@ -1317,7 +1193,7 @@ class RAASHandler(BaseHTTPRequestHandler):
             # 1단계-c: 관리자에게만 참고 푸터([small]) — 사용 데이터 + 지표 정의(온톨로지)
             if user.get("is_admin"):
                 try:
-                    _prov = STORY.build_query_provenance(facts, target_date)
+                    _prov = METRICS.build_query_provenance(facts, target_date)
                     if _prov:
                         sse({"type": "token", "text": "\n\n" + _prov})
                 except Exception as _e:
@@ -1625,27 +1501,16 @@ class RAASHandler(BaseHTTPRequestHandler):
 
             in_tok = out_tok = None
             facts = {}
-            if QUERY_ENGINE_AVAILABLE:
-                timeline = get_cached_timeline()
-                result = QE.query_with_timeline(
-                    question, timeline,
-                    target_date=target_date,
-                )
-                answer     = result["answer"]
-                chart_data = None   # 채팅 차트 단일화: 구 chart_data 비활성(grounding ```chart만)
-                in_tok     = result.get("input_tokens")
-                out_tok    = result.get("output_tokens")
-                facts      = result.get("facts") or {}
-            else:
-                # QE 로드 실패 시 간단 fallback — facts 없이 graceful 저장
-                enriched_context = build_query_context(question, context)
-                answer, usage = call_claude(
-                    QUERY_SYSTEM_PROMPT,
-                    f"데이터:\n{enriched_context}\n\n질문: {question}"
-                )
-                chart_data = None
-                in_tok  = usage.get("input_tokens")
-                out_tok = usage.get("output_tokens")
+            # 비스트리밍 경로 — 폴백 QA 엔진 은퇴. 온톨로지 컨텍스트 + 일반 LLM 답변.
+            #   (자유질의 본선은 /api/query/stream의 grounding. 이 경로는 호환용 경량 답변)
+            enriched_context = build_query_context(question, context)
+            answer, usage = call_claude(
+                QUERY_SYSTEM_PROMPT,
+                f"데이터:\n{enriched_context}\n\n질문: {question}"
+            )
+            chart_data = None
+            in_tok  = usage.get("input_tokens")
+            out_tok = usage.get("output_tokens")
 
             query_id = save_query(user_id, question, answer, chart_data=chart_data,
                                   ip=ip, user_name=user_name, user_role=user_role,
@@ -1766,7 +1631,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "이미 데이터를 가져오는 중입니다. 잠시 후 다시 시도하세요."}, 429); return
             try:
                 import time as _time
-                cache_clear()                    # timeline·anomalies 등 Splunk 파생 캐시 전체 무효화
+                cache_clear()                    # anomalies 등 Splunk 파생 캐시 전체 무효화
+                DS.invalidate_timeline()         # 타임라인(일일 캐시)도 강제 재적재
                 _t0 = _time.time()
                 tl = get_cached_timeline()       # 그 자리에서 Splunk 재적재(실패 시 빈 타임라인 → red로 표면화)
                 _elapsed = _time.time() - _t0
@@ -1828,7 +1694,6 @@ class RAASHandler(BaseHTTPRequestHandler):
         ("/api/query/history", _get_query_history),
         ("/api/concept/search", _get_concept_search),
         ("/api/concept/", _get_concept),
-        ("/api/briefing", _get_briefing),
         ("/api/rawdata", _get_rawdata),
         ("/api/my/interest-map", _get_my_interest_map),
         ("/api/admin/stats/", _get_admin_stats),
@@ -1868,6 +1733,15 @@ class RAASHandler(BaseHTTPRequestHandler):
         "/api/data_check": _post_data_check,
         "/api/data_refresh": _post_data_refresh,
     }
+
+    def handle_one_request(self):
+        # 모바일·ngrok 클라이언트가 응답 도중 연결을 끊으면 요청 읽기·응답 쓰기에서
+        # (BrokenPipe/ConnectionReset/ConnectionAborted)가 발생 → 조용히 연결만 닫고
+        # 서버·로그를 어지럽히지 않음(스레드 예외로 번지지 않게 이 지점에서 흡수).
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError):
+            self.close_connection = True
 
     def do_GET(self):
         h = self.GET_EXACT.get(self.path)

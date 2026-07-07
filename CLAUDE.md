@@ -12,11 +12,6 @@ Splunk에서 청취 KPI 데이터를 가져와 Claude API로 분석하고, 브�
 ```bash
 # 로컬 프록시 서버 실행 (포트 5000)
 python raas_server.py
-
-# 자연어 질의 CLI (단독 실행)
-python raas_query_engine.py "어제 DAU는?" --verbose
-python raas_query_engine.py --demo   # 샘플 5개 질의 실행
-python raas_query_engine.py "최근 트렌드" --date 2024-04-20
 ```
 
 ## Environment Variables (`.env`)
@@ -45,24 +40,28 @@ LLM context에 골라 넣고 LLM이 본연의 성능으로 답변(고정 출력 
 raas_server.py  ← 진입점, ThreadingHTTPServer on port 5000
     ├── POST /api/query/stream → [핵심] 자유질의 SSE 스트리밍
     │       1) 편성표 의도면 STORY.build_program_schedule (룩업)
-    │       2) GROUND.assemble(question) → ok면 grounding 답변 스트리밍
-    │       3) 미식별이면 raas_query_engine(구 QE)로 폴백
+    │       2) GROUND.assemble(question) → grounding 답변 스트리밍 (general scope가 catch-all)
+    │       (구 raas_query_engine 폴백 QA 엔진은 2026-07 은퇴·삭제 — grounding 단일 경로)
     ├── POST /api/storyline/today → '어제 방송 특이사항' digest (grounding)
     ├── POST /api/improve/* · /api/knowledge/* → 지식 개선 루프
-    ├── GET  /api/briefing · /api/suggestions · /api/query/history/* 등
+    ├── GET  /api/suggestions · /api/query/history/* 등 (/api/briefing은 2026-07 은퇴)
     └── GET  /                → raas_web.html 정적 서빙
 
 raas_grounding.py  ← [핵심] 검색·Grounding 레이어 (단일 답변 엔진)
     resolve_entities → scope 판별(program/channel/compare/ranking) → provider 선택(Haiku)
     → fetch(구조화 데이터) → 온톨로지 팩 + 사용자 오버레이 병합 → GROUNDING_SYSTEM으로 LLM 생성
 
-raas_storyline_engine.py  ← grounding이 재사용하는 데이터 computer 모음
+raas_metrics_engine.py  ← grounding이 재사용하는 KPI 파생지표 계산 계층
     _compute_flow_decomposition / _compute_cohort / _compute_stickiness /
     _compute_programming_impact / _compute_weekday_pattern_check / _detect_program_revision /
     build_program_schedule / build_query_provenance / _metric_definitions_lines / _query_decompositions
     (구 CP 다중슬롯 스토리라인 오케스트레이션은 은퇴·제거됨)
 
-raas_query_engine.py  ← 폴백 엔진(거래성·메타 질의) + collect_briefing_data(s1~s7) + timeline 캐시
+raas_datasource.py  ← Splunk 수집 단일 소유 (splunk_search·fetch_lookup·run_query)
+    KPI 타임라인 일일 캐시(원천 06:50 생성 → 기본 07:00 경계, RAAS_KPI_REFRESH_AT로 변경)
+    Feed 클래스: daily_at(일배치형)/ttl_sec(실시간형) 정책 — 새 룩업·직접쿼리 소스 추가용
+    타임라인 조회 헬퍼(get_metric_trend·get_snapshot_at·get_available_dates·_i·_fn)
+raas_llm.py  ← 공용 LLM 클라이언트(call_claude·HAIKU_MODEL) — grounding·router·server가 import
 raas_onto/raas_ontology_adapter.py  ← TTL 온톨로지 8종 로더(지표/프로그램/게스트/특일/cause 등)
 raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·data_requests·storyline_events
 ```
@@ -74,10 +73,11 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 |-------|------------|--------|
 | **program** | "컬투쇼 어제 왜 빠졌어?" | provider 10종(KPI·시계열·흐름분해·코호트·편성·요일·개편·편성표·특일) |
 | **channel** | "러브FM 어때?", "전사 트렌드" | 채널행(F00/L00/G00/P00/T00) — 프로그램 전용 provider 제외 |
-| **compare** | "파워FM vs 러브FM 비교" | 엔티티 2~4개 KPI·시계열 나란히 |
-| **ranking** | "프로그램별 DAU 순위" | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬 |
+| **compare** | "파워FM vs 러브FM 비교", "채널별 핵심 지표 비교"(→4채널) | 엔티티 2~4개 KPI·시계열 나란히 |
+| **ranking** | "프로그램별 DAU 순위", "가장 많이 증가한 프로그램"(변화량 순위) | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬(`_chg`도 지원) |
+| **meta** | "어떤 지표 있나", "뭘 볼 수 있어" | 온톨로지 지표 카탈로그(`get_metric_definitions_block`) — `_detect_meta`/`_assemble_meta` |
 | **digest** | "어제 방송 특이사항"(스토리라인 단일경로) | z-score 이상탐지(get_cached_anomalies) |
-| (폴백) | "어제 MAU는?"(거래성), "어떤 지표 있나"(메타) | raas_query_engine |
+| **general** | 위 어디에도 안 걸린 잔여(현황·건강도·이상·인사이트·개념) | T00 광역 스냅샷+시계열+온톨로지 (catch-all — `assemble`이 항상 ok) |
 
 - provider = `{name, needs, desc, fetch}`. LLM(Haiku)이 질문에 맞는 provider만 선택(`select_providers`).
 - 온톨로지 팩: 지표 정의 + cause 분해 프레임워크. 오버레이: 사용자 기여 지식(read-time 병합).
@@ -128,24 +128,17 @@ KPI 패널         | 우측 토글 패널(loadKpiPanel) — 핵심 지표 스냅
 1. `data/raas_kpi_latest.csv` (권장)
 2. `raas_kpi_latest.csv` (구 위치, 호환용 fallback)
 
-## Briefing Sections (raas_query_engine.collect_briefing_data)
+## 이상탐지 (raas_metrics_engine.collect_anomalies)
 
-`collect_briefing_data(timeline)` 반환 딕셔너리의 7개 섹션 (s7 이상탐지는 grounding digest가 재사용):
-
-| 키 | 내용 |
-|----|------|
-| `s1_executive` | DAU/WAU/MAU, 신규/복귀 |
-| `s2_funnel` | D1/D7 리텐션, 이탈율, 복귀율 |
-| `s3_engagement` | 깊은청취율(10분이상/1분이상), 참여율 |
-| `s4_growth` | 습관형성률, TOP3 프로그램 |
-| `s5_rankings` | DAU TOP10, 깊은청취 TOP5, 리스크 프로그램 |
-| `s6_channels` | 파워FM/러브FM/고릴라M/픽채널 채널별 지표 |
-| `s7_anomalies` | 자동 이상 알림 (red/yellow/green) |
+구 briefing(s1~s7, `/api/briefing`, 프론트 브리핑 카드)은 **2026-07 은퇴**. 남은 것은
+s7 이상탐지 하나 — `collect_anomalies(timeline)`이 ZScoreDetector 기반 alerts
+(red/yellow/green)를 반환하고, 서버 `get_cached_anomalies`(5분 캐시)를 통해
+`/api/suggestions` 어제 이상신호 칩과 grounding digest가 공유한다.
 
 ## Program Code Conventions
 
 프로그램 매핑: `raas_storyline_router.PROGRAM_DIRECTORY` + `extract_program(text)` (질문→프로그램),
-채널 매핑: `raas_storyline_engine._CHANNEL_CODE`, 코드→이름: `adapter.get_program_meta(code)`:
+채널 매핑: `raas_metrics_engine._CHANNEL_CODE`, 코드→이름: `adapter.get_program_meta(code)`:
 - `T00` = 전체, `F00` = 파워FM, `L00` = 러브FM, `G00` = 고릴라M, `P00` = 픽채널
 - `F01`~`F13` = 파워FM 프로그램, `L01`~`L15` / `M05`~`M11` = 러브FM 프로그램
 - 채널/집계 코드는 X00 패턴(ranking scope에서 제외)
@@ -165,15 +158,6 @@ KPI 패널         | 우측 토글 패널(loadKpiPanel) — 핵심 지표 스냅
 - new_d7_ret / new_d7_ret_pw / new_d7_diff: 신규코호트 D7유지율
 - new_w1_ret / new_w1_ret_pw / new_w1_diff: 신규코호트 W1유지율
 - new_m1_ret / new_m1_ret_pw / new_m1_diff: 신규코호트 M1유지율
-
-### Briefing Engine 섹션 추가 필드
-s2_funnel 추가:
-- new_d1_ret / new_d7_ret / new_w1_ret / new_m1_ret (신규 코호트 유지율 4종)
-
-s3_engagement 추가:
-- wau_1min / wau_10min (주간 1분이상/10분이상 사용자)
-- mau_1min / mau_10min (월간 1분이상/10분이상 사용자)
-- channel_deep 각 채널에 rate_week / rate_mon 추가
 
 ### 유지율 코호트 구분
 - 전체 코호트: d1_ret / d7_ret / w1_ret / m1_ret (program_user_retention_*.csv)

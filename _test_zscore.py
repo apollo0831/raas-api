@@ -2,7 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from raas_query_engine import _load_timeline, get_available_dates
+from raas_datasource import load_timeline as _load_timeline, get_available_dates
 
 def _csv_fallback(_query):
     raise RuntimeError("no splunk — use CSV fallback")

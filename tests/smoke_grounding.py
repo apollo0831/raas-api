@@ -20,7 +20,7 @@ sys.path.insert(0, __file__.rsplit("tests", 1)[0].rstrip("\\/"))
 
 import raas_server as SRV                    # noqa: E402 — timeline provider 준비
 import raas_grounding as G                   # noqa: E402
-import raas_storyline_engine as STORY        # noqa: E402
+import raas_metrics_engine as METRICS        # noqa: E402
 import raas_storyline_router as ROUTER       # noqa: E402
 import raas_data_check as DC                 # noqa: E402
 
@@ -112,7 +112,36 @@ check_true("프로그램별 복귀·신규 포함", all(k in _p0 for k in ("reac
 print("── 5. 비교/순위/편성표 분기 ─────────────────────────")
 check_true("compare 감지: 파워FM vs 러브FM", bool(G._detect_compare("파워FM vs 러브FM 비교")))
 check_true("ranking 감지: 프로그램별 DAU 순위", bool(G._detect_ranking("프로그램별 DAU 순위")))
-check_true("편성표 의도", STORY.is_schedule_query("컬투쇼 코너 편성 알려줘"))
+# 누수 수정: '채널별 ~' 는 채널 4개(F00/L00/G00/P00) compare 로 (폴백 유출 방지)
+_ch_cmp = G._detect_compare("채널별 핵심 지표 비교") or []
+check("'채널별' → 4채널 compare", [e["code"] for e in _ch_cmp], ["F00", "L00", "G00", "P00"])
+# 누수 수정: '가장 많이 증가/감소한 프로그램' 은 변화량(_chg) 순위로
+_rk_up = G._detect_ranking("지난주 활성사용자가 가장 많이 증가한 프로그램은?") or {}
+check("'가장 많이 증가한 프로그램' → 변화량 순위",
+      (_rk_up.get("field"), _rk_up.get("by_change"), _rk_up.get("asc")), ("dau", True, False))
+_rk_dn = G._detect_ranking("DAU 가장 많이 감소한 프로그램") or {}
+check("'가장 많이 감소' → 오름차순(음수 우선)", _rk_dn.get("asc"), True)
+# 오탐 방지: 단일 엔티티 변화 질의는 순위가 아니다
+check_true("오탐 방지: '컬투쇼 DAU 증가했어?' 순위 아님",
+           G._detect_ranking("컬투쇼 DAU 증가했어?") is None)
+
+print("── 5.1 no-entity scope 흡수 (거래성·속성·메타) ────────")
+# A. 지표 미지정 날짜 스냅샷 → 전사(T00)
+_a = G.resolve_entities("6월 16일 주요 데이터 보여줘", None)
+check("A '6월16일 주요 데이터' → T00", _a.get("code"), "T00")
+# B. 엔티티 없는 속성 질의 → 전사 + 소속 프로그램 나열
+_b = G.resolve_entities("어제 게스트 누구야?", None)
+check("B '어제 게스트' → T00+all_programs", (_b.get("code"), _b.get("all_programs")), ("T00", True))
+# C. 메타 카탈로그 질의 감지 + assemble
+check_true("C 메타 감지: '어떤 지표들을 볼 수 있어?'", G._detect_meta("어떤 지표들을 볼 수 있어?"))
+check_true("C 메타 assemble ok + catalog provider",
+           (G._assemble_meta("어떤 지표 있나") or {}).get("providers_used") == ["metric_catalog"])
+# 오탐 방지: 값/순위/날짜 질의는 메타 아님
+check_true("오탐 방지: '어떤 프로그램이 DAU 가장 높아?' 메타 아님",
+           not G._detect_meta("어떤 프로그램이 DAU 가장 높아?"))
+check_true("오탐 방지: '6/17 데이터 있어?' 메타 아님",
+           not G._detect_meta("6/17 신규사용자 데이터 있어?"))
+check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")
 

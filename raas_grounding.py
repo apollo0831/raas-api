@@ -24,11 +24,11 @@ def _dow_ko(date_str: str) -> str:
     except Exception:
         return ""
 
-import raas_storyline_engine as S
+import raas_metrics_engine as S
 from raas_storyline_router import extract_program, PROGRAM_DIRECTORY
 
 try:
-    from raas_query_engine import call_claude, HAIKU_MODEL
+    from raas_llm import call_claude, HAIKU_MODEL
 except Exception:
     call_claude = None
     HAIKU_MODEL = None
@@ -258,6 +258,17 @@ def resolve_entities(question: str, default_code: str = None) -> dict:
         elif (ent.get("focus_fields") or ent.get("metric")) and not _is_concept(question):
             # 엔티티 없는 지표 질의(추이·단순조회) → 사용자 관심 엔티티(default_code) 또는 전사(T00)
             #   단, 정의·전략·방법형(개념신호)은 데이터 스코프를 강제하지 않고 통과(과잉 캡처 방지).
+            code, _sk, _nm, _chn = _default_entity(default_code)
+            ent["scope_kind"] = _sk
+            ent.update(code=code, name=_nm, channel=_chn)
+        elif _requested_attr_fields(question) and not _is_concept(question):
+            # 엔티티 없는 속성 질의('어제 게스트 누구야') → 전사(T00) + 소속 프로그램 나열
+            ent["scope_kind"] = "channel"
+            code = "T00"
+            ent.update(code=code, name="전체", channel="T00")
+            ent["all_programs"] = True
+        elif _parse_abs_date(question) and not _is_concept(question):
+            # 특정 날짜 + 지표 미지정('6월16일 주요 데이터 보여줘') → 전사(T00) 그날 스냅샷
             code, _sk, _nm, _chn = _default_entity(default_code)
             ent["scope_kind"] = _sk
             ent.update(code=code, name=_nm, channel=_chn)
@@ -921,8 +932,16 @@ def _resolve_one(seg: str):
     return None
 
 
+_CHANNEL_COMPARE_NAMES = ["파워FM", "러브FM", "고릴라M", "픽채널"]
+
 def _detect_compare(question: str):
     """비교 구분자로 분할해 서로 다른 엔티티 ≥2개면 비교 scope. 아니면 None."""
+    t = question or ""
+    # '채널별' = 채널 4개(F00/L00/G00/P00) 나란히 비교 — 엔티티 미명시라도 채널 전체가 대상
+    if "채널별" in t or "채널 별" in t:
+        ch = [e for e in (_resolve_one(n) for n in _CHANNEL_COMPARE_NAMES) if e]
+        if len(ch) >= 2:
+            return ch
     ents, seen = [], set()
     for s in _COMPARE_SPLIT.split(question or ""):
         s = s.strip()
@@ -1040,18 +1059,32 @@ def _to_float(v):
     except Exception:
         return None
 
+_RANK_CHANGE_UP   = ("증가", "늘어", "늘은", "는 ", "상승", "오른", "급증")
+_RANK_CHANGE_DOWN = ("감소", "줄어", "줄은", "하락", "떨어", "급감")
+_RANK_SUPERLATIVE = ("가장", "제일", "많이", "최다", "최대")
+
 def _detect_ranking(question: str):
     t = question or ""
     tl = t.lower()
-    if not any(s.lower() in tl for s in _RANK_SIGNAL):
+    _chg_up   = any(k in t for k in _RANK_CHANGE_UP)
+    _chg_down = any(k in t for k in _RANK_CHANGE_DOWN)
+    # 변화량 순위: '가장/제일/많이' + '증가/감소' + '프로그램' 조합만 인정(오탐 방지).
+    #   예 "지난주 활성사용자가 가장 많이 증가한 프로그램은?" → dau_chg 내림차순.
+    by_change = ((_chg_up or _chg_down)
+                 and any(s in t for s in _RANK_SUPERLATIVE) and "프로그램" in t)
+    if not any(s.lower() in tl for s in _RANK_SIGNAL) and not by_change:
         return None
     fld, label = "dau", "DAU"
     for keys, f, lab in _RANK_FIELD_MAP:
         if any(k.lower() in tl for k in keys):
             fld, label = f, lab
             break
+    if by_change:
+        # 감소 질의(가장 많이 감소=가장 음수)면 오름차순 정렬
+        return {"field": fld, "label": label, "asc": (_chg_down and not _chg_up),
+                "by_change": True}
     asc = any(k in t for k in ("낮은", "최저", "하위", "worst", "적은", "least"))
-    return {"field": fld, "label": label, "asc": asc}
+    return {"field": fld, "label": label, "asc": asc, "by_change": False}
 
 
 def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
@@ -1063,6 +1096,8 @@ def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
         return {"ok": False, "reason": "데이터 없음"}
     latest = max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
     fld = spec["field"]
+    by_change = spec.get("by_change")
+    rank_fld = f"{fld}_chg" if by_change else fld   # 변화량 순위는 전주대비%(_chg)로 정렬
     items, seen = [], set()
     for r in rows:
         if r.get("DATE") != latest:
@@ -1070,19 +1105,24 @@ def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
         code = r.get("PGM_CODE")
         if not code or code in _RANK_EXCLUDE or code.endswith("00") or code in seen:
             continue
-        v = _to_float(r.get(fld))
+        v = _to_float(r.get(rank_fld))
         if v is None:
             continue
         seen.add(code)
-        items.append({"code": code, "name": _resolve_name(code), fld: r.get(fld), "_v": v})
+        it = {"code": code, "name": _resolve_name(code), fld: r.get(fld)}
+        if by_change:
+            it[rank_fld] = r.get(rank_fld)          # 순위 기준값(변화율)도 함께 노출
+        it["_v"] = v
+        items.append(it)
     if not items:
         return {"ok": False, "reason": "지표 데이터 없음"}
     items.sort(key=lambda x: x["_v"], reverse=not spec["asc"])
     top = [{k: v for k, v in it.items() if k != "_v"} for it in items[:15]]
-    payload = {"date": latest, "metric": spec["label"], "field": fld,
+    _metric_kr = f"{spec['label']} 변화량(전주대비%)" if by_change else spec["label"]
+    payload = {"date": latest, "metric": _metric_kr, "field": rank_fld,
                "order": "asc(낮은순)" if spec["asc"] else "desc(높은순)",
                "count": len(items), "ranking": top}
-    head = (f"순위 분석: 전 프로그램 {spec['label']} "
+    head = (f"순위 분석: 전 프로그램 {_metric_kr} "
             f"{'하위' if spec['asc'] else '상위'} (기준일 {latest}, 대상 {len(items)}개)")
     context = (head + f"\n\n### program_ranking — 전 프로그램 {spec['label']} 순위\n"
                + json.dumps(payload, ensure_ascii=False, default=str))
@@ -1101,6 +1141,39 @@ def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
     }
 
 
+# ─── Meta scope — 지표 카탈로그(시스템이 제공하는 지표 목록·정의) ─────────────
+#    "어떤 지표/데이터 있나·볼 수 있나" 같은 시스템 능력 질의. 특정 데이터 값이 아니라
+#    온톨로지 지표 체계를 근거로 답한다(엔티티 없음 → 폴백으로 새던 것을 흡수).
+_META_OBJ = ("지표", "메트릭", "kpi", "지수", "데이터")
+_META_ASK = ("어떤", "무슨", "무엇", "뭐", "뭘", "종류", "목록", "리스트", "볼 수 있", "제공")
+_META_VALUE_EXCLUDE = ("높", "낮", "많", "적", "얼마", "몇", "순위", "랭킹", "추이", "그래프", "비교", "vs")
+
+def _detect_meta(question: str) -> bool:
+    """카탈로그(시스템 능력) 질의. 데이터 값 질의(높은/얼마/순위/추이)·특정날짜는 제외."""
+    t = (question or "").lower()
+    if any(x in t for x in _META_VALUE_EXCLUDE):
+        return False
+    if _parse_abs_date(question):        # 특정 날짜가 있으면 데이터 조회지 카탈로그가 아님
+        return False
+    return any(o in t for o in _META_OBJ) and any(a in t for a in _META_ASK)
+
+def _assemble_meta(question, overlay_ctx=None) -> dict:
+    try:
+        from raas_onto import get_adapter
+        catalog = get_adapter().get_metric_definitions_block()
+    except Exception:
+        catalog = ""
+    if not catalog:
+        return {"ok": False, "reason": "카탈로그 없음"}
+    context = ("분석 대상: 지표 카탈로그(메타) — 시스템이 제공하는 지표 목록·정의\n"
+               "안내: 어떤 지표/데이터를 볼 수 있는지 묻는 질의. 아래 카탈로그를 근거로 "
+               "범주별로 소개하되 질문 범위에 맞게 간결히.\n\n"
+               "### metric_catalog — 제공 지표 체계·정의\n" + catalog)
+    return {"ok": True, "context": context, "providers_used": ["metric_catalog"],
+            "entities_brief": "지표 카탈로그(메타)",
+            "provenance": {"providers": ["metric_catalog"], "scope": "meta"}}
+
+
 # ─── 메인 — 맥락 조립 ───────────────────────────────────────────────────────
 def assemble(question: str, overlay_ctx=None) -> dict:
     """질문 → 근거 context 조립. overlay_ctx={user_id, mode:'normal'|'requery'}.
@@ -1108,6 +1181,10 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     cmp_ents = _detect_compare(question)
     if cmp_ents:
         return _assemble_compare(question, cmp_ents, overlay_ctx)
+    if _detect_meta(question):
+        _m = _assemble_meta(question, overlay_ctx)
+        if _m.get("ok"):
+            return _m
     rank_spec = _detect_ranking(question)
     if rank_spec:
         _r = _assemble_ranking(question, rank_spec, overlay_ctx)
@@ -1119,10 +1196,20 @@ def assemble(question: str, overlay_ctx=None) -> dict:
             return _g
     ent = resolve_entities(question, (overlay_ctx or {}).get("default_code"))
     if not ent.get("code"):
-        return {"ok": False, "reason": "프로그램 미식별"}   # 비-프로그램 질의는 기존 엔진으로
+        # 안전망(general) scope — 엔티티/지표/날짜/속성/메타/비교/순위 어디에도 안 걸린 잔여.
+        #   전사(T00) 광역(현황·건강도·이상·인사이트·개념)으로 흡수해 표준 provider 경로로 답한다.
+        #   데이터+온톨로지를 context에 넣고 LLM이 자유 답변(고정 템플릿 없음) → 폴백 은퇴 준비.
+        ent["scope_kind"] = "channel"
+        ent.update(code="T00", name="전체", channel="T00")
+        ent["row"] = S._load_program_latest_row("T00")
+        ent["history"] = S._load_program_history("T00", ent.get("lookback") or 0)
+        ent["date"] = ((ent["row"] or {}).get("DATE") or "").replace("/", "-")
+        if "프로그램" in (question or ""):
+            ent["all_programs"] = True     # '위험한 프로그램' 등 → 소속 프로그램 나열 첨부
+        ent["_general"] = True
     names = select_providers(question, ent)
-    if ent.get("as_of_date") and "point_snapshot" not in names:
-        names = ["point_snapshot"] + names   # 특정 날짜 지정이면 그 날짜 스냅샷 반드시 포함
+    if (ent.get("as_of_date") or ent.get("_general")) and "point_snapshot" not in names:
+        names = ["point_snapshot"] + names   # 특정 날짜/안전망은 현황 스냅샷 반드시 포함
     if (ent.get("scope_kind") == "channel" and ("프로그램" in question or ent.get("all_programs"))
             and "channel_programs" not in names):
         names = ["channel_programs"] + names   # 채널 내 '프로그램'/'모든 프로그램' 질의는 소속 프로그램 행 반드시 포함

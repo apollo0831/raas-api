@@ -1,11 +1,11 @@
-"""raas_storyline_engine.py — grounding이 재사용하는 데이터 computer 모음.
+"""raas_metrics_engine.py — grounding이 재사용하는 KPI 파생지표 계산 계층.
 
 구 CP 다중슬롯 스토리라인 오케스트레이션은 은퇴·제거됨. 현재 역할:
     - 데이터 계산: _compute_flow_decomposition / _compute_cohort / _compute_stickiness /
       _compute_programming_impact / _compute_weekday_pattern_check / _detect_program_revision
     - 룩업·유틸: _kpi_rows / _load_program_latest_row / _load_program_history /
       build_program_schedule / build_query_provenance / is_schedule_query / _CHANNEL_CODE
-호출자: raas_grounding(provider fetch), raas_server(편성표·provenance), raas_query_engine.
+호출자: raas_grounding(provider fetch), raas_server(편성표·provenance·이상탐지).
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ _TIMELINE_PROVIDER = None  # type: ignore
 
 
 def set_timeline_provider(fn) -> None:
-    """raas_server.py에서 호출: STORY.set_timeline_provider(get_cached_timeline).
+    """raas_server.py에서 호출: METRICS.set_timeline_provider(get_cached_timeline).
 
     Splunk REST API → CSV 보충 통합 파이프라인을 스토리라인이 그대로 쓰도록.
     """
@@ -1405,7 +1405,117 @@ _CACHE_VERSION = "2026-06-25e"
 # ─── 스토리라인 엔진 ──────────────────────────────────────────────────────
 
 
-# ─── Export stub (Phase 3 ⑥ 예정) ───────────────────────────────────────
+# ─── 이상탐지 (구 raas_fallback_engine에서 이관) ─────────────────────────
+#    ZScoreDetector 기반 알림 — 서버 get_cached_anomalies가 호출(추천칩·digest 공유).
+from raas_datasource import get_available_dates as _get_available_dates
+
+def _i2(v, d=0):
+    try: return int(float(v)) if v not in (None, '', 'None', 'null') else d
+    except Exception: return d
+
+def _fn2(v):
+    try: return float(v) if v not in (None, '', 'None', 'null') else None
+    except Exception: return None
+
+def _pgm_name(code, row=None, default=None):
+    """코드→표시 이름 (TTL 어댑터 → row.pgm_name → code). 서버 KPI 패널·이상탐지 공용."""
+    try:
+        from raas_onto import get_adapter
+        label = get_adapter()._onto.label_ko(f"raas:{code}")
+        if label and label != f"raas:{code}":
+            return label
+    except Exception:
+        pass
+    if row is not None:
+        nm = (row.get('pgm_name') or '').strip()
+        if nm:
+            return nm
+    return default if default is not None else code
+
+def _build_alert_kpi(row: dict) -> dict:
+    return {
+        'dau_chg':         _fn2(row.get('dau_chg')),
+        'deep_rate_diff':  _fn2(row.get('deep_rate_diff')),
+        'new_chg':         _fn2(row.get('new_chg')),
+        'churn_rate_diff': _fn2(row.get('churn_rate_diff')),
+        'react_rate':      _fn2(row.get('react_rate')),
+        'habit_rate':      _fn2(row.get('habit_rate')),
+    }
+
+def _evaluate_alerts(row: dict, timeline_snap: dict, latest_dt: str) -> dict:
+    """Z-score 기반 알림 평가 (우선) + 고정룰 fallback + 위험 프로그램 감지."""
+    alerts = []
+    try:
+        from raas_onto import get_adapter
+        adapter = get_adapter()
+        alerts = adapter.evaluate_zscore_alerts(timeline_snap, latest_dt)
+
+        # 프로그램명을 알림에 결정적으로 주입 — 코드만 있으면 LLM이 표 렌더 중
+        # 코드→이름 조인을 스스로 하다 오귀속(예: F05를 씨네타운으로) 발생.
+        for a in alerts:
+            _c = a.get('code')
+            if _c and not a.get('program'):
+                _nm = _pgm_name(_c)
+                if _nm and _nm != _c:
+                    a['program'] = _nm
+                    if a.get('msg') and f"[{_c}]" in a['msg']:
+                        a['msg'] = a['msg'].replace(f"[{_c}]", f"[{_nm}({_c})]")
+
+        zscore_fields = {a['field'] for a in alerts}
+        if not alerts or len(alerts) < 2:
+            kpi = _build_alert_kpi(row)
+            fixed_alerts = adapter.evaluate_platform_alerts(kpi)
+            for fa in fixed_alerts:
+                field_hint = {
+                    'DauPlunge': 'dau_chg', 'DauSurge': 'dau_chg',
+                    'DeepRatePlunge': 'deep_rate_diff',
+                    'NewUserPlunge': 'new_chg',
+                    'ChurnRateRise': 'churn_rate_diff',
+                    'HabitRateAchieved': 'habit_rate', 'HabitRateLow': 'habit_rate',
+                }
+                rid = fa.get('rule_id', '').replace('raas:Alert_', '')
+                if field_hint.get(rid) not in zscore_fields:
+                    fa['source'] = 'fixed_rule'
+                    alerts.append(fa)
+
+        exclude = {'T00', 'F00', 'L00', 'G00', 'P00', 'L04'}
+        prog_snap = {}
+        for code, date_rows in timeline_snap.items():
+            if code in exclude:
+                continue
+            r = date_rows.get(latest_dt, {})
+            prog_snap[code] = {
+                'dau':        _i2(r.get('dau')),
+                'churn_rate': _fn2(r.get('churn_rate')),
+                'dau_chg':    _fn2(r.get('dau_chg')),
+            }
+        risk_progs = adapter.find_at_risk_programs(prog_snap)
+        if risk_progs:
+            names = [
+                _pgm_name(r.get('code'),
+                                row=(timeline_snap.get(r.get('code'), {}) or {}).get(latest_dt, {}))
+                for r in risk_progs[:3]
+            ]
+            alerts.append({
+                'level': 'yellow',
+                'msg':   f"🟡 위험 프로그램 감지: {', '.join(names)}",
+                'rule_id': 'AtRiskProgramDetected',
+            })
+    except Exception:
+        pass
+
+    if not alerts:
+        alerts = [{'level': 'green', 'msg': '🟢 이상 없음 — 모든 지표 정상 범위', 'rule_id': 'NoAlert'}]
+    return {'alerts': alerts}
+
+def collect_anomalies(timeline: dict) -> dict:
+    """전사(T00) 최신일 기준 이상탐지 alerts. 서버 get_cached_anomalies가 5분 캐시로 감쌈."""
+    available = _get_available_dates(timeline)
+    if not available:
+        return {'alerts': []}
+    latest_dt = available[-1]
+    row = timeline.get('T00', {}).get(latest_dt, {})
+    return _evaluate_alerts(row, timeline, latest_dt)
 
 
 # ─── CLI 자가 테스트 ─────────────────────────────────────────────────────
