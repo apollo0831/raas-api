@@ -1641,7 +1641,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                 report = _run_data_check(tl)
             finally:
                 _refresh_lock.release()
-            _src_kr = {"splunk": "스플렁크", "csv": "로컬 CSV(폴백)"}.get(src, src or "unknown")
+            _src_kr = {"splunk": "스플렁크", "csv_fallback": "로컬 CSV(폴백)",
+                       "csv": "로컬 CSV(폴백)"}.get(src, src or "unknown")
             prefix = (f"🔄 **최신 데이터 다시 가져옴** — 출처 {_src_kr} · "
                       f"최신일 {latest or '?'} · {_elapsed:.1f}초 소요")
             full = _build_data_check_text(report, prefix_line=prefix)
