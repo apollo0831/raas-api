@@ -1141,6 +1141,110 @@ def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
     }
 
 
+# ─── Realtime scope — 실시간 동시사용자(summary_gorealra_1m, 1분 집계) ────────
+#    "지금/실시간/동시청취" 질의. 데이터 획득은 raas_datasource(60초/일일 캐시),
+#    여기서는 스냅샷·어제/지난주 동시각 비교·오늘 추이를 결정적으로 계산해 근거로 조립.
+_RT_SIGNAL = ("동시사용자", "동시 사용자", "동시접속", "동시 접속", "동시청취", "동시 청취", "실시간")
+_RT_NOW_HINT = ("청취", "듣는", "듣고", "접속자", "사용자", "몇 명", "몇명")
+
+def _detect_realtime(question: str) -> bool:
+    t = question or ""
+    if any(s in t for s in _RT_SIGNAL):
+        return True
+    return ("지금" in t or "현재" in t) and any(s in t for s in _RT_NOW_HINT)
+
+# 실시간 채널 접두사 ↔ 한글 채널명 (AM=러브FM 오귀속 방지 — 코드가 결정적으로 매핑)
+_RT_CHANNELS = [("파워FM", "FM_SUM", "F00"), ("러브FM", "AM_SUM", "L00"),
+                ("고릴라M", "GM_SUM", "G00"), ("픽채널", "PM_SUM", "P00")]
+_RT_DEVICES = [("스마트폰(파생: 전체-PC-AI)", "TOTAL_SUM_SP"), ("PC클라이언트", "TOTAL_SUM_PC"),
+               ("웹브라우저(SBS홈페이지)", "TOTAL_SUM_PW"), ("AI스피커", "TOTAL_SUM_AI"),
+               ("보는라디오", "TOTAL_SUM_BA")]
+
+def _rt_hhmm(row) -> str:
+    """행 _time(ISO) → 'HH:MM'."""
+    t = str(row.get("_time") or "")
+    return t[11:16] if len(t) >= 16 else ""
+
+def _rt_int(v):
+    try:
+        return int(float(v)) if v not in (None, "", "None") else None
+    except Exception:
+        return None
+
+def _rt_pct(cur, base):
+    if cur is None or base in (None, 0):
+        return None
+    return round((cur - base) / base * 100, 1)
+
+def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
+    import raas_datasource as DSRC
+    today = DSRC.get_realtime_today()
+    if not today:
+        context = ("분석 대상: 실시간 동시사용자(1분 집계)\n"
+                   "### realtime_now — 조회 실패\n"
+                   "실시간 데이터(summary_gorealra_1m)를 가져오지 못했습니다"
+                   "(스플렁크 미접속 또는 집계 없음). 이 사실을 사용자에게 안내하세요.")
+        return {"ok": True, "context": context, "providers_used": ["realtime_now"],
+                "entities_brief": "실시간 동시사용자(조회 실패)",
+                "provenance": {"providers": ["realtime_now"], "scope": "realtime"}}
+    latest = today[-1]
+    now_hhmm = _rt_hhmm(latest)
+    total_now = _rt_int(latest.get("TOTAL_SUM"))
+
+    # 스냅샷 — 채널·디바이스 분해 (키를 한글명으로 결정적 변환)
+    snap = {"기준시각": now_hhmm, "전체": total_now,
+            "채널별": {nm: _rt_int(latest.get(f)) for nm, f, _ in _RT_CHANNELS},
+            "디바이스별": {nm: _rt_int(latest.get(f)) for nm, f in _RT_DEVICES}}
+
+    # 어제/지난주 같은 시각 비교 + 피크 (계산은 코드가, LLM은 읽기만)
+    def _at(rows, hhmm):
+        for r in rows:
+            if _rt_hhmm(r) == hhmm:
+                return _rt_int(r.get("TOTAL_SUM"))
+        return None
+    def _peak(rows):
+        best_v, best_t = None, None
+        for r in rows:
+            v = _rt_int(r.get("TOTAL_SUM"))
+            if v is not None and (best_v is None or v > best_v):
+                best_v, best_t = v, _rt_hhmm(r)
+        return {"값": best_v, "시각": best_t}
+    yday, lastwk = DSRC.get_realtime_yesterday(), DSRC.get_realtime_lastweek()
+    y_same, w_same = _at(yday, now_hhmm), _at(lastwk, now_hhmm)
+    compare = {"어제 같은 시각": {"값": y_same, "증감%": _rt_pct(total_now, y_same)},
+               "지난주 동요일 같은 시각": {"값": w_same, "증감%": _rt_pct(total_now, w_same)},
+               "오늘 피크": _peak(today), "어제 피크": _peak(yday),
+               "지난주 동요일 피크": _peak(lastwk)}
+
+    # 오늘 추이 — 10분 간격 다운샘플 CSV (토큰 절약, 피크는 위에서 전체 행으로 계산)
+    ser = ["time,전체,파워FM,러브FM,고릴라M,픽채널"]
+    for r in today:
+        hh = _rt_hhmm(r)
+        if hh[4:5] == "0":                      # 매 10분(HH:M0)만 추림
+            ser.append(",".join([hh] + [str(_rt_int(r.get(f)) or "") for f in
+                                        ("TOTAL_SUM", "FM_SUM", "AM_SUM", "GM_SUM", "PM_SUM")]))
+
+    ch_code, ch_name = _detect_channel(question)
+    head = (f"분석 대상: 실시간 동시사용자(1분 집계) · 기준시각 오늘 {now_hhmm}"
+            + (f" · 관심 채널: {ch_name}" if ch_code and ch_code != "T00" else ""))
+    defs = ("[용어 정의]\n"
+            "- 동시사용자: 해당 1분에 청취 중인 사용자 수(SUM 계열). COUNT 계열은 미사용.\n"
+            "- 채널 매핑: FM=파워FM, AM=러브FM, GM=고릴라M, PM=픽채널 (위 데이터는 이미 한글명으로 변환됨)\n"
+            "- 디바이스: 스마트폰=전체-PC클라이언트-AI스피커(파생) · 보는라디오=앱 내 시청 모드\n"
+            "- 비교값·증감%·피크는 코드가 계산한 값 — 그대로 사용하고 재계산하지 말 것")
+    context = (head + "\n\n### realtime_now — 현재 동시사용자 스냅샷\n"
+               + json.dumps(snap, ensure_ascii=False)
+               + "\n\n### realtime_compare — 어제/지난주 동시각·피크 비교\n"
+               + json.dumps(compare, ensure_ascii=False)
+               + "\n\n### realtime_series — 오늘 추이(10분 간격)\n" + "\n".join(ser)
+               + "\n\n" + defs)
+    return {"ok": True, "context": context,
+            "providers_used": ["realtime_now", "realtime_compare", "realtime_series"],
+            "entities_brief": head,
+            "provenance": {"providers": ["realtime_now", "realtime_compare", "realtime_series"],
+                           "scope": "realtime", "channel": ch_code}}
+
+
 # ─── Meta scope — 지표 카탈로그(시스템이 제공하는 지표 목록·정의) ─────────────
 #    "어떤 지표/데이터 있나·볼 수 있나" 같은 시스템 능력 질의. 특정 데이터 값이 아니라
 #    온톨로지 지표 체계를 근거로 답한다(엔티티 없음 → 폴백으로 새던 것을 흡수).
@@ -1178,6 +1282,8 @@ def _assemble_meta(question, overlay_ctx=None) -> dict:
 def assemble(question: str, overlay_ctx=None) -> dict:
     """질문 → 근거 context 조립. overlay_ctx={user_id, mode:'normal'|'requery'}.
        반환: {ok, context, providers_used, entities_brief, provenance}"""
+    if _detect_realtime(question):     # 실시간은 비교·순위보다 먼저 (동시사용자 자체가 주제)
+        return _assemble_realtime(question, overlay_ctx)
     cmp_ents = _detect_compare(question)
     if cmp_ents:
         return _assemble_compare(question, cmp_ents, overlay_ctx)

@@ -141,6 +141,18 @@ check_true("오탐 방지: '어떤 프로그램이 DAU 가장 높아?' 메타 �
            not G._detect_meta("어떤 프로그램이 DAU 가장 높아?"))
 check_true("오탐 방지: '6/17 데이터 있어?' 메타 아님",
            not G._detect_meta("6/17 신규사용자 데이터 있어?"))
+
+print("── 5.2 실시간 동시사용자 scope ───────────────────────")
+check_true("실시간 감지: '지금 동시 청취자 몇 명'", G._detect_realtime("지금 동시 청취자 몇 명이야?"))
+check_true("실시간 감지: '실시간 현황'", G._detect_realtime("실시간 현황 보여줘"))
+check_true("오탐 방지: '지금 이상 있어?' 실시간 아님", not G._detect_realtime("지금 이상 있어?"))
+check_true("오탐 방지: '어제 DAU는?' 실시간 아님", not G._detect_realtime("어제 DAU는?"))
+# 채널 매핑 결정성 — AM=러브FM(L00) 오귀속 방지의 근원
+check("실시간 채널 매핑(AM=러브FM)",
+      [(nm, code) for nm, f, code in G._RT_CHANNELS],
+      [("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"), ("픽채널", "P00")])
+check("실시간 증감% 계산", G._rt_pct(110, 100), 10.0)
+check("실시간 시각 파싱", G._rt_hhmm({"_time": "2026-07-07T08:09:00.000+09:00"}), "08:09")
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")

@@ -123,9 +123,11 @@ class Feed:
     def _stale(self, now: datetime) -> bool:
         if self._loaded_at is None:
             return True
-        # 폴백으로 채워진 캐시는 짧은 간격으로 재시도 (Splunk 복구 반영)
+        # 폴백/실패로 채워진 캐시는 짧은 간격으로 재시도 (Splunk 복구 반영)
+        #   실시간형(ttl_sec)은 자체 주기가 더 짧으므로 그 주기로 재시도.
         if self._source and self._source != "splunk":
-            return (now - self._loaded_at).total_seconds() >= FALLBACK_RETRY_SEC
+            retry = self.ttl_sec if self.ttl_sec is not None else FALLBACK_RETRY_SEC
+            return (now - self._loaded_at).total_seconds() >= retry
         if self.ttl_sec is not None:
             return (now - self._loaded_at).total_seconds() >= self.ttl_sec
         if self.daily_at:
@@ -262,6 +264,47 @@ def get_timeline_source() -> str:
 def invalidate_timeline() -> None:
     """수동 재적재 — 다음 get_timeline()이 Splunk를 다시 조회."""
     _timeline_feed.invalidate()
+
+
+# ── 실시간 동시사용자 (summary_gorealra_1m, 1분 집계) ─────
+# 필드 규칙(2026-07 확인): 채널별 *_COUNT는 값 없음 → *_SUM만 사용.
+#   접미사: _BA=보는라디오 / _PW=웹브라우저(SBS홈페이지) / _PC=PC클라이언트 / _AI=AI스피커
+#   스마트폰은 필드가 없어 파생: TOTAL_SUM_SP = TOTAL_SUM - TOTAL_SUM_PC - TOTAL_SUM_AI
+#   채널 접두사 ↔ RAAS 코드: FM=파워FM(F00) / AM=러브FM(L00) / GM=고릴라M(G00) / PM=픽채널(P00)
+RT_INDEX = "summary_gorealra_1m"
+_RT_FIELDS = ("_time TOTAL_SUM AM_SUM FM_SUM GM_SUM PM_SUM "
+              "TOTAL_SUM_SP TOTAL_SUM_PC TOTAL_SUM_PW TOTAL_SUM_AI TOTAL_SUM_BA")
+
+def _rt_spl(earliest: str, latest: str) -> str:
+    return (f"search index={RT_INDEX} earliest={earliest} latest={latest} "
+            "| eval TOTAL_SUM_SP=TOTAL_SUM-TOTAL_SUM_PC-TOTAL_SUM_AI "
+            f"| table {_RT_FIELDS} | sort 0 _time")
+
+def _rt_loader(earliest: str, latest: str):
+    """실시간 행 로더 — 실패 시 빈 리스트 + source='error' (Feed가 짧은 주기로 재시도)."""
+    def load():
+        try:
+            return splunk_search(_rt_spl(earliest, latest)), "splunk"
+        except Exception as e:
+            print(f"  [realtime] 조회 실패({earliest}~{latest}): {e}")
+            return [], "error"
+    return load
+
+# 오늘: 60초 캐시(사실상 1분 주기). 어제/지난주 동요일: 과거 불변 → 자정 경계 일일 캐시.
+_rt_today_feed    = Feed("realtime_today",    _rt_loader("@d", "now"),      ttl_sec=60)
+_rt_yday_feed     = Feed("realtime_yesterday", _rt_loader("-1d@d", "@d"),   daily_at="00:05")
+_rt_lastweek_feed = Feed("realtime_lastweek",  _rt_loader("-7d@d", "-6d@d"), daily_at="00:05")
+
+def get_realtime_today() -> list:
+    """오늘 0시~현재 1분 단위 동시사용자 행 목록 (60초 캐시)."""
+    return _rt_today_feed.get() or []
+
+def get_realtime_yesterday() -> list:
+    return _rt_yday_feed.get() or []
+
+def get_realtime_lastweek() -> list:
+    """지난주 동요일(7일 전) 하루치 — '지난주 이 시간' 비교용."""
+    return _rt_lastweek_feed.get() or []
 
 
 # ── 값 코어션 헬퍼 (타임라인 행 값 → int/float) ──────────
