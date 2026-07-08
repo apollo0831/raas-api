@@ -584,6 +584,44 @@ def _p_period_events(ent):
     return {"window": f"{d0}~{d1}", "annotations": items} if items else None
 
 
+def _p_data_coverage(ent):
+    """이 scope의 지표별 데이터 보유 범위(최초 수집일~최신)를 '답할 때마다' 라이브로 계산.
+       metric_timeseries는 최근 창만 담아 '언제부터 데이터 있나'에 최초일을 오해시키므로,
+       현재 룩업 실제 범위를 명시. 과거 데이터를 백필하면 다음 질의부터 자동 반영."""
+    code = ent.get("code")
+    if not code:
+        return None
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        return None
+    fields = ["dau", "wau", "mau", "dau_r7", "dau_r30", "new", "react",
+              "deep_rate", "real_rate", "engage_rate", "habit_rate", "churn_rate"]
+    cov, all_dates = {}, set()
+    for r in rows:
+        if r.get("PGM_CODE") != code:
+            continue
+        d = (r.get("DATE") or "").strip()
+        if not d:
+            continue
+        all_dates.add(d)
+        for f in fields:
+            v = str(r.get(f) or "").strip()
+            if v and v not in ("0", "0.0", ".0"):
+                c = cov.get(f)
+                if c is None:
+                    cov[f] = [d, d]
+                else:
+                    if d < c[0]: c[0] = d
+                    if d > c[1]: c[1] = d
+    if not all_dates:
+        return None
+    ad = sorted(all_dates)
+    return {"보유 범위(전체)": f"{ad[0]} ~ {ad[-1]}", "총 일수": len(ad),
+            "지표별 최초 수집일": {f: cov[f][0] for f in sorted(cov)},
+            "안내": "이 값이 실제 데이터 시작일(현재 룩업 스캔값). 시계열 provider의 최근 창과 혼동 금지."}
+
+
 PROVIDERS = [
     {"name": "program_kpi", "needs": "program",
      "desc": "프로그램의 최신 핵심 KPI 스냅샷(DAU/WAU/MAU·신규·복귀·이탈·실청취·깊은청취·유지율과 증감)",
@@ -603,6 +641,9 @@ PROVIDERS = [
     {"name": "metric_timeseries", "needs": "program",
      "desc": "주요 지표 시계열(의도 기반: 추이 질의는 전체, 원인·포인트 질의는 최근 4주)",
      "fetch": _p_metric_timeseries},
+    {"name": "data_coverage", "needs": "program",
+     "desc": "데이터 보유 기간·범위 — '언제부터/언제까지 데이터 있나·며칠치·수집 기간' 등 데이터 커버리지 질의(실제 룩업 최초/최신일)",
+     "fetch": _p_data_coverage},
     {"name": "ontology", "needs": "program",
      "desc": "프로그램 도메인 사실(진행자·정규게스트·시간대·편성유형·광고가치·게스트명 해석정책 등 온톨로지)",
      "fetch": _p_ontology},
@@ -635,6 +676,11 @@ PROVIDERS = [
      "fetch": _p_period_events},
 ]
 _PROVIDER_BY_NAME = {p["name"]: p for p in PROVIDERS}
+
+# '데이터 언제부터/언제까지/며칠치/보유·수집 기간' 등 커버리지 질의 신호
+_COVERAGE_SIGNAL = ("언제부터", "언제까지", "언제 부터", "언제 까지", "며칠부터", "며칠치",
+                    "몇일부터", "부터 있", "까지 있", "보유 기간", "수집 기간", "보유기간",
+                    "얼마나 오래", "얼마나 됐", "데이터 기간", "기간이 언제", "최초", "언제까지의")
 
 
 # 채널 scope에서 의미가 약하거나 프로그램 전용인 provider — 제외(노이즈 방지)
@@ -1435,6 +1481,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     names = select_providers(question, ent)
     if (ent.get("as_of_date") or ent.get("_general")) and "point_snapshot" not in names:
         names = ["point_snapshot"] + names   # 특정 날짜/안전망은 현황 스냅샷 반드시 포함
+    if any(k in question for k in _COVERAGE_SIGNAL) and "data_coverage" not in names:
+        names = ["data_coverage"] + names    # '언제부터/기간/보유' 질의는 실제 보유범위 반드시 포함
     if (ent.get("scope_kind") == "channel" and ("프로그램" in question or ent.get("all_programs"))
             and "channel_programs" not in names):
         names = ["channel_programs"] + names   # 채널 내 '프로그램'/'모든 프로그램' 질의는 소속 프로그램 행 반드시 포함

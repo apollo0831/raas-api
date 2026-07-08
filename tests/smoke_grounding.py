@@ -166,6 +166,13 @@ check_true("온톨로지: 편성 공리 F00 적용", len(get_adapter().get_domai
 check_true("온톨로지: 비편성 G00 공리 없음", len(get_adapter().get_domain_axioms("G00")) == 0)
 check_true("실시간 온톨로지 블록(F00)에 편성 공리 포함",
            "공리" in G._rt_ontology_block("F00") and "편성형" in G._rt_ontology_block("F00"))
+# 데이터 보유범위 — 라이브 스캔(하드코딩·온톨로지 저장 아님). '언제부터' 질의에 강제 포함
+_cov = G._p_data_coverage({"code": "T00"}) or {}
+check_true("data_coverage 라이브 스캔(dau 최초일 존재)",
+           bool(_cov.get("지표별 최초 수집일", {}).get("dau")))
+check_true("'언제부터 데이터' → data_coverage 강제 포함",
+           "data_coverage" in G.assemble("dau wau mau 데이터 언제부터 있나?",
+                                         overlay_ctx={"mode": "normal"}).get("providers_used", []))
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")
