@@ -838,18 +838,26 @@ class RAASHandler(BaseHTTPRequestHandler):
             if preair:
                 base_rows, base_day = yday, "어제"
                 anchor = program["stime"].replace(":", "")       # 어제 방송 시작시각 시점
-                anchor_hhmm = f"{anchor[:2]}:{anchor[2:]}" if len(anchor) == 4 else GROUND._rt_hhmm(yday[-1] if yday else {})
-                value = _at(yday, anchor_hhmm)
-                cmp_a = {"label": "지난주 동시각", "value": _at(lastwk, anchor_hhmm)}
-                asof = anchor_hhmm
+                asof = f"{anchor[:2]}:{anchor[2:]}" if len(anchor) == 4 else GROUND._rt_hhmm(yday[-1] if yday else {})
+                value = _at(yday, asof)
             else:
                 base_rows, base_day = today, "오늘"
-                latest = today[-1]
-                asof = GROUND._rt_hhmm(latest)
-                value = _val(latest)
-                cmp_a = {"label": "지난주 동시각", "value": _at(lastwk, asof)}
+                asof = GROUND._rt_hhmm(today[-1])
+                value = _val(today[-1])
             y_same = _at(yday, asof)
-            cmp_a["pct"] = GROUND._rt_pct(value, cmp_a["value"])
+            w_same = _at(lastwk, asof)
+
+            # 카드1(통합) 오버레이 차트: 메인일(오늘 또는 어제) + 지난주 동요일 2선
+            peak = _peak(base_rows)
+            # 카드2 피크타임 추이: 최근 14일(일일 캐시) + 오늘 피크(진행 중) 덧붙임
+            trend = [{"date": r.get("date"), "hm": r.get("peak_hm"),
+                      "val": GROUND._rt_int(r.get("peak_val"))}
+                     for r in DS.get_realtime_peak_trend(field)]
+            if not preair:   # 오늘 피크(진행 중)를 추이 끝에 덧붙여 이동 추적
+                _tp = _peak(today)
+                if _tp["value"] is not None:
+                    trend.append({"date": datetime.now().strftime("%Y-%m-%d"),
+                                  "hm": _tp["time"], "val": _tp["value"], "today": True})
 
             out = {"ok": True, "asof": asof, "mode": "yesterday_preair" if preair else "live",
                    "scope": {"code": scope,
@@ -857,13 +865,14 @@ class RAASHandler(BaseHTTPRequestHandler):
                              "field": field},
                    "value": value,
                    "yesterday": {"value": y_same, "pct": GROUND._rt_pct(value, y_same)},
-                   "lastweek": cmp_a,
-                   "peak": _peak(base_rows), "peak_day": base_day,
-                   "series": _ser(base_rows), "series_day": base_day,
+                   "lastweek": {"value": w_same, "pct": GROUND._rt_pct(value, w_same)},
+                   "peak": peak, "peak_day": base_day,
+                   "series_main": _ser(base_rows), "series_main_day": base_day,
+                   "series_lastweek": _ser(lastwk),
+                   "peak_trend": trend,
                    "program": program}
             if field == "T00" and not program:   # 전사 뷰에서만 채널 분해 칩
-                latest = today[-1]
-                out["channels"] = [{"code": f, "name": nm, "value": GROUND._rt_int(latest.get(f))}
+                out["channels"] = [{"code": f, "name": nm, "value": GROUND._rt_int(today[-1].get(f))}
                                    for nm, f in GROUND._RT_CHANNELS]
             self.send_json(out)
         except Exception as e:

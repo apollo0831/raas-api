@@ -72,6 +72,9 @@ def splunk_search(spl: str) -> list:
                 if not line: continue
                 try:
                     obj = json.loads(line)
+                    # export는 중간 미리보기(preview=true) + 최종(preview=false)을 함께 스트리밍 —
+                    # 변환 검색(sort/stats)에서 중복 유발. 최종 결과만 취한다(preview 없으면 최종 취급).
+                    if obj.get("preview") is True: continue
                     if obj.get("result"): rows.append(obj["result"])
                 except: pass
             return rows
@@ -315,6 +318,35 @@ def get_realtime_yesterday() -> list:
 def get_realtime_lastweek() -> list:
     """지난주 동요일(7일 전) 하루치 — '지난주 이 시간' 비교용."""
     return _rt_lastweek_feed.get() or []
+
+# 최근 14일(오늘 제외) 일자별 피크값·피크시각 — 과거 불변 → 일일 캐시. 스코프별 지연 생성.
+#   argmax 관용구: sort로 (date, 값) 정렬 후 stats last()가 그날 최대값 행의 시각·값.
+_RT_PEAK_DAYS = 14
+_rt_peak_feeds: dict = {}
+
+def _rt_peak_loader(field: str):
+    def load():
+        spl = (f"search index={RT_INDEX} earliest=-{_RT_PEAK_DAYS}d@d latest=@d "
+               f'| eval date=strftime(_time,"%Y-%m-%d"), hm=strftime(_time,"%H:%M") '
+               f"| sort 0 date {field} "
+               f"| stats last(hm) as peak_hm last({field}) as peak_val by date "
+               f"| sort 0 date")
+        try:
+            return splunk_search(spl), "splunk"
+        except Exception as e:
+            print(f"  [realtime peak] 조회 실패({field}): {e}")
+            return [], "error"
+    return load
+
+def get_realtime_peak_trend(field: str = "T00") -> list:
+    """최근 14일 일자별 [{date, peak_hm, peak_val}] — 피크타임 이동 추적용."""
+    if field not in ("T00", "F00", "L00", "G00", "P00"):
+        field = "T00"
+    feed = _rt_peak_feeds.get(field)
+    if feed is None:
+        feed = Feed(f"realtime_peak_{field}", _rt_peak_loader(field), daily_at="00:05")
+        _rt_peak_feeds[field] = feed
+    return feed.get() or []
 
 
 # ── 값 코어션 헬퍼 (타임라인 행 값 → int/float) ──────────

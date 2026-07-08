@@ -3155,101 +3155,144 @@ async function _loadRtCard() {
     if (!j.ok) { el.innerHTML = ''; _RT_LAST = null; return; }
     _RT_LAST = j;
     const n = v => (v == null ? '—' : Math.round(v).toLocaleString());
-    const badge = (o, pp) => {
+    const badge = (o, prefix) => {
       const p = o && o.pct;
       if (p == null) return '';
       const cls = p > 0 ? 'up' : p < 0 ? 'dn' : 'flat';
-      return `<div class="kpi-card-wow ${cls}">${p >= 0 ? '+' : ''}${p.toFixed(1)}%</div>`;
+      return `<span class="rt-badge ${cls}">${prefix} ${p >= 0 ? '+' : ''}${p.toFixed(1)}%</span>`;
     };
     const preair = j.mode === 'yesterday_preair';
     const pg = j.program;
-    // 섹션 타이틀 — preair면 '방송 전 · 어제 방송분' 명시
-    let title = `🔴 실시간 동시청취 · ${escapeHtml(j.asof || '')} 기준`;
+    let title = `실시간 동시청취 · ${escapeHtml(j.asof || '')} 기준`;
     if (pg) title = preair
-      ? `🔴 실시간 동시청취 · ${escapeHtml(pg.name)} 방송 전 — 어제 ${escapeHtml(pg.stime)} 방송분`
-      : `🔴 실시간 동시청취 · ${escapeHtml(pg.name)} (${escapeHtml(pg.channel_name)} 채널 기준) · ${escapeHtml(j.asof || '')}`;
+      ? `실시간 동시청취 · ${escapeHtml(pg.name)} 방송 전 — 어제 ${escapeHtml(pg.stime)} 방송분`
+      : `실시간 동시청취 · ${escapeHtml(pg.name)} (${escapeHtml(pg.channel_name)} 채널 기준) · ${escapeHtml(j.asof || '')}`;
 
-    // 카드 3장 — 규모/흐름 섹션과 동일한 kpi-card, 탭하면 인트라데이 추이
-    const mainLabel = preair ? `어제 ${escapeHtml(pg.stime)} 동시청취` : '동시청취';
     const pk = j.peak || {};
-    let cards = `
-      <div class="kpi-card clickable" onclick="_rtToggleChart(this)" title="탭하면 ${escapeHtml(j.series_day||'오늘')} 분단위 추이">
+    const mainLabel = preair ? `어제 ${escapeHtml(pg.stime)} 동시청취` : '동시청취';
+    // 카드 2장 — ① 동시청취(어제·지난주 대비 배지) → 오늘vs지난주 오버레이  ② 오늘 피크 → 피크타임 추이
+    const cards = `
+      <div class="kpi-card clickable" data-rt="series" onclick="_rtToggleChart(this)" title="탭하면 오늘 vs 지난주 추이">
         <div class="kpi-card-label">${mainLabel}<span class="kpi-spark-hint">〰</span></div>
-        <div class="kpi-card-value">${n(j.value)}</div>${preair ? badge(j.lastweek) : badge(j.yesterday)}</div>
-      <div class="kpi-card clickable" onclick="_rtToggleChart(this)" title="탭하면 ${escapeHtml(j.series_day||'오늘')} 분단위 추이">
-        <div class="kpi-card-label">${escapeHtml(j.peak_day||'오늘')} 피크<span class="kpi-spark-hint">〰</span></div>
+        <div class="kpi-card-value">${n(j.value)}</div>
+        <div class="rt-badges">${badge(j.yesterday, '어제')}${badge(j.lastweek, '지난주')}</div></div>
+      <div class="kpi-card clickable" data-rt="peak" onclick="_rtToggleChart(this)" title="탭하면 최근 14일 피크타임 추이">
+        <div class="kpi-card-label">${escapeHtml(j.peak_day || '오늘')} 피크<span class="kpi-spark-hint">〰</span></div>
         <div class="kpi-card-value">${n(pk.value)}</div>
         <div class="kpi-card-wow flat">${escapeHtml(pk.time || '—')}</div></div>`;
-    if (!preair) cards += `
-      <div class="kpi-card clickable" onclick="_rtToggleChart(this)" title="탭하면 오늘 분단위 추이">
-        <div class="kpi-card-label">지난주 동시각<span class="kpi-spark-hint">〰</span></div>
-        <div class="kpi-card-value">${n((j.lastweek||{}).value)}</div>${badge(j.lastweek)}</div>`;
 
     let html = `<div class="kpi-section">
       <div class="kpi-section-title">${title}</div>
       <div class="kpi-grid" id="rtGrid">${cards}</div>`;
-    // 전사 뷰에서만 채널 분해 칩 (추가 정보)
     const chips = (j.channels || []).map(c =>
       `<div class="channel-chip">${escapeHtml(c.name)}<strong>${n(c.value)}</strong></div>`).join('');
     if (chips) html += `<div class="channel-chips" style="margin-top:8px">${chips}</div>`;
     html += '</div>';
     el.innerHTML = html;
-    // 60초 갱신 시 실시간 차트가 열려 있었으면 새 데이터로 다시 그림
-    if (_kpiOpenField === '__rt__') {
-      _kpiOpenField = null;                      // 재오픈 허용
-      const first = el.querySelector('#rtGrid .kpi-card');
-      if (first) _rtToggleChart(first);
+    // 60초 갱신 시 열려 있던 실시간 차트를 새 데이터로 다시 그림 (같은 카드 종류로)
+    if (_kpiOpenField && _kpiOpenField.startsWith('__rt_')) {
+      const kind = _kpiOpenField.slice('__rt_'.length);
+      _kpiOpenField = null;
+      const c = el.querySelector(`#rtGrid .kpi-card[data-rt="${kind}"]`);
+      if (c) _rtToggleChart(c);
     }
   } catch (e) { /* 실시간 미접속 환경 — 카드 비표시로 조용히 강등 */ el.innerHTML = ''; _RT_LAST = null; }
 }
 
-// 실시간 카드 탭 → 분단위 추이 (다른 지표와 동일한 kpi-mini-chart/ECharts 사용)
+// 실시간 카드 탭 → 미니차트. 카드 종류(series=오늘vs지난주 / peak=피크타임 추이)별로 다른 그래프.
 async function _rtToggleChart(card) {
-  if (_kpiOpenField === '__rt__') { _kpiCloseChart(); return; }
+  const kind = card.dataset.rt;                // 'series' | 'peak'
+  const key = '__rt_' + kind;
+  if (_kpiOpenField === key) { _kpiCloseChart(); return; }
   _kpiCloseChart();
-  if (!_RT_LAST || !(_RT_LAST.series || []).length) return;
-  _kpiOpenField = '__rt__';
+  if (!_RT_LAST) return;
+  _kpiOpenField = key;
   const j = _RT_LAST;
-  const grid = document.getElementById('rtGrid');
   const box = document.createElement('div');
   box.id = 'kpiMiniChartBox';
   box.className = 'kpi-mini-chart';
-  grid.insertAdjacentElement('afterend', box);
-  const label = `${(j.scope || {}).name || ''} 동시청취 · ${j.series_day || '오늘'}`;
+  card.insertAdjacentElement('afterend', box);   // 그리드 안(카드 뒤) — 규모 섹션과 동일 간격
   const _ch = _kpiChartHeight(box.clientWidth);
-  box.innerHTML = `<div class="kpi-mini-head">${escapeHtml(label)} (10분 간격)</div>
+  const head = kind === 'peak'
+    ? `${(j.scope || {}).name || ''} 최근 피크타임 추이`
+    : `${(j.scope || {}).name || ''} 동시청취 · ${escapeHtml(j.series_main_day || '오늘')} vs 지난주`;
+  box.innerHTML = `<div class="kpi-mini-head">${escapeHtml(head)}</div>
     <div class="kpi-mini-canvas" style="width:100%;height:${_ch}px"></div>
-    <button class="kpi-chart-link" onclick="_rtTrendAsk()">실시간 추이 분석 →</button>`;
+    <button class="kpi-chart-link" onclick="_rtTrendAsk('${kind}')">${kind === 'peak' ? '피크 패턴 분석' : '실시간 추이 분석'} →</button>`;
   try {
-    const pts = j.series.filter(p => p[1] != null);
     const echarts = await _loadECharts();
     const css = getComputedStyle(document.documentElement);
     const col = v => css.getPropertyValue(v).trim();
     _kpiMiniChart = echarts.init(box.querySelector('.kpi-mini-canvas'), null, { renderer: 'canvas' });
-    _kpiMiniChart.setOption({
-      grid: { left: 6, right: 12, top: 10, bottom: 4, containLabel: true },
-      xAxis: { type: 'category', data: pts.map(p => p[0]), axisTick: { show: false },
-               axisLabel: { fontSize: 9, color: col('--sub') },
-               axisLine: { lineStyle: { color: col('--line2') } } },
-      yAxis: { type: 'value', scale: true, splitNumber: 3,
-               axisLabel: { fontSize: 9, color: col('--sub'),
-                            formatter: v => v >= 10000 ? Math.round(v / 1000) + 'k' : v },
-               splitLine: { lineStyle: { color: col('--line') } } },
-      tooltip: { trigger: 'axis', confine: true,
-                 valueFormatter: v => v == null ? '—' : Number(v).toLocaleString() },
-      series: [{ type: 'line', data: pts.map(p => p[1]), smooth: true, showSymbol: false,
-                 lineStyle: { width: 2, color: col('--accent') },
-                 itemStyle: { color: col('--accent') },
-                 areaStyle: { opacity: 0.08, color: col('--accent') } }],
-    });
+    _kpiMiniChart.setOption(kind === 'peak' ? _rtPeakOption(j, col) : _rtSeriesOption(j, col));
   } catch (e) {
     box.innerHTML = '<div class="kpi-loading">추이 로드 실패</div>';
   }
 }
 
-function _rtTrendAsk() {
+// 오늘(실선·강조) vs 지난주(점선·희미) 오버레이 — x축은 시각(HH:MM) 합집합
+function _rtSeriesOption(j, col) {
+  const main = new Map((j.series_main || []).map(p => [p[0], p[1]]));
+  const last = new Map((j.series_lastweek || []).map(p => [p[0], p[1]]));
+  const xs = Array.from(new Set([...last.keys(), ...main.keys()])).sort();  // 지난주가 하루 전체
+  return {
+    grid: { left: 6, right: 12, top: 22, bottom: 4, containLabel: true },
+    legend: { data: [j.series_main_day || '오늘', '지난주'], top: 0, right: 4,
+              textStyle: { fontSize: 9, color: col('--sub') }, itemWidth: 14, itemHeight: 8 },
+    xAxis: { type: 'category', data: xs, axisTick: { show: false },
+             axisLabel: { fontSize: 9, color: col('--sub'), interval: v => v % 6 === 0 },
+             axisLine: { lineStyle: { color: col('--line2') } } },
+    yAxis: { type: 'value', scale: true, splitNumber: 3,
+             axisLabel: { fontSize: 9, color: col('--sub'),
+                          formatter: v => v >= 10000 ? Math.round(v / 1000) + 'k' : v },
+             splitLine: { lineStyle: { color: col('--line') } } },
+    tooltip: { trigger: 'axis', confine: true,
+               valueFormatter: v => v == null ? '—' : Number(v).toLocaleString() + '명' },
+    series: [
+      { name: '지난주', type: 'line', data: xs.map(x => last.has(x) ? last.get(x) : null),
+        smooth: true, showSymbol: false, lineStyle: { width: 1.5, type: 'dashed', color: col('--sub') },
+        itemStyle: { color: col('--sub') } },
+      { name: j.series_main_day || '오늘', type: 'line', data: xs.map(x => main.has(x) ? main.get(x) : null),
+        smooth: true, showSymbol: false, lineStyle: { width: 2.4, color: col('--accent') },
+        itemStyle: { color: col('--accent') }, areaStyle: { opacity: 0.08, color: col('--accent') } },
+    ],
+  };
+}
+
+// 최근 14일 일자별 피크 발생 '시각' 추이 (y축=분→HH:MM). 오늘 점은 강조.
+function _rtPeakOption(j, col) {
+  const t2m = hm => { const [h, m] = String(hm || '').split(':').map(Number); return (h * 60 + (m || 0)); };
+  const rows = (j.peak_trend || []).filter(r => r.hm);
+  const data = rows.map(r => ({
+    value: t2m(r.hm),
+    itemStyle: r.today ? { color: col('--accent'), borderColor: col('--accent'), borderWidth: 2 }
+                       : { color: col('--sub') },
+    symbolSize: r.today ? 9 : 6,
+    _hm: r.hm, _val: r.val, _date: r.date, _today: !!r.today,
+  }));
+  return {
+    grid: { left: 6, right: 12, top: 10, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: rows.map(r => String(r.date).slice(5)), axisTick: { show: false },
+             axisLabel: { fontSize: 9, color: col('--sub'), interval: v => v % 2 === 0 },
+             axisLine: { lineStyle: { color: col('--line2') } } },
+    yAxis: { type: 'value', min: 0, max: 1440, interval: 360, inverse: false,
+             axisLabel: { fontSize: 9, color: col('--sub'),
+                          formatter: v => String(Math.floor(v / 60)).padStart(2, '0') + ':00' },
+             splitLine: { lineStyle: { color: col('--line') } } },
+    tooltip: { trigger: 'item', confine: true,
+               formatter: p => `${p.data._date} 피크<br/>${Number(p.data._val).toLocaleString()}명 @ ${p.data._hm}`
+                               + (p.data._today ? ' (오늘, 진행 중)' : '') },
+    series: [{ type: 'line', data, smooth: false,
+               lineStyle: { width: 2, color: col('--accent'), opacity: 0.5 } }],
+  };
+}
+
+function _rtTrendAsk(kind) {
   if (isMobile()) closeKpi();
-  submitQuery(`${_kpiScopeName()}실시간 동시청취 오늘 추이 분석해줘`, 'kpi_panel');
+  const q = kind === 'peak'
+    ? `${_kpiScopeName()}실시간 최근 14일 피크타임 패턴 분석해줘`
+    : `${_kpiScopeName()}실시간 동시청취 오늘 추이 분석해줘`;
+  submitQuery(q, 'kpi_panel');
 }
 
 document.getElementById('btnRefreshKpi').addEventListener('click', loadKpiPanel);
