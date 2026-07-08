@@ -1184,6 +1184,50 @@ def _rt_stime_fmt(raw) -> str:
     s = str(raw or "").strip()
     return f"{s[:2]}:{s[2:]}" if len(s) == 4 and s.isdigit() else s
 
+def _rt_current_program(ch_code: str):
+    """현재 시각 기준 그 채널에서 '지금 방송 중'인 프로그램을 STIME으로 역산.
+       오늘 요일에 방송하는 프로그램(KPI dau 존재) 중 STIME이 now 이하로 가장 큰 것.
+       반환 {name, code, stime, etime} 또는 None."""
+    pref = {"F00": ("F",), "L00": ("L", "M"), "G00": ("G",), "P00": ("P",)}.get(ch_code)
+    if not pref:
+        return None
+    now = _dt.datetime.now()
+    now_hm, today_wd = now.strftime("%H%M"), now.weekday()
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        rows = []
+    by_code = {}
+    for r in rows:
+        c = r.get("PGM_CODE") or ""
+        if c.endswith("00") or not c.startswith(pref):
+            continue
+        rec = by_code.setdefault(c, {"stime": "", "name": r.get("PGM_NAME") or _resolve_name(c), "wds": set()})
+        st = (r.get("STIME") or "").strip()
+        if len(st) == 4:
+            rec["stime"] = st
+        dau = str(r.get("dau") or "").strip()
+        if dau and dau not in ("0", "0.0"):
+            try:
+                rec["wds"].add(_dt.datetime.strptime((r.get("DATE") or "").replace("/", "-"), "%Y-%m-%d").weekday())
+            except Exception:
+                pass
+    # 오늘 방송(요일) + STIME 유효한 프로그램만, STIME 순
+    airing = sorted((v["stime"], c, v["name"]) for c, v in by_code.items()
+                    if len(v["stime"]) == 4 and (not v["wds"] or today_wd in v["wds"]))
+    if not airing:
+        return None
+    cur = None
+    for i, (st, c, nm) in enumerate(airing):
+        if st <= now_hm:
+            et = airing[i + 1][0] if i + 1 < len(airing) else "2400"
+            cur = (st, c, nm, et)
+    if not cur:
+        return None
+    st, c, nm, et = cur
+    return {"name": nm, "code": c, "stime": _rt_stime_fmt(st),
+            "etime": "24:00" if et == "2400" else _rt_stime_fmt(et)}
+
 def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
     import raas_datasource as DSRC
     today = DSRC.get_realtime_today()
@@ -1242,17 +1286,30 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
     #   실시간 집계는 채널 단위뿐이라, 방송 중 여부 판단 재료(시작시각·편성 요일)를 결정적으로 제공.
     prog = extract_program(question)
     prog_block = None
-    if prog:
+    ch_code, ch_name = _detect_channel(question)
+    if prog:                                   # 프로그램이 있으면 그 소속 채널을 관심 채널로
+        # channel이 한글명이므로 코드 변환(미등재는 접두사 유추: M*=러브FM 주말)
+        ch_code = (S._CHANNEL_CODE.get(prog["channel"])
+                   or {"F": "F00", "L": "L00", "M": "L00",
+                       "G": "G00", "P": "P00"}.get(prog["code"][:1], "T00"))
+        ch_name = prog["channel"]
         _prow = S._load_program_latest_row(prog["code"]) or {}
         prog_block = {
             "프로그램": prog["name"], "코드": prog["code"],
-            "소속 채널": _CH_NAME_BY_CODE.get(prog["channel"], prog["channel"]),
+            "소속 채널": prog["channel"],      # PROGRAM_DIRECTORY.channel = 한글명
             "방송 시작시각": _rt_stime_fmt(_prow.get("STIME")) or "미상",
             "편성": "주말" if prog["code"].startswith("M") else "평일 중심",
         }
-    ch_code, ch_name = _detect_channel(question)
-    if prog:                                   # 프로그램이 있으면 그 소속 채널을 관심 채널로
-        ch_code, ch_name = prog["channel"], _CH_NAME_BY_CODE.get(prog["channel"], prog["channel"])
+    elif ch_code and ch_code != "T00" and any(k in question for k in ("프로그램", "방송", "뭐", "무슨", "어떤")):
+        # 프로그램명 없이 '지금 방송 중인 프로그램' 류 → 현재 시각 + STIME으로 역산
+        _cur = _rt_current_program(ch_code)
+        if _cur:
+            prog_block = {
+                "현재 방송 중": _cur["name"], "코드": _cur["code"],
+                "소속 채널": ch_name,
+                "방송 시간": f"{_cur['stime']}~{_cur['etime']}",
+                "판정": f"현재 시각 {now_hhmm}이 편성 창에 속함(STIME 기준 역산)",
+            }
     head = (f"분석 대상: 실시간 동시사용자(1분 집계) · 기준시각 오늘 {now_hhmm}"
             + (f" · 관심 채널: {ch_name}" if ch_code and ch_code != "T00" else ""))
     defs = ("[용어 정의]\n"

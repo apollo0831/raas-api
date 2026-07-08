@@ -153,6 +153,14 @@ check("실시간 채널 매핑(필드=코드)",
       [("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"), ("픽채널", "P00")])
 check("실시간 증감% 계산", G._rt_pct(110, 100), 10.0)
 check("실시간 시각 파싱", G._rt_hhmm({"_time": "2026-07-07T08:09:00.000+09:00"}), "08:09")
+# 현재 방송 프로그램 역산 — STIME 기준(라디오 24h라 항상 하나 방송 중)
+_curp = G._rt_current_program("F00")
+check_true("현재 방송 프로그램 역산(파워FM)",
+           bool(_curp) and all(k in (_curp or {}) for k in ("name", "code", "stime", "etime")),
+           f"got={_curp}")
+# '지금 방송 중인 프로그램' 질의 → 편성 컨텍스트 주입(과거 '알 수 없음' 답변 회귀 방지)
+check_true("'지금 방송 프로그램' → realtime_program 주입",
+           "realtime_program" in (G._assemble_realtime("파워FM 지금 방송 중인 프로그램 몇명?") or {}).get("providers_used", []))
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")
