@@ -55,8 +55,9 @@ def _splunk_auth():
     return "Basic " + base64.b64encode(
         f"{SPLUNK_USER}:{SPLUNK_PASSWORD}".encode()).decode()
 
-def splunk_search(spl: str) -> list:
-    """SPL 실행 → 결과 행 list[dict]. (search/jobs/export, JSON 라인 스트림)"""
+def splunk_search(spl: str, timeout: int = None) -> list:
+    """SPL 실행 → 결과 행 list[dict]. (search/jobs/export, JSON 라인 스트림)
+    timeout: 장기 범위 쿼리(예: 10년 아카이브)는 기본 10초로 부족 → 개별 지정."""
     url = f"{SPLUNK_HOST}/servicesNS/nobody/{SPLUNK_APP}/search/jobs/export"
     data = urllib.parse.urlencode({
         "search": spl, "output_mode": "json", "count": 0
@@ -65,7 +66,8 @@ def splunk_search(spl: str) -> list:
     req.add_header("Authorization", _splunk_auth())
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
     try:
-        with urllib.request.urlopen(req, context=SSL_CONTEXT, timeout=SPLUNK_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, context=SSL_CONTEXT,
+                                    timeout=timeout or SPLUNK_TIMEOUT) as resp:
             rows = []
             for line in resp:
                 line = line.decode("utf-8").strip()
@@ -352,6 +354,105 @@ def get_realtime_peak_trend(field: str = "T00", window=None) -> list:
         feed = Feed(nm, _rt_peak_loader(field, window), daily_at="00:05")
         _rt_peak_feeds[key] = feed
     return feed.get() or []
+
+
+# ── 장기 아카이브 (real_dau.csv + summary_uuid_stats, 최대 10년) ─────
+# 상세 KPI(raas_kpi_latest, 2026-03~)와 별도의 장기 이력 — 4개 지표만 존재:
+#   PERIOD=1D/TYPE=ALL → dau · 7D/ALL → dau_r7(롤링WAU) · 30D/ALL → dau_r30(롤링MAU)
+#   1D/1MIN → dau_1min(1분이상 청취)
+# 컬럼 = 프로그램/채널 코드(wide). 과거 불변 → 일일 캐시. 저장소는 Splunk(로컬 저장 없음).
+_HISTORY_SPL = r"""| inputlookup real_dau.csv
+| eval earliest="-10y@y"
+| eval latest="@d"
+| eval earliest=if(isnum(earliest),earliest,relative_time(now(),earliest))
+| eval latest=if(latest=="now","@d",latest)
+| eval latest=if(isnum(latest),latest,relative_time(now(),latest))
+| eval _time = strptime(DATE, "%Y/%m/%d")
+| where _time >= earliest AND _time < latest
+| rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
+| search TYPE="DAY"
+| untable _time field_name value
+| eval _time = if(field_name=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
+| xyseries _time field_name value
+| table _time, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13
+| eval PERIOD = "1D"
+| append [
+| inputlookup real_dau.csv
+| eval earliest="-10y@y"
+| eval latest="@d"
+| eval earliest=if(isnum(earliest),earliest,relative_time(now(),earliest))
+| eval latest=if(latest=="now","@d",latest)
+| eval latest=if(isnum(latest),latest,relative_time(now(),latest))
+| eval _time = strptime(DATE, "%Y/%m/%d")
+| where _time >= earliest AND _time < latest
+| rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
+| search TYPE="WEEK"
+| untable _time field_name value
+| eval _time = if(field_name=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
+| xyseries _time field_name value
+| table _time, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13
+| eval PERIOD = "7D"
+]
+| append [
+| inputlookup real_dau.csv
+| eval earliest="-10y@y"
+| eval latest="@d"
+| eval earliest=if(isnum(earliest),earliest,relative_time(now(),earliest))
+| eval latest=if(latest=="now","@d",latest)
+| eval latest=if(isnum(latest),latest,relative_time(now(),latest))
+| eval _time = strptime(DATE, "%Y/%m/%d")
+| where _time >= earliest AND _time < latest
+| rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
+| search TYPE="MONTH"
+| untable _time field_name value
+| eval _time = if(field_name=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
+| xyseries _time field_name value
+| table _time, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13
+| eval PERIOD = "30D"
+]
+| eval TYPE = "ALL"
+| eval DATE = strftime(_time, "%Y/%m/%d")
+| append [
+| search index=summary_uuid_stats sourcetype=stats_1d earliest=-10y@y latest=@d
+| eval DATE = strftime(_time, "%Y/%m/%d")
+| eval TYPE="1MIN"
+| eval PERIOD="1D"
+| rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
+| table DATE, PERIOD, TYPE, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13
+]
+| table DATE, PERIOD, TYPE, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13"""
+
+# (PERIOD, TYPE) → RAAS 표준 지표 필드 — 기존 온톨로지 정의(AU_Day/AU_R7/AU_R30/1분청취)에 접붙임
+HISTORY_METRIC_MAP = {("1D", "ALL"): "dau", ("7D", "ALL"): "dau_r7",
+                      ("30D", "ALL"): "dau_r30", ("1D", "1MIN"): "dau_1min"}
+
+def _load_history():
+    try:
+        rows = splunk_search(_HISTORY_SPL, timeout=300)   # 10년 범위 — 장기 timeout
+        return rows, "splunk"
+    except Exception as e:
+        print(f"  [history] 장기 아카이브 조회 실패: {e}")
+        return [], "error"
+
+_history_feed = Feed("history_metrics", _load_history, daily_at="07:10")
+
+def get_history_rows() -> list:
+    """장기 아카이브 원본 행(wide). 행당 (DATE, PERIOD, TYPE) + 코드 컬럼."""
+    return _history_feed.get() or []
+
+def get_history_series(code: str, metric: str) -> list:
+    """코드+지표의 장기 시계열 [(DATE, float)] 오름차순. metric은 HISTORY_METRIC_MAP 값."""
+    key = next((k for k, v in HISTORY_METRIC_MAP.items() if v == metric), None)
+    if key is None:
+        return []
+    out = []
+    for r in get_history_rows():
+        if (r.get("PERIOD"), r.get("TYPE")) != key:
+            continue
+        v = _fn(r.get(code))
+        if v is not None:
+            out.append(((r.get("DATE") or "").strip(), v))
+    return sorted(out)
 
 
 # ── 값 코어션 헬퍼 (타임라인 행 값 → int/float) ──────────

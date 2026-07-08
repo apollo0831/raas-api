@@ -85,6 +85,11 @@ raas:P00 a raas:Channel ;
 # 2-1. 도메인 공리 (DomainAxiom) — LLM이 데이터 해석에 활용할 도메인 규칙
 # =============================================================================
 
+raas:HistoricalArchiveAxiom a raas:DomainAxiom ;
+    rdfs:label "장기 아카이브 데이터"@ko ;
+    raas:appliesTo raas:AU_Day, raas:AU_R7, raas:AU_R30 ;
+    rdfs:comment "상세 KPI(raas_kpi_latest.csv, 2026-03-25~)와 별도로, DAU(dau)·롤링WAU(dau_r7)·롤링MAU(dau_r30)·1분이상 청취자(dau_1min) 4개 지표에 한해 장기 아카이브(원천: real_dau.csv 룩업 + summary_uuid_stats 서머리인덱스, 최대 10년)가 존재한다. 대상은 채널·프로그램 코드 전체(T00/F00/L00/G00/P00/F01~/L01~/M05·M10·M11·M13). 지표 정의는 현행과 동일하지만 산정 원천이 달라 겹치는 기간에는 값이 미세하게 다를 수 있으며, 그 경우 상세 KPI 값을 우선한다. 아카이브에는 이 4개 지표 외의 지표(신규·복귀·이탈·유지율·청취품질 등)는 존재하지 않으므로, 그 지표들의 과거는 상세 KPI 보유 기간으로만 답할 수 있다."@ko .
+
 raas:BroadcastConcurrencyAxiom a raas:DomainAxiom ;
     rdfs:label "편성 채널 동시방송 공리"@ko ;
     raas:appliesTo raas:F00, raas:L00 ;

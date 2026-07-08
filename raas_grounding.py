@@ -639,10 +639,86 @@ def _p_data_coverage(ent):
             return ""
     ad = sorted(all_dates)
     metrics = {f: {"최초일": first[f], "정의": _defstr(f)} for f in sorted(first)}
-    return {"보유 범위(전체)": f"{ad[0]} ~ {ad[-1]}", "총 일수": len(ad),
-            "지표별 최초 수집일·정의": metrics,
-            "안내": "현재 룩업 실측 스캔값(백필 시 자동 갱신). 정의는 온톨로지 기준. "
-                    "지표별 시작일이 다를 수 있음(예: 월간 지표는 첫 월말/월초부터)."}
+    out = {"보유 범위(상세 KPI)": f"{ad[0]} ~ {ad[-1]}", "총 일수": len(ad),
+           "지표별 최초 수집일·정의": metrics,
+           "안내": "현재 룩업 실측 스캔값(백필 시 자동 갱신). 정의는 온톨로지 기준. "
+                   "지표별 시작일이 다를 수 있음(예: 월간 지표는 첫 월말/월초부터)."}
+    # 장기 아카이브(별도 원천) 병합 — dau·롤링WAU·롤링MAU·1분청취는 더 이른 시작일 보유
+    try:
+        import raas_datasource as DSRC
+        arch = {}
+        for m in _HIST_METRICS:
+            s = DSRC.get_history_series(code, m)
+            if s:
+                arch[m] = f"{s[0][0]} ~ {s[-1][0]}"
+        if arch:
+            out["장기 아카이브(별도 원천, 이 4개 지표만)"] = arch
+            out["안내"] += " dau·dau_r7·dau_r30·dau_1min은 장기 아카이브가 더 이른 시작일을 " \
+                          "보유 — '언제부터' 답변엔 아카이브 시작일을 우선 안내."
+    except Exception:
+        pass
+    return out
+
+
+_HIST_METRICS = ("dau", "dau_r7", "dau_r30", "dau_1min")   # 장기 아카이브 보유 4개 지표
+_HIST_SIGNAL = ("작년", "재작년", "년 전", "년전", "장기", "역대", "수년", "몇 년", "연도별", "해 전")
+
+def _wants_history(q: str) -> bool:
+    """과거 연도(2015~2025)·장기 신호 → 장기 아카이브 provider 강제 포함."""
+    t = q or ""
+    if re.search(r"20(1[5-9]|2[0-5])", t):
+        return True
+    return any(s in t for s in _HIST_SIGNAL)
+
+def _p_long_history(ent):
+    """장기 아카이브(최대 10년) 시계열 — dau·롤링WAU·롤링MAU·1분청취 4개 지표만.
+       전체 기간은 월평균으로 다운샘플(토큰 절약), 질문에 특정 연도 언급 시 그 해 일별 첨부.
+       지표 정의·아카이브 성격(원천 차이 등)은 온톨로지에서 함께 표면화."""
+    code = ent.get("code")
+    if not code:
+        return None
+    import raas_datasource as DSRC
+    from collections import defaultdict
+    series = {m: DSRC.get_history_series(code, m) for m in _HIST_METRICS}
+    if not any(series.values()):
+        return None
+    cov = {m: f"{s[0][0]} ~ {s[-1][0]} ({len(s)}일)" for m, s in series.items() if s}
+    # 월평균 CSV — 전체 아카이브를 월 단위로 (10년×4지표도 ~100행)
+    monthly = defaultdict(dict)
+    for m, s in series.items():
+        agg = defaultdict(lambda: [0.0, 0])
+        for d, v in s:
+            a = agg[d[:7].replace("/", "-")]
+            a[0] += v; a[1] += 1
+        for ym, (sm, c) in agg.items():
+            monthly[ym][m] = round(sm / c)
+    lines = ["month," + ",".join(_HIST_METRICS)]
+    for ym in sorted(monthly):
+        lines.append(ym + "," + ",".join(str(monthly[ym].get(m, "")) for m in _HIST_METRICS))
+    out = {"지표별 아카이브 범위": cov, "월평균(CSV)": "\n".join(lines)}
+    # 특정 연도 언급 → 그 해 일별(포커스 지표 1개, 최대 2개 연도)
+    q = ent.get("_question") or ""
+    yrs = sorted({y for y in re.findall(r"20(?:1[5-9]|2[0-5])", q)})[:2]
+    if yrs:
+        focus = next((f for f in (ent.get("focus_fields") or []) if f in _HIST_METRICS), "dau")
+        for y in yrs:
+            dly = [f"date,{focus}"] + [f"{d.replace('/', '-')},{int(v)}"
+                                       for d, v in series.get(focus) or [] if d.startswith(y)]
+            if len(dly) > 1:
+                out[f"{y}년 일별({focus}, CSV)"] = "\n".join(dly)
+    # 온톨로지 — 지표 정의 + 아카이브 공리(원천·범위·주의)
+    onto = _metric_def_lines(list(_HIST_METRICS))
+    try:
+        from raas_onto import get_adapter
+        ax = get_adapter()._onto
+        t = ax.value_str(ax.get_one("raas:HistoricalArchiveAxiom", "rdfs:comment"))
+        if t:
+            onto.append(f"- [장기 아카이브 성격] {t}")
+    except Exception:
+        pass
+    if onto:
+        out["온톨로지 근거"] = "\n".join(onto)
+    return out
 
 
 PROVIDERS = [
@@ -667,6 +743,9 @@ PROVIDERS = [
     {"name": "data_coverage", "needs": "program",
      "desc": "데이터 보유 기간·범위 — '언제부터/언제까지 데이터 있나·며칠치·수집 기간' 등 데이터 커버리지 질의(실제 룩업 최초/최신일)",
      "fetch": _p_data_coverage},
+    {"name": "long_history", "needs": "program",
+     "desc": "장기 아카이브 시계열(최대 10년 — dau·롤링WAU·롤링MAU·1분청취 4개 지표만) — 과거 연도·작년·수년 장기 추이/비교 질의",
+     "fetch": _p_long_history},
     {"name": "ontology", "needs": "program",
      "desc": "프로그램 도메인 사실(진행자·정규게스트·시간대·편성유형·광고가치·게스트명 해석정책 등 온톨로지)",
      "fetch": _p_ontology},
@@ -1506,6 +1585,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         names = ["point_snapshot"] + names   # 특정 날짜/안전망은 현황 스냅샷 반드시 포함
     if any(k in question for k in _COVERAGE_SIGNAL) and "data_coverage" not in names:
         names = ["data_coverage"] + names    # '언제부터/기간/보유' 질의는 실제 보유범위 반드시 포함
+    if _wants_history(question) and "long_history" not in names:
+        names = ["long_history"] + names     # 과거 연도·장기 질의는 아카이브 반드시 포함
     if (ent.get("scope_kind") == "channel" and ("프로그램" in question or ent.get("all_programs"))
             and "channel_programs" not in names):
         names = ["channel_programs"] + names   # 채널 내 '프로그램'/'모든 프로그램' 질의는 소속 프로그램 행 반드시 포함

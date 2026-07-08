@@ -179,6 +179,17 @@ check_true("data_coverage에 react_rate_mon(변형) 포함", "react_rate_mon" in
 check_true("data_coverage에 온톨로지 정의 첨부(월간 복귀율)",
            "복귀율" in (_covm.get("react_rate_mon", {}).get("정의", "")) and
            "월간" in (_covm.get("react_rate_mon", {}).get("정의", "")))
+# 장기 아카이브 — 신호 감지·지표 매핑·온톨로지 공리 (fetch는 Splunk 필요라 스모크 제외)
+check_true("장기 신호: '2023년 DAU'", G._wants_history("2023년 DAU 어땠어?"))
+check_true("장기 신호: '작년 대비'", G._wants_history("작년 대비 올해 청취자"))
+check_true("장기 신호 오탐 방지: '어제 DAU'", not G._wants_history("어제 DAU는?"))
+import raas_datasource as DSRC
+check("아카이브 슬라이스→지표 매핑",
+      DSRC.HISTORY_METRIC_MAP,
+      {("1D", "ALL"): "dau", ("7D", "ALL"): "dau_r7",
+       ("30D", "ALL"): "dau_r30", ("1D", "1MIN"): "dau_1min"})
+check_true("온톨로지: 장기 아카이브 공리 존재",
+           bool(get_adapter()._onto.get_one("raas:HistoricalArchiveAxiom", "rdfs:comment")))
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")

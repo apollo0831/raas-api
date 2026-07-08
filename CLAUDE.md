@@ -62,6 +62,10 @@ raas_datasource.py  ← Splunk 수집 단일 소유 (splunk_search·fetch_lookup
     Feed 클래스: daily_at(일배치형)/ttl_sec(실시간형) 정책 — 새 룩업·직접쿼리 소스 추가용
     타임라인 조회 헬퍼(get_metric_trend·get_snapshot_at·get_available_dates·_i·_fn)
     실시간 동시사용자 Feed 3종: 오늘(60초)·어제·지난주 동요일(자정 경계 일일) — 로컬 저장 없음(저장소=Splunk)
+    장기 아카이브 Feed(history_metrics, 일일): real_dau.csv+summary_uuid_stats, 최대 10년 —
+      dau·dau_r7·dau_r30·dau_1min 4개 지표만(HISTORY_METRIC_MAP). grounding long_history provider가
+      월평균 다운샘플+연도별 상세로 답변, data_coverage에 아카이브 범위 병합. 아카이브 성격(원천 차이
+      등)은 raas:HistoricalArchiveAxiom(온톨로지)이 정의
 raas_llm.py  ← 공용 LLM 클라이언트(call_claude·HAIKU_MODEL) — grounding·router·server가 import
 raas_onto/raas_ontology_adapter.py  ← TTL 온톨로지 8종 로더(지표/프로그램/게스트/특일/cause 등)
 raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·data_requests·storyline_events
