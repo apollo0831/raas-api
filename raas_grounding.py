@@ -584,10 +584,16 @@ def _p_period_events(ent):
     return {"window": f"{d0}~{d1}", "annotations": items} if items else None
 
 
+_COV_META = {"DATE", "DATE_WEEK", "DATE_MON", "PGM_CODE", "PGM_NAME", "STIME",
+             "program_title", "guestname", "daily_corner", "weekly_corner",
+             "view_radio_yn", "live_yn"}
+_COV_SKIP_SUFFIX = ("_prev", "_chg", "_diff", "_share", "_pw")   # 전주/증감/비율 등 파생 비교값 제외
+
 def _p_data_coverage(ent):
-    """이 scope의 지표별 데이터 보유 범위(최초 수집일~최신)를 '답할 때마다' 라이브로 계산.
-       metric_timeseries는 최근 창만 담아 '언제부터 데이터 있나'에 최초일을 오해시키므로,
-       현재 룩업 실제 범위를 명시. 과거 데이터를 백필하면 다음 질의부터 자동 반영."""
+    """이 scope의 '전체 지표' 데이터 보유 범위를 답할 때마다 라이브로 계산 + 온톨로지 정의 첨부.
+       하드코딩 목록 없이 룩업에 실재하는 모든 지표 필드를 스캔(일간/주간/월간 변형 포함)하므로,
+       'react_rate_mon(월간 복귀율)은 언제부터?' 같은 변형 지표도 최초일+정의로 답할 수 있다.
+       과거 데이터를 백필하면 다음 질의부터 자동 반영."""
     code = ent.get("code")
     if not code:
         return None
@@ -595,9 +601,7 @@ def _p_data_coverage(ent):
         rows = S._kpi_rows() or []
     except Exception:
         return None
-    fields = ["dau", "wau", "mau", "dau_r7", "dau_r30", "new", "react",
-              "deep_rate", "real_rate", "engage_rate", "habit_rate", "churn_rate"]
-    cov, all_dates = {}, set()
+    first, all_dates = {}, set()
     for r in rows:
         if r.get("PGM_CODE") != code:
             continue
@@ -605,21 +609,40 @@ def _p_data_coverage(ent):
         if not d:
             continue
         all_dates.add(d)
-        for f in fields:
-            v = str(r.get(f) or "").strip()
-            if v and v not in ("0", "0.0", ".0"):
-                c = cov.get(f)
-                if c is None:
-                    cov[f] = [d, d]
-                else:
-                    if d < c[0]: c[0] = d
-                    if d > c[1]: c[1] = d
+        for f, v in r.items():
+            if f in _COV_META or f.endswith(_COV_SKIP_SUFFIX):
+                continue
+            vs = str(v or "").strip()
+            if vs and vs not in ("0", "0.0", ".0"):
+                if f not in first or d < first[f]:
+                    first[f] = d
     if not all_dates:
         return None
+    # 온톨로지 정의(지표·단위) 첨부 — 지식은 온톨로지에서
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+    except Exception:
+        a = None
+    def _defstr(f):
+        if not a:
+            return ""
+        try:
+            info = a.get_field_info(f) or {}
+            m = info.get("metric") or {}
+            parts = [x for x in (m.get("label"),
+                                 (info.get("granularity") or {}).get("label"),
+                                 (info.get("variant") or {}).get("label"))
+                     if x and x != "현재값"]
+            return " · ".join(parts)
+        except Exception:
+            return ""
     ad = sorted(all_dates)
+    metrics = {f: {"최초일": first[f], "정의": _defstr(f)} for f in sorted(first)}
     return {"보유 범위(전체)": f"{ad[0]} ~ {ad[-1]}", "총 일수": len(ad),
-            "지표별 최초 수집일": {f: cov[f][0] for f in sorted(cov)},
-            "안내": "이 값이 실제 데이터 시작일(현재 룩업 스캔값). 시계열 provider의 최근 창과 혼동 금지."}
+            "지표별 최초 수집일·정의": metrics,
+            "안내": "현재 룩업 실측 스캔값(백필 시 자동 갱신). 정의는 온톨로지 기준. "
+                    "지표별 시작일이 다를 수 있음(예: 월간 지표는 첫 월말/월초부터)."}
 
 
 PROVIDERS = [
