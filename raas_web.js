@@ -3177,9 +3177,9 @@ async function _loadRtCard() {
         <div class="kpi-card-value">${n(j.value)}</div>
         <div class="rt-badges">${badge(j.yesterday, '어제')}${badge(j.lastweek, '지난주')}</div></div>
       <div class="kpi-card clickable" data-rt="peak" onclick="_rtToggleChart(this)" title="탭하면 최근 14일 피크타임 추이">
-        <div class="kpi-card-label">${escapeHtml(j.peak_day || '오늘')} 피크<span class="kpi-spark-hint">〰</span></div>
-        <div class="kpi-card-value">${n(pk.value)}</div>
-        <div class="kpi-card-wow flat">${escapeHtml(pk.time || '—')}</div></div>`;
+        <div class="kpi-card-label">피크타임 추이<span class="kpi-spark-hint">〰</span></div>
+        <div class="kpi-card-value">${escapeHtml(pk.time || '—')}</div>
+        <div class="kpi-card-wow flat">${escapeHtml(j.peak_day || '오늘')} ${n(pk.value)}명</div></div>`;
 
     let html = `<div class="kpi-section">
       <div class="kpi-section-title">${title}</div>
@@ -3224,21 +3224,43 @@ async function _rtToggleChart(card) {
     const css = getComputedStyle(document.documentElement);
     const col = v => css.getPropertyValue(v).trim();
     _kpiMiniChart = echarts.init(box.querySelector('.kpi-mini-canvas'), null, { renderer: 'canvas' });
-    _kpiMiniChart.setOption(kind === 'peak' ? _rtPeakOption(j, col) : _rtSeriesOption(j, col));
+    if (kind === 'peak') {
+      _kpiMiniChart.setOption(_rtPeakOption(j, col));
+    } else {
+      const mainName = j.series_main_day || '오늘';
+      const sel = { '지난주': true, [mainName]: true, '어제': false };  // 기본: 오늘+지난주
+      _kpiMiniChart.setOption(_rtSeriesOption(j, col, sel), { notMerge: true });
+      // 범례 토글마다 x축 범위 재계산(오늘만 보이면 현재까지, 비교선 켜지면 전체 창)
+      _kpiMiniChart.on('legendselectchanged', p => {
+        _kpiMiniChart.setOption(_rtSeriesOption(j, col, p.selected), { notMerge: true });
+      });
+    }
   } catch (e) {
     box.innerHTML = '<div class="kpi-loading">추이 로드 실패</div>';
   }
 }
 
-// 오늘(실선·강조) vs 지난주(점선) vs 어제(점선·기본 숨김) 오버레이 — x축은 시각(HH:MM) 합집합
-function _rtSeriesOption(j, col) {
+// 오늘(실선·강조) vs 지난주(점선) vs 어제(점선·기본 숨김) 오버레이.
+//   x축 = (프로그램 편성창 or 0~24시) ∩ (현재 보이는 라인들의 데이터 범위).
+//   → 오늘만 켜지면 0시~현재까지, 비교선 켜지면 창 전체.
+function _rtSeriesOption(j, col, sel) {
   const mainName = j.series_main_day || '오늘';
+  const preair = j.mode === 'yesterday_preair';    // preair면 메인=어제라 별도 어제선 없음
   const main = new Map((j.series_main || []).map(p => [p[0], p[1]]));
   const last = new Map((j.series_lastweek || []).map(p => [p[0], p[1]]));
   const yday = new Map((j.series_yesterday || []).map(p => [p[0], p[1]]));
-  const preair = j.mode === 'yesterday_preair';   // preair면 메인=어제라 어제선 중복 → 미표시
-  const xs = Array.from(new Set([...last.keys(), ...yday.keys(), ...main.keys()])).sort();
   const at = (m, x) => m.has(x) ? m.get(x) : null;
+  const vis = nm => sel ? sel[nm] !== false : true;
+
+  // 편성창(프로그램) 또는 하루 전체
+  const w = (j.program && j.program.window) || { start: '00:00', end: '24:00' };
+  // 현재 보이는 비교선(지난주/어제)이 있으면 창 전체, 아니면 메인 데이터 끝(현재)까지
+  const cmpVisible = vis('지난주') || (!preair && vis('어제'));
+  const mainKeys = [...main.keys()].filter(x => x >= w.start && x <= w.end).sort();
+  const dataEnd = cmpVisible ? w.end : (mainKeys.length ? mainKeys[mainKeys.length - 1] : w.end);
+  const xs = Array.from(new Set([...last.keys(), ...yday.keys(), ...main.keys()]))
+    .filter(x => x >= w.start && x <= dataEnd).sort();
+
   const series = [
     { name: '지난주', type: 'line', data: xs.map(x => at(last, x)),
       smooth: true, showSymbol: false, lineStyle: { width: 1.5, type: 'dashed', color: col('--sub') },
@@ -3248,7 +3270,7 @@ function _rtSeriesOption(j, col) {
       itemStyle: { color: col('--accent') }, areaStyle: { opacity: 0.08, color: col('--accent') } },
   ];
   const legendData = ['지난주', mainName];
-  if (!preair) {                                   // 어제선 — 기본 숨김, 범례로 켬
+  if (!preair) {
     series.push({ name: '어제', type: 'line', data: xs.map(x => at(yday, x)),
       smooth: true, showSymbol: false, lineStyle: { width: 1.5, type: 'dotted', color: col('--yellow') },
       itemStyle: { color: col('--yellow') } });
@@ -3256,9 +3278,9 @@ function _rtSeriesOption(j, col) {
   }
   return {
     grid: { left: 6, right: 12, top: 22, bottom: 4, containLabel: true },
-    legend: { data: legendData, top: 0, right: 4, selected: { '어제': false },
+    legend: { data: legendData, top: 0, right: 4, selected: sel || { '어제': false },
               textStyle: { fontSize: 9, color: col('--sub') }, itemWidth: 14, itemHeight: 8 },
-    xAxis: { type: 'category', data: xs, axisTick: { show: false },
+    xAxis: { type: 'category', data: xs, boundaryGap: false, axisTick: { show: false },
              axisLabel: { fontSize: 9, color: col('--sub'), interval: v => v % 6 === 0 },
              axisLine: { lineStyle: { color: col('--line2') } } },
     yAxis: { type: 'value', scale: true, splitNumber: 3,

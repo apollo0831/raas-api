@@ -780,6 +780,27 @@ class RAASHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
 
+    @staticmethod
+    def _realtime_program_window(field, stime4):
+        """프로그램 편성창 {start,end} — 종료시각 필드가 없어 '소속 채널 다음 프로그램 STIME'로 유도.
+        편성이 24h 연속이라 다음 시작=이번 종료. 마지막 프로그램(자정 넘김)은 24:00으로 클램프."""
+        if not stime4 or len(stime4) != 4 or field not in ("F00", "L00", "G00", "P00"):
+            return None
+        prefs = {"F00": ("F",), "L00": ("L", "M"), "G00": ("G",), "P00": ("P",)}[field]
+        tl = get_cached_timeline() or {}
+        stimes = set()
+        for code, date_rows in tl.items():
+            if code.endswith("00") or not code.startswith(prefs):
+                continue
+            row = date_rows.get(max(date_rows)) if date_rows else None
+            st = ((row or {}).get("STIME") or "").strip()
+            if len(st) == 4 and st.isdigit():
+                stimes.add(st)
+        nxt = min((s for s in stimes if s > stime4), default=None)  # HHMM 고정폭 → 사전순=시간순
+        end4 = nxt if nxt else "2400"
+        _f = lambda s: f"{s[:2]}:{s[2:]}"
+        return {"start": _f(stime4), "end": ("24:00" if end4 == "2400" else _f(end4))}
+
     def _get_realtime_panel(self):
         # KPI 패널 실시간 섹션 — 채널 선택(scope)에 맞는 동시청취 + 어제/지난주 동시각·피크·시리즈.
         # scope가 프로그램 코드('내 관심')면 소속 채널 값 사용; 방송 시작 전이면 어제 데이터로 전환.
@@ -813,7 +834,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                            "channel": field,
                            "channel_name": METRICS._pgm_name(field),
                            "stime": f"{_stime[:2]}:{_stime[2:]}" if len(_stime) == 4 else _stime,
-                           "started": bool(_stime and _now_hm >= _stime)}
+                           "started": bool(_stime and _now_hm >= _stime),
+                           "window": self._realtime_program_window(field, _stime)}
 
             def _val(row):
                 return GROUND._rt_int(row.get(field))
