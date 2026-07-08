@@ -801,6 +801,21 @@ class RAASHandler(BaseHTTPRequestHandler):
         _f = lambda s: f"{s[:2]}:{s[2:]}"
         return {"start": _f(stime4), "end": ("24:00" if end4 == "2400" else _f(end4))}
 
+    @staticmethod
+    def _program_broadcast_weekdays(code):
+        """프로그램이 방송하는 요일 집합(0=월~6=일) — KPI dau 존재 여부로 판별.
+        평일 프로그램은 주말에 dau가 비고(주말 프로그램 M*으로 대체), 그 반대도 성립."""
+        rows = (get_cached_timeline() or {}).get(code) or {}
+        wds = set()
+        for d, row in rows.items():
+            v = str((row or {}).get("dau") or "").strip()
+            if v and v not in ("0", "0.0"):
+                try:
+                    wds.add(datetime.strptime(d.replace("/", "-"), "%Y-%m-%d").weekday())
+                except Exception:
+                    pass
+        return wds or set(range(7))   # 판별 불가 시 전 요일 허용(필터 안 함)
+
     def _get_realtime_panel(self):
         # KPI 패널 실시간 섹션 — 채널 선택(scope)에 맞는 동시청취 + 어제/지난주 동시각·피크·시리즈.
         # scope가 프로그램 코드('내 관심')면 소속 채널 값 사용; 방송 시작 전이면 어제 데이터로 전환.
@@ -869,14 +884,32 @@ class RAASHandler(BaseHTTPRequestHandler):
             y_same = _at(yday, asof)
             w_same = _at(lastwk, asof)
 
-            # 카드1(통합) 오버레이 차트: 메인일(오늘 또는 어제) + 지난주 동요일 2선
-            peak = _peak(base_rows)
-            # 카드2 피크타임 추이: 최근 14일(일일 캐시) + 오늘 피크(진행 중) 덧붙임
-            trend = [{"date": r.get("date"), "hm": r.get("peak_hm"),
-                      "val": GROUND._rt_int(r.get("peak_val"))}
-                     for r in DS.get_realtime_peak_trend(field)]
-            if not preair:   # 오늘 피크(진행 중)를 추이 끝에 덧붙여 이동 추적
-                _tp = _peak(today)
+            # 프로그램 편성창(HH:MM) — 프로그램 스코프는 피크를 그 슬롯 안에서만 집계
+            pw = None
+            if program and program.get("window"):
+                pw = (program["window"]["start"], program["window"]["end"])
+            def _win(rows):
+                if not pw:
+                    return rows
+                return [r for r in rows if pw[0] <= GROUND._rt_hhmm(r) < pw[1]]
+            bdays = self._program_broadcast_weekdays(scope) if program else None
+
+            # 카드1(통합) 오버레이 차트 + 카드2 피크(편성창 내)
+            peak = _peak(_win(base_rows))
+            # 카드2 피크타임 추이: 최근 14일(편성창 내) — 프로그램은 방송일만 + 오늘(진행 중) 덧붙임
+            trend = []
+            for r in DS.get_realtime_peak_trend(field, pw):
+                d = r.get("date")
+                if bdays is not None:
+                    try:
+                        if datetime.strptime(d, "%Y-%m-%d").weekday() not in bdays:
+                            continue   # 비방송일 제외
+                    except Exception:
+                        pass
+                trend.append({"date": d, "hm": r.get("peak_hm"),
+                              "val": GROUND._rt_int(r.get("peak_val"))})
+            if not preair and (bdays is None or datetime.now().weekday() in bdays):
+                _tp = _peak(_win(today))
                 if _tp["value"] is not None:
                     trend.append({"date": datetime.now().strftime("%Y-%m-%d"),
                                   "hm": _tp["time"], "val": _tp["value"], "today": True})

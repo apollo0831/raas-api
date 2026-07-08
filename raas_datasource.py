@@ -324,28 +324,33 @@ def get_realtime_lastweek() -> list:
 _RT_PEAK_DAYS = 14
 _rt_peak_feeds: dict = {}
 
-def _rt_peak_loader(field: str):
+def _rt_peak_loader(field: str, window=None):
     def load():
         spl = (f"search index={RT_INDEX} earliest=-{_RT_PEAK_DAYS}d@d latest=@d "
-               f'| eval date=strftime(_time,"%Y-%m-%d"), hm=strftime(_time,"%H:%M") '
-               f"| sort 0 date {field} "
-               f"| stats last(hm) as peak_hm last({field}) as peak_val by date "
-               f"| sort 0 date")
+               f'| eval date=strftime(_time,"%Y-%m-%d"), hm=strftime(_time,"%H:%M") ')
+        if window:                       # 프로그램 편성창 [start, end) 시간대만
+            spl += f'| where hm>="{window[0]}" AND hm<"{window[1]}" '
+        spl += (f"| sort 0 date {field} "
+                f"| stats last(hm) as peak_hm last({field}) as peak_val by date "
+                f"| sort 0 date")
         try:
             return splunk_search(spl), "splunk"
         except Exception as e:
-            print(f"  [realtime peak] 조회 실패({field}): {e}")
+            print(f"  [realtime peak] 조회 실패({field},{window}): {e}")
             return [], "error"
     return load
 
-def get_realtime_peak_trend(field: str = "T00") -> list:
-    """최근 14일 일자별 [{date, peak_hm, peak_val}] — 피크타임 이동 추적용."""
+def get_realtime_peak_trend(field: str = "T00", window=None) -> list:
+    """최근 14일 일자별 [{date, peak_hm, peak_val}]. window=(start,end) 주면 그 시간대 내 피크.
+       프로그램 스코프는 편성창을 넘겨 슬롯 내 피크타임 이동을 추적."""
     if field not in ("T00", "F00", "L00", "G00", "P00"):
         field = "T00"
-    feed = _rt_peak_feeds.get(field)
+    key = (field, window[0], window[1]) if window else (field,)
+    feed = _rt_peak_feeds.get(key)
     if feed is None:
-        feed = Feed(f"realtime_peak_{field}", _rt_peak_loader(field), daily_at="00:05")
-        _rt_peak_feeds[field] = feed
+        nm = "realtime_peak_" + "_".join(str(x).replace(":", "") for x in key)
+        feed = Feed(nm, _rt_peak_loader(field, window), daily_at="00:05")
+        _rt_peak_feeds[key] = feed
     return feed.get() or []
 
 

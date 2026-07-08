@@ -3294,6 +3294,7 @@ function _rtSeriesOption(j, col, sel) {
 }
 
 // 최근 14일 일자별 피크 발생 '시각' 추이 (y축=분→HH:MM). 오늘 점은 강조.
+//   프로그램 스코프면 y축을 편성창으로 줌 → 2시간 슬롯 안 피크 이동이 보이게.
 function _rtPeakOption(j, col) {
   const t2m = hm => { const [h, m] = String(hm || '').split(':').map(Number); return (h * 60 + (m || 0)); };
   const rows = (j.peak_trend || []).filter(r => r.hm);
@@ -3304,14 +3305,24 @@ function _rtPeakOption(j, col) {
     symbolSize: r.today ? 9 : 6,
     _hm: r.hm, _val: r.val, _date: r.date, _today: !!r.today,
   }));
+  // y축 범위: 프로그램 편성창(줌) 또는 0~24시. 24:00은 1440.
+  const win = j.program && j.program.window;
+  let yMin = 0, yMax = 1440, yInt = 360;
+  if (win) {
+    yMin = t2m(win.start);
+    yMax = win.end === '24:00' ? 1440 : t2m(win.end);
+    const span = Math.max(30, yMax - yMin);
+    yInt = span <= 120 ? 30 : (span <= 360 ? 60 : 120);   // 슬롯 길이에 맞춘 눈금
+  }
   return {
     grid: { left: 6, right: 12, top: 10, bottom: 4, containLabel: true },
     xAxis: { type: 'category', data: rows.map(r => String(r.date).slice(5)), axisTick: { show: false },
              axisLabel: { fontSize: 9, color: col('--sub'), interval: v => v % 2 === 0 },
              axisLine: { lineStyle: { color: col('--line2') } } },
-    yAxis: { type: 'value', min: 0, max: 1440, interval: 360, inverse: false,
+    yAxis: { type: 'value', min: yMin, max: yMax, interval: yInt,
              axisLabel: { fontSize: 9, color: col('--sub'),
-                          formatter: v => String(Math.floor(v / 60)).padStart(2, '0') + ':00' },
+                          formatter: v => String(Math.floor(v / 60)).padStart(2, '0')
+                                          + ':' + String(v % 60).padStart(2, '0') },
              splitLine: { lineStyle: { color: col('--line') } } },
     tooltip: { trigger: 'item', confine: true,
                formatter: p => `${p.data._date} 피크<br/>${Number(p.data._val).toLocaleString()}명 @ ${p.data._hm}`
