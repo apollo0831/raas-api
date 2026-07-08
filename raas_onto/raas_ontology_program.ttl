@@ -52,13 +52,17 @@ raas:F00 a raas:Channel ;
     raas:code "F00" ;
     rdfs:label "파워FM"@ko ;
     raas:altLabel "PowerFM"@en, "Power FM"@en, "파워"@ko, "에프엠"@ko ;
-    raas:partOfPlatform raas:T00 .
+    raas:partOfPlatform raas:T00 ;
+    raas:channelNature "programmed"@en ;
+    rdfs:comment "시간대별로 프로그램이 편성되는 채널 (편성형)"@ko .
 
 raas:L00 a raas:Channel ;
     raas:code "L00" ;
     rdfs:label "러브FM"@ko ;
     raas:altLabel "LoveFM"@en, "Love FM"@en, "러브"@ko ;
-    raas:partOfPlatform raas:T00 .
+    raas:partOfPlatform raas:T00 ;
+    raas:channelNature "programmed"@en ;
+    rdfs:comment "시간대별로 프로그램이 편성되는 채널 (편성형). 평일/주말 편성이 다름"@ko .
 
 raas:G00 a raas:Channel ;
     raas:code "G00" ;
@@ -75,6 +79,16 @@ raas:P00 a raas:Channel ;
     raas:partOfPlatform raas:T00 ;
     raas:channelNature "non-programmed"@en ;
     rdfs:comment "프로그램 단위 편성 없이 채널 자체로 청취가 측정됨 (큐레이션/비편성 채널)"@ko .
+
+
+# =============================================================================
+# 2-1. 도메인 공리 (DomainAxiom) — LLM이 데이터 해석에 활용할 도메인 규칙
+# =============================================================================
+
+raas:BroadcastConcurrencyAxiom a raas:DomainAxiom ;
+    rdfs:label "편성 채널 동시방송 공리"@ko ;
+    raas:appliesTo raas:F00, raas:L00 ;
+    rdfs:comment "편성형(programmed) 라디오 채널은 동시간에 단 하나의 프로그램만 방송한다. 따라서 어떤 프로그램의 편성 시간(STIME부터 다음 프로그램 STIME까지) 안에서는 그 채널의 동시청취자 수가 곧 그 프로그램의 동시청취자 수와 같다. 실시간 집계가 채널 단위로만 제공되더라도, 편성 시간 안이라면 그 값을 방송 중인 프로그램의 청취 규모로 그대로 귀속할 수 있다(별도 프로그램 단위 집계 불필요). 단, 비편성형 채널(고릴라M·픽채널)은 이 공리가 적용되지 않는다."@ko .
 
 
 # =============================================================================

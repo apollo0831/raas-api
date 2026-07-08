@@ -23,7 +23,7 @@ import raas_grounding as G                   # noqa: E402
 import raas_metrics_engine as METRICS        # noqa: E402
 import raas_storyline_router as ROUTER       # noqa: E402
 import raas_data_check as DC                 # noqa: E402
-
+from raas_onto import get_adapter            # noqa: E402
 G.S.set_timeline_provider(SRV.get_cached_timeline)
 
 FAIL = []
@@ -161,6 +161,11 @@ check_true("현재 방송 프로그램 역산(파워FM)",
 # '지금 방송 중인 프로그램' 질의 → 편성 컨텍스트 주입(과거 '알 수 없음' 답변 회귀 방지)
 check_true("'지금 방송 프로그램' → realtime_program 주입",
            "realtime_program" in (G._assemble_realtime("파워FM 지금 방송 중인 프로그램 몇명?") or {}).get("providers_used", []))
+# 도메인 공리는 코드가 아니라 온톨로지에서 — 편성형 채널에만 동시방송 공리 적용
+check_true("온톨로지: 편성 공리 F00 적용", len(get_adapter().get_domain_axioms("F00")) >= 1)
+check_true("온톨로지: 비편성 G00 공리 없음", len(get_adapter().get_domain_axioms("G00")) == 0)
+check_true("실시간 온톨로지 블록(F00)에 편성 공리 포함",
+           "공리" in G._rt_ontology_block("F00") and "편성형" in G._rt_ontology_block("F00"))
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")

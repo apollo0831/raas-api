@@ -151,6 +151,11 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
 - 성별(`SEX_M/F`)·연령(`AGE_T*` 10구간)은 **본인인증(AUTH=1) 사용자만** — 분모 `SEX_TM`/`AGE_TM` 제공, 비율은 인증자합계 기준으로만
 - 채널 세부 분해 접미사: `_F`(파워FM)/`_L`(러브FM)/`_G`(고릴라M)/`_P`(픽채널) — Tier 2 확장용, 현재 T레벨만 사용
 
+**도메인 지식은 온톨로지에**: 채널 편성 성격(`raas:channelNature` programmed/non-programmed)과
+동시방송 공리(`raas:DomainAxiom` — 편성형 채널은 동시간 1개 프로그램만 방송 → 편성창 내 채널 동시청취
+= 프로그램 동시청취)는 `raas_ontology_program.ttl`에 두고, `_rt_ontology_block`이 실시간 답변 context에
+주입한다(코드에 하드코딩 금지 — 공백/오류는 TTL 수정으로). `_rt_current_program`이 STIME으로 현재 방송분 역산.
+
 ## Program Code Conventions
 
 프로그램 매핑: `raas_storyline_router.PROGRAM_DIRECTORY` + `extract_program(text)` (질문→프로그램),

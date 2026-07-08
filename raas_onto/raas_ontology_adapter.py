@@ -343,6 +343,26 @@ class OntologyAdapter:
             "formula": self._onto.value_str(self._onto.get_one(metric_iri, "raas:formula")),
         }
 
+    def get_channel_nature(self, code: str) -> str:
+        """채널 편성 성격: 'programmed' | 'non-programmed' | ''(미상)."""
+        return self._onto.value_str(self._onto.get_one(f"raas:{code}", "raas:channelNature"))
+
+    def get_domain_axioms(self, channel_code: str = None) -> list:
+        """raas:DomainAxiom 도메인 규칙 텍스트 목록 → [{label, text}].
+        channel_code 주면 raas:appliesTo가 그 채널을 포함하는(또는 미지정인) 공리만.
+        LLM 컨텍스트에 '온톨로지 근거'로 주입 — 지식을 코드가 아니라 온톨로지에 둔다."""
+        out = []
+        for iri in self._onto.instances_of("raas:DomainAxiom"):
+            text = self._onto.value_str(self._onto.get_one(iri, "rdfs:comment"))
+            if not text:
+                continue
+            if channel_code:
+                applies = self._onto.get(iri, "raas:appliesTo")
+                if applies and f"raas:{channel_code}" not in applies:
+                    continue
+            out.append({"label": self._onto.label_ko(iri), "text": text})
+        return out
+
     def get_metric_definitions_block(self) -> str:
         """TTL raas:definition/formula/rdfs:comment 기반 지표 정의 텍스트 블록.
         LLM 시스템 프롬프트의 [지표 정의] 섹션을 대체한다."""

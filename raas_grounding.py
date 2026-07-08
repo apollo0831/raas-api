@@ -1184,6 +1184,28 @@ def _rt_stime_fmt(raw) -> str:
     s = str(raw or "").strip()
     return f"{s[:2]}:{s[2:]}" if len(s) == 4 and s.isdigit() else s
 
+def _rt_ontology_block(ch_code: str) -> str:
+    """채널 편성 성격 + 적용 도메인 공리를 온톨로지에서 읽어 '온톨로지 근거' 블록으로.
+       (지식을 코드 문자열이 아니라 온톨로지 TTL에 두고 read-time 주입 — 채워질수록 답변 향상)"""
+    if not ch_code or ch_code == "T00":
+        return ""
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+    except Exception:
+        return ""
+    lines = []
+    nature = a.get_channel_nature(ch_code)
+    if nature:
+        _kr = {"programmed": "편성형(시간대별 프로그램 편성)",
+               "non-programmed": "비편성형(프로그램 단위 편성 없음)"}.get(nature, nature)
+        lines.append(f"- {_CH_NAME_BY_CODE.get(ch_code, ch_code)} 채널 성격: {_kr}")
+    for ax in a.get_domain_axioms(ch_code):
+        lines.append(f"- [{ax['label']}] {ax['text']}")
+    if not lines:
+        return ""
+    return "## 온톨로지 근거\n" + "\n".join(lines)
+
 def _rt_current_program(ch_code: str):
     """현재 시각 기준 그 채널에서 '지금 방송 중'인 프로그램을 STIME으로 역산.
        오늘 요일에 방송하는 프로그램(KPI dau 존재) 중 STIME이 now 이하로 가장 큰 것.
@@ -1326,13 +1348,14 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
     providers = ["realtime_now", "realtime_compare", "realtime_series"]
     if prog_block:
         context += ("\n\n### realtime_program — 질의 프로그램 편성 컨텍스트\n"
-                    + json.dumps(prog_block, ensure_ascii=False)
-                    + "\n※ 실시간 집계는 채널 단위뿐(프로그램 단위 없음). 현재 시각과 방송 "
-                      "시작시각·편성을 대조해, 방송 중이면 소속 채널 동시사용자를 해당 프로그램 "
-                      "청취 규모로 해석하되 '채널 합계 기준'임을 반드시 밝힐 것. 방송 종료시각 "
-                      "데이터는 없으므로 방송 중 여부가 애매하면 그 점을 함께 안내.")
+                    + json.dumps(prog_block, ensure_ascii=False))
         providers.append("realtime_program")
     context += "\n\n" + defs
+    # 온톨로지 도메인 근거(채널 편성 성격 + 동시방송 공리) — 지식을 코드가 아닌 온톨로지에서.
+    onto = _rt_ontology_block(ch_code)
+    if onto:
+        context += "\n\n" + onto
+        providers.append("channel_ontology")
     return {"ok": True, "context": context,
             "providers_used": providers,
             "entities_brief": head,
