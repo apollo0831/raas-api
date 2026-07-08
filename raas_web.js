@@ -3230,14 +3230,33 @@ async function _rtToggleChart(card) {
   }
 }
 
-// 오늘(실선·강조) vs 지난주(점선·희미) 오버레이 — x축은 시각(HH:MM) 합집합
+// 오늘(실선·강조) vs 지난주(점선) vs 어제(점선·기본 숨김) 오버레이 — x축은 시각(HH:MM) 합집합
 function _rtSeriesOption(j, col) {
+  const mainName = j.series_main_day || '오늘';
   const main = new Map((j.series_main || []).map(p => [p[0], p[1]]));
   const last = new Map((j.series_lastweek || []).map(p => [p[0], p[1]]));
-  const xs = Array.from(new Set([...last.keys(), ...main.keys()])).sort();  // 지난주가 하루 전체
+  const yday = new Map((j.series_yesterday || []).map(p => [p[0], p[1]]));
+  const preair = j.mode === 'yesterday_preair';   // preair면 메인=어제라 어제선 중복 → 미표시
+  const xs = Array.from(new Set([...last.keys(), ...yday.keys(), ...main.keys()])).sort();
+  const at = (m, x) => m.has(x) ? m.get(x) : null;
+  const series = [
+    { name: '지난주', type: 'line', data: xs.map(x => at(last, x)),
+      smooth: true, showSymbol: false, lineStyle: { width: 1.5, type: 'dashed', color: col('--sub') },
+      itemStyle: { color: col('--sub') } },
+    { name: mainName, type: 'line', data: xs.map(x => at(main, x)),
+      smooth: true, showSymbol: false, lineStyle: { width: 2.4, color: col('--accent') },
+      itemStyle: { color: col('--accent') }, areaStyle: { opacity: 0.08, color: col('--accent') } },
+  ];
+  const legendData = ['지난주', mainName];
+  if (!preair) {                                   // 어제선 — 기본 숨김, 범례로 켬
+    series.push({ name: '어제', type: 'line', data: xs.map(x => at(yday, x)),
+      smooth: true, showSymbol: false, lineStyle: { width: 1.5, type: 'dotted', color: col('--yellow') },
+      itemStyle: { color: col('--yellow') } });
+    legendData.push('어제');
+  }
   return {
     grid: { left: 6, right: 12, top: 22, bottom: 4, containLabel: true },
-    legend: { data: [j.series_main_day || '오늘', '지난주'], top: 0, right: 4,
+    legend: { data: legendData, top: 0, right: 4, selected: { '어제': false },
               textStyle: { fontSize: 9, color: col('--sub') }, itemWidth: 14, itemHeight: 8 },
     xAxis: { type: 'category', data: xs, axisTick: { show: false },
              axisLabel: { fontSize: 9, color: col('--sub'), interval: v => v % 6 === 0 },
@@ -3248,14 +3267,7 @@ function _rtSeriesOption(j, col) {
              splitLine: { lineStyle: { color: col('--line') } } },
     tooltip: { trigger: 'axis', confine: true,
                valueFormatter: v => v == null ? '—' : Number(v).toLocaleString() + '명' },
-    series: [
-      { name: '지난주', type: 'line', data: xs.map(x => last.has(x) ? last.get(x) : null),
-        smooth: true, showSymbol: false, lineStyle: { width: 1.5, type: 'dashed', color: col('--sub') },
-        itemStyle: { color: col('--sub') } },
-      { name: j.series_main_day || '오늘', type: 'line', data: xs.map(x => main.has(x) ? main.get(x) : null),
-        smooth: true, showSymbol: false, lineStyle: { width: 2.4, color: col('--accent') },
-        itemStyle: { color: col('--accent') }, areaStyle: { opacity: 0.08, color: col('--accent') } },
-    ],
+    series,
   };
 }
 

@@ -868,6 +868,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                    "lastweek": {"value": w_same, "pct": GROUND._rt_pct(value, w_same)},
                    "peak": peak, "peak_day": base_day,
                    "series_main": _ser(base_rows), "series_main_day": base_day,
+                   "series_yesterday": _ser(yday),
                    "series_lastweek": _ser(lastwk),
                    "peak_trend": trend,
                    "program": program}
