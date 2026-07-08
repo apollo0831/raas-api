@@ -1718,6 +1718,7 @@ async function submitQuery(question, source, opts) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     let rawText = '', chartData = null, initialized = false, streamDone = false;
+    let _extractHTML = '';       // 추출 표 HTML — done에서 msgBody 재구성 시 다시 붙임
     let _renderQueued = false;   // 토큰마다 재파싱하지 않고 프레임당 1회로 합쳐 깜빡임 감소
     const _flushRender = () => {
       _renderQueued = false;
@@ -1746,7 +1747,11 @@ async function submitQuery(question, source, opts) {
             msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text" id="${aiId}-txt">${renderAiText(rawText)}</div>`;
             initialized = true;
           }
-          msgBody.insertAdjacentHTML('beforeend', _renderExtract(ev.payload));
+          const _h = _renderExtract(ev.payload);   // 한 번만 호출(store 1건) — 같은 HTML을 done에서 재사용
+          _extractHTML += _h;
+          const _host = document.getElementById(`${aiId}-txt`);
+          if (_host) _host.insertAdjacentHTML('afterend', _h);
+          else msgBody.insertAdjacentHTML('beforeend', _h);
         } else if (ev.type === 'token') {
           if (!initialized) {
             msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text" id="${aiId}-txt"></div>`;
@@ -1757,6 +1762,7 @@ async function submitQuery(question, source, opts) {
         } else if (ev.type === 'done') {
           const qid = ev.query_id || null;
           msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text">${renderAiText(rawText)}</div>`;
+          if (_extractHTML) msgBody.insertAdjacentHTML('beforeend', _extractHTML);  // 추출 표 재삽입(overwrite 방지)
           _initLLMCharts(msgBody);   // ```chart 블록 → ECharts 렌더
           // 드릴다운(어제 특이사항 → 프로그램별 원인) — 클릭 시 일반 자유질의(통합 grounding 경로)로
           if (ev.drill && ev.drill.length) msgBody.insertAdjacentHTML('beforeend', _buildDrillChips(ev.drill));
