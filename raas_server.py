@@ -20,6 +20,7 @@ import raas_datasource as DS
 import urllib.request
 import urllib.parse
 import urllib.error
+import socket
 import sys
 import os
 import threading
@@ -361,11 +362,14 @@ class RAASHandler(BaseHTTPRequestHandler):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {format % args}")
 
     def _get_client_ip(self) -> str:
-        """ngrok/프록시 환경은 X-Forwarded-For 우선, 직접 접속은 client_address."""
+        """ngrok/프록시 환경은 X-Forwarded-For 우선, 직접 접속은 client_address.
+        듀얼스택 소켓에서 IPv4 직접접속은 '::ffff:X.X.X.X'로 오므로 접두사를 벗겨
+        기존 IPv4 표기(사내 IP 화이트리스트 매칭)와 동일하게 정규화한다."""
         forwarded = self.headers.get("X-Forwarded-For", "")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return self.client_address[0]
+        ip = forwarded.split(",")[0].strip() if forwarded else self.client_address[0]
+        if ip.startswith("::ffff:") and "." in ip:
+            ip = ip[len("::ffff:"):]
+        return ip
 
     def _get_session_token(self) -> str:
         """Authorization: Bearer <token> 헤더에서 토큰만 추출. 없으면 ''."""
@@ -1856,12 +1860,25 @@ class RAASHandler(BaseHTTPRequestHandler):
             return
         return h(self, body)
 
+class DualStackServer(ThreadingHTTPServer):
+    """IPv4·IPv6 동시 수신. ngrok이 localhost를 ::1(IPv6)로 먼저 풀어 IPv4 전용
+    서버에 ERR_NGROK_8012(연결 거부)가 나던 문제 해결. (stdlib http.server와 동일 패턴)"""
+    address_family = socket.AF_INET6
+
+    def server_bind(self):
+        try:
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except (AttributeError, OSError):
+            pass   # 듀얼스택 미지원 플랫폼이면 그대로 진행
+        super().server_bind()
+
+
 if __name__ == "__main__":
     init_db()
     bootstrap_admins()  # .env ADMIN_LOGIN_IDS 기반 관리자 자동 승격
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), RAASHandler)
+    server = DualStackServer(("::", PORT), RAASHandler)   # ::는 IPv4-매핑 포함 전 주소
     server.daemon_threads = True
-    print(f"RAAS Local Server started: http://localhost:{PORT}  (Ctrl+C to quit)")
+    print(f"RAAS Local Server started: http://localhost:{PORT}  (IPv4+IPv6, Ctrl+C to quit)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
