@@ -679,7 +679,8 @@ def _p_long_history(ent):
         return None
     import raas_datasource as DSRC
     from collections import defaultdict
-    series = {m: DSRC.get_history_series(code, m) for m in _HIST_METRICS}
+    # 상세 KPI 우선 병합 — 겹치는 기간은 raas_kpi_latest(메인) 값, 그 이전만 아카이브
+    series = {m: DSRC.get_history_series_merged(code, m) for m in _HIST_METRICS}
     if not any(series.values()):
         return None
     cov = {m: f"{s[0][0]} ~ {s[-1][0]} ({len(s)}일)" for m, s in series.items() if s}

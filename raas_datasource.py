@@ -441,7 +441,7 @@ def get_history_rows() -> list:
     return _history_feed.get() or []
 
 def get_history_series(code: str, metric: str) -> list:
-    """코드+지표의 장기 시계열 [(DATE, float)] 오름차순. metric은 HISTORY_METRIC_MAP 값."""
+    """코드+지표의 장기 '아카이브' 시계열 [(DATE, float)] 오름차순. metric은 HISTORY_METRIC_MAP 값."""
     key = next((k for k, v in HISTORY_METRIC_MAP.items() if v == metric), None)
     if key is None:
         return []
@@ -453,6 +453,17 @@ def get_history_series(code: str, metric: str) -> list:
         if v is not None:
             out.append(((r.get("DATE") or "").strip(), v))
     return sorted(out)
+
+def get_history_series_merged(code: str, metric: str) -> list:
+    """장기 아카이브 + 상세 KPI 병합 시계열 [(DATE, float)].
+       메인 소스는 상세 KPI(raas_kpi_latest, 더 정교) — 겹치는 날짜는 상세 KPI 값이 우선.
+       아카이브는 상세 KPI에 없는 과거 기간만 채운다."""
+    merged = dict(get_history_series(code, metric))       # 아카이브(과거 폭넓음)
+    for d, row in (get_timeline() or {}).get(code, {}).items():
+        v = _fn(row.get(metric))
+        if v is not None:
+            merged[(d or "").strip()] = v                 # 상세 KPI 우선 덮어쓰기
+    return sorted(merged.items())
 
 
 # ── 값 코어션 헬퍼 (타임라인 행 값 → int/float) ──────────
