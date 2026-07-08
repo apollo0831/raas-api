@@ -1624,6 +1624,63 @@ function _buildDrillChips(drill) {
   return `<div class="story-chips-inline"><div class="drill-label">자세히 볼 프로그램</div>${chips}</div>`;
 }
 
+// ── 데이터 추출 결과: 미리보기 표 + 엑셀 다운로드 (숫자는 서버가 결정적 생성) ──
+const _EXTRACT_STORE = {};   // id → payload (다운로드 시 사용)
+let _extractSeq = 0;
+
+function _renderExtract(payload) {
+  const id = 'ex' + (++_extractSeq);
+  _EXTRACT_STORE[id] = payload;
+  const sh = (payload.sheets || [])[0] || { header: [], rows: [] };
+  const PREVIEW = 12, PREV_COLS = 8;
+  const cols = sh.header.slice(0, PREV_COLS);
+  const moreCols = sh.header.length - cols.length;
+  const fmt = v => (typeof v === 'number' ? v.toLocaleString() : (v === '' || v == null ? '—' : escapeHtml(String(v))));
+  let thead = '<tr>' + cols.map((c, i) =>
+    `<th${i === 0 ? ' class="ov-sticky"' : ''}>${escapeHtml(String(c))}</th>`).join('') +
+    (moreCols > 0 ? `<th>… +${moreCols}열</th>` : '') + '</tr>';
+  let tbody = sh.rows.slice(0, PREVIEW).map(r =>
+    '<tr>' + r.slice(0, PREV_COLS).map((v, i) =>
+      `<td${i === 0 ? ' class="ov-sticky"' : ''}>${fmt(v)}</td>`).join('') +
+    (moreCols > 0 ? '<td>…</td>' : '') + '</tr>').join('');
+  const moreRows = sh.rows.length - Math.min(PREVIEW, sh.rows.length);
+  const tabs = (payload.sheets || []).map(s => escapeHtml(s.label)).join(' · ');
+  return `<div class="ai-chart-box extract-box">
+    <div class="dl-title">${escapeHtml(payload.title)}</div>
+    <div class="extract-meta">지표 ${tabs} · ${payload.row_count}일 × ${payload.col_count}개 대상</div>
+    <div class="extract-scroll"><table class="story-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+    ${moreRows > 0 ? `<div class="extract-more">미리보기 상위 ${Math.min(PREVIEW, sh.rows.length)}행 (전체 ${sh.rows.length}행) — 엑셀에 전체 포함</div>` : ''}
+    <button class="kpi-ai-btn" onclick="_downloadExtract('${id}')">📥 엑셀 다운로드 (${(payload.sheets || []).length}개 시트)</button>
+  </div>`;
+}
+
+function _downloadExtract(id) {
+  const p = _EXTRACT_STORE[id];
+  if (!p || typeof XLSX === 'undefined') return;
+  const wb = XLSX.utils.book_new();
+  const isRate = f => /_rate|_ret$/.test(f);
+  (p.sheets || []).forEach(sh => {
+    const aoa = [sh.header, ...sh.rows];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // 숫자 서식: 비율 지표는 %(값이 0~100이면 /100), 그 외 정수 콤마
+    const nCols = sh.header.length;
+    for (let ri = 1; ri < aoa.length; ri++) {
+      for (let ci = 1; ci < nCols; ci++) {
+        const ref = XLSX.utils.encode_cell({ r: ri, c: ci });
+        if (ws[ref] && typeof ws[ref].v === 'number') {
+          if (isRate(sh.field)) { ws[ref].v = ws[ref].v / 100; ws[ref].z = '0.0%'; }
+          else ws[ref].z = '#,##0';
+        }
+      }
+    }
+    ws['!cols'] = sh.header.map((h, ci) => ({ wch: ci === 0 ? 12 : Math.min(Math.max(String(h).length + 1, 9), 22) }));
+    ws['!freeze'] = { xSplit: 1, ySplit: 1, topLeftCell: 'B2', state: 'frozen' };
+    XLSX.utils.book_append_sheet(wb, ws, sh.label.slice(0, 31));
+  });
+  const fn = (p.title.replace(/[\\/:*?"<>|·]/g, '_').slice(0, 60)) + '.xlsx';
+  XLSX.writeFile(wb, fn);
+}
+
 async function submitQuery(question, source, opts) {
   opts = opts || {};
   const _endpoint = opts.endpoint || '/api/query/stream';
@@ -1684,6 +1741,12 @@ async function submitQuery(question, source, opts) {
         try { ev = JSON.parse(line.slice(6)); } catch(e) { continue; }
         if (ev.type === 'meta') {
           chartData = ev.chart_data;
+        } else if (ev.type === 'extract') {
+          if (!initialized) {
+            msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text" id="${aiId}-txt">${renderAiText(rawText)}</div>`;
+            initialized = true;
+          }
+          msgBody.insertAdjacentHTML('beforeend', _renderExtract(ev.payload));
         } else if (ev.type === 'token') {
           if (!initialized) {
             msgBody.innerHTML = `<div class="msg-ai-name">RAAS Assistant</div><div class="msg-ai-text" id="${aiId}-txt"></div>`;

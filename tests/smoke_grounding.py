@@ -190,6 +190,12 @@ check("아카이브 슬라이스→지표 매핑",
        ("30D", "ALL"): "dau_r30", ("1D", "1MIN"): "dau_1min"})
 check_true("온톨로지: 장기 아카이브 공리 존재",
            bool(get_adapter()._onto.get_one("raas:HistoricalArchiveAxiom", "rdfs:comment")))
+
+print("── 5.4 데이터 추출(extract) ──────────────────────────")
+check_true("추출 감지: '프로그램별 DAU 뽑아줘'", G.detect_extract("파워FM 프로그램별 DAU 데이터 뽑아줘"))
+check_true("추출 감지: '엑셀로 다운로드'", G.detect_extract("이번주 DAU 엑셀로 다운로드"))
+check_true("추출 오탐 방지: '어제 DAU는?'", not G.detect_extract("어제 DAU는?"))
+check_true("추출 지원 지표에 dau·이탈율", "dau" in G._EXTRACT_FIELDS and "churn_rate" in G._EXTRACT_FIELDS)
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")

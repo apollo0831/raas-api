@@ -290,6 +290,131 @@ def resolve_entities(question: str, default_code: str = None) -> dict:
     return ent
 
 
+# ─── 데이터 추출(extract) — 프로그램별×기간×지표 표 + 엑셀 다운로드 ──────────
+#     분석 Q&A와 별개의 '결정적' 경로. LLM은 요청 파싱만, 숫자는 코드가 표로 만든다
+#     (환각 0). 광고·마케팅의 반복 데이터 추출 작업용.
+_EXTRACT_SIGNAL = ("뽑아", "추출", "내려받", "다운로드", "엑셀", "excel", "csv",
+                   "표로", "데이터 받", "데이터를 받", "데이터 줘", "원본 데이터", "raw")
+
+def detect_extract(question: str) -> bool:
+    t = (question or "").lower()
+    return any(s in t for s in _EXTRACT_SIGNAL)
+
+# 추출 지원 지표(라벨→필드). 주간/월간은 _week/_mon, 장기 4종은 아카이브 병합 사용.
+_EXTRACT_FIELDS = {
+    "dau": "DAU", "wau": "WAU", "mau": "MAU", "dau_r7": "롤링WAU", "dau_r30": "롤링MAU",
+    "new": "신규", "react": "복귀", "react_rate": "복귀율", "churn_rate": "이탈율",
+    "real_rate": "실청취율", "deep_rate": "깊은청취율", "engage_rate": "참여율",
+    "habit_rate": "습관형성률", "dau_1min": "1분이상청취", "dau_10min": "10분이상청취",
+    "d1_ret": "D1유지율", "d7_ret": "D7유지율", "w1_ret": "W1유지율", "m1_ret": "M1유지율",
+}
+_EXTRACT_SYS = (
+    "너는 RAAS 데이터 추출 요청 파서다. 사용자의 자연어 추출 요청을 JSON으로만 응답한다.\n"
+    "형식: {\"targets\":[대상들], \"per_program\":true/false, \"metrics\":[지표필드들], "
+    "\"date_from\":\"YYYY-MM-DD\", \"date_to\":\"YYYY-MM-DD\"}\n"
+    "- targets: 언급된 채널/프로그램(예: '파워FM','러브FM','컬투쇼'). 전체면 ['전체'].\n"
+    "- per_program: '프로그램별'이면 true(채널을 소속 프로그램들로 펼침), 채널 단위면 false.\n"
+    "- metrics: 아래 필드명만 사용(라벨 아닌 필드): "
+    + ", ".join(f"{f}({l})" for f, l in _EXTRACT_FIELDS.items())
+    + ". 주간은 _week, 월간은 _mon 접미사(예: react_rate_mon). 미지정이면 ['dau'].\n"
+    "- 날짜: 연도 생략 시 2026년. 'N주간' 등 상대기간도 절대날짜로 환산."
+)
+_CH_PREFIX = {"F00": ("F",), "L00": ("L", "M"), "G00": ("G",), "P00": ("P",)}
+
+def _extract_parse(question: str) -> dict:
+    try:
+        raw, _ = call_claude(_EXTRACT_SYS, question, max_tokens=400, model=HAIKU_MODEL)
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1].lstrip("json").strip()
+        return json.loads(raw)
+    except Exception as e:
+        print(f"[extract] parse 실패: {e}")
+        return {}
+
+def build_extract(question: str, overlay_ctx=None) -> dict:
+    """자연어 추출 요청 → {ok, payload}. payload에 지표별 시트(행=날짜, 열=프로그램)."""
+    spec = _extract_parse(question)
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        rows = []
+    if not rows:
+        return {"ok": False, "reason": "데이터 없음"}
+    # 지표 필드 정리
+    fields = [f for f in (spec.get("metrics") or ["dau"]) if isinstance(f, str)] or ["dau"]
+    # 대상 → 코드 목록
+    per_prog = bool(spec.get("per_program"))
+    all_codes = sorted({r.get("PGM_CODE") for r in rows if r.get("PGM_CODE")})
+    def _expand(target):
+        t = (target or "").strip()
+        if t in ("전체", "전사", "all", "T00"):
+            return [c for c in all_codes if not c.endswith("00") and c != "L04"] if per_prog else ["T00"]
+        ch = S._CHANNEL_CODE.get(t) or (t if t in _CH_PREFIX else None)
+        if ch:
+            if per_prog:
+                pf = _CH_PREFIX.get(ch, ())
+                return [c for c in all_codes if c.startswith(pf) and not c.endswith("00") and c != "L04"]
+            return [ch]
+        p = extract_program(t)                       # 프로그램명
+        return [p["code"]] if p else []
+    codes, seen = [], set()
+    for tg in (spec.get("targets") or ["전체"]):
+        for c in _expand(tg):
+            if c not in seen:
+                seen.add(c); codes.append(c)
+    if not codes:
+        return {"ok": False, "reason": "대상 프로그램/채널 미식별"}
+    # 기간
+    def _norm(d):
+        d = (d or "").replace("-", "/").strip()
+        return d if len(d) == 10 else None
+    dfrom, dto = _norm(spec.get("date_from")), _norm(spec.get("date_to"))
+    # 값 인덱스: (code,field) → {date: val}
+    import raas_datasource as DSRC
+    hist_metrics = set(_HIST_METRICS)
+    def _series(code, field):
+        if field in hist_metrics:                     # 장기 4종은 아카이브 병합
+            return dict((d.replace("-", "/"), v) for d, v in DSRC.get_history_series_merged(code, field))
+        out = {}
+        for r in rows:
+            if r.get("PGM_CODE") == code:
+                v = _to_float(r.get(field))
+                if v is not None:
+                    out[(r.get("DATE") or "").strip()] = v
+        return out
+    # 전체 날짜 축(대상·지표 통틀어 존재하는 날짜, 기간 필터)
+    date_set = set()
+    cache = {}
+    for f in fields:
+        for c in codes:
+            s = cache[(c, f)] = _series(c, f)
+            date_set.update(s.keys())
+    dates = sorted(d for d in date_set
+                   if (not dfrom or d >= dfrom) and (not dto or d <= dto))
+    if not dates:
+        return {"ok": False, "reason": "해당 기간 데이터 없음"}
+    prog_meta = [{"code": c, "name": _resolve_name(c)} for c in codes]
+    sheets = []
+    for f in fields:
+        header = ["날짜"] + [f"{p['name']}({p['code']})" for p in prog_meta]
+        srows = []
+        for d in dates:
+            row = [d.replace("/", "-")]
+            for c in codes:
+                v = cache[(c, f)].get(d)
+                row.append(round(v) if isinstance(v, float) else (v if v is not None else ""))
+            srows.append(row)
+        sheets.append({"field": f, "label": _EXTRACT_FIELDS.get(f, f),
+                       "header": header, "rows": srows})
+    tgt_label = ", ".join(spec.get("targets") or []) + (" 프로그램별" if per_prog else "")
+    title = f"{tgt_label} {'·'.join(s['label'] for s in sheets)} · {dates[0]}~{dates[-1]}"
+    return {"ok": True, "payload": {
+        "title": title.strip(), "date_from": dates[0], "date_to": dates[-1],
+        "programs": prog_meta, "row_count": len(dates), "col_count": len(codes),
+        "sheets": sheets}}
+
+
 # ─── Provider 레지스트리 ────────────────────────────────────────────────────
 # 각 provider: name, desc(LLM 선택용), needs(필요 엔티티), fetch(ent)->data(JSON 직렬화 가능)
 _KPI_BROAD = ["DATE", "STIME", "dau", "dau_chg", "wau", "wau_chg", "mau", "mau_chg",

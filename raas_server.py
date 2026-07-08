@@ -1208,6 +1208,39 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
                 return
 
+            # 데이터 추출 — '뽑아줘/엑셀/표로' 등. 결정적 표 생성(숫자는 코드, LLM 아님) +
+            #   엑셀 다운로드(프론트 SheetJS). 광고·마케팅의 반복 데이터 추출 작업용.
+            if GROUND.detect_extract(question):
+                try:
+                    _ex = GROUND.build_extract(question)
+                except Exception as e:
+                    print(f"[extract] {e}")
+                    _ex = {"ok": False, "reason": str(e)}
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                def sse_x(d):
+                    self.wfile.write(("data: " + json.dumps(d, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                    self.wfile.flush()
+                if _ex.get("ok"):
+                    p = _ex["payload"]
+                    _sm = (f"**{p['title']}**\n\n{p['col_count']}개 대상 × {p['row_count']}일"
+                           f" · 지표 {len(p['sheets'])}종을 추출했습니다. 아래 미리보기 확인 후 엑셀로 내려받으세요.")
+                    sse_x({"type": "token", "text": _sm})
+                    sse_x({"type": "extract", "payload": p})
+                    _qid = save_query(user_id, question, _sm, ip=ip, user_name=user_name,
+                                      user_role=user_role, intent="extract", source="general")
+                    sse_x({"type": "done", "query_id": _qid, "routing_badge": "📥 데이터 추출"})
+                else:
+                    sse_x({"type": "token", "text": f"추출할 데이터를 구성하지 못했습니다"
+                           f"({_ex.get('reason', '미상')}). 대상·지표·기간을 더 구체적으로 알려주세요."})
+                    sse_x({"type": "done"})
+                self.close_connection = True
+                return
+
             # 편성표 의도 — '코너 편성/편성표'는 원인 분석이 아니라 주간 편성표(룩업 데이터).
             #   프로그램명만 있으면 lenient로 탐지(라우터는 편성표 의도의 프로그램 탐지에만 사용).
             if METRICS.is_schedule_query(question):
