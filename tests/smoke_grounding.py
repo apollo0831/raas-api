@@ -253,6 +253,9 @@ check_true("channel_history 자리 반환(종영+현행)",
 check_true("channel_history 07시 평일·주말 공존(current 리스트)",
            any(s["slot"] == "07:00" and len(s.get("current", [])) >= 2 for s in _chh.get("slots", [])),
            f"07:00={[s for s in _chh.get('slots',[]) if s['slot']=='07:00']}")
+# 다시간 편성 커버 — 04:00~06:00 프로그램은 05:00 시간대에도 방송 중(빈 슬롯 아님)
+_s5 = next((s for s in _chh.get("slots", []) if s["slot"] == "05:00"), {})
+check_true("다시간 편성 05시 커버(현행 채움)", bool(_s5.get("current")), f"05:00={_s5}")
 # '편성 변화' 의도(채널) → channel_history 주경로, KPI·아카이브 경쟁 제거(과거 '데이터 없음' 회귀 방지)
 _edn = G.assemble("2023년부터 러브FM 시간대별 프로그램 편성 변화 알려줘",
                   overlay_ctx={"mode": "normal"}).get("providers_used", [])

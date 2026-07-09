@@ -599,14 +599,14 @@ def _p_channel_history(ent):
             {"start": r["start_date"] or None, "end": r["end_date"], "name": r["name"],
              "air_time": r["slot_start"] if r["slot_start"][2:] != "00" else None,
              "start_est": r["start_prov"] == "derived"})
-    # 현행 — 라이브 최신일 채널 프로그램(STIME으로 자리 판정). 같은 정시에 평일·주말 편성이
-    #   공존할 수 있어(예: 07시 평일 정치쇼 + 주말 드라이브뮤직) current는 리스트.
+    # 현행 — 라이브 최신일 채널 프로그램. STIME으로 시작 시간대 판정. 같은 정시에 평일·주말
+    #   편성이 공존할 수 있음(예: 07시 평일 정치쇼 + 주말 드라이브뮤직).
     try:
         rows = S._kpi_rows() or []
         latest = max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
     except Exception:
         rows, latest = [], None
-    seen = set()
+    current_progs, seen = [], set()   # {name, code, hour(int), air_time}
     for r in rows:
         if r.get("DATE") != latest:
             continue
@@ -617,11 +617,23 @@ def _p_channel_history(ent):
                 or len(st) != 4 or not st.isdigit() or not nm):
             continue
         seen.add(c)
-        key = f"{st[:2]}:00"
-        slots.setdefault(key, {"ended": [], "current": []})["current"].append(
-            {"name": nm, "code": c, "air_time": st if st[2:] != "00" else None})
+        current_progs.append({"name": nm, "code": c, "hour": int(st[:2]),
+                              "air_time": st if st[2:] != "00" else None})
+        slots.setdefault(f"{st[:2]}:00", {"ended": [], "current": []})   # 시작 시간대 슬롯 보장
     if not slots:
         return None
+    # 각 시간대의 현행 = 그 시각에 방송 중인 프로그램. 라디오는 24h 연속 편성(빈 시간 없음)이라
+    #   시작시각이 그 시간대 이하 중 최댓값인 프로그램이 방송 중(다시간 편성은 여러 시간대 커버).
+    #   예: OLDIES 20(재) 04:00~06:00 → 04·05시 모두, 09시 러브FM 09:00~11:00 → 09·10시 모두.
+    cur_hours = sorted({p["hour"] for p in current_progs})
+    for key, v in slots.items():
+        H = int(key[:2])
+        onair = [h for h in cur_hours if h <= H]
+        if not onair:
+            continue
+        top = max(onair)
+        v["current"] = [{"name": p["name"], "code": p["code"], "air_time": p["air_time"]}
+                        for p in current_progs if p["hour"] == top]
     ordered = [{"slot": k, **slots[k]} for k in sorted(slots)]
     return {
         "channel": _resolve_name(code),
