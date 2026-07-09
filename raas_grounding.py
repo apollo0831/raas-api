@@ -1822,9 +1822,11 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     if _wants_history(question) and not edit and "long_history" not in names:
         names = ["long_history"] + names     # 과거 연도·장기 질의는 아카이브 반드시 포함(편성 연혁은 제외)
     if edit:
-        if "channel_history" not in names:
-            names = ["channel_history"] + names   # 편성 변화·연혁 질의는 편성 이력 반드시 주경로
-        names = [n for n in names if n not in ("channel_programs", "long_history")]
+        # 편성 연혁 질의는 편성 전용 맥락으로 확정 — KPI·시계열 provider가 섞이면 LLM이 편성
+        #   서술 대신 '데이터 없음' KPI 프레임으로 새는 걸 방지(Haiku 선택 비결정성 제거).
+        _EDIT_KEEP = {"channel_history", "ontology", "calendar", "period_events"}
+        names = ["channel_history"] + [n for n in names
+                                       if n in _EDIT_KEEP and n != "channel_history"]
     elif (ent.get("scope_kind") == "channel" and ("프로그램" in question or ent.get("all_programs"))
             and "channel_programs" not in names):
         names = ["channel_programs"] + names   # 채널 내 '프로그램'/'모든 프로그램' 질의는 소속 프로그램 행 반드시 포함
