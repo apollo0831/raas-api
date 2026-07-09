@@ -687,7 +687,29 @@ def _p_program_history(ent):
             since = (_d(y, m, d) + _td(days=1)).isoformat()
         except Exception:
             since = last_end
-    return {
+
+    # 프랜차이즈 이동 이력 — 같은 프로그램명이 과거 다른 시간대에서 방송된 이력
+    #   (예: 정치쇼 9시대→10시대→현재 7시대). 채널명 접미사는 오탐 방지로 제외.
+    def _show_token(nm):
+        t = re.sub(r"\((재|오전|오후)\)$", "", (nm or "").strip())
+        t = t.split("의 ")[-1].strip() if "의 " in t else t
+        return t
+    GENERIC = {"러브FM", "파워FM", "고릴라M", "픽채널", ""}
+    tok = _show_token(cur_name)
+    franchise = []
+    if tok not in GENERIC:
+        moved = {}
+        for r in airings:
+            if r.get("analysis_slot", "")[:2] == slot_hh:      # 현재 자리는 위 chain에 있음
+                continue
+            if _show_token(r["name"]) == tok:
+                asl = r.get("analysis_slot", "")
+                moved.setdefault(f"{asl[:2]}:{asl[2:]}", []).append(
+                    {"start": r["start_date"] or None, "end": r["end_date"], "name": r["name"]})
+        for hhmm in sorted(moved):
+            franchise.append({"slot": hhmm, "airings": moved[hhmm]})
+
+    out = {
         "channel": (meta.get("channel") or {}).get("label") or ch,
         "slot": f"{slot}~{(meta.get('time_slot') or {}).get('end','')}".strip("~"),
         "ended": chain,
@@ -696,6 +718,10 @@ def _p_program_history(ent):
                     "note": "현행 방송분(종료일 없음, 진행 중)"},
         "note": "종영분은 불변 이력. 시작일 start_est=true는 같은 자리 직전 편성 종료 다음날로 추정한 값.",
     }
+    if franchise:
+        out["franchise_moved_from"] = franchise
+        out["franchise_note"] = f"'{tok}'는 과거 다른 시간대에서도 방송됨(시간대 이동 이력). 현재 자리는 위 slot."
+    return out
 
 
 def _p_flow(ent):
