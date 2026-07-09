@@ -9,6 +9,7 @@ LLM이 본연의 성능으로 답하게 한다. 고정 출력 템플릿 없음.
 """
 from __future__ import annotations
 import json
+import os
 import re
 import random
 import datetime as _dt
@@ -2051,15 +2052,30 @@ _DEFAULT_STYLE_POLICY = (
     "- 불확실하면 단정 대신 '데이터 없음/추정'을 명시."
 )
 
+_RULES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "raas_rules.md")
+
+
+def _service_rules_block() -> str:
+    """data/raas_rules.md — 서비스 답변 규칙(명칭·지표 4범주·프로그램명 표기·수치 포맷·WoW 기준 등).
+       디스크에서 매 답변 로드(편집 즉시 반영, 서버 재시작 불필요). 없으면 빈 문자열."""
+    try:
+        with open(_RULES_PATH, encoding="utf-8") as f:
+            txt = f.read().strip()
+        return "\n\n[서비스 답변 규칙]\n" + txt if txt else ""
+    except Exception:
+        return ""
+
+
 def style_policy_block() -> str:
-    """현재 답변 스타일 정책을 시스템 프롬프트용 블록으로. DB 우선, 없으면 기본 시드."""
+    """현재 답변 스타일 정책을 시스템 프롬프트용 블록으로. DB 우선, 없으면 기본 시드.
+       + 서비스 답변 규칙(raas_rules.md)을 뒤에 병합."""
     pol = None
     try:
         import raas_history_db as HDB
         pol = HDB.get_style_policy()
     except Exception:
         pol = None
-    return "[답변 스타일 정책]\n" + (pol or _DEFAULT_STYLE_POLICY).strip()
+    return "[답변 스타일 정책]\n" + (pol or _DEFAULT_STYLE_POLICY).strip() + _service_rules_block()
 
 def system_with_style(base: str) -> str:
     """답변 생성용 시스템 프롬프트 = base + 현재 스타일 정책 블록(매 답변 1회 주입)."""
