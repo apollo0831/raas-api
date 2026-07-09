@@ -232,8 +232,9 @@ check_true("program_history air_time 보존(0905)",
 _pl6 = G._p_program_history({"code": "L06"}) or {}
 _fslots = {f["slot"] for f in (_pl6.get("franchise_moved_from") or [])}
 check("정치쇼 franchise 이동: 9시·10시 노출", sorted(_fslots), ["09:00", "10:00"])
-# 오탐 방지: 채널명 접미사(러브FM)는 프랜차이즈로 묶지 않음
-check_true("franchise 오탐 방지: '러브FM' 접미사 제외",
+# 오탐 방지: '최영주의 러브FM'·'이숙영의 러브FM'은 각각 정식 프로그램명(전체명이 정체성) —
+#   진행자 떼면 채널 브랜드('러브FM')만 남는 정식명은 서로 다른 프로그램으로 취급, 오묶임 없음
+check_true("franchise 오탐 방지: 'OOO의 러브FM' 정식명은 전체명으로 구분",
            G._p_program_history({"code": "M07"}).get("franchise_moved_from") is None)
 # provider: 프로그램 자리의 역대 편성 + 현행 결합
 _ph = G._p_program_history({"code": "F12"}) or {}

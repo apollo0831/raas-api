@@ -688,16 +688,20 @@ def _p_program_history(ent):
         except Exception:
             since = last_end
 
-    # 프랜차이즈 이동 이력 — 같은 프로그램명이 과거 다른 시간대에서 방송된 이력
-    #   (예: 정치쇼 9시대→10시대→현재 7시대). 채널명 접미사는 오탐 방지로 제외.
+    # 프랜차이즈 이동 이력 — 같은 프로그램(쇼)이 과거 다른 시간대에서 방송된 이력
+    #   (예: 정치쇼 9시대→10시대→현재 7시대). 진행자를 떼어 쇼명으로 매칭하되,
+    #   떼면 채널 브랜드가 남는 정식명('최영주의 러브FM' 등)은 전체명을 정체성으로 써서
+    #   서로 다른 프로그램이 브랜드만으로 오묶이지 않게 한다.
+    _BRANDS = {"러브FM", "파워FM", "고릴라M", "픽채널"}
+
     def _show_token(nm):
-        t = re.sub(r"\((재|오전|오후)\)$", "", (nm or "").strip())
-        t = t.split("의 ")[-1].strip() if "의 " in t else t
-        return t
-    GENERIC = {"러브FM", "파워FM", "고릴라M", "픽채널", ""}
+        base = re.sub(r"\s*\((재|오전|오후)\)\s*$", "", (nm or "").strip())
+        core = base.split("의 ")[-1].strip() if "의 " in base else base
+        return base if core in _BRANDS else core   # 브랜드면 전체명이 곧 프로그램 정체성
+
     tok = _show_token(cur_name)
     franchise = []
-    if tok not in GENERIC:
+    if tok:
         moved = {}
         for r in airings:
             if r.get("analysis_slot", "")[:2] == slot_hh:      # 현재 자리는 위 chain에 있음
