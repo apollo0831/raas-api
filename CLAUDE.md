@@ -67,9 +67,11 @@ raas_datasource.py  ← Splunk 수집 단일 소유 (splunk_search·fetch_lookup
     오늘 편성·게스트 Feed(today_lineup, index=broadplan): 당일 프로그램별 GUEST·view_radio(Y/N) —
       상세 KPI 배치가 아직 못 담은 '오늘' 공백을 메움. daily_at=KPI_REFRESH_AT 공유(get_today_lineup)
     장기 아카이브 Feed(history_metrics, 일일): real_dau.csv+summary_uuid_stats, 최대 10년 —
-      dau·dau_r7·dau_r30·dau_1min 4개 지표만(HISTORY_METRIC_MAP). grounding long_history provider가
-      월평균 다운샘플+연도별 상세로 답변, data_coverage에 아카이브 범위 병합. 아카이브 성격(원천 차이
-      등)은 raas:HistoricalArchiveAxiom(온톨로지)이 정의
+      dau·dau_r7·dau_r30·dau_1min 4개 지표만(HISTORY_METRICS). SPL 출력=키 long+지표 wide
+      (DATE,PGM_CODE,dau,…)로 KPI 타임라인과 동일 모양, 로드 시 {code:{date:row}} 인덱싱(10만+행도
+      코드별 조회). 엔티티 열 하드코딩 없음(정규식으로 코드형만 → 새 프로그램 자동 유입). grounding
+      long_history provider가 월평균 다운샘플+연도별 상세로 답변, data_coverage에 아카이브 범위 병합.
+      아카이브 성격(원천 차이 등)은 raas:HistoricalArchiveAxiom(온톨로지)이 정의
 raas_llm.py  ← 공용 LLM 클라이언트(call_claude·HAIKU_MODEL) — grounding·router·server가 import
 raas_onto/raas_ontology_adapter.py  ← TTL 온톨로지 9종 로더(지표/프로그램/편성이력/게스트/특일/cause 등)
 raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·data_requests·storyline_events

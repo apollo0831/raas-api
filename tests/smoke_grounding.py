@@ -184,10 +184,8 @@ check_true("장기 신호: '2023년 DAU'", G._wants_history("2023년 DAU 어땠�
 check_true("장기 신호: '작년 대비'", G._wants_history("작년 대비 올해 청취자"))
 check_true("장기 신호 오탐 방지: '어제 DAU'", not G._wants_history("어제 DAU는?"))
 import raas_datasource as DSRC
-check("아카이브 슬라이스→지표 매핑",
-      DSRC.HISTORY_METRIC_MAP,
-      {("1D", "ALL"): "dau", ("7D", "ALL"): "dau_r7",
-       ("30D", "ALL"): "dau_r30", ("1D", "1MIN"): "dau_1min"})
+check("아카이브 보유 지표 4종", list(DSRC.HISTORY_METRICS),
+      ["dau", "dau_r7", "dau_r30", "dau_1min"])
 check_true("온톨로지: 장기 아카이브 공리 존재",
            bool(get_adapter()._onto.get_one("raas:HistoricalArchiveAxiom", "rdfs:comment")))
 

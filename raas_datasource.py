@@ -399,101 +399,90 @@ def get_realtime_peak_trend(field: str = "T00", window=None) -> list:
 
 
 # ── 장기 아카이브 (real_dau.csv + summary_uuid_stats, 최대 10년) ─────
-# 상세 KPI(raas_kpi_latest, 2026-03~)와 별도의 장기 이력 — 4개 지표만 존재:
-#   PERIOD=1D/TYPE=ALL → dau · 7D/ALL → dau_r7(롤링WAU) · 30D/ALL → dau_r30(롤링MAU)
-#   1D/1MIN → dau_1min(1분이상 청취)
-# 컬럼 = 프로그램/채널 코드(wide). 과거 불변 → 일일 캐시. 저장소는 Splunk(로컬 저장 없음).
+# 상세 KPI(raas_kpi_latest, 2026-03~)와 별도의 장기 이력 — 4개 지표만: dau·dau_r7(롤링WAU)·
+#   dau_r30(롤링MAU)·dau_1min(1분이상 청취). 원천 real_dau.csv는 TYPE=DAY/WEEK/MONTH.
+# 출력 형태 = '키 long + 지표 wide'(DATE, PGM_CODE, dau, dau_r7, dau_r30, dau_1min) — KPI 타임라인과
+#   동일 모양. 엔티티 열 하드코딩(F01…M13) 제거(정규식으로 코드형만) → 새 프로그램 자동 유입.
+# 과거 불변 → 일일 캐시. 저장소는 Splunk(로컬 저장 없음). F01은 자정 넘김이라 방송일 -1d 보정.
 _HISTORY_SPL = r"""| inputlookup real_dau.csv
-| eval earliest="-10y@y"
-| eval latest="@d"
-| eval earliest=if(isnum(earliest),earliest,relative_time(now(),earliest))
-| eval latest=if(latest=="now","@d",latest)
-| eval latest=if(isnum(latest),latest,relative_time(now(),latest))
 | eval _time = strptime(DATE, "%Y/%m/%d")
-| where _time >= earliest AND _time < latest
+| where _time >= relative_time(now(),"-10y@y") AND _time < relative_time(now(),"@d")
 | rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
 | search TYPE="DAY"
-| untable _time field_name value
-| eval _time = if(field_name=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
-| xyseries _time field_name value
-| table _time, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13
-| eval PERIOD = "1D"
+| fields - DATE TYPE
+| untable _time PGM_CODE value
+| where match(PGM_CODE, "^[TFLGPM][0-9][0-9]$")
+| eval _time = if(PGM_CODE=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
+| eval METRIC="dau"
 | append [
-| inputlookup real_dau.csv
-| eval earliest="-10y@y"
-| eval latest="@d"
-| eval earliest=if(isnum(earliest),earliest,relative_time(now(),earliest))
-| eval latest=if(latest=="now","@d",latest)
-| eval latest=if(isnum(latest),latest,relative_time(now(),latest))
-| eval _time = strptime(DATE, "%Y/%m/%d")
-| where _time >= earliest AND _time < latest
-| rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
-| search TYPE="WEEK"
-| untable _time field_name value
-| eval _time = if(field_name=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
-| xyseries _time field_name value
-| table _time, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13
-| eval PERIOD = "7D"
-]
+    | inputlookup real_dau.csv
+    | eval _time = strptime(DATE, "%Y/%m/%d")
+    | where _time >= relative_time(now(),"-10y@y") AND _time < relative_time(now(),"@d")
+    | rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
+    | search TYPE="WEEK"
+    | fields - DATE TYPE
+    | untable _time PGM_CODE value
+    | where match(PGM_CODE, "^[TFLGPM][0-9][0-9]$")
+    | eval _time = if(PGM_CODE=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
+    | eval METRIC="dau_r7" ]
 | append [
-| inputlookup real_dau.csv
-| eval earliest="-10y@y"
-| eval latest="@d"
-| eval earliest=if(isnum(earliest),earliest,relative_time(now(),earliest))
-| eval latest=if(latest=="now","@d",latest)
-| eval latest=if(isnum(latest),latest,relative_time(now(),latest))
-| eval _time = strptime(DATE, "%Y/%m/%d")
-| where _time >= earliest AND _time < latest
-| rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
-| search TYPE="MONTH"
-| untable _time field_name value
-| eval _time = if(field_name=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
-| xyseries _time field_name value
-| table _time, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13
-| eval PERIOD = "30D"
-]
-| eval TYPE = "ALL"
+    | inputlookup real_dau.csv
+    | eval _time = strptime(DATE, "%Y/%m/%d")
+    | where _time >= relative_time(now(),"-10y@y") AND _time < relative_time(now(),"@d")
+    | rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
+    | search TYPE="MONTH"
+    | fields - DATE TYPE
+    | untable _time PGM_CODE value
+    | where match(PGM_CODE, "^[TFLGPM][0-9][0-9]$")
+    | eval _time = if(PGM_CODE=="F01", strptime(strftime(relative_time(_time,"-1d@d"), "%Y/%m/%d"), "%Y/%m/%d"), _time)
+    | eval METRIC="dau_r30" ]
+| append [
+    search index=summary_uuid_stats sourcetype=stats_1d earliest=-10y@y latest=@d
+    | rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
+    | untable _time PGM_CODE value
+    | where match(PGM_CODE, "^[TFLGPM][0-9][0-9]$")
+    | eval METRIC="dau_1min" ]
 | eval DATE = strftime(_time, "%Y/%m/%d")
-| append [
-| search index=summary_uuid_stats sourcetype=stats_1d earliest=-10y@y latest=@d
-| eval DATE = strftime(_time, "%Y/%m/%d")
-| eval TYPE="1MIN"
-| eval PERIOD="1D"
-| rename TOTAL_COUNT as T00, FM_COUNT as F00, AM_COUNT as L00, GM_COUNT as G00, PM_COUNT as P00
-| table DATE, PERIOD, TYPE, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13
-]
-| table DATE, PERIOD, TYPE, T00, F00, L00, G00, P00, F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, L01, L02, L03, L04, L05, L06, L07, L08, L09, L10, L11, L12, L13, L14, L15, M05, M10, M11, M13"""
+| stats first(eval(if(METRIC=="dau",      value, null()))) as dau
+        first(eval(if(METRIC=="dau_r7",   value, null()))) as dau_r7
+        first(eval(if(METRIC=="dau_r30",  value, null()))) as dau_r30
+        first(eval(if(METRIC=="dau_1min", value, null()))) as dau_1min
+        by DATE, PGM_CODE
+| table DATE, PGM_CODE, dau, dau_r7, dau_r30, dau_1min"""
 
-# (PERIOD, TYPE) → RAAS 표준 지표 필드 — 기존 온톨로지 정의(AU_Day/AU_R7/AU_R30/1분청취)에 접붙임
-HISTORY_METRIC_MAP = {("1D", "ALL"): "dau", ("7D", "ALL"): "dau_r7",
-                      ("30D", "ALL"): "dau_r30", ("1D", "1MIN"): "dau_1min"}
+# 아카이브 보유 지표 4종(= 출력 열 이름 = grounding _HIST_METRICS와 동일)
+HISTORY_METRICS = ("dau", "dau_r7", "dau_r30", "dau_1min")
 
 def _load_history():
+    """장기 아카이브 조회 후 로드 시 1회 인덱싱 → {PGM_CODE: {DATE: row}} (KPI 타임라인과 동일 구조).
+       10만+ 행이라도 매 호출 선형스캔 대신 코드별 dict 조회가 되게(조회는 그 코드 날짜만 순회)."""
     try:
         rows = splunk_search(_HISTORY_SPL, timeout=300)   # 10년 범위 — 장기 timeout
-        return rows, "splunk"
     except Exception as e:
         print(f"  [history] 장기 아카이브 조회 실패: {e}")
-        return [], "error"
+        return {}, "error"
+    idx: dict = {}
+    for r in rows:
+        code = (r.get("PGM_CODE") or "").strip().upper()
+        date = (r.get("DATE") or "").strip()
+        if code and date:
+            idx.setdefault(code, {})[date] = r
+    return idx, "splunk"
 
 _history_feed = Feed("history_metrics", _load_history, daily_at="07:10")
 
-def get_history_rows() -> list:
-    """장기 아카이브 원본 행(wide). 행당 (DATE, PERIOD, TYPE) + 코드 컬럼."""
-    return _history_feed.get() or []
+def get_history_index() -> dict:
+    """장기 아카이브 인덱스 {PGM_CODE: {DATE: {dau,dau_r7,dau_r30,dau_1min}}} (일일 캐시)."""
+    return _history_feed.get() or {}
 
 def get_history_series(code: str, metric: str) -> list:
-    """코드+지표의 장기 '아카이브' 시계열 [(DATE, float)] 오름차순. metric은 HISTORY_METRIC_MAP 값."""
-    key = next((k for k, v in HISTORY_METRIC_MAP.items() if v == metric), None)
-    if key is None:
-        return []
+    """코드+지표의 장기 '아카이브' 시계열 [(DATE, float)] 오름차순. metric ∈ HISTORY_METRICS.
+       인덱스에서 그 코드의 날짜만 순회(로드 시 1회 인덱싱 덕에 빠름)."""
     out = []
-    for r in get_history_rows():
-        if (r.get("PERIOD"), r.get("TYPE")) != key:
-            continue
-        v = _fn(r.get(code))
+    for d, r in (get_history_index().get((code or "").upper()) or {}).items():
+        v = _fn(r.get(metric))
         if v is not None:
-            out.append(((r.get("DATE") or "").strip(), v))
+            out.append((d, v))
     return sorted(out)
 
 def get_history_series_merged(code: str, metric: str) -> list:
