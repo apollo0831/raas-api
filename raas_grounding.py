@@ -910,6 +910,17 @@ def _wants_history(q: str) -> bool:
     return any(s in t for s in _HIST_SIGNAL)
 
 
+_TODAY_SIGNAL = ("오늘", "금일", "오늘자", "today")
+_LINEUP_SIGNAL = ("게스트", "초대손님", "초대 손님", "손님", "출연", "누가 나와", "누구 나와",
+                  "누가 출연", "편성", "보이는라디오", "보이는 라디오", "보라")
+
+def _wants_today_lineup(q: str) -> bool:
+    """'오늘' + 게스트/편성 신호 → 오늘 편성 provider 강제 포함.
+       상세 KPI 배치가 아직 못 담은 당일 게스트·보라 편성을 broadplan 라이브에서."""
+    t = q or ""
+    return any(a in t for a in _TODAY_SIGNAL) and any(b in t for b in _LINEUP_SIGNAL)
+
+
 _EDITORIAL_SIGNAL = ("편성 변화", "편성변화", "편성 이력", "편성이력", "편성 연혁", "편성연혁",
                      "편성 개편", "편성개편", "편성 변천", "편성변천", "과거 편성", "예전 편성",
                      "예전 프로그램", "이전 프로그램", "과거 프로그램", "역대 프로그램", "역대 편성",
@@ -973,6 +984,42 @@ def _p_long_history(ent):
     return out
 
 
+def _p_today_lineup(ent):
+    """[오늘 편성·게스트] 오늘(진행 중) 프로그램별 게스트·보라 편성 — 상세 KPI 배치가 아직
+       못 담은 당일. broadplan 라이브(하루 1회 캐시). '오늘 게스트 누구·오늘 프로그램별 출연/보라'."""
+    import raas_datasource as DSRC
+    try:
+        rows = DSRC.get_today_lineup() or []
+    except Exception:
+        return None
+    if not rows:
+        return None
+    code = ent.get("code")
+    allp = ent.get("all_programs") or code in (None, "T00", "")
+    prefixes = _CH_PREFIX.get(code) if code else None
+    out = []
+    for r in rows:
+        c = (r.get("PGM_CODE") or "").upper()
+        if not c:
+            continue
+        if not allp:
+            if prefixes:                       # 채널 scope → 소속 프로그램만
+                if not c.startswith(prefixes):
+                    continue
+            elif c != code:                    # program scope → 그 프로그램만
+                continue
+        out.append({"code": c, "name": r.get("PGM_NAME") or _resolve_name(c),
+                    "guest": (r.get("GUEST") or "").strip(),
+                    "보이는라디오": r.get("view_radio")})
+    if not out:
+        return None
+    return {"date": rows[0].get("DATE"),
+            "programs": out,
+            "note": ("오늘(진행 중) 편성·게스트. guest 빈값=초대손님 없음, 보이는라디오 Y/N. "
+                     "이 질의는 오늘 편성/게스트 조회이므로 게스트·보라 편성만 간결히 답하고, "
+                     "오늘은 아직 미집계인 측정 지표(DAU 등)의 '데이터 없음'은 언급하지 말 것.")}
+
+
 PROVIDERS = [
     {"name": "program_kpi", "needs": "program",
      "desc": "프로그램의 최신 핵심 KPI 스냅샷(DAU/WAU/MAU·신규·복귀·이탈·실청취·깊은청취·유지율과 증감)",
@@ -983,6 +1030,9 @@ PROVIDERS = [
     {"name": "daily_lineup", "needs": "program",
      "desc": "일자별 편성·출연 상세(날짜별 게스트·회차제목·일일/주간 코너·생방송여부·보이는라디오) — '지난주 게스트 일자별로' 등 날짜별 편성/출연 조회",
      "fetch": _p_daily_lineup},
+    {"name": "today_lineup", "needs": "program",
+     "desc": "오늘(진행 중) 프로그램별 게스트·보이는라디오 편성 — 상세 KPI 배치가 아직 못 담은 당일. '오늘 게스트 누구·오늘 프로그램별 출연/보라 편성' 등 오늘자 편성 조회",
+     "fetch": _p_today_lineup},
     {"name": "field_projection", "needs": "program",
      "desc": "질문이 지목한 필드(지표+속성)를 일자별 표로 묶음 — 특정 필드 콕 집기/지표+속성 혼합('DAU와 게스트 일자별') 대응",
      "fetch": _p_field_projection},
@@ -1847,6 +1897,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         names = ["data_coverage"] + names    # '언제부터/기간/보유' 질의는 실제 보유범위 반드시 포함
     if _wants_history(question) and not edit and "long_history" not in names:
         names = ["long_history"] + names     # 과거 연도·장기 질의는 아카이브 반드시 포함(편성 연혁은 제외)
+    if _wants_today_lineup(question) and "today_lineup" not in names:
+        names = ["today_lineup"] + names      # '오늘 게스트/편성' 질의는 당일 broadplan 반드시 포함
     if edit:
         # 편성 연혁 질의는 편성 전용 맥락으로 확정 — KPI·시계열 provider가 섞이면 LLM이 편성
         #   서술 대신 '데이터 없음' KPI 프레임으로 새는 걸 방지(Haiku 선택 비결정성 제거).

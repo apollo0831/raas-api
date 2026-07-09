@@ -214,6 +214,12 @@ check_true("'26년 1월 컬투쇼' → long_history 포함",
 check("미래연도 가드 '2030년'", G._history_years("2030년 DAU"), [])
 check("과거범위밖 가드 '13년'", G._history_years("13년 데이터"), [])
 check_true("추출 지원 지표에 dau·이탈율", "dau" in G._EXTRACT_FIELDS and "churn_rate" in G._EXTRACT_FIELDS)
+# 오늘 편성·게스트(broadplan 라이브, 하루 1회) — '오늘'+게스트/편성 신호 감지·provider 등록
+check_true("오늘편성 감지: '오늘 컬투쇼 게스트 누구야?'", G._wants_today_lineup("오늘 컬투쇼 게스트 누구야?"))
+check_true("오늘편성 감지: '오늘 보이는라디오 프로그램'", G._wants_today_lineup("오늘 보이는라디오 하는 프로그램 알려줘"))
+check_true("오늘편성 오탐 방지: '오늘 DAU'", not G._wants_today_lineup("오늘 DAU는?"))
+check_true("오늘편성 오탐 방지: '지난주 게스트'(오늘 아님)", not G._wants_today_lineup("지난주 컬투쇼 게스트"))
+check_true("today_lineup provider 등록", "today_lineup" in G._PROVIDER_BY_NAME)
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")

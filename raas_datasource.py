@@ -271,6 +271,48 @@ def invalidate_timeline() -> None:
     _timeline_feed.invalidate()
 
 
+# ── 오늘 편성·게스트 (index=broadplan, 하루 1회) ─────────────
+# 상세 KPI 배치(완료된 날)가 아직 못 담은 '오늘(진행 중)' 프로그램별 게스트·보라 편성.
+# earliest=@d 라 오늘 하루치. 코드=PGM_CODE, 이름=PGM_NAME, GUEST, view_radio(Y/N).
+# 저장소=Splunk(로컬 저장 없음). KPI 타임라인과 같은 편성 축이라 daily_at=KPI_REFRESH_AT 공유.
+_TODAY_LINEUP_SPL = r"""search index=broadplan earliest=@d latest=now
+| eval DATE = strftime(_time, "%Y/%m/%d")
+| eval DAY = strftime(_time, "%w")
+| eval date_mday=ltrim(strftime(_time,"%d"),"0"), date_month=lower(strftime(_time,"%B")), date_wday=lower(strftime(_time,"%A")), date_year=strftime(_time,"%Y")
+| lookup HOLIDAY_0 HOLIDAY_DAY AS date_mday, HOLIDAY_WEEK AS date_wday, HOLIDAY_MONTH AS date_month, HOLIDAY_YEAR AS date_year output HOLIDAY_CHECK
+| fillnull value="no" HOLIDAY_CHECK
+| rename program.vod_id as vod_id, program.start_time as start_time, program.end_time as end_time, program.gonggam_ch_cd as ch, program.view_radio as view_radio
+| join type=left vod_id
+    [| inputlookup BROADPLAN.csv
+    | search IS_END="N"
+    | rename VOD_ID AS vod_id
+    | fields SEQ, vod_id, PD_NAME]
+| fillnull value="" PROGRAM_CODE, view_radio
+| search SEQ=*
+| rename program.title as TITLE
+| table DATE, DAY, TITLE, start_time, end_time, program.guestlist.guest.name, view_radio, view_radio, ch, SEQ, PD_NAME
+| stats first(program.guestlist.guest.name) as GUEST by SEQ, DATE, TITLE, view_radio
+| rename SEQ as PGM_CODE, TITLE as PGM_NAME
+| table DATE, PGM_CODE, PGM_NAME, GUEST, view_radio"""
+
+def _load_today_lineup():
+    try:
+        return splunk_search(_TODAY_LINEUP_SPL, timeout=60), "splunk"
+    except Exception as e:
+        print(f"  [today_lineup] 조회 실패: {e}")
+        return [], "error"
+
+_today_lineup_feed = Feed("today_lineup", _load_today_lineup, daily_at=KPI_REFRESH_AT)
+
+def get_today_lineup(force: bool = False) -> list:
+    """오늘(진행 중) 프로그램별 게스트·보라 편성 행 목록
+       [{DATE, PGM_CODE, PGM_NAME, GUEST, view_radio}]. 하루 1회 캐시(KPI_REFRESH_AT 경계)."""
+    return _today_lineup_feed.get(force=force) or []
+
+def get_today_lineup_source() -> str:
+    return _today_lineup_feed.source()
+
+
 # ── 실시간 동시사용자 (tempsummary, 1분 집계) ─────────────
 # 원천: gorealra_app_log 세션(RA/BA/RS)을 1분 버킷 겹침 판정 → dc(UUID) → collect.
 # 필드 규칙(2026-07 확정 — 구 summary_gorealra_1m 스키마는 폐기):

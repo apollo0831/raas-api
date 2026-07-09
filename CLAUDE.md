@@ -64,6 +64,8 @@ raas_datasource.py  ← Splunk 수집 단일 소유 (splunk_search·fetch_lookup
     Feed 클래스: daily_at(일배치형)/ttl_sec(실시간형) 정책 — 새 룩업·직접쿼리 소스 추가용
     타임라인 조회 헬퍼(get_metric_trend·get_snapshot_at·get_available_dates·_i·_fn)
     실시간 동시사용자 Feed 3종: 오늘(60초)·어제·지난주 동요일(자정 경계 일일) — 로컬 저장 없음(저장소=Splunk)
+    오늘 편성·게스트 Feed(today_lineup, index=broadplan): 당일 프로그램별 GUEST·view_radio(Y/N) —
+      상세 KPI 배치가 아직 못 담은 '오늘' 공백을 메움. daily_at=KPI_REFRESH_AT 공유(get_today_lineup)
     장기 아카이브 Feed(history_metrics, 일일): real_dau.csv+summary_uuid_stats, 최대 10년 —
       dau·dau_r7·dau_r30·dau_1min 4개 지표만(HISTORY_METRIC_MAP). grounding long_history provider가
       월평균 다운샘플+연도별 상세로 답변, data_coverage에 아카이브 범위 병합. 아카이브 성격(원천 차이
@@ -78,7 +80,7 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 
 | scope | 트리거 예시 | 데이터 |
 |-------|------------|--------|
-| **program** | "컬투쇼 어제 왜 빠졌어?", "영스트리트 역대 DJ" | provider 11종(KPI·시계열·흐름분해·코호트·편성·요일·개편·편성표·특일·편성이력) |
+| **program** | "컬투쇼 어제 왜 빠졌어?", "영스트리트 역대 DJ", "오늘 컬투쇼 게스트 누구야?" | provider 12종(KPI·시계열·흐름분해·코호트·편성·요일·개편·편성표·특일·편성이력·오늘편성) |
 | **channel** | "러브FM 어때?", "전사 트렌드", "러브FM 시간대별 편성 변화" | 채널행(F00/L00/G00/P00/T00) + 채널 소속 프로그램 KPI(`channel_programs`)·시간대별 편성 이력(`channel_history`, 종영승계+현행). '편성 변화·연혁' 의도면 `_wants_editorial`이 편성이력을 주경로로 세우고 KPI·아카이브 경쟁 제거 |
 | **compare** | "파워FM vs 러브FM 비교", "채널별 핵심 지표 비교"(→4채널) | 엔티티 2~4개 KPI·시계열 나란히 |
 | **ranking** | "프로그램별 DAU 순위", "가장 많이 증가한 프로그램"(변화량 순위) | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬(`_chg`도 지원) |
