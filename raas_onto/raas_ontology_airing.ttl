@@ -1,0 +1,564 @@
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+#################################################################
+# 프로그램 편성 이력 (ProgramAiring) — 종영분 = 불변 사실
+#   출처: 종방프로그램.csv (SBS 편성). 종료일=권위, 시작일=유도(같은 자리 직전 종료+1일).
+#   자리(slot)=(채널, 시작시각). SEQ는 시대별로 드리프트하므로 legacySeq(참고)로만 보존.
+#   현행 방송분은 여기 없음 — 라이브(broadplan) 데이터가 소유(가변 종료).
+#################################################################
+
+raas:ProgramAiring a rdfs:Class ;
+    rdfs:label "프로그램 편성분"@ko ;
+    rdfs:comment "특정 채널의 특정 시간대 자리에서 한 프로그램이 방송된 기간. 종영분은 불변 이력."@ko .
+
+raas:inChannel        a rdf:Property ; rdfs:label "방송 채널"@ko .
+raas:airProgramName   a rdf:Property ; rdfs:label "프로그램명"@ko .
+raas:slotStartTime    a rdf:Property ; rdfs:label "편성 시작시각(HHMM)"@ko .
+raas:slotEndTime      a rdf:Property ; rdfs:label "편성 종료시각(HHMM)"@ko .
+raas:airStartDate     a rdf:Property ; rdfs:label "방송 시작일(유도)"@ko ;
+    rdfs:comment "같은 자리 직전 편성 종료 다음날로 추정. 자리 최초 기록분은 미상."@ko .
+raas:airEndDate       a rdf:Property ; rdfs:label "방송 종료일(종영일)"@ko .
+raas:startDateProvenance a rdf:Property ; rdfs:label "시작일 출처"@ko .
+raas:legacySeq        a rdf:Property ; rdfs:label "원본 편성코드(참고)"@ko .
+
+
+
+raas:Airing_F00_0300_20250706 a raas:ProgramAiring ;
+    rdfs:label "김주우의 팝 스테이션"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "김주우의 팝 스테이션"@ko ;
+    raas:slotStartTime "0300" ;
+    raas:slotEndTime "0500" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2025-07-06" ;
+    raas:legacySeq "F03" .
+
+raas:Airing_F00_0500_20230820 a raas:ProgramAiring ;
+    rdfs:label "조정식의 FUNFUN TODAY"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "조정식의 FUNFUN TODAY"@ko ;
+    raas:slotStartTime "0500" ;
+    raas:slotEndTime "0700" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2023-08-20" ;
+    raas:legacySeq "F04" .
+
+raas:Airing_F00_0900_20240317 a raas:ProgramAiring ;
+    rdfs:label "아름다운 이 아침 김창완입니다"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "아름다운 이 아침 김창완입니다"@ko ;
+    raas:slotStartTime "0900" ;
+    raas:slotEndTime "1100" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2024-03-17" ;
+    raas:legacySeq "F06" .
+
+raas:Airing_F00_1100_20200202 a raas:ProgramAiring ;
+    rdfs:label "박선영의 씨네타운"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "박선영의 씨네타운"@ko ;
+    raas:slotStartTime "1100" ;
+    raas:slotEndTime "1200" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2020-02-02" ;
+    raas:legacySeq "F07" .
+
+raas:Airing_F00_1100_20201031 a raas:ProgramAiring ;
+    rdfs:label "장예원의 씨네타운"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "장예원의 씨네타운"@ko ;
+    raas:slotStartTime "1100" ;
+    raas:slotEndTime "1200" ;
+    raas:airStartDate "2020-02-03" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2020-10-31" ;
+    raas:legacySeq "F07" .
+
+raas:Airing_F00_1200_20240804 a raas:ProgramAiring ;
+    rdfs:label "최화정의 파워타임"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "최화정의 파워타임"@ko ;
+    raas:slotStartTime "1200" ;
+    raas:slotEndTime "1400" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2024-08-04" ;
+    raas:legacySeq "F08" .
+
+raas:Airing_F00_1600_20220717 a raas:ProgramAiring ;
+    rdfs:label "붐붐파워"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "붐붐파워"@ko ;
+    raas:slotStartTime "1600" ;
+    raas:slotEndTime "1800" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2022-07-17" ;
+    raas:legacySeq "F10" .
+
+raas:Airing_F00_2000_20191215 a raas:ProgramAiring ;
+    rdfs:label "정소민의 영스트리트"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "정소민의 영스트리트"@ko ;
+    raas:slotStartTime "2000" ;
+    raas:slotEndTime "2200" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2019-12-15" ;
+    raas:legacySeq "F12" .
+
+raas:Airing_F00_2000_20210502 a raas:ProgramAiring ;
+    rdfs:label "이준의 영스트리트"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "이준의 영스트리트"@ko ;
+    raas:slotStartTime "2000" ;
+    raas:slotEndTime "2200" ;
+    raas:airStartDate "2019-12-16" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2021-05-02" ;
+    raas:legacySeq "F12" .
+
+raas:Airing_F00_2000_20230702 a raas:ProgramAiring ;
+    rdfs:label "웬디의 영스트리트"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "웬디의 영스트리트"@ko ;
+    raas:slotStartTime "2000" ;
+    raas:slotEndTime "2200" ;
+    raas:airStartDate "2021-05-03" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2023-07-02" ;
+    raas:legacySeq "F12" .
+
+raas:Airing_F00_2000_20240819 a raas:ProgramAiring ;
+    rdfs:label "권은비의 영스트리트"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "권은비의 영스트리트"@ko ;
+    raas:slotStartTime "2000" ;
+    raas:slotEndTime "2200" ;
+    raas:airStartDate "2023-07-03" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2024-08-19" ;
+    raas:legacySeq "F12" .
+
+raas:Airing_F00_2300_20190127 a raas:ProgramAiring ;
+    rdfs:label "NCT의 night night!"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "NCT의 night night!"@ko ;
+    raas:slotStartTime "2300" ;
+    raas:slotEndTime "2400" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2019-01-27" ;
+    raas:legacySeq "F14" .
+
+raas:Airing_F00_2300_20200831 a raas:ProgramAiring ;
+    rdfs:label "우원재의 Music High"@ko ;
+    raas:inChannel raas:F00 ;
+    raas:airProgramName "우원재의 Music High"@ko ;
+    raas:slotStartTime "2300" ;
+    raas:slotEndTime "0100" ;
+    raas:airStartDate "2019-01-28" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2020-08-31" ;
+    raas:legacySeq "F01" .
+
+raas:Airing_L00_0000_20210315 a raas:ProgramAiring ;
+    rdfs:label "김태욱의 기분좋은 밤"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "김태욱의 기분좋은 밤"@ko ;
+    raas:slotStartTime "0000" ;
+    raas:slotEndTime "0200" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2021-03-15" ;
+    raas:legacySeq "L01" .
+
+raas:Airing_L00_0000_20250706 a raas:ProgramAiring ;
+    rdfs:label "박은경의 스위트 뮤직박스"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "박은경의 스위트 뮤직박스"@ko ;
+    raas:slotStartTime "0000" ;
+    raas:slotEndTime "0200" ;
+    raas:airStartDate "2021-03-16" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2025-07-06" ;
+    raas:legacySeq "L01" .
+
+raas:Airing_L00_0000_20260327 a raas:ProgramAiring ;
+    rdfs:label "심야방송반"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "심야방송반"@ko ;
+    raas:slotStartTime "0000" ;
+    raas:slotEndTime "0200" ;
+    raas:airStartDate "2025-07-07" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2026-03-27" ;
+    raas:legacySeq "L01" .
+
+raas:Airing_L00_0200_20231201 a raas:ProgramAiring ;
+    rdfs:label "이현경의 뮤직토피아"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "이현경의 뮤직토피아"@ko ;
+    raas:slotStartTime "0200" ;
+    raas:slotEndTime "0400" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2023-12-01" ;
+    raas:legacySeq "L02" .
+
+raas:Airing_L00_0400_20220502 a raas:ProgramAiring ;
+    rdfs:label "김정일의 생생가요"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "김정일의 생생가요"@ko ;
+    raas:slotStartTime "0400" ;
+    raas:slotEndTime "0500" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2022-05-02" ;
+    raas:legacySeq "L03" .
+
+raas:Airing_L00_0400_20230904 a raas:ProgramAiring ;
+    rdfs:label "유혜영의 생생가요"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "유혜영의 생생가요"@ko ;
+    raas:slotStartTime "0400" ;
+    raas:slotEndTime "0500" ;
+    raas:airStartDate "2022-05-03" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2023-09-04" ;
+    raas:legacySeq "L03" .
+
+raas:Airing_L00_0400_20251026 a raas:ProgramAiring ;
+    rdfs:label "Hits20(재)"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "Hits20(재)"@ko ;
+    raas:slotStartTime "0400" ;
+    raas:slotEndTime "0500" ;
+    raas:airStartDate "2023-09-05" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2025-10-26" ;
+    raas:legacySeq "L03" .
+
+raas:Airing_L00_0505_20210307 a raas:ProgramAiring ;
+    rdfs:label "유영미의 마음은 언제나청춘"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "유영미의 마음은 언제나청춘"@ko ;
+    raas:slotStartTime "0505" ;
+    raas:slotEndTime "0600" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2021-03-07" ;
+    raas:legacySeq "L04" .
+
+raas:Airing_L00_0505_20251026 a raas:ProgramAiring ;
+    rdfs:label "최영주의 아침편지"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "최영주의 아침편지"@ko ;
+    raas:slotStartTime "0505" ;
+    raas:slotEndTime "0600" ;
+    raas:airStartDate "2021-03-08" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2025-10-26" ;
+    raas:legacySeq "L04" .
+
+raas:Airing_L00_0700_20221003 a raas:ProgramAiring ;
+    rdfs:label "이숙영의 러브FM"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "이숙영의 러브FM"@ko ;
+    raas:slotStartTime "0700" ;
+    raas:slotEndTime "0900" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2022-10-03" ;
+    raas:legacySeq "L06" .
+
+raas:Airing_L00_0905_20200531 a raas:ProgramAiring ;
+    rdfs:label "정치쇼"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "정치쇼"@ko ;
+    raas:slotStartTime "0905" ;
+    raas:slotEndTime "1100" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2020-05-31" ;
+    raas:legacySeq "L07" .
+
+raas:Airing_L00_0905_20221003 a raas:ProgramAiring ;
+    rdfs:label "김태현의 정치쇼"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "김태현의 정치쇼"@ko ;
+    raas:slotStartTime "0905" ;
+    raas:slotEndTime "1100" ;
+    raas:airStartDate "2020-06-01" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2022-10-03" ;
+    raas:legacySeq "L07" .
+
+raas:Airing_L00_0905_20260329 a raas:ProgramAiring ;
+    rdfs:label "박은경의 러브FM"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "박은경의 러브FM"@ko ;
+    raas:slotStartTime "0905" ;
+    raas:slotEndTime "1100" ;
+    raas:airStartDate "2022-10-04" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2026-03-29" ;
+    raas:legacySeq "M07" .
+
+raas:Airing_L00_1005_20210531 a raas:ProgramAiring ;
+    rdfs:label "이재익의 정치쇼"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "이재익의 정치쇼"@ko ;
+    raas:slotStartTime "1005" ;
+    raas:slotEndTime "1200" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2021-05-31" ;
+    raas:legacySeq "L07" .
+
+raas:Airing_L00_1100_20210917 a raas:ProgramAiring ;
+    rdfs:label "허지웅쇼"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "허지웅쇼"@ko ;
+    raas:slotStartTime "1100" ;
+    raas:slotEndTime "1200" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2021-09-17" ;
+    raas:legacySeq "L08" .
+
+raas:Airing_L00_1100_20230305 a raas:ProgramAiring ;
+    rdfs:label "정철진의 목돈연구소"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "정철진의 목돈연구소"@ko ;
+    raas:slotStartTime "1100" ;
+    raas:slotEndTime "1200" ;
+    raas:airStartDate "2021-09-18" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2023-03-05" ;
+    raas:legacySeq "L08" .
+
+raas:Airing_L00_1205_20200531 a raas:ProgramAiring ;
+    rdfs:label "김상혁  딘딘의 오빠네 라디오"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "김상혁  딘딘의 오빠네 라디오"@ko ;
+    raas:slotStartTime "1205" ;
+    raas:slotEndTime "1400" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2020-05-31" ;
+    raas:legacySeq "L10" .
+
+raas:Airing_L00_1205_20220515 a raas:ProgramAiring ;
+    rdfs:label "이재익의 시사 특공대"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "이재익의 시사 특공대"@ko ;
+    raas:slotStartTime "1205" ;
+    raas:slotEndTime "1400" ;
+    raas:airStartDate "2020-06-01" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2022-05-15" ;
+    raas:legacySeq "L09" .
+
+raas:Airing_L00_1200_20231015 a raas:ProgramAiring ;
+    rdfs:label "허지웅쇼"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "허지웅쇼"@ko ;
+    raas:slotStartTime "1200" ;
+    raas:slotEndTime "1400" ;
+    raas:airStartDate "2022-05-16" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2023-10-15" ;
+    raas:legacySeq "L09" .
+
+raas:Airing_L00_1200_20251026 a raas:ProgramAiring ;
+    rdfs:label "박세미의 수다가 체질"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "박세미의 수다가 체질"@ko ;
+    raas:slotStartTime "1200" ;
+    raas:slotEndTime "1400" ;
+    raas:airStartDate "2023-10-16" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2025-10-26" ;
+    raas:legacySeq "L09" .
+
+raas:Airing_L00_1420_20220204 a raas:ProgramAiring ;
+    rdfs:label "나르샤의 아브라카타브라"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "나르샤의 아브라카타브라"@ko ;
+    raas:slotStartTime "1420" ;
+    raas:slotEndTime "1600" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2022-02-04" ;
+    raas:legacySeq "L10" .
+
+raas:Airing_L00_1420_20240722 a raas:ProgramAiring ;
+    rdfs:label "윤수현의 천태만상"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "윤수현의 천태만상"@ko ;
+    raas:slotStartTime "1420" ;
+    raas:slotEndTime "1600" ;
+    raas:airStartDate "2022-02-05" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2024-07-22" ;
+    raas:legacySeq "L10" .
+
+raas:Airing_L00_1420_20251026 a raas:ProgramAiring ;
+    rdfs:label "유민상의 배고픈 라디오"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "유민상의 배고픈 라디오"@ko ;
+    raas:slotStartTime "1420" ;
+    raas:slotEndTime "1600" ;
+    raas:airStartDate "2024-07-23" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2025-10-26" ;
+    raas:legacySeq "L10" .
+
+raas:Airing_L00_1605_20200601 a raas:ProgramAiring ;
+    rdfs:label "김창열의 올드스쿨"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "김창열의 올드스쿨"@ko ;
+    raas:slotStartTime "1605" ;
+    raas:slotEndTime "1800" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2020-06-01" ;
+    raas:legacySeq "L12" .
+
+raas:Airing_L00_1605_20220717 a raas:ProgramAiring ;
+    rdfs:label "붐붐파워"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "붐붐파워"@ko ;
+    raas:slotStartTime "1605" ;
+    raas:slotEndTime "1800" ;
+    raas:airStartDate "2020-06-02" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2022-07-17" ;
+    raas:legacySeq "L11" .
+
+raas:Airing_L00_1605_20250406 a raas:ProgramAiring ;
+    rdfs:label "뜨거우면 지상렬"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "뜨거우면 지상렬"@ko ;
+    raas:slotStartTime "1605" ;
+    raas:slotEndTime "1800" ;
+    raas:airStartDate "2022-07-18" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2025-04-06" ;
+    raas:legacySeq "L11" .
+
+raas:Airing_L00_1600_20260327 a raas:ProgramAiring ;
+    rdfs:label "어예진의 방과후 목돈연구소"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "어예진의 방과후 목돈연구소"@ko ;
+    raas:slotStartTime "1600" ;
+    raas:slotEndTime "1700" ;
+    raas:airStartDate "2025-04-07" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2026-03-27" ;
+    raas:legacySeq "L11" .
+
+raas:Airing_L00_1700_20260327 a raas:ProgramAiring ;
+    rdfs:label "주영진의 뉴스직격"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "주영진의 뉴스직격"@ko ;
+    raas:slotStartTime "1700" ;
+    raas:slotEndTime "1800" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2026-03-27" ;
+    raas:legacySeq "L13" .
+
+raas:Airing_L00_1805_20200916 a raas:ProgramAiring ;
+    rdfs:label "집으로가는길 소이현입니다"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "집으로가는길 소이현입니다"@ko ;
+    raas:slotStartTime "1805" ;
+    raas:slotEndTime "2000" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2020-09-16" ;
+    raas:legacySeq "L12" .
+
+raas:Airing_L00_1805_20210912 a raas:ProgramAiring ;
+    rdfs:label "황제성의 ready yo 팡팡"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "황제성의 ready yo 팡팡"@ko ;
+    raas:slotStartTime "1805" ;
+    raas:slotEndTime "2000" ;
+    raas:airStartDate "2020-09-17" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2021-09-12" ;
+    raas:legacySeq "L12" .
+
+raas:Airing_L00_1800_20220515 a raas:ProgramAiring ;
+    rdfs:label "허지웅쇼"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "허지웅쇼"@ko ;
+    raas:slotStartTime "1800" ;
+    raas:slotEndTime "2000" ;
+    raas:airStartDate "2021-09-13" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2022-05-15" ;
+    raas:legacySeq "L12" .
+
+raas:Airing_L00_1800_20231015 a raas:ProgramAiring ;
+    rdfs:label "정엽의 LP까페"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "정엽의 LP까페"@ko ;
+    raas:slotStartTime "1800" ;
+    raas:slotEndTime "2000" ;
+    raas:airStartDate "2022-05-16" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2023-10-15" ;
+    raas:legacySeq "L12" .
+
+raas:Airing_L00_1800_20240722 a raas:ProgramAiring ;
+    rdfs:label "유민상의 배고픈 라디오"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "유민상의 배고픈 라디오"@ko ;
+    raas:slotStartTime "1800" ;
+    raas:slotEndTime "2000" ;
+    raas:airStartDate "2023-10-16" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2024-07-22" ;
+    raas:legacySeq "L12" .
+
+raas:Airing_L00_2000_20210912 a raas:ProgramAiring ;
+    rdfs:label "정철진의 목돈연구소"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "정철진의 목돈연구소"@ko ;
+    raas:slotStartTime "2000" ;
+    raas:slotEndTime "2100" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2021-09-12" ;
+    raas:legacySeq "L13" .
+
+raas:Airing_L00_2000_20231015 a raas:ProgramAiring ;
+    rdfs:label "간미연의 러브나잇"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "간미연의 러브나잇"@ko ;
+    raas:slotStartTime "2000" ;
+    raas:slotEndTime "2200" ;
+    raas:airStartDate "2021-09-13" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2023-10-15" ;
+    raas:legacySeq "L14" .
+
+raas:Airing_L00_2000_20251026 a raas:ProgramAiring ;
+    rdfs:label "그대의 밤 정엽입니다"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "그대의 밤 정엽입니다"@ko ;
+    raas:slotStartTime "2000" ;
+    raas:slotEndTime "2200" ;
+    raas:airStartDate "2023-10-16" ;
+    raas:startDateProvenance "derived" ;
+    raas:airEndDate "2025-10-26" ;
+    raas:legacySeq "L14" .
+
+raas:Airing_L00_2030_20210221 a raas:ProgramAiring ;
+    rdfs:label "신혜성의 음악오디세이"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "신혜성의 음악오디세이"@ko ;
+    raas:slotStartTime "2030" ;
+    raas:slotEndTime "2200" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2021-02-21" ;
+    raas:legacySeq "L13" .
+
+raas:Airing_L00_2205_20260329 a raas:ProgramAiring ;
+    rdfs:label "최백호의 낭만시대"@ko ;
+    raas:inChannel raas:L00 ;
+    raas:airProgramName "최백호의 낭만시대"@ko ;
+    raas:slotStartTime "2205" ;
+    raas:slotEndTime "2400" ;
+    raas:startDateProvenance "unknown" ;
+    raas:airEndDate "2026-03-29" ;
+    raas:legacySeq "L15" .

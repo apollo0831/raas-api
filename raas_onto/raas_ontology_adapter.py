@@ -62,6 +62,7 @@ ONTOLOGY_DIR = _find_ontology_dir()
 ONTOLOGY_FILES = [
     "raas_ontology_fields.ttl",
     "raas_ontology_program.ttl",
+    "raas_ontology_airing.ttl",   # 프로그램 편성 이력(종영분·불변)
     "raas_ontology_time.ttl",
     "raas_ontology_noteworthy.ttl",
     "raas_ontology_calendar.ttl",
@@ -362,6 +363,61 @@ class OntologyAdapter:
                     continue
             out.append({"label": self._onto.label_ko(iri), "text": text})
         return out
+
+    def get_program_airings(self, channel_code: str = None, name_contains: str = None) -> list:
+        """종영 프로그램 편성 이력(raas:ProgramAiring) → 정렬된 dict 목록.
+        channel_code: 'F00'/'L00' 등으로 필터. name_contains: 프로그램명 부분일치.
+        각 항목: {channel, name, slot_start, slot_end, start_date, end_date,
+                  start_prov, seq}. (slot_start_min, end_date 기준 정렬)
+        시작일 'unknown'(자리 최초 기록분)은 start_date=''."""
+        o = self._onto
+        out = []
+        for iri in o.instances_of("raas:ProgramAiring"):
+            ch = o.value_str(o.get_one(iri, "raas:inChannel"))  # 'raas:F00' → 'raas:F00'
+            ch = ch.replace("raas:", "") if ch else ""
+            nm = o.value_str(o.get_one(iri, "raas:airProgramName"))
+            if channel_code and ch != channel_code:
+                continue
+            if name_contains and name_contains not in nm:
+                continue
+            ss = o.value_str(o.get_one(iri, "raas:slotStartTime"))
+            out.append({
+                "channel": ch,
+                "name": nm,
+                "slot_start": ss,
+                "slot_end": o.value_str(o.get_one(iri, "raas:slotEndTime")),
+                "start_date": o.value_str(o.get_one(iri, "raas:airStartDate")),
+                "end_date": o.value_str(o.get_one(iri, "raas:airEndDate")),
+                "start_prov": o.value_str(o.get_one(iri, "raas:startDateProvenance")),
+                "seq": o.value_str(o.get_one(iri, "raas:legacySeq")),
+            })
+
+        def _key(r):
+            ss = r["slot_start"]
+            smin = int(ss[:2]) * 60 + int(ss[2:]) if len(ss) == 4 and ss.isdigit() else 0
+            return (r["channel"], smin, r["end_date"])
+        out.sort(key=_key)
+        return out
+
+    def get_program_history_block(self, channel_code: str = None, name_contains: str = None) -> str:
+        """편성 이력을 LLM 컨텍스트용 텍스트 블록으로. 자리별 승계 체인 표시.
+        현행 방송분은 라이브 데이터 소유이므로 여기 없음(종영분만)."""
+        rows = self.get_program_airings(channel_code, name_contains)
+        if not rows:
+            return ""
+        CH = {"F00": "파워FM", "L00": "러브FM", "G00": "고릴라M", "P00": "픽채널"}
+        from collections import defaultdict as _dd
+        by_slot = _dd(list)
+        for r in rows:
+            by_slot[(r["channel"], r["slot_start"][:2] + ":" + r["slot_start"][2:])].append(r)
+        lines = ["[프로그램 편성 이력 — 종영분(불변). 시작일은 같은 자리 직전 편성 종료 다음날로 추정]"]
+        for (ch, hhmm) in sorted(by_slot.keys()):
+            chn = CH.get(ch, ch)
+            lines.append(f"· {chn} {hhmm} 자리:")
+            for r in by_slot[(ch, hhmm)]:
+                sd = r["start_date"] or "(이전 미상)"
+                lines.append(f"   {sd} ~ {r['end_date']}  {r['name']}")
+        return "\n".join(lines)
 
     def get_metric_definitions_block(self) -> str:
         """TTL raas:definition/formula/rdfs:comment 기반 지표 정의 텍스트 블록.

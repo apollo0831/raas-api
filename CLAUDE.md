@@ -69,7 +69,7 @@ raas_datasource.py  ← Splunk 수집 단일 소유 (splunk_search·fetch_lookup
       월평균 다운샘플+연도별 상세로 답변, data_coverage에 아카이브 범위 병합. 아카이브 성격(원천 차이
       등)은 raas:HistoricalArchiveAxiom(온톨로지)이 정의
 raas_llm.py  ← 공용 LLM 클라이언트(call_claude·HAIKU_MODEL) — grounding·router·server가 import
-raas_onto/raas_ontology_adapter.py  ← TTL 온톨로지 8종 로더(지표/프로그램/게스트/특일/cause 등)
+raas_onto/raas_ontology_adapter.py  ← TTL 온톨로지 9종 로더(지표/프로그램/편성이력/게스트/특일/cause 등)
 raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·data_requests·storyline_events
 ```
 
@@ -78,7 +78,7 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 
 | scope | 트리거 예시 | 데이터 |
 |-------|------------|--------|
-| **program** | "컬투쇼 어제 왜 빠졌어?" | provider 10종(KPI·시계열·흐름분해·코호트·편성·요일·개편·편성표·특일) |
+| **program** | "컬투쇼 어제 왜 빠졌어?", "영스트리트 역대 DJ" | provider 11종(KPI·시계열·흐름분해·코호트·편성·요일·개편·편성표·특일·편성이력) |
 | **channel** | "러브FM 어때?", "전사 트렌드" | 채널행(F00/L00/G00/P00/T00) — 프로그램 전용 provider 제외 |
 | **compare** | "파워FM vs 러브FM 비교", "채널별 핵심 지표 비교"(→4채널) | 엔티티 2~4개 KPI·시계열 나란히 |
 | **ranking** | "프로그램별 DAU 순위", "가장 많이 증가한 프로그램"(변화량 순위) | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬(`_chg`도 지원) |
@@ -169,6 +169,22 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
 - `T00` = 전체, `F00` = 파워FM, `L00` = 러브FM, `G00` = 고릴라M, `P00` = 픽채널
 - `F01`~`F13` = 파워FM 프로그램, `L01`~`L15` / `M05`~`M11` = 러브FM 프로그램
 - 채널/집계 코드는 X00 패턴(ranking scope에서 제외)
+
+### 프로그램명 해석 — 라이브 우선(TTL 낡음 자동 교정)
+`_pgm_name(code, row, default)`(metrics_engine)·`_resolve_name(code)`(grounding)는 **현행명을
+라이브 broadplan(PGM_NAME)에서 최우선**으로 가져오고, 없을 때만 온톨로지 TTL 라벨→코드로 폴백.
+현재 프로그램명은 '데이터 상태'(매일 갱신)라 온톨로지에 박제하지 않는다 — TTL 라벨이 낡아도
+라이브가 현행명으로 자동 교정(F02/F03/M07/M10 등).
+
+### 프로그램 편성 이력 = 온톨로지(불변 사실)
+종영 프로그램의 편성 연혁은 `raas_onto/raas_ontology_airing.ttl`의 `raas:ProgramAiring`에 박제
+(과거는 불변). 자리(slot)=**(채널, 시작시각)** — SEQ는 시대별로 드리프트하므로 `legacySeq`(참고)로만
+보존, 시작시각 ±5분 버퍼는 같은 자리로 병합. **종료일=권위**(CSV), **시작일=유도**(같은 자리 직전
+편성 종료+1일, `startDateProvenance`). 현행 방송분은 여기 없음(라이브 소유·가변 종료).
+- 어댑터: `get_program_airings(channel_code, name_contains)` / `get_program_history_block(...)`
+- grounding provider: `program_history`(program scope) — 자리 승계 체인 + 현행 결합
+- TTL 재생성: `종방프로그램.csv`(CHN/SEQ/PGM_NAME/START·END_TIME/LASTDAY) → 생성 스크립트로 갱신,
+  빈 LASTDAY 행은 현행 방송분이므로 제외
 
 ## Key Metrics Definitions
 

@@ -649,6 +649,59 @@ def _p_ontology(ent):
     return out or None
 
 
+def _p_program_history(ent):
+    """[편성 이력] 이 프로그램 자리(채널·시간대)의 역대 종영 프로그램 승계 체인 + 현행.
+       온톨로지 raas:ProgramAiring(불변 종영분) + 라이브 현행명 결합.
+       '영스트리트 역대 DJ', '이 시간대 예전 프로그램', '언제부터 방송' 등에 근거 제공."""
+    code = ent.get("code")
+    if not code or (len(code) == 3 and code.endswith("00")):  # 채널 집계코드 제외
+        return None
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+        meta = a.get_program_meta(code) or {}
+    except Exception:
+        return None
+    ch = ((meta.get("channel") or {}).get("code")) or ""
+    slot = (meta.get("time_slot") or {}).get("start") or ""   # "20:00"
+    slot_min = None
+    if len(slot) == 5 and slot[:2].isdigit():
+        slot_min = int(slot[:2]) * 60 + int(slot[3:])
+    airings = a.get_program_airings(channel_code=ch) if ch else []
+    # 이 프로그램 자리와 시간대 근접(±10분, 버퍼 흡수) 종영분만
+    chain = []
+    for r in airings:
+        ss = r["slot_start"]
+        if len(ss) != 4 or not ss.isdigit():
+            continue
+        m = int(ss[:2]) * 60 + int(ss[2:])
+        if slot_min is None or abs(m - slot_min) <= 10:
+            chain.append({"start": r["start_date"] or None, "end": r["end_date"],
+                          "name": r["name"], "start_est": r["start_prov"] == "derived"})
+    if not chain:
+        return None
+    # 현행(라이브) 프로그램 = 자리의 마지막 종영 다음날부터 진행 중
+    cur_name = S._pgm_name(code)
+    last_end = chain[-1]["end"] if chain else None
+    since = None
+    if last_end and len(last_end) == 10:
+        try:
+            from datetime import date as _d, timedelta as _td
+            y, m, d = (int(x) for x in last_end.split("-"))
+            since = (_d(y, m, d) + _td(days=1)).isoformat()
+        except Exception:
+            since = last_end
+    return {
+        "channel": (meta.get("channel") or {}).get("label") or ch,
+        "slot": f"{slot}~{(meta.get('time_slot') or {}).get('end','')}".strip("~"),
+        "ended": chain,
+        "current": {"name": cur_name,
+                    "since_est": since,
+                    "note": "현행 방송분(종료일 없음, 진행 중)"},
+        "note": "종영분은 불변 이력. 시작일 start_est=true는 같은 자리 직전 편성 종료 다음날로 추정한 값.",
+    }
+
+
 def _p_flow(ent):
     return S._compute_flow_decomposition(ent.get("row") or {}, ent.get("history"))
 
@@ -875,6 +928,9 @@ PROVIDERS = [
     {"name": "ontology", "needs": "program",
      "desc": "프로그램 도메인 사실(진행자·정규게스트·시간대·편성유형·광고가치·게스트명 해석정책 등 온톨로지)",
      "fetch": _p_ontology},
+    {"name": "program_history", "needs": "program",
+     "desc": "이 프로그램 자리(채널·시간대)의 역대 편성 이력 — 종영 프로그램 승계 체인(이전 진행자·프로그램)과 현행. '역대 DJ/진행자·예전 프로그램·언제부터 이 자리·전임' 등 편성 연혁 질의",
+     "fetch": _p_program_history},
     {"name": "flow_decomp", "needs": "program",
      "desc": "활성사용자 변화를 신규·복귀·이탈로 분해(왜 늘었나/줄었나의 사용자 흐름 구조)",
      "fetch": _p_flow},
@@ -1822,12 +1878,11 @@ def _assemble_guest_search(question: str, overlay_ctx=None):
 
 
 def _resolve_name(code) -> str:
+    # 현재 프로그램명은 라이브(broadplan) 우선 — S._pgm_name에 위임(TTL 낡음 자동 교정)
     if not code:
         return ""
     try:
-        from raas_onto import get_adapter
-        m = get_adapter().get_program_meta(code)
-        return (m or {}).get("label") or code
+        return S._pgm_name(code)
     except Exception:
         return code
 

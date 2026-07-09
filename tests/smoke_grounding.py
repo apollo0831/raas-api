@@ -200,6 +200,28 @@ check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편�
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")
 
+print("── 5.6 편성 이력(ProgramAiring 온톨로지) ─────────────")
+# 종영 프로그램 편성 이력을 온톨로지에 박제 — 자리(채널·시간대) 승계 체인
+_air = get_adapter().get_program_airings(name_contains="영스트리트")
+check("영스트리트 역대 4대 승계", [a["name"] for a in _air],
+      ["정소민의 영스트리트", "이준의 영스트리트", "웬디의 영스트리트", "권은비의 영스트리트"])
+check_true("시작일 유도(직전 종료+1): 이준=2019-12-16",
+           next((a["start_date"] for a in _air if a["name"] == "이준의 영스트리트"), "") == "2019-12-16")
+# 버퍼(±5분) 병합으로 자리 연속성 복원 — 어예진 방과후 목돈연구소가 지상렬 뒤 승계
+_l1600 = get_adapter().get_program_airings(channel_code="L00", name_contains="어예진")
+check_true("16:00/16:05 버퍼병합 → 어예진 시작일 유도됨",
+           bool(_l1600) and _l1600[0]["start_date"] == "2025-04-07",
+           f"got={_l1600 and _l1600[0].get('start_date')}")
+# provider: 프로그램 자리의 역대 편성 + 현행 결합
+_ph = G._p_program_history({"code": "F12"}) or {}
+check_true("program_history: 종영 4편 + 현행 반환",
+           len(_ph.get("ended", [])) == 4 and (_ph.get("current") or {}).get("name"),
+           f"ended={len(_ph.get('ended', []))}")
+check_true("program_history: 채널 집계코드(F00)는 None",
+           G._p_program_history({"code": "F00"}) is None)
+# 라이브 우선 이름 해석(TTL 낡아도 현행명) — F03 회귀 방지
+check("_pgm_name 라이브 우선(F03=파워 스테이션)", METRICS._pgm_name("F03"), "파워 스테이션")
+
 print("── 4.5 지표 용어→필드 + 기간 인지 시계열 ────────────")
 # '주간 참여율/유지율/습관형성률 추이 분석'이 시계열에 해당 필드가 없어 '데이터 없음'으로 답하던 버그
 for term, fld in [("참여율", "engage_rate"), ("습관형성률", "habit_rate"),

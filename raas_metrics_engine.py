@@ -1418,7 +1418,22 @@ def _fn2(v):
     except Exception: return None
 
 def _pgm_name(code, row=None, default=None):
-    """코드→표시 이름 (TTL 어댑터 → row.pgm_name → code). 서버 KPI 패널·이상탐지 공용."""
+    """코드→표시 이름. 현재 프로그램명은 '데이터 상태'(매일 broadplan에서 갱신)이므로
+       라이브 PGM_NAME을 최우선 → 온톨로지 TTL 라벨(안정 별칭·폴백) → 코드 순.
+       (TTL 라벨이 낡아도 라이브가 현행명으로 자동 교정. 서버 KPI 패널·이상탐지 공용.)"""
+    # 1) 넘겨받은 row의 라이브 이름 (대/소문자 모두)
+    if row is not None:
+        nm = str(row.get('PGM_NAME') or row.get('pgm_name') or '').strip()
+        if nm:
+            return nm
+    # 2) row 미제공 시 라이브 최신 행에서 조회
+    try:
+        nm = str((_load_program_latest_row(code) or {}).get('PGM_NAME') or '').strip()
+        if nm:
+            return nm
+    except Exception:
+        pass
+    # 3) 온톨로지 TTL 라벨 (별칭·안정 사실 — 채널 집계코드 등 라이브명 없는 경우 포함)
     try:
         from raas_onto import get_adapter
         label = get_adapter()._onto.label_ko(f"raas:{code}")
@@ -1426,10 +1441,6 @@ def _pgm_name(code, row=None, default=None):
             return label
     except Exception:
         pass
-    if row is not None:
-        nm = (row.get('pgm_name') or '').strip()
-        if nm:
-            return nm
     return default if default is not None else code
 
 def _build_alert_kpi(row: dict) -> dict:
