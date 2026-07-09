@@ -91,14 +91,18 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 - 온톨로지 팩: 지표 정의 + cause 분해 프레임워크. 오버레이: 사용자 기여 지식(read-time 병합).
 - 관리자에게는 응답 끝에 `[small]` 참고 푸터(사용 provider·적용 오버레이)를 SSE로 덧붙임.
 
-### provider 설계 원칙 — 하이브리드 (A: 결정적 계산 / B: 원자료+공리→LLM 조립)
-- **A. 핵심 숫자(KPI·집계·시계열)**: provider가 결정적으로 계산해 제공(숫자는 코드, LLM 아님).
-  매번 같은 값이어야 하는 지표·순위·증감은 여기. 예: program_kpi, channel_programs, ranking.
-- **B. 편성·서술형 지식**: provider는 **원자료+온톨로지 공리만 얇게** 제공, 조립·해석은 LLM.
-  도메인 규칙(스패닝·시간대이동·5분뉴스·오묶임방지)을 **파이썬에 박지 않는다** — 공리(TTL)로
-  서술하면 LLM이 적용하고, 규칙 추가·수정은 코드가 아니라 TTL만 갱신(목표: 온톨로지가 커질수록
-  코드 없이 똑똑해짐). 예: program_history/channel_history(`_airing_raw` — ended_airings·
-  current_programs·rules). 새 provider를 만들 때 도메인 규칙이 코드로 들어오려 하면 B로 보낼 것.
+### provider 설계 원칙 — 한 문장
+**provider는 항상 얇다(검색). 숫자는 계산 레이어(metrics_engine)에서 결정적으로. 도메인
+규칙·해석은 온톨로지 공리+LLM이지, provider 파이썬에 넣지 않는다.**
+
+- provider의 역할은 *질문에 필요한 데이터 슬라이스를 떠서 LLM에 넘기는 것*뿐. 대부분이 얇은
+  조회/서술이고, 계산형(flow_decomp·cohort·weekday 등)도 `S._compute_*`를 부르는 2줄 위임 —
+  결정적 숫자는 metrics_engine에 있고 provider 본문엔 로직이 없다.
+- **금지**: provider fetch 본문에 도메인 규칙(if/else 판정·특수 케이스·조립 루프)을 박는 것.
+  그런 규칙(스패닝·시간대이동·5분뉴스·오묶임방지 등)은 `raas:DomainAxiom`(TTL)으로 서술하고
+  LLM이 적용한다 → 규칙 추가·수정은 코드가 아니라 TTL만 갱신(온톨로지가 커질수록 코드 없이
+  똑똑해짐). 모범: program_history/channel_history(`_airing_raw` — ended_airings·
+  current_programs·rules만 제공, 조립은 LLM). 새 provider에 규칙이 코드로 들어오려 하면 공리로 뺄 것.
 
 ### 스토리라인 = '어제 방송 특이사항' 단일 경로
 구 CP 다중슬롯 스토리라인(advance/슬롯/칩)은 **제품에서 은퇴**. 현재 스토리라인은 웰컴 CTA
