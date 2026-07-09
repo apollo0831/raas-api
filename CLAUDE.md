@@ -91,6 +91,15 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 - 온톨로지 팩: 지표 정의 + cause 분해 프레임워크. 오버레이: 사용자 기여 지식(read-time 병합).
 - 관리자에게는 응답 끝에 `[small]` 참고 푸터(사용 provider·적용 오버레이)를 SSE로 덧붙임.
 
+### provider 설계 원칙 — 하이브리드 (A: 결정적 계산 / B: 원자료+공리→LLM 조립)
+- **A. 핵심 숫자(KPI·집계·시계열)**: provider가 결정적으로 계산해 제공(숫자는 코드, LLM 아님).
+  매번 같은 값이어야 하는 지표·순위·증감은 여기. 예: program_kpi, channel_programs, ranking.
+- **B. 편성·서술형 지식**: provider는 **원자료+온톨로지 공리만 얇게** 제공, 조립·해석은 LLM.
+  도메인 규칙(스패닝·시간대이동·5분뉴스·오묶임방지)을 **파이썬에 박지 않는다** — 공리(TTL)로
+  서술하면 LLM이 적용하고, 규칙 추가·수정은 코드가 아니라 TTL만 갱신(목표: 온톨로지가 커질수록
+  코드 없이 똑똑해짐). 예: program_history/channel_history(`_airing_raw` — ended_airings·
+  current_programs·rules). 새 provider를 만들 때 도메인 규칙이 코드로 들어오려 하면 B로 보낼 것.
+
 ### 스토리라인 = '어제 방송 특이사항' 단일 경로
 구 CP 다중슬롯 스토리라인(advance/슬롯/칩)은 **제품에서 은퇴**. 현재 스토리라인은 웰컴 CTA
 `🗓 어제 방송 특이사항 보기` → `/api/storyline/today`(grounding digest) 하나. 결과의 특이 프로그램
@@ -185,10 +194,11 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
 (정치쇼 9시대→10시대→7시대)는 서로 다른 자리로 본다. **종료일=권위**(CSV), **시작일=유도**(같은 자리
 직전 편성 종료+1일, `startDateProvenance`). 현행 방송분은 여기 없음(라이브 소유·가변 종료).
 - 어댑터: `get_program_airings(channel_code, name_contains)` / `get_program_history_block(...)`
-- grounding provider: `program_history`(program scope) — 자리 승계 체인 + 현행 결합 + 프랜차이즈
-  시간대 이동 이력(정치쇼 9시→10시→7시). `channel_history`(channel scope) — 채널 전체 시간대별
-  종영승계+현행(평일/주말 공존은 current 리스트). 'OOO의 러브FM' 등 채널 브랜드가 프로그램명인
-  정식명은 전체명으로 구분(프랜차이즈 오묶임 방지)
+- grounding provider(B 방식): `program_history`(program)·`channel_history`(channel) — 공용
+  `_airing_raw`가 종영 원자료+현행 라이브+해석 공리(rules)만 얇게 제공, 시간대 조립·스패닝·
+  프랜차이즈(정치쇼 9시→10시→7시)·오묶임 방지('OOO의 러브FM'은 정식명)는 **LLM이 공리를 적용**.
+  규칙 공리 3종: HourSlotAnalysisAxiom(L00 5분뉴스)·ContinuousSchedulingAxiom(24h 연속,
+  다시간 스패닝)·FranchiseRelocationAxiom(시간대 이동) — 모두 airing TTL에, appliesTo F00/L00
 - TTL 재생성: `종방프로그램.csv`(CHN/SEQ/PGM_NAME/START·END_TIME/LASTDAY) → 생성 스크립트로 갱신,
   빈 LASTDAY 행은 현행 방송분이므로 제외
 

@@ -223,39 +223,44 @@ check("이재익의 정치쇼는 10시 자리(시대 이동)",
 # 도메인 공리: 시간 단위 분석(5분 뉴스 오프셋)이 러브FM에 적용
 check_true("온톨로지: L00에 '시간 단위 편성 분석' 공리",
            any("시간 단위" in ax.get("label", "") for ax in get_adapter().get_domain_axioms("L00")))
-# provider가 실제 편성시각(air_time)도 함께 노출
+# 원자료에 실제 편성시각(air_time) 보존 — 정치쇼 0905, 분석자리는 09
 _phm = G._p_program_history({"code": "M07"}) or {}
-check_true("program_history air_time 보존(0905)",
-           any(e.get("air_time") == "0905" for e in _phm.get("ended", [])),
-           f"ended={_phm.get('ended')}")
-# 프랜차이즈 시간대 이동 이력 — 정치쇼(현행 오전7시, L06)가 9시대·10시대 이력을 함께 노출
+check_true("원자료 air_time 보존(0905)+analysis_hour(09)",
+           any(e.get("air_time") == "0905" and e.get("analysis_hour") == "09"
+               for e in _phm.get("ended_airings", []) if "정치쇼" in e.get("name", "")),
+           f"n={len(_phm.get('ended_airings', []))}")
+# B 구조: 프랜차이즈 이동·스패닝·오묶임 방지는 코드가 아니라 온톨로지 공리 → LLM 적용.
+#   공리 존재 + 원자료에 정치쇼의 9시·10시 이력이 그대로 실려있는지 확인(조립은 LLM 몫).
 _pl6 = G._p_program_history({"code": "L06"}) or {}
-_fslots = {f["slot"] for f in (_pl6.get("franchise_moved_from") or [])}
-check("정치쇼 franchise 이동: 9시·10시 노출", sorted(_fslots), ["09:00", "10:00"])
-# 오탐 방지: '최영주의 러브FM'·'이숙영의 러브FM'은 각각 정식 프로그램명(전체명이 정체성) —
-#   진행자 떼면 채널 브랜드('러브FM')만 남는 정식명은 서로 다른 프로그램으로 취급, 오묶임 없음
-check_true("franchise 오탐 방지: 'OOO의 러브FM' 정식명은 전체명으로 구분",
-           G._p_program_history({"code": "M07"}).get("franchise_moved_from") is None)
-# provider: 프로그램 자리의 역대 편성 + 현행 결합
+_jchrs = {e["analysis_hour"] for e in _pl6.get("ended_airings", []) if "정치쇼" in e.get("name", "")}
+check("원자료에 정치쇼 9시·10시 이력 포함", sorted(_jchrs), ["09", "10"])
+check_true("rules에 시간대 이동 공리(프랜차이즈·오묶임 방지 서술) 포함",
+           any("시간대 이동" in r.get("label", "") and "러브FM" in r.get("text", "")
+               for r in _pl6.get("rules", [])))
+check_true("rules에 24h 연속 편성 공리(다시간 스패닝 서술) 포함",
+           any("연속 편성" in r.get("label", "") and "04:00" in r.get("text", "")
+               for r in _pl6.get("rules", [])))
+# provider(B: 얇은 원자료+공리): focus 프로그램 + 채널 airing 원자료 + 해석 rules
 _ph = G._p_program_history({"code": "F12"}) or {}
-check_true("program_history: 종영 4편 + 현행 반환",
-           len(_ph.get("ended", [])) == 4 and (_ph.get("current") or {}).get("name"),
-           f"ended={len(_ph.get('ended', []))}")
+check_true("program_history: focus+원자료+rules 반환",
+           (_ph.get("focus_program") or {}).get("analysis_hour") == "20"
+           and len(_ph.get("ended_airings", [])) >= 4
+           and any("연속 편성" in r.get("label", "") for r in _ph.get("rules", [])),
+           f"keys={list(_ph)}")
 check_true("program_history: 채널 집계코드(F00)는 None",
            G._p_program_history({"code": "F00"}) is None)
 # 라이브 우선 이름 해석(TTL 낡아도 현행명) — F03 회귀 방지
 check("_pgm_name 라이브 우선(F03=파워 스테이션)", METRICS._pgm_name("F03"), "파워 스테이션")
-# 채널 편성 이력(channel scope) — 채널 전체 시간대별 종영승계 + 현행(평일/주말 공존)
+# 채널 편성 이력(channel scope, B: 얇은 원자료+공리) — 종영·현행 원자료와 rules 제공
 _chh = G._p_channel_history(G.resolve_entities("러브FM 시간대별 편성")) or {}
-check_true("channel_history 자리 반환(종영+현행)",
-           len(_chh.get("slots", [])) >= 10 and any(s.get("current") for s in _chh.get("slots", [])),
-           f"slots={len(_chh.get('slots', []))}")
-check_true("channel_history 07시 평일·주말 공존(current 리스트)",
-           any(s["slot"] == "07:00" and len(s.get("current", [])) >= 2 for s in _chh.get("slots", [])),
-           f"07:00={[s for s in _chh.get('slots',[]) if s['slot']=='07:00']}")
-# 다시간 편성 커버 — 04:00~06:00 프로그램은 05:00 시간대에도 방송 중(빈 슬롯 아님)
-_s5 = next((s for s in _chh.get("slots", []) if s["slot"] == "05:00"), {})
-check_true("다시간 편성 05시 커버(현행 채움)", bool(_s5.get("current")), f"05:00={_s5}")
+check_true("channel_history 원자료(종영 30+·현행 15+·rules)",
+           len(_chh.get("ended_airings", [])) >= 30 and len(_chh.get("current_programs", [])) >= 15
+           and len(_chh.get("rules", [])) >= 3,
+           f"ended={len(_chh.get('ended_airings', []))}, cur={len(_chh.get('current_programs', []))}")
+# 07시 평일·주말 공존 — 원자료에 STIME=0700 프로그램 2개(정치쇼+드라이브뮤직) 그대로 노출
+check_true("현행 원자료 07시 공존(2편)",
+           sum(1 for p in _chh.get("current_programs", []) if p["start_time"] == "0700") >= 2,
+           f"0700={[p['name'] for p in _chh.get('current_programs', []) if p['start_time']=='0700']}")
 # '편성 변화' 의도(채널) → channel_history 주경로, KPI·아카이브 경쟁 제거(과거 '데이터 없음' 회귀 방지)
 _edn = G.assemble("2023년부터 러브FM 시간대별 프로그램 편성 변화 알려줘",
                   overlay_ctx={"mode": "normal"}).get("providers_used", [])

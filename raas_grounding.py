@@ -575,14 +575,12 @@ def _p_channel_programs(ent):
     return {"as_of": latest, "programs": out} if out else None
 
 
-def _p_channel_history(ent):
-    """[채널 전용] 채널 전체의 시간대별 편성 이력 — 각 분석 자리(정시)마다
-       종영 프로그램 승계(온톨로지 raas:ProgramAiring, 불변) + 현행(라이브) 결합.
-       '러브FM 시간대별 편성 변화', '채널 편성 연혁' 등 채널 단위 편성 질의 근거."""
-    if ent.get("scope_kind") != "channel":
-        return None
-    code = ent.get("code") or ""
-    prefixes = _CH_PREFIX.get(code)
+# ── 편성 이력(B: 규칙은 온톨로지 공리, 조립은 LLM) — provider는 원자료+공리만 얇게 제공 ──
+def _airing_raw(channel_code):
+    """채널의 편성 이력 원자료 — 종영분(온톨로지 raas:ProgramAiring, 불변) + 현행(라이브) +
+       해석 공리(24h 연속편성·시간단위·시간대 이동). 시간대 조립/스패닝/프랜차이즈 판정은
+       LLM이 공리를 적용해 수행(코드에 규칙을 박지 않음 — 온톨로지 확장 시 자동 반영)."""
+    prefixes = _CH_PREFIX.get(channel_code)
     if not prefixes:
         return None
     try:
@@ -590,23 +588,18 @@ def _p_channel_history(ent):
         a = get_adapter()
     except Exception:
         return None
-    # 종영분 — 분석 자리(정시)별 그룹
-    slots = {}   # "HH:MM" -> {"ended": [...], "current": [...]}
-    for r in a.get_program_airings(channel_code=code):
-        asl = r.get("analysis_slot") or ""
-        key = f"{asl[:2]}:{asl[2:]}"
-        slots.setdefault(key, {"ended": [], "current": []})["ended"].append(
-            {"start": r["start_date"] or None, "end": r["end_date"], "name": r["name"],
-             "air_time": r["slot_start"] if r["slot_start"][2:] != "00" else None,
-             "start_est": r["start_prov"] == "derived"})
-    # 현행 — 라이브 최신일 채널 프로그램. STIME으로 시작 시간대 판정. 같은 정시에 평일·주말
-    #   편성이 공존할 수 있음(예: 07시 평일 정치쇼 + 주말 드라이브뮤직).
+    # 종영분 — 원자료 그대로(자리 그룹핑·스패닝은 LLM 몫)
+    ended = [{"name": r["name"], "air_time": r["slot_start"], "analysis_hour": r["analysis_slot"][:2],
+              "start_date": r["start_date"] or None, "end_date": r["end_date"],
+              "start_estimated": r["start_prov"] == "derived"}
+             for r in a.get_program_airings(channel_code=channel_code)]
+    # 현행 — 라이브 최신일 채널 프로그램(STIME 그대로). 같은 STIME에 평일·주말 편성 공존 가능.
     try:
         rows = S._kpi_rows() or []
         latest = max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
     except Exception:
         rows, latest = [], None
-    current_progs, seen = [], set()   # {name, code, hour(int), air_time}
+    current, seen = [], set()
     for r in rows:
         if r.get("DATE") != latest:
             continue
@@ -617,30 +610,32 @@ def _p_channel_history(ent):
                 or len(st) != 4 or not st.isdigit() or not nm):
             continue
         seen.add(c)
-        current_progs.append({"name": nm, "code": c, "hour": int(st[:2]),
-                              "air_time": st if st[2:] != "00" else None})
-        slots.setdefault(f"{st[:2]}:00", {"ended": [], "current": []})   # 시작 시간대 슬롯 보장
-    if not slots:
+        current.append({"name": nm, "code": c, "start_time": st})
+    if not ended and not current:
         return None
-    # 각 시간대의 현행 = 그 시각에 방송 중인 프로그램. 라디오는 24h 연속 편성(빈 시간 없음)이라
-    #   시작시각이 그 시간대 이하 중 최댓값인 프로그램이 방송 중(다시간 편성은 여러 시간대 커버).
-    #   예: OLDIES 20(재) 04:00~06:00 → 04·05시 모두, 09시 러브FM 09:00~11:00 → 09·10시 모두.
-    cur_hours = sorted({p["hour"] for p in current_progs})
-    for key, v in slots.items():
-        H = int(key[:2])
-        onair = [h for h in cur_hours if h <= H]
-        if not onair:
-            continue
-        top = max(onair)
-        v["current"] = [{"name": p["name"], "code": p["code"], "air_time": p["air_time"]}
-                        for p in current_progs if p["hour"] == top]
-    ordered = [{"slot": k, **slots[k]} for k in sorted(slots)]
-    return {
-        "channel": _resolve_name(code),
-        "slots": ordered,
-        "note": ("자리=분석 정시(시간 단위). 종영분은 불변 이력(시작일 start_est=추정), "
-                 "현행은 라이브. 러브FM :05 시작은 정시 5분 뉴스 후 편성(air_time=실제시각)."),
-    }
+    current.sort(key=lambda p: p["start_time"])
+    try:
+        rules = get_adapter().get_domain_axioms(channel_code)
+    except Exception:
+        rules = []
+    return {"ended_airings": ended, "current_programs": current,
+            "rules": rules,
+            "note": ("종영분=불변 이력(start_estimated=직전 편성 종료+1일 추정), 현행=라이브. "
+                     "시간대별 편성은 rules(공리)를 적용해 조립하라: analysis_hour로 자리 묶기, "
+                     "24h 연속편성이라 각 시각 방송분=시작≤그시각 중 최근(다시간 편성은 여러 시각 커버), "
+                     "같은 쇼명이 다른 시간대에 있으면 시간대 이동.")}
+
+
+def _p_channel_history(ent):
+    """[채널 전용·얇음] 채널 편성 이력 원자료(종영+현행)+공리 → LLM이 시간대별로 조립.
+       '러브FM 시간대별 편성 변화·연혁' 등 채널 단위 편성 질의 근거."""
+    if ent.get("scope_kind") != "channel":
+        return None
+    code = ent.get("code") or ""
+    raw = _airing_raw(code)
+    if not raw:
+        return None
+    return {"channel": _resolve_name(code), **raw}
 
 
 def _p_metric_timeseries(ent):
@@ -718,82 +713,28 @@ def _p_ontology(ent):
 
 
 def _p_program_history(ent):
-    """[편성 이력] 이 프로그램 자리(채널·시간대)의 역대 종영 프로그램 승계 체인 + 현행.
-       온톨로지 raas:ProgramAiring(불변 종영분) + 라이브 현행명 결합.
-       '영스트리트 역대 DJ', '이 시간대 예전 프로그램', '언제부터 방송' 등에 근거 제공."""
+    """[편성 이력·얇음] 이 프로그램 자리의 편성 연혁 — 채널 편성 원자료(종영+현행)+공리를 주고
+       LLM이 focus 프로그램의 시간대 자리 승계·시간대 이동(프랜차이즈)을 조립.
+       '영스트리트 역대 DJ', '이 시간대 예전 프로그램', '전임 진행자' 등에 근거 제공."""
     code = ent.get("code")
     if not code or (len(code) == 3 and code.endswith("00")):  # 채널 집계코드 제외
         return None
     try:
         from raas_onto import get_adapter
-        a = get_adapter()
-        meta = a.get_program_meta(code) or {}
+        meta = get_adapter().get_program_meta(code) or {}
     except Exception:
         return None
     ch = ((meta.get("channel") or {}).get("code")) or ""
-    slot = (meta.get("time_slot") or {}).get("start") or ""   # "20:00"
-    slot_hh = slot[:2] if len(slot) >= 2 and slot[:2].isdigit() else None  # 분석 자리=정시
-    airings = a.get_program_airings(channel_code=ch) if ch else []
-    # 같은 분석 자리(정시)의 종영분만 — 러브FM :05 뉴스 오프셋도 정시로 정규화되어 매칭
-    chain = []
-    for r in airings:
-        asl = r.get("analysis_slot") or ""
-        if slot_hh is None or asl[:2] == slot_hh:
-            chain.append({"start": r["start_date"] or None, "end": r["end_date"],
-                          "name": r["name"], "start_est": r["start_prov"] == "derived",
-                          "air_time": r["slot_start"] if r["slot_start"][2:] != "00" else None})
-    if not chain:
+    raw = _airing_raw(ch)
+    if not raw:
         return None
-    # 현행(라이브) 프로그램 = 자리의 마지막 종영 다음날부터 진행 중
-    cur_name = S._pgm_name(code)
-    last_end = chain[-1]["end"] if chain else None
-    since = None
-    if last_end and len(last_end) == 10:
-        try:
-            from datetime import date as _d, timedelta as _td
-            y, m, d = (int(x) for x in last_end.split("-"))
-            since = (_d(y, m, d) + _td(days=1)).isoformat()
-        except Exception:
-            since = last_end
-
-    # 프랜차이즈 이동 이력 — 같은 프로그램(쇼)이 과거 다른 시간대에서 방송된 이력
-    #   (예: 정치쇼 9시대→10시대→현재 7시대). 진행자를 떼어 쇼명으로 매칭하되,
-    #   떼면 채널 브랜드가 남는 정식명('최영주의 러브FM' 등)은 전체명을 정체성으로 써서
-    #   서로 다른 프로그램이 브랜드만으로 오묶이지 않게 한다.
-    _BRANDS = {"러브FM", "파워FM", "고릴라M", "픽채널"}
-
-    def _show_token(nm):
-        base = re.sub(r"\s*\((재|오전|오후)\)\s*$", "", (nm or "").strip())
-        core = base.split("의 ")[-1].strip() if "의 " in base else base
-        return base if core in _BRANDS else core   # 브랜드면 전체명이 곧 프로그램 정체성
-
-    tok = _show_token(cur_name)
-    franchise = []
-    if tok:
-        moved = {}
-        for r in airings:
-            if r.get("analysis_slot", "")[:2] == slot_hh:      # 현재 자리는 위 chain에 있음
-                continue
-            if _show_token(r["name"]) == tok:
-                asl = r.get("analysis_slot", "")
-                moved.setdefault(f"{asl[:2]}:{asl[2:]}", []).append(
-                    {"start": r["start_date"] or None, "end": r["end_date"], "name": r["name"]})
-        for hhmm in sorted(moved):
-            franchise.append({"slot": hhmm, "airings": moved[hhmm]})
-
-    out = {
-        "channel": (meta.get("channel") or {}).get("label") or ch,
-        "slot": f"{slot}~{(meta.get('time_slot') or {}).get('end','')}".strip("~"),
-        "ended": chain,
-        "current": {"name": cur_name,
-                    "since_est": since,
-                    "note": "현행 방송분(종료일 없음, 진행 중)"},
-        "note": "종영분은 불변 이력. 시작일 start_est=true는 같은 자리 직전 편성 종료 다음날로 추정한 값.",
-    }
-    if franchise:
-        out["franchise_moved_from"] = franchise
-        out["franchise_note"] = f"'{tok}'는 과거 다른 시간대에서도 방송됨(시간대 이동 이력). 현재 자리는 위 slot."
-    return out
+    slot = (meta.get("time_slot") or {}).get("start") or ""
+    focus = {"name": S._pgm_name(code), "code": code,
+             "analysis_hour": slot[:2] if len(slot) >= 2 and slot[:2].isdigit() else None,
+             "time_slot": f"{slot}~{(meta.get('time_slot') or {}).get('end', '')}".strip("~")}
+    # 이 프로그램의 자리(analysis_hour)에 집중하되, 같은 쇼명이 있으면 다른 시간대 이력도 참고.
+    return {"channel": (meta.get("channel") or {}).get("label") or ch,
+            "focus_program": focus, **raw}
 
 
 def _p_flow(ent):

@@ -120,11 +120,21 @@ raas:airEndDate       a rdf:Property ; rdfs:label "방송 종료일(종영일)"@
 raas:startDateProvenance a rdf:Property ; rdfs:label "시작일 출처"@ko .
 raas:legacySeq        a rdf:Property ; rdfs:label "원본 편성코드(참고)"@ko .
 
-# 도메인 공리 — 시간 단위 편성 분석(정시 5분 뉴스 오프셋)
+# 도메인 공리 — 편성 이력 해석 규칙(LLM이 원자료에 적용). 코드가 아니라 여기 서술 → 확장은 TTL 수정.
 raas:HourSlotAnalysisAxiom a raas:DomainAxiom ;
     rdfs:label "시간 단위 편성 분석"@ko ;
     raas:appliesTo raas:L00 ;
     rdfs:comment "러브FM(AM)은 정시에 5분 뉴스가 편성돼 그 뒤 프로그램은 09:05~10:00처럼 5분 늦게 시작한다. 청취 분석은 시간 단위로 집계하므로 09:05 시작 편성도 09:00~10:00 자리로 처리한다(5분 뉴스 자체는 별도 분석하지 않음). 각 편성분의 실제 시작·종료시각은 slotStartTime/slotEndTime에 원본대로 보존하고, 분석 자리는 analysisSlotStart(정시)로 정규화한다. 시각이 다른 시간대로 이동한 경우(예: 정치쇼가 9시대→10시대→7시대로 이동)는 서로 다른 자리로 본다."@ko .
+
+raas:ContinuousSchedulingAxiom a raas:DomainAxiom ;
+    rdfs:label "24시간 연속 편성(빈 시간 없음)"@ko ;
+    raas:appliesTo raas:F00, raas:L00 ;
+    rdfs:comment "편성형 라디오 채널은 24시간 빈 시간 없이 연속 편성된다. 따라서 '어떤 시각에 방송 중인 프로그램'은 시작시각이 그 시각 이하인 프로그램 중 가장 늦게 시작한 것이다. 다시간 편성(예: OLDIES 20(재) 04:00~06:00)은 그 사이 모든 시간대(04시·05시)를 커버한다 — 시작 시간대에만 넣지 말고 다음 프로그램 시작 전까지 이어짐을 적용하라. 현행 프로그램 목록(start_time 포함)을 시각순으로 보면 각 시간대의 방송분을 이렇게 채울 수 있다. 시작 프로그램이 없는 시간대라도 '편성 없음'이 아니라 직전 시작 프로그램이 이어지는 것이다."@ko .
+
+raas:FranchiseRelocationAxiom a raas:DomainAxiom ;
+    rdfs:label "프로그램 시간대 이동"@ko ;
+    raas:appliesTo raas:F00, raas:L00 ;
+    rdfs:comment "같은 프로그램(쇼)이 시대에 따라 다른 시간대로 이동할 수 있다(예: 정치쇼가 오전 9시대→10시대→현재 7시대). 편성 이력에서 같은 쇼명이 여러 시간대(analysis_hour)에 나타나면 시간대 이동 이력으로 해석하라. 다만 'OOO의 러브FM/파워FM'처럼 진행자를 떼면 채널명만 남는 정식 프로그램명은 전체명이 곧 프로그램 정체성이다 — 채널명이 같다는 이유만으로 서로 다른 프로그램(최영주의 러브FM ≠ 이숙영의 러브FM)을 같은 쇼로 묶지 말 것."@ko .
 
 """
 
