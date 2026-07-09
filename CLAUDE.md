@@ -236,8 +236,6 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   field_lineage_map(필드 계보) · decisions(의사결정 로그) · RAAS_*(제품·UX·지표 참고자료)
   (구 CP 스토리라인·briefing 설계문서 storyline_cp_*·BRIEFING_DESIGN·PHASE5_INTEGRATION_PLAN·
   LOCAL_GUIDE는 2026-07 기능 은퇴와 함께 삭제)
-- 답변 규칙: `data/raas_rules.md`(명칭·지표 4범주·프로그램명 표기·수치 포맷·WoW 기준 등)를
-  `raas_grounding.style_policy_block()`이 [서비스 답변 규칙]으로 매 답변 주입(디스크 로드, 편집 즉시 반영).
 - 서버 재시작(윈도우): 포트 5000 종료 후 `nohup python raas_server.py > server_restart.log 2>&1 &`,
   py 코드 변경 시 재시작 필요. HTML/JS는 디스크 서빙이라 재시작 불필요.
 - 서버 라우팅: RAASHandler의 `GET_EXACT`/`GET_PREFIX`/`POST_EXACT` 테이블 — 엔드포인트 추가는
