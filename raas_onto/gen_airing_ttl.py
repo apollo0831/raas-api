@@ -42,23 +42,20 @@ for r in current:
 def hhmm_to_min(s):
     return int(s[:2]) * 60 + int(s[2:])
 
-# 자리 정규화: 채널 내 시작시각을 ≤5분 간격으로 클러스터링(행정 버퍼 흡수).
-#   16:00/16:05, 12:00/12:05, 18:00/18:05 → 동일 자리. 60분·30분 이동은 분리 유지.
-BUFFER_MIN = 5
-canon = {}  # (chn, start) -> canonical start
-for chn in {r["chn"] for r in ended}:
-    starts = sorted({r["start"] for r in ended if r["chn"] == chn}, key=hhmm_to_min)
-    anchor = None
-    for s in starts:
-        if anchor is None or hhmm_to_min(s) - hhmm_to_min(anchor) > BUFFER_MIN:
-            anchor = s
-        canon[(chn, s)] = anchor
+# 자리 정규화 = 정시 내림(floor-to-hour). 도메인 규칙:
+#   러브FM(AM)은 정시 5분 뉴스 후 편성돼 09:05~10:00처럼 5분 늦게 시작하나,
+#   청취 분석은 시간 단위(09:00~10:00)로 집계한다(5분 뉴스는 별도 분석 안 함).
+#   → 실제 편성시각(slotStartTime)은 원본 보존, 분석 자리(analysis_slot)는 정시로 정규화.
+#   09시/10시는 다른 시간대로 분리(정치쇼처럼 시대별 시간대 이동을 그대로 반영),
+#   :05 뉴스 오프셋(16:05→16:00 등)은 정시로 흡수.
+def floor_hour(hhmm):
+    return hhmm[:2] + "00"   # "0905" → "0900", "2030" → "2000"
 
-# 자리 = (채널, 정규화 시작시각). 종료일 순 정렬 → 시작일 유도(직전 종료+1)
+# 자리 = (채널, 분석 정시). 종료일 순 정렬 → 시작일 유도(직전 종료+1)
 slots = defaultdict(list)
 for r in ended:
-    r["canon_start"] = canon[(r["chn"], r["start"])]
-    slots[(r["chn"], r["canon_start"])].append(r)
+    r["analysis_slot"] = floor_hour(r["start"])
+    slots[(r["chn"], r["analysis_slot"])].append(r)
 
 anomalies = []
 for key, lst in slots.items():
@@ -101,7 +98,8 @@ PRE = """@prefix raas: <http://raas.sbs.co.kr/onto#> .
 #################################################################
 # 프로그램 편성 이력 (ProgramAiring) — 종영분 = 불변 사실
 #   출처: 종방프로그램.csv (SBS 편성). 종료일=권위, 시작일=유도(같은 자리 직전 종료+1일).
-#   자리(slot)=(채널, 시작시각). SEQ는 시대별로 드리프트하므로 legacySeq(참고)로만 보존.
+#   자리(slot)=(채널, 분석 정시). 실제 편성시각은 slotStartTime/End에 원본 보존, 분석은 정시.
+#   SEQ는 시대별로 드리프트하므로 legacySeq(참고)로만 보존.
 #   현행 방송분은 여기 없음 — 라이브(broadplan) 데이터가 소유(가변 종료).
 #################################################################
 
@@ -111,13 +109,22 @@ raas:ProgramAiring a rdfs:Class ;
 
 raas:inChannel        a rdf:Property ; rdfs:label "방송 채널"@ko .
 raas:airProgramName   a rdf:Property ; rdfs:label "프로그램명"@ko .
-raas:slotStartTime    a rdf:Property ; rdfs:label "편성 시작시각(HHMM)"@ko .
-raas:slotEndTime      a rdf:Property ; rdfs:label "편성 종료시각(HHMM)"@ko .
+raas:slotStartTime    a rdf:Property ; rdfs:label "편성 시작시각(HHMM, 실제)"@ko ;
+    rdfs:comment "실제 편성 시작시각. 러브FM은 정시 5분 뉴스 후라 :05로 시작할 수 있음(예: 0905)."@ko .
+raas:slotEndTime      a rdf:Property ; rdfs:label "편성 종료시각(HHMM, 실제)"@ko .
+raas:analysisSlotStart a rdf:Property ; rdfs:label "분석 자리 시각(정시)"@ko ;
+    rdfs:comment "청취 분석용 정시 정규화(시작시각 정시 내림). 09:05 편성도 09:00으로 집계."@ko .
 raas:airStartDate     a rdf:Property ; rdfs:label "방송 시작일(유도)"@ko ;
     rdfs:comment "같은 자리 직전 편성 종료 다음날로 추정. 자리 최초 기록분은 미상."@ko .
 raas:airEndDate       a rdf:Property ; rdfs:label "방송 종료일(종영일)"@ko .
 raas:startDateProvenance a rdf:Property ; rdfs:label "시작일 출처"@ko .
 raas:legacySeq        a rdf:Property ; rdfs:label "원본 편성코드(참고)"@ko .
+
+# 도메인 공리 — 시간 단위 편성 분석(정시 5분 뉴스 오프셋)
+raas:HourSlotAnalysisAxiom a raas:DomainAxiom ;
+    rdfs:label "시간 단위 편성 분석"@ko ;
+    raas:appliesTo raas:L00 ;
+    rdfs:comment "러브FM(AM)은 정시에 5분 뉴스가 편성돼 그 뒤 프로그램은 09:05~10:00처럼 5분 늦게 시작한다. 청취 분석은 시간 단위로 집계하므로 09:05 시작 편성도 09:00~10:00 자리로 처리한다(5분 뉴스 자체는 별도 분석하지 않음). 각 편성분의 실제 시작·종료시각은 slotStartTime/slotEndTime에 원본대로 보존하고, 분석 자리는 analysisSlotStart(정시)로 정규화한다. 시각이 다른 시간대로 이동한 경우(예: 정치쇼가 9시대→10시대→7시대로 이동)는 서로 다른 자리로 본다."@ko .
 
 """
 
@@ -134,6 +141,7 @@ for key in sorted(slots.keys()):
         b.append(f'    raas:airProgramName "{esc(r["name"])}"@ko ;')
         b.append(f'    raas:slotStartTime "{r["start"]}" ;')
         b.append(f'    raas:slotEndTime "{r["end_t"]}" ;')
+        b.append(f'    raas:analysisSlotStart "{r["analysis_slot"]}" ;')
         if r["start_d"]:
             b.append(f'    raas:airStartDate "{r["start_d"].isoformat()}" ;')
         b.append(f'    raas:startDateProvenance "{r["start_prov"]}" ;')

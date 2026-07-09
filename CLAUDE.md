@@ -178,9 +178,12 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
 
 ### 프로그램 편성 이력 = 온톨로지(불변 사실)
 종영 프로그램의 편성 연혁은 `raas_onto/raas_ontology_airing.ttl`의 `raas:ProgramAiring`에 박제
-(과거는 불변). 자리(slot)=**(채널, 시작시각)** — SEQ는 시대별로 드리프트하므로 `legacySeq`(참고)로만
-보존, 시작시각 ±5분 버퍼는 같은 자리로 병합. **종료일=권위**(CSV), **시작일=유도**(같은 자리 직전
-편성 종료+1일, `startDateProvenance`). 현행 방송분은 여기 없음(라이브 소유·가변 종료).
+(과거는 불변). 자리(slot)=**(채널, 분석 정시)** — SEQ는 시대별로 드리프트하므로 `legacySeq`(참고)로만
+보존. **분석은 시간 단위**: 러브FM은 정시 5분 뉴스 후 편성돼 09:05~10:00처럼 시작하지만 09:00 자리로
+집계(`raas:HourSlotAnalysisAxiom`, 5분 뉴스는 별도 분석 안 함). **실제 편성시각은 `slotStartTime`/
+`slotEndTime`에 원본 보존**, 분석 자리는 `analysisSlotStart`(정시). 시각이 다른 시간대로 이동한 경우
+(정치쇼 9시대→10시대→7시대)는 서로 다른 자리로 본다. **종료일=권위**(CSV), **시작일=유도**(같은 자리
+직전 편성 종료+1일, `startDateProvenance`). 현행 방송분은 여기 없음(라이브 소유·가변 종료).
 - 어댑터: `get_program_airings(channel_code, name_contains)` / `get_program_history_block(...)`
 - grounding provider: `program_history`(program scope) — 자리 승계 체인 + 현행 결합
 - TTL 재생성: `종방프로그램.csv`(CHN/SEQ/PGM_NAME/START·END_TIME/LASTDAY) → 생성 스크립트로 갱신,

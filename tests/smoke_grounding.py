@@ -207,11 +207,27 @@ check("영스트리트 역대 4대 승계", [a["name"] for a in _air],
       ["정소민의 영스트리트", "이준의 영스트리트", "웬디의 영스트리트", "권은비의 영스트리트"])
 check_true("시작일 유도(직전 종료+1): 이준=2019-12-16",
            next((a["start_date"] for a in _air if a["name"] == "이준의 영스트리트"), "") == "2019-12-16")
-# 버퍼(±5분) 병합으로 자리 연속성 복원 — 어예진 방과후 목돈연구소가 지상렬 뒤 승계
+# 정시 정규화(floor-to-hour): :05 뉴스 오프셋 흡수 — 어예진(16:00)이 지상렬(16:05) 뒤 승계
 _l1600 = get_adapter().get_program_airings(channel_code="L00", name_contains="어예진")
-check_true("16:00/16:05 버퍼병합 → 어예진 시작일 유도됨",
+check_true("16시 정시병합 → 어예진 시작일 유도됨",
            bool(_l1600) and _l1600[0]["start_date"] == "2025-04-07",
            f"got={_l1600 and _l1600[0].get('start_date')}")
+# 실제 편성시각 보존(러브FM :05 뉴스 오프셋) + 분석 자리는 정시
+_jc = get_adapter().get_program_airings(channel_code="L00", name_contains="정치쇼")
+_jc0 = next((r for r in _jc if r["name"] == "정치쇼"), {})
+check("정치쇼 실제시각 0905 보존 / 분석자리 0900",
+      (_jc0.get("slot_start"), _jc0.get("analysis_slot")), ("0905", "0900"))
+# 09시/10시 분리 — 정치쇼가 9시대→10시대로 이동한 시대차이를 다른 자리로 반영
+check("이재익의 정치쇼는 10시 자리(시대 이동)",
+      next((r["analysis_slot"] for r in _jc if r["name"] == "이재익의 정치쇼"), None), "1000")
+# 도메인 공리: 시간 단위 분석(5분 뉴스 오프셋)이 러브FM에 적용
+check_true("온톨로지: L00에 '시간 단위 편성 분석' 공리",
+           any("시간 단위" in ax.get("label", "") for ax in get_adapter().get_domain_axioms("L00")))
+# provider가 실제 편성시각(air_time)도 함께 노출
+_phm = G._p_program_history({"code": "M07"}) or {}
+check_true("program_history air_time 보존(0905)",
+           any(e.get("air_time") == "0905" for e in _phm.get("ended", [])),
+           f"ended={_phm.get('ended')}")
 # provider: 프로그램 자리의 역대 편성 + 현행 결합
 _ph = G._p_program_history({"code": "F12"}) or {}
 check_true("program_history: 종영 4편 + 현행 반환",

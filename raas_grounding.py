@@ -664,20 +664,16 @@ def _p_program_history(ent):
         return None
     ch = ((meta.get("channel") or {}).get("code")) or ""
     slot = (meta.get("time_slot") or {}).get("start") or ""   # "20:00"
-    slot_min = None
-    if len(slot) == 5 and slot[:2].isdigit():
-        slot_min = int(slot[:2]) * 60 + int(slot[3:])
+    slot_hh = slot[:2] if len(slot) >= 2 and slot[:2].isdigit() else None  # 분석 자리=정시
     airings = a.get_program_airings(channel_code=ch) if ch else []
-    # 이 프로그램 자리와 시간대 근접(±10분, 버퍼 흡수) 종영분만
+    # 같은 분석 자리(정시)의 종영분만 — 러브FM :05 뉴스 오프셋도 정시로 정규화되어 매칭
     chain = []
     for r in airings:
-        ss = r["slot_start"]
-        if len(ss) != 4 or not ss.isdigit():
-            continue
-        m = int(ss[:2]) * 60 + int(ss[2:])
-        if slot_min is None or abs(m - slot_min) <= 10:
+        asl = r.get("analysis_slot") or ""
+        if slot_hh is None or asl[:2] == slot_hh:
             chain.append({"start": r["start_date"] or None, "end": r["end_date"],
-                          "name": r["name"], "start_est": r["start_prov"] == "derived"})
+                          "name": r["name"], "start_est": r["start_prov"] == "derived",
+                          "air_time": r["slot_start"] if r["slot_start"][2:] != "00" else None})
     if not chain:
         return None
     # 현행(라이브) 프로그램 = 자리의 마지막 종영 다음날부터 진행 중

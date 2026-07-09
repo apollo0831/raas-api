@@ -381,11 +381,13 @@ class OntologyAdapter:
             if name_contains and name_contains not in nm:
                 continue
             ss = o.value_str(o.get_one(iri, "raas:slotStartTime"))
+            asl = o.value_str(o.get_one(iri, "raas:analysisSlotStart")) or (ss[:2] + "00" if len(ss) == 4 else ss)
             out.append({
                 "channel": ch,
                 "name": nm,
-                "slot_start": ss,
+                "slot_start": ss,               # 실제 편성 시작시각(예: 0905)
                 "slot_end": o.value_str(o.get_one(iri, "raas:slotEndTime")),
+                "analysis_slot": asl,           # 분석 자리(정시, 예: 0900)
                 "start_date": o.value_str(o.get_one(iri, "raas:airStartDate")),
                 "end_date": o.value_str(o.get_one(iri, "raas:airEndDate")),
                 "start_prov": o.value_str(o.get_one(iri, "raas:startDateProvenance")),
@@ -393,9 +395,9 @@ class OntologyAdapter:
             })
 
         def _key(r):
-            ss = r["slot_start"]
-            smin = int(ss[:2]) * 60 + int(ss[2:]) if len(ss) == 4 and ss.isdigit() else 0
-            return (r["channel"], smin, r["end_date"])
+            a = r["analysis_slot"]
+            amin = int(a[:2]) * 60 + int(a[2:]) if len(a) == 4 and a.isdigit() else 0
+            return (r["channel"], amin, r["end_date"])
         out.sort(key=_key)
         return out
 
@@ -409,14 +411,16 @@ class OntologyAdapter:
         from collections import defaultdict as _dd
         by_slot = _dd(list)
         for r in rows:
-            by_slot[(r["channel"], r["slot_start"][:2] + ":" + r["slot_start"][2:])].append(r)
-        lines = ["[프로그램 편성 이력 — 종영분(불변). 시작일은 같은 자리 직전 편성 종료 다음날로 추정]"]
+            a = r["analysis_slot"]
+            by_slot[(r["channel"], a[:2] + ":" + a[2:])].append(r)
+        lines = ["[프로그램 편성 이력 — 종영분(불변). 자리=분석 정시(시간 단위), 시작일은 직전 편성 종료 다음날로 추정]"]
         for (ch, hhmm) in sorted(by_slot.keys()):
             chn = CH.get(ch, ch)
             lines.append(f"· {chn} {hhmm} 자리:")
             for r in by_slot[(ch, hhmm)]:
                 sd = r["start_date"] or "(이전 미상)"
-                lines.append(f"   {sd} ~ {r['end_date']}  {r['name']}")
+                real = f" (실제 {r['slot_start'][:2]}:{r['slot_start'][2:]} 시작)" if r["slot_start"][2:] != "00" else ""
+                lines.append(f"   {sd} ~ {r['end_date']}  {r['name']}{real}")
         return "\n".join(lines)
 
     def get_metric_definitions_block(self) -> str:
