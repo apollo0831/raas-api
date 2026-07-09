@@ -860,5 +860,87 @@ raas:Col_live_yn a raas:LookupColumn ;
 
 
 # =============================================================================
+# 참여 지표 (문자 SMS · 고릴라 공감로그 GG) — SUMMARY_INDEX_02, 프로그램별 일자별(평일)
+#   _WR=작성자(참여자) 수, _RATIO=1인당 참여횟수(건수/참여자수), TOTAL=SMS+GG 합계
+# =============================================================================
+raas:Ratio a raas:MeasureType ;
+    rdfs:label "비율(1인당 등)"@ko .
+
+raas:SMSParticipation a raas:Metric ;
+    rdfs:label "문자 참여"@ko ;
+    raas:altLabel "SMS 참여"@ko, "문자 메시지"@ko ;
+    raas:unit "건" ;
+    raas:hasMeasureType raas:Count ;
+    raas:definition "프로그램에 청취자가 보낸 문자(SMS) 메시지 참여"@ko ;
+    raas:dictionarySection "E. participation" .
+
+raas:Part_SMS a raas:MetricVariant ;
+    rdfs:label "문자 참여 수"@ko ;
+    rdfs:comment "일간 프로그램별 문자(SMS) 참여 건수"@ko ;
+    raas:ofMetric raas:SMSParticipation ; raas:granularity raas:Day ;
+    raas:fieldName "SMS" .
+
+raas:Part_SMS_WR a raas:MetricVariant ;
+    rdfs:label "문자 참여자 수"@ko ;
+    rdfs:comment "문자를 보낸 고유 작성자(참여자) 수 — 접미사 _WR=작성자"@ko ;
+    raas:ofMetric raas:SMSParticipation ; raas:granularity raas:Day ;
+    raas:fieldName "SMS_WR" .
+
+raas:Part_SMS_RATIO a raas:MetricVariant ;
+    rdfs:label "문자 1인당 참여"@ko ;
+    rdfs:comment "1인당 문자 참여 횟수 = SMS / SMS_WR — 접미사 _RATIO=1인당"@ko ;
+    raas:ofMetric raas:SMSParticipation ; raas:granularity raas:Day ;
+    raas:hasMeasureType raas:Ratio ; raas:unit "회/인" ;
+    raas:fieldName "SMS_RATIO" .
+
+raas:GGParticipation a raas:Metric ;
+    rdfs:label "공감로그 참여"@ko ;
+    raas:altLabel "고릴라 공감로그"@ko, "공감 로그"@ko, "GG 참여"@ko ;
+    raas:unit "건" ;
+    raas:hasMeasureType raas:Count ;
+    raas:definition "고릴라 앱의 공감로그(GG) 참여 — 청취자가 남긴 공감 로그"@ko ;
+    raas:dictionarySection "E. participation" .
+
+raas:Part_GG a raas:MetricVariant ;
+    rdfs:label "공감로그 참여 수"@ko ;
+    rdfs:comment "일간 프로그램별 공감로그(GG) 참여 건수"@ko ;
+    raas:ofMetric raas:GGParticipation ; raas:granularity raas:Day ;
+    raas:fieldName "GG" .
+
+raas:Part_GG_WR a raas:MetricVariant ;
+    rdfs:label "공감로그 참여자 수"@ko ;
+    rdfs:comment "공감로그를 남긴 고유 작성자(참여자) 수 — 접미사 _WR=작성자"@ko ;
+    raas:ofMetric raas:GGParticipation ; raas:granularity raas:Day ;
+    raas:fieldName "GG_WR" .
+
+raas:Part_GG_RATIO a raas:MetricVariant ;
+    rdfs:label "공감로그 1인당 참여"@ko ;
+    rdfs:comment "1인당 공감로그 참여 횟수 = GG / GG_WR — 접미사 _RATIO=1인당"@ko ;
+    raas:ofMetric raas:GGParticipation ; raas:granularity raas:Day ;
+    raas:hasMeasureType raas:Ratio ; raas:unit "회/인" ;
+    raas:fieldName "GG_RATIO" .
+
+raas:TotalParticipation a raas:Metric ;
+    rdfs:label "합계 참여(문자+공감로그)"@ko ;
+    raas:altLabel "총 참여"@ko ;
+    raas:unit "건" ;
+    raas:hasMeasureType raas:Count ;
+    raas:definition "문자와 공감로그 참여를 합한 총 참여"@ko ;
+    raas:dictionarySection "E. participation" .
+
+raas:Part_TOTAL a raas:MetricVariant ;
+    rdfs:label "합계 참여 수"@ko ;
+    rdfs:comment "문자+공감로그 합계 참여 건수 = GG + SMS"@ko ;
+    raas:ofMetric raas:TotalParticipation ; raas:granularity raas:Day ;
+    raas:fieldName "TOTAL" .
+
+raas:Part_TOTAL_WR a raas:MetricVariant ;
+    rdfs:label "합계 참여자 수"@ko ;
+    rdfs:comment "문자+공감로그 합계 참여자 수 = GG_WR + SMS_WR"@ko ;
+    raas:ofMetric raas:TotalParticipation ; raas:granularity raas:Day ;
+    raas:fieldName "TOTAL_WR" .
+
+
+# =============================================================================
 # 끝
 # =============================================================================

@@ -485,6 +485,59 @@ def get_history_series(code: str, metric: str) -> list:
             out.append((d, v))
     return sorted(out)
 
+def get_history_source() -> str:
+    return _history_feed.source()
+
+
+# ── 참여(문자 SMS · 공감로그 GG) 아카이브 (SUMMARY_INDEX_02, 과거 1년, 하루 1회) ──
+# 프로그램별 일자별 참여 — 평일·비공휴일만(원천 쿼리 필터). 출력=키 long+지표 wide.
+# 지표: SMS·GG(참여 건수), SMS_WR·GG_WR(참여자수, _WR=작성자), SMS_RATIO·GG_RATIO(1인당),
+#   TOTAL(=GG+SMS)·TOTAL_WR(=GG_WR+SMS_WR). 필드 정의는 온톨로지(raas:*Participation).
+ENGAGE_METRICS = ("SMS", "GG", "TOTAL", "SMS_WR", "GG_WR", "TOTAL_WR", "SMS_RATIO", "GG_RATIO")
+
+_ENGAGE_SPL = r"""search index=SUMMARY_INDEX_02 earliest=-365d latest=@d
+| lookup HOLIDAY_0 HOLIDAY_DAY AS date_mday, HOLIDAY_WEEK AS date_wday, HOLIDAY_MONTH AS date_month, HOLIDAY_YEAR AS date_year output HOLIDAY_CHECK
+| fillnull value="no" HOLIDAY_CHECK
+| search date_wday="monday" OR date_wday="tuesday" OR date_wday="wednesday" OR date_wday="thursday" OR date_wday="friday" HOLIDAY_CHECK = "no"
+| eval DATE = strftime(_time, "%Y/%m/%d")
+| eval SMS_RATIO=round(SMS/SMS_WR,1)
+| eval GG_RATIO=round(GG/GG_WR,1)
+| eval TOTAL = GG + SMS
+| eval TOTAL_WR = GG_WR + SMS_WR
+| rename SEQ as PGM_CODE
+| table DATE, PGM_CODE, SMS, GG, SMS_WR, GG_WR, SMS_RATIO, GG_RATIO, TOTAL, TOTAL_WR"""
+
+def _load_engagement():
+    """참여 아카이브 조회 후 {PGM_CODE: {DATE: row}} 인덱싱(로드 시 1회, 아카이브와 동일 패턴)."""
+    try:
+        rows = splunk_search(_ENGAGE_SPL, timeout=120)
+    except Exception as e:
+        print(f"  [engagement] 참여 데이터 조회 실패: {e}")
+        return {}, "error"
+    idx: dict = {}
+    for r in rows:
+        code = (r.get("PGM_CODE") or "").strip().upper()
+        date = (r.get("DATE") or "").strip()
+        if code and date:
+            idx.setdefault(code, {})[date] = r
+    return idx, "splunk"
+
+_engage_feed = Feed("engagement", _load_engagement, daily_at="07:15")
+
+def get_engagement_index() -> dict:
+    """참여 인덱스 {PGM_CODE: {DATE: {SMS,GG,...}}} (일일 캐시)."""
+    return _engage_feed.get() or {}
+
+def get_engagement_series(code: str, metric: str) -> list:
+    """코드+지표의 참여 시계열 [(DATE, float)] 오름차순. metric ∈ ENGAGE_METRICS."""
+    out = []
+    for d, r in (get_engagement_index().get((code or "").upper()) or {}).items():
+        v = _fn(r.get(metric))
+        if v is not None:
+            out.append((d, v))
+    return sorted(out)
+
+
 def get_history_series_merged(code: str, metric: str) -> list:
     """장기 아카이브 + 상세 KPI 병합 시계열 [(DATE, float)].
        메인 소스는 상세 KPI(raas_kpi_latest, 더 정교) — 겹치는 날짜는 상세 KPI 값이 우선.

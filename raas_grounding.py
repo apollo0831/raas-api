@@ -316,6 +316,9 @@ _EXTRACT_FIELDS = {
     "real_rate": "실청취율", "deep_rate": "깊은청취율", "engage_rate": "참여율",
     "habit_rate": "습관형성률", "dau_1min": "1분이상청취", "dau_10min": "10분이상청취",
     "d1_ret": "D1유지율", "d7_ret": "D7유지율", "w1_ret": "W1유지율", "m1_ret": "M1유지율",
+    "SMS": "문자참여수", "GG": "공감로그참여수", "TOTAL": "합계참여수",
+    "SMS_WR": "문자참여자수", "GG_WR": "공감로그참여자수", "TOTAL_WR": "합계참여자수",
+    "SMS_RATIO": "문자1인당참여", "GG_RATIO": "공감로그1인당참여",
 }
 _EXTRACT_SYS = (
     "너는 RAAS 데이터 추출 요청 파서다. 사용자의 자연어 추출 요청을 JSON으로만 응답한다.\n"
@@ -382,9 +385,12 @@ def build_extract(question: str, overlay_ctx=None) -> dict:
     # 값 인덱스: (code,field) → {date: val}
     import raas_datasource as DSRC
     hist_metrics = set(_HIST_METRICS)
+    engage_metrics = set(DSRC.ENGAGE_METRICS)
     def _series(code, field):
         if field in hist_metrics:                     # 장기 4종은 아카이브 병합
             return dict((d.replace("-", "/"), v) for d, v in DSRC.get_history_series_merged(code, field))
+        if field in engage_metrics:                   # 참여(SMS·GG 등)는 참여 아카이브
+            return dict((d.replace("-", "/"), v) for d, v in DSRC.get_engagement_series(code, field))
         out = {}
         for r in rows:
             if r.get("PGM_CODE") == code:
@@ -921,6 +927,14 @@ def _wants_today_lineup(q: str) -> bool:
     return any(a in t for a in _TODAY_SIGNAL) and any(b in t for b in _LINEUP_SIGNAL)
 
 
+# 문자(SMS)·공감로그(GG) 참여 — '참여율'(engage_rate, 청취 몰입)과 구분되게 신호는 명시 어휘만
+_ENGAGE_SIGNAL = ("문자", "sms", "공감로그", "공감 로그", "작성자", "1인당")
+
+def _wants_engagement(q: str) -> bool:
+    """문자·공감로그 참여 질의 → 참여 provider 강제 포함(과거 1년 프로그램별 SMS·GG)."""
+    return any(s in (q or "").lower() for s in _ENGAGE_SIGNAL)
+
+
 _EDITORIAL_SIGNAL = ("편성 변화", "편성변화", "편성 이력", "편성이력", "편성 연혁", "편성연혁",
                      "편성 개편", "편성개편", "편성 변천", "편성변천", "과거 편성", "예전 편성",
                      "예전 프로그램", "이전 프로그램", "과거 프로그램", "역대 프로그램", "역대 편성",
@@ -1020,6 +1034,52 @@ def _p_today_lineup(ent):
                      "오늘은 아직 미집계인 측정 지표(DAU 등)의 '데이터 없음'은 언급하지 말 것.")}
 
 
+_ENGAGE_FIELDS = ("SMS", "GG", "TOTAL", "SMS_WR", "GG_WR", "TOTAL_WR", "SMS_RATIO", "GG_RATIO")
+
+
+def _p_engagement(ent):
+    """[참여] 프로그램별 문자(SMS)·공감로그(GG) 참여 — 과거 1년(평일). 정의는 온톨로지.
+       단일 프로그램=최근 일자별 시계열, 전체/채널=최신일 프로그램별 스냅샷(순위·비교)."""
+    import raas_datasource as DSRC
+    idx = DSRC.get_engagement_index()
+    if not idx:
+        return None
+    code = ent.get("code")
+    allp = ent.get("all_programs") or code in (None, "T00", "")
+    prefixes = _CH_PREFIX.get(code) if code else None
+    if allp:
+        codes = [c for c in idx if not c.endswith("00")]
+    elif prefixes:
+        codes = [c for c in idx if c.startswith(prefixes) and not c.endswith("00")]
+    else:
+        codes = [code] if code in idx else []
+    if not codes:
+        return None
+    defs = _metric_def_lines(list(_ENGAGE_FIELDS))
+    note = ("문자·공감로그 참여(평일만). _WR=참여자(작성자) 수, _RATIO=1인당 참여횟수(건수/참여자수), "
+            "TOTAL=SMS+GG. 정의는 metric_defs 참조.")
+    if len(codes) > 1:                                    # 전체/채널 → 최신일 프로그램별 스냅샷
+        latest = max((d for c in codes for d in idx.get(c, {})), default=None)
+        progs = []
+        for c in codes:
+            r = idx.get(c, {}).get(latest)
+            if not r:
+                continue
+            rec = {"code": c, "name": _resolve_name(c)}
+            for f in _ENGAGE_FIELDS:
+                if r.get(f) not in (None, ""):
+                    rec[f] = r[f]
+            progs.append(rec)
+        return {"as_of": latest, "programs": progs, "metric_defs": defs, "note": note}
+    c = codes[0]                                          # 단일 프로그램 → 최근 일자별 시계열
+    lb = ent.get("lookback") or 0
+    dates = sorted(idx.get(c, {}).keys())
+    win = dates[-lb:] if lb > 0 else dates[-20:]
+    series = [dict({"date": d}, **{f: idx[c][d][f] for f in _ENGAGE_FIELDS
+                                   if idx[c][d].get(f) not in (None, "")}) for d in win]
+    return {"code": c, "name": _resolve_name(c), "series": series, "metric_defs": defs, "note": note}
+
+
 PROVIDERS = [
     {"name": "program_kpi", "needs": "program",
      "desc": "프로그램의 최신 핵심 KPI 스냅샷(DAU/WAU/MAU·신규·복귀·이탈·실청취·깊은청취·유지율과 증감)",
@@ -1033,6 +1093,9 @@ PROVIDERS = [
     {"name": "today_lineup", "needs": "program",
      "desc": "오늘(진행 중) 프로그램별 게스트·보이는라디오 편성 — 상세 KPI 배치가 아직 못 담은 당일. '오늘 게스트 누구·오늘 프로그램별 출연/보라 편성' 등 오늘자 편성 조회",
      "fetch": _p_today_lineup},
+    {"name": "engagement", "needs": "program",
+     "desc": "프로그램별 문자(SMS)·공감로그(GG) 참여(과거 1년, 평일) — 참여 건수·참여자수(_WR)·1인당(_RATIO)·합계(TOTAL). '컬투쇼 문자 참여·공감로그 몇 건·프로그램별 참여 순위·1인당 참여' 등",
+     "fetch": _p_engagement},
     {"name": "field_projection", "needs": "program",
      "desc": "질문이 지목한 필드(지표+속성)를 일자별 표로 묶음 — 특정 필드 콕 집기/지표+속성 혼합('DAU와 게스트 일자별') 대응",
      "fetch": _p_field_projection},
@@ -1866,7 +1929,9 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         _m = _assemble_meta(question, overlay_ctx)
         if _m.get("ok"):
             return _m
-    rank_spec = _detect_ranking(question)
+    # 참여(문자·공감로그) 순위는 KPI 랭킹(program_ranking, DAU 기준)이 아니라 참여 provider가 담당
+    #   ('공감로그 참여 순위'가 DAU로 정렬되던 문제 방지). 전체 스냅샷을 주고 LLM이 정렬.
+    rank_spec = None if _wants_engagement(question) else _detect_ranking(question)
     if rank_spec:
         _r = _assemble_ranking(question, rank_spec, overlay_ctx)
         if _r.get("ok"):
@@ -1899,6 +1964,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         names = ["long_history"] + names     # 과거 연도·장기 질의는 아카이브 반드시 포함(편성 연혁은 제외)
     if _wants_today_lineup(question) and "today_lineup" not in names:
         names = ["today_lineup"] + names      # '오늘 게스트/편성' 질의는 당일 broadplan 반드시 포함
+    if _wants_engagement(question) and "engagement" not in names:
+        names = ["engagement"] + names        # '문자·공감로그 참여' 질의는 참여 데이터 반드시 포함
     if edit:
         # 편성 연혁 질의는 편성 전용 맥락으로 확정 — KPI·시계열 provider가 섞이면 LLM이 편성
         #   서술 대신 '데이터 없음' KPI 프레임으로 새는 걸 방지(Haiku 선택 비결정성 제거).
