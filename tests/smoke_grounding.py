@@ -195,6 +195,17 @@ print("── 5.4 데이터 추출(extract) ────────────
 check_true("추출 감지: '프로그램별 DAU 뽑아줘'", G.detect_extract("파워FM 프로그램별 DAU 데이터 뽑아줘"))
 check_true("추출 감지: '엑셀로 다운로드'", G.detect_extract("이번주 DAU 엑셀로 다운로드"))
 check_true("추출 오탐 방지: '어제 DAU는?'", not G.detect_extract("어제 DAU는?"))
+# 대량 덤프 의도('전부'+'일자별/프로그램별')도 추출 경로 — '보여줘'라도(과거 '데이터 없음' 회귀 방지)
+check_true("추출 감지: '전체 프로그램별 일자별 전부 보여줘'",
+           G.detect_extract("25년 12월 전체 프로그램별 일자별 DAU 전부 보여줘"))
+check_true("추출 감지: '일별 청취자수 전부 보여줘'",
+           G.detect_extract("25년 12월 전체 프로그램별 일별 청취자수 전부 보여줘"))
+check_true("대량덤프 오탐 방지: '프로그램별 DAU 순위'(전부 없음)", not G.detect_extract("프로그램별 DAU 순위"))
+check_true("대량덤프 오탐 방지: '게스트 일자별로'(전부 없음)", not G.detect_extract("지난주 컬투쇼 게스트 일자별로"))
+# 2자리 연도('25년') 인식 → 아카이브 소환(4자리만 보던 회귀 방지)
+check_true("장기 신호(2자리): '25년 12월 DAU 추이'", G._wants_history("25년 12월 전체 DAU 추이"))
+check("연도 정규화 '25년'→2025", G._history_years("25년 12월 전체 DAU 추이"), ["2025"])
+check("연도 오탐 없음 '2025년'", G._history_years("2025년 DAU"), ["2025"])
 check_true("추출 지원 지표에 dau·이탈율", "dau" in G._EXTRACT_FIELDS and "churn_rate" in G._EXTRACT_FIELDS)
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})

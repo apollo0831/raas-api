@@ -295,10 +295,19 @@ def resolve_entities(question: str, default_code: str = None) -> dict:
 #     (환각 0). 광고·마케팅의 반복 데이터 추출 작업용.
 _EXTRACT_SIGNAL = ("뽑아", "추출", "내려받", "다운로드", "엑셀", "excel", "csv",
                    "표로", "데이터 받", "데이터를 받", "데이터 줘", "원본 데이터", "raw")
+# 대량 덤프 의도 — '전부/싹' + '일자별/프로그램별' 조합. per-program×일자별×기간(수백~수천 칸)은
+#   본질적으로 추출(표+엑셀 다운로드) 자리라 '뽑아' 없이 '보여줘'라도 추출 경로로 보낸다.
+#   단건('어제 DAU 보여줘')·순위('프로그램별 순위')는 두 마커 AND라 안 걸림.
+_BULK_MARK = ("전부", "싹", "몽땅", "다 보여", "전체 다")
+_BREAKDOWN_MARK = ("일자별", "일별", "날짜별", "매일", "프로그램별")
+
+def _wants_bulk_dump(question: str) -> bool:
+    q = question or ""
+    return any(b in q for b in _BULK_MARK) and any(d in q for d in _BREAKDOWN_MARK)
 
 def detect_extract(question: str) -> bool:
     t = (question or "").lower()
-    return any(s in t for s in _EXTRACT_SIGNAL)
+    return any(s in t for s in _EXTRACT_SIGNAL) or _wants_bulk_dump(question)
 
 # 추출 지원 지표(라벨→필드). 주간/월간은 _week/_mon, 장기 4종은 아카이브 병합 사용.
 _EXTRACT_FIELDS = {
@@ -877,11 +886,20 @@ _HIST_METRICS = ("dau", "dau_r7", "dau_r30", "dau_1min")   # 장기 아카이브
 _HIST_SIGNAL = ("작년", "재작년", "년 전", "년전", "장기", "역대", "수년", "몇 년", "연도별", "해 전")
 
 def _wants_history(q: str) -> bool:
-    """과거 연도(2015~2025)·장기 신호 → 장기 아카이브 provider 강제 포함."""
+    """과거 연도(2015~2025)·장기 신호 → 장기 아카이브 provider 강제 포함.
+       4자리('2025')·2자리('25년') 연도 모두 인식."""
     t = q or ""
-    if re.search(r"20(1[5-9]|2[0-5])", t):
+    if re.search(r"20(1[5-9]|2[0-5])", t) or re.search(r"(?<!\d)(1[5-9]|2[0-5])년", t):
         return True
     return any(s in t for s in _HIST_SIGNAL)
+
+
+def _history_years(q: str) -> list:
+    """질문에서 과거 연도(2015~2025)를 4자리로 정규화해 추출. '25년'→'2025'."""
+    t = q or ""
+    yrs = set(re.findall(r"20(?:1[5-9]|2[0-5])", t))
+    yrs |= {"20" + m for m in re.findall(r"(?<!\d)(1[5-9]|2[0-5])년", t)}
+    return sorted(yrs)
 
 
 _EDITORIAL_SIGNAL = ("편성 변화", "편성변화", "편성 이력", "편성이력", "편성 연혁", "편성연혁",
@@ -922,9 +940,9 @@ def _p_long_history(ent):
     for ym in sorted(monthly):
         lines.append(ym + "," + ",".join(str(monthly[ym].get(m, "")) for m in _HIST_METRICS))
     out = {"지표별 아카이브 범위": cov, "월평균(CSV)": "\n".join(lines)}
-    # 특정 연도 언급 → 그 해 일별(포커스 지표 1개, 최대 2개 연도)
+    # 특정 연도 언급 → 그 해 일별(포커스 지표 1개, 최대 2개 연도). '25년'(2자리)도 인식.
     q = ent.get("_question") or ""
-    yrs = sorted({y for y in re.findall(r"20(?:1[5-9]|2[0-5])", q)})[:2]
+    yrs = _history_years(q)[:2]
     if yrs:
         focus = next((f for f in (ent.get("focus_fields") or []) if f in _HIST_METRICS), "dau")
         for y in yrs:
