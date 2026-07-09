@@ -885,21 +885,29 @@ def _p_data_coverage(ent):
 _HIST_METRICS = ("dau", "dau_r7", "dau_r30", "dau_1min")   # 장기 아카이브 보유 4개 지표
 _HIST_SIGNAL = ("작년", "재작년", "년 전", "년전", "장기", "역대", "수년", "몇 년", "연도별", "해 전")
 
-def _wants_history(q: str) -> bool:
-    """과거 연도(2015~2025)·장기 신호 → 장기 아카이브 provider 강제 포함.
-       4자리('2025')·2자리('25년') 연도 모두 인식."""
+def _history_years(q: str) -> list:
+    """질문의 연도(2015~올해)를 4자리로 정규화해 추출. 4자리('2026')·2자리('26년') 모두.
+       상단 경계는 올해(동적) — 상세 KPI가 연중 일부만 커버해 '올해 초'도 아카이브 영역이라
+       현재 연도까지 인식해야 한다(2025 하드코딩 상단이 2026을 놓치던 회귀 방지)."""
     t = q or ""
-    if re.search(r"20(1[5-9]|2[0-5])", t) or re.search(r"(?<!\d)(1[5-9]|2[0-5])년", t):
+    cur = _dt.date.today().year
+    out = set()
+    for m in re.findall(r"20\d{2}", t):
+        if 2015 <= int(m) <= cur:
+            out.add(m)
+    for m in re.findall(r"(?<!\d)([12]\d)년", t):        # '26년' → 2026
+        y = 2000 + int(m)
+        if 2015 <= y <= cur:
+            out.add(str(y))
+    return sorted(out)
+
+
+def _wants_history(q: str) -> bool:
+    """연도(2015~올해)·장기 신호 → 장기 아카이브 provider 강제 포함."""
+    t = q or ""
+    if _history_years(t):
         return True
     return any(s in t for s in _HIST_SIGNAL)
-
-
-def _history_years(q: str) -> list:
-    """질문에서 과거 연도(2015~2025)를 4자리로 정규화해 추출. '25년'→'2025'."""
-    t = q or ""
-    yrs = set(re.findall(r"20(?:1[5-9]|2[0-5])", t))
-    yrs |= {"20" + m for m in re.findall(r"(?<!\d)(1[5-9]|2[0-5])년", t)}
-    return sorted(yrs)
 
 
 _EDITORIAL_SIGNAL = ("편성 변화", "편성변화", "편성 이력", "편성이력", "편성 연혁", "편성연혁",

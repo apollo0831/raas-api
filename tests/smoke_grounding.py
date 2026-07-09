@@ -202,10 +202,17 @@ check_true("추출 감지: '일별 청취자수 전부 보여줘'",
            G.detect_extract("25년 12월 전체 프로그램별 일별 청취자수 전부 보여줘"))
 check_true("대량덤프 오탐 방지: '프로그램별 DAU 순위'(전부 없음)", not G.detect_extract("프로그램별 DAU 순위"))
 check_true("대량덤프 오탐 방지: '게스트 일자별로'(전부 없음)", not G.detect_extract("지난주 컬투쇼 게스트 일자별로"))
-# 2자리 연도('25년') 인식 → 아카이브 소환(4자리만 보던 회귀 방지)
+# 연도 인식: 2자리·올해(2026)까지. 상세 KPI가 연중 일부만 커버 → 올해 초도 아카이브 영역
 check_true("장기 신호(2자리): '25년 12월 DAU 추이'", G._wants_history("25년 12월 전체 DAU 추이"))
 check("연도 정규화 '25년'→2025", G._history_years("25년 12월 전체 DAU 추이"), ["2025"])
 check("연도 오탐 없음 '2025년'", G._history_years("2025년 DAU"), ["2025"])
+# 올해(2026) 초 개별 프로그램 과거 질의 → 아카이브 소환(2025 상단 하드코딩이 2026 놓치던 회귀)
+check("연도 정규화 '26년'→2026(올해)", G._history_years("26년 1월 컬투쇼 DAU 일자별로"), ["2026"])
+check_true("'26년 1월 컬투쇼' → long_history 포함",
+           "long_history" in G.assemble("26년 1월 컬투쇼 롤링MAU 일자별로 보여줘",
+                                        overlay_ctx={"mode": "normal"}).get("providers_used", []))
+check("미래연도 가드 '2030년'", G._history_years("2030년 DAU"), [])
+check("과거범위밖 가드 '13년'", G._history_years("13년 데이터"), [])
 check_true("추출 지원 지표에 dau·이탈율", "dau" in G._EXTRACT_FIELDS and "churn_rate" in G._EXTRACT_FIELDS)
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
