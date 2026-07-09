@@ -575,6 +575,62 @@ def _p_channel_programs(ent):
     return {"as_of": latest, "programs": out} if out else None
 
 
+def _p_channel_history(ent):
+    """[채널 전용] 채널 전체의 시간대별 편성 이력 — 각 분석 자리(정시)마다
+       종영 프로그램 승계(온톨로지 raas:ProgramAiring, 불변) + 현행(라이브) 결합.
+       '러브FM 시간대별 편성 변화', '채널 편성 연혁' 등 채널 단위 편성 질의 근거."""
+    if ent.get("scope_kind") != "channel":
+        return None
+    code = ent.get("code") or ""
+    prefixes = _CH_PREFIX.get(code)
+    if not prefixes:
+        return None
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+    except Exception:
+        return None
+    # 종영분 — 분석 자리(정시)별 그룹
+    slots = {}   # "HH:MM" -> {"ended": [...], "current": [...]}
+    for r in a.get_program_airings(channel_code=code):
+        asl = r.get("analysis_slot") or ""
+        key = f"{asl[:2]}:{asl[2:]}"
+        slots.setdefault(key, {"ended": [], "current": []})["ended"].append(
+            {"start": r["start_date"] or None, "end": r["end_date"], "name": r["name"],
+             "air_time": r["slot_start"] if r["slot_start"][2:] != "00" else None,
+             "start_est": r["start_prov"] == "derived"})
+    # 현행 — 라이브 최신일 채널 프로그램(STIME으로 자리 판정). 같은 정시에 평일·주말 편성이
+    #   공존할 수 있어(예: 07시 평일 정치쇼 + 주말 드라이브뮤직) current는 리스트.
+    try:
+        rows = S._kpi_rows() or []
+        latest = max((r.get("DATE") for r in rows if r.get("DATE")), default=None)
+    except Exception:
+        rows, latest = [], None
+    seen = set()
+    for r in rows:
+        if r.get("DATE") != latest:
+            continue
+        c = (r.get("PGM_CODE") or "").upper()
+        st = str(r.get("STIME") or "")
+        nm = (r.get("PGM_NAME") or "").strip()
+        if (not c or c.endswith("00") or c in seen or not c.startswith(prefixes)
+                or len(st) != 4 or not st.isdigit() or not nm):
+            continue
+        seen.add(c)
+        key = f"{st[:2]}:00"
+        slots.setdefault(key, {"ended": [], "current": []})["current"].append(
+            {"name": nm, "code": c, "air_time": st if st[2:] != "00" else None})
+    if not slots:
+        return None
+    ordered = [{"slot": k, **slots[k]} for k in sorted(slots)]
+    return {
+        "channel": _resolve_name(code),
+        "slots": ordered,
+        "note": ("자리=분석 정시(시간 단위). 종영분은 불변 이력(시작일 start_est=추정), "
+                 "현행은 라이브. 러브FM :05 시작은 정시 5분 뉴스 후 편성(air_time=실제시각)."),
+    }
+
+
 def _p_metric_timeseries(ent):
     """의도 기반 슬라이싱(1D): 명시 기간>그만큼 / 추이 질의>전체(상한) / 원인·포인트 질의>최근 4주.
        전체 노이즈·토큰을 줄여 핵심 근거에 집중."""
@@ -874,6 +930,18 @@ def _wants_history(q: str) -> bool:
         return True
     return any(s in t for s in _HIST_SIGNAL)
 
+
+_EDITORIAL_SIGNAL = ("편성 변화", "편성변화", "편성 이력", "편성이력", "편성 연혁", "편성연혁",
+                     "편성 개편", "편성개편", "편성 변천", "편성변천", "과거 편성", "예전 편성",
+                     "예전 프로그램", "이전 프로그램", "과거 프로그램", "역대 프로그램", "역대 편성",
+                     "무슨 프로그램이 있었", "어떤 프로그램이 있었", "전임 프로그램")
+
+
+def _wants_editorial(q: str) -> bool:
+    """'편성 변화·이력·연혁·역대·예전 프로그램' 등 편성 연혁 의도.
+       채널 스코프에서 편성 이력 provider를 주경로로 세우고 KPI·아카이브 경쟁 제거."""
+    return any(s in (q or "") for s in _EDITORIAL_SIGNAL)
+
 def _p_long_history(ent):
     """장기 아카이브(최대 10년) 시계열 — dau·롤링WAU·롤링MAU·1분청취 4개 지표만.
        전체 기간은 월평균으로 다운샘플(토큰 절약), 질문에 특정 연도 언급 시 그 해 일별 첨부.
@@ -942,6 +1010,9 @@ PROVIDERS = [
     {"name": "channel_programs", "needs": "channel",
      "desc": "채널 소속 프로그램별 최신 KPI 나열 — '채널 내 프로그램 비교·순위·많이 하락한 프로그램' 질의(집계행만으론 답 불가)",
      "fetch": _p_channel_programs},
+    {"name": "channel_history", "needs": "channel",
+     "desc": "채널 전체의 시간대별 편성 이력 — 자리(정시)마다 역대 종영 프로그램 승계 + 현행. '채널 편성 변화·시간대별 편성 연혁·과거 편성표·언제부터 이 프로그램들' 등 채널 단위 편성 질의",
+     "fetch": _p_channel_history},
     {"name": "metric_timeseries", "needs": "program",
      "desc": "주요 지표 시계열(의도 기반: 추이 질의는 전체, 원인·포인트 질의는 최근 4주)",
      "fetch": _p_metric_timeseries},
@@ -1789,13 +1860,19 @@ def assemble(question: str, overlay_ctx=None) -> dict:
             ent["all_programs"] = True     # '위험한 프로그램' 등 → 소속 프로그램 나열 첨부
         ent["_general"] = True
     names = select_providers(question, ent)
+    # 편성 연혁 의도(채널) — 편성 이력을 주경로로, KPI 순위·DAU 아카이브는 경쟁이라 제거
+    edit = ent.get("scope_kind") == "channel" and _wants_editorial(question)
     if (ent.get("as_of_date") or ent.get("_general")) and "point_snapshot" not in names:
         names = ["point_snapshot"] + names   # 특정 날짜/안전망은 현황 스냅샷 반드시 포함
     if any(k in question for k in _COVERAGE_SIGNAL) and "data_coverage" not in names:
         names = ["data_coverage"] + names    # '언제부터/기간/보유' 질의는 실제 보유범위 반드시 포함
-    if _wants_history(question) and "long_history" not in names:
-        names = ["long_history"] + names     # 과거 연도·장기 질의는 아카이브 반드시 포함
-    if (ent.get("scope_kind") == "channel" and ("프로그램" in question or ent.get("all_programs"))
+    if _wants_history(question) and not edit and "long_history" not in names:
+        names = ["long_history"] + names     # 과거 연도·장기 질의는 아카이브 반드시 포함(편성 연혁은 제외)
+    if edit:
+        if "channel_history" not in names:
+            names = ["channel_history"] + names   # 편성 변화·연혁 질의는 편성 이력 반드시 주경로
+        names = [n for n in names if n not in ("channel_programs", "long_history")]
+    elif (ent.get("scope_kind") == "channel" and ("프로그램" in question or ent.get("all_programs"))
             and "channel_programs" not in names):
         names = ["channel_programs"] + names   # 채널 내 '프로그램'/'모든 프로그램' 질의는 소속 프로그램 행 반드시 포함
     if ((ent.get("is_trend") or ent.get("analytical")) and "period_events" not in names):

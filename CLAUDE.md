@@ -79,7 +79,7 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 | scope | 트리거 예시 | 데이터 |
 |-------|------------|--------|
 | **program** | "컬투쇼 어제 왜 빠졌어?", "영스트리트 역대 DJ" | provider 11종(KPI·시계열·흐름분해·코호트·편성·요일·개편·편성표·특일·편성이력) |
-| **channel** | "러브FM 어때?", "전사 트렌드" | 채널행(F00/L00/G00/P00/T00) — 프로그램 전용 provider 제외 |
+| **channel** | "러브FM 어때?", "전사 트렌드", "러브FM 시간대별 편성 변화" | 채널행(F00/L00/G00/P00/T00) + 채널 소속 프로그램 KPI(`channel_programs`)·시간대별 편성 이력(`channel_history`, 종영승계+현행). '편성 변화·연혁' 의도면 `_wants_editorial`이 편성이력을 주경로로 세우고 KPI·아카이브 경쟁 제거 |
 | **compare** | "파워FM vs 러브FM 비교", "채널별 핵심 지표 비교"(→4채널) | 엔티티 2~4개 KPI·시계열 나란히 |
 | **ranking** | "프로그램별 DAU 순위", "가장 많이 증가한 프로그램"(변화량 순위) | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬(`_chg`도 지원) |
 | **meta** | "어떤 지표 있나", "뭘 볼 수 있어" | 온톨로지 지표 카탈로그(`get_metric_definitions_block`) — `_detect_meta`/`_assemble_meta` |
@@ -185,7 +185,10 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
 (정치쇼 9시대→10시대→7시대)는 서로 다른 자리로 본다. **종료일=권위**(CSV), **시작일=유도**(같은 자리
 직전 편성 종료+1일, `startDateProvenance`). 현행 방송분은 여기 없음(라이브 소유·가변 종료).
 - 어댑터: `get_program_airings(channel_code, name_contains)` / `get_program_history_block(...)`
-- grounding provider: `program_history`(program scope) — 자리 승계 체인 + 현행 결합
+- grounding provider: `program_history`(program scope) — 자리 승계 체인 + 현행 결합 + 프랜차이즈
+  시간대 이동 이력(정치쇼 9시→10시→7시). `channel_history`(channel scope) — 채널 전체 시간대별
+  종영승계+현행(평일/주말 공존은 current 리스트). 'OOO의 러브FM' 등 채널 브랜드가 프로그램명인
+  정식명은 전체명으로 구분(프랜차이즈 오묶임 방지)
 - TTL 재생성: `종방프로그램.csv`(CHN/SEQ/PGM_NAME/START·END_TIME/LASTDAY) → 생성 스크립트로 갱신,
   빈 LASTDAY 행은 현행 방송분이므로 제외
 

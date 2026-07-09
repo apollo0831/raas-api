@@ -245,6 +245,21 @@ check_true("program_history: 채널 집계코드(F00)는 None",
            G._p_program_history({"code": "F00"}) is None)
 # 라이브 우선 이름 해석(TTL 낡아도 현행명) — F03 회귀 방지
 check("_pgm_name 라이브 우선(F03=파워 스테이션)", METRICS._pgm_name("F03"), "파워 스테이션")
+# 채널 편성 이력(channel scope) — 채널 전체 시간대별 종영승계 + 현행(평일/주말 공존)
+_chh = G._p_channel_history(G.resolve_entities("러브FM 시간대별 편성")) or {}
+check_true("channel_history 자리 반환(종영+현행)",
+           len(_chh.get("slots", [])) >= 10 and any(s.get("current") for s in _chh.get("slots", [])),
+           f"slots={len(_chh.get('slots', []))}")
+check_true("channel_history 07시 평일·주말 공존(current 리스트)",
+           any(s["slot"] == "07:00" and len(s.get("current", [])) >= 2 for s in _chh.get("slots", [])),
+           f"07:00={[s for s in _chh.get('slots',[]) if s['slot']=='07:00']}")
+# '편성 변화' 의도(채널) → channel_history 주경로, KPI·아카이브 경쟁 제거(과거 '데이터 없음' 회귀 방지)
+_edn = G.assemble("2023년부터 러브FM 시간대별 프로그램 편성 변화 알려줘",
+                  overlay_ctx={"mode": "normal"}).get("providers_used", [])
+check_true("'편성 변화' → channel_history 포함", "channel_history" in _edn, f"used={_edn}")
+check_true("'편성 변화' → channel_programs 배제", "channel_programs" not in _edn, f"used={_edn}")
+# 오탐 방지: '역대 최고 DAU'는 편성 의도 아님(KPI)
+check_true("오탐 방지: '역대 최고 DAU' 편성의도 아님", not G._wants_editorial("러브FM 역대 최고 DAU"))
 
 print("── 4.5 지표 용어→필드 + 기간 인지 시계열 ────────────")
 # '주간 참여율/유지율/습관형성률 추이 분석'이 시계열에 해당 필드가 없어 '데이터 없음'으로 답하던 버그
