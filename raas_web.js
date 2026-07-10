@@ -1170,14 +1170,12 @@ async function changePw(ev) {
 const QUICK_QUERIES = [
   // '이번 주 브리핑'은 우측 KPI 패널(주간 탭 + ✨ AI 요약)로 이전
   '지금 동시 청취자 몇 명이야?',
+  '오늘 프로그램별 게스트 누구야?',
   'RAAS에는 어떤 지표들이 있나',
-  '어제 MAU는?',
-  '이번 주 DAU 추이',
   '파워FM vs 러브FM 주간 신규유입 추이 비교',
-  '프로그램별 DAU 순위',
   '지난주 컬투쇼 게스트 일자별로',
-  '어제 프로그램별로 생방송/보라 편성정보 알려줘',
   '컬투쇼 코너 편성 알려줘',
+  '과거부터 러브FM 채널 시간대별로 프로그램 편성 변화 알려줘',
 ];
 
 // ────────────────────────────────────────────────
@@ -2099,7 +2097,35 @@ function _buildFeedbackBar(queryId) {
   return `<div class="feedback-bar" id="fb-${queryId}">
     <button class="fb-btn fb-good" onclick="sendFeedback(${queryId},1,this)">👍 도움됨</button>
     <button class="fb-btn fb-bad"  onclick="sendFeedback(${queryId},-1,this)">👎 아쉬움</button>
+    <button class="fb-btn fb-share" onclick="shareAnswer(${queryId},this)">↗ 공유</button>
   </div>`;
+}
+
+// 공유 링크 생성(추측불가 토큰·24시간) → 모바일은 네이티브 공유(카톡 등), 데스크톱은 링크 복사
+async function shareAnswer(queryId, btn) {
+  if (!queryId) { alert('공유할 수 없는 답변입니다.'); return; }
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '↗ 링크 생성 중…'; }
+  try {
+    const res = await fetch('/api/share', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query_id: queryId }),
+    });
+    const d = await res.json();
+    if (!d.ok) { alert(d.error || '공유 링크 생성 실패'); return; }
+    if (navigator.share) {
+      try { await navigator.share({ title: 'RAAS 분석 답변', url: d.url }); } catch (_) {}
+    } else {
+      try {
+        await navigator.clipboard.writeText(d.url);
+        alert('공유 링크를 복사했습니다 (24시간 유효)\n\n' + d.url);
+      } catch (_) { prompt('공유 링크 (복사하세요, 24시간 유효):', d.url); }
+    }
+  } catch (e) {
+    alert('공유 링크 생성 중 오류가 발생했습니다.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig || '↗ 공유'; }
+  }
 }
 
 async function sendFeedback(queryId, val, btn) {

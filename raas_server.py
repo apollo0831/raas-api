@@ -317,6 +317,7 @@ def call_claude_stream(system: str, user: str, max_tokens: int = 4000):
 
 # HTML 파일 경로 (서버와 같은 폴더)
 HTML_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.html")
+SHARE_HTML_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "share.html")
 JS_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raas_web.js")
 
 
@@ -443,6 +444,51 @@ class RAASHandler(BaseHTTPRequestHandler):
             self.send_html(html)
         else:
             self.send_html("<h2>raas_web.html 파일을 같은 폴더에 두세요</h2>")
+
+    # ── 공유 링크 (추측불가 토큰 + 1일 만료, 스냅샷) ──────────────
+    def _post_share(self, body):
+        """답변을 공유 링크로. body={query_id} (또는 question/answer 폴백). 소유자만."""
+        import raas_history_db as HDB
+        user = self._get_session_user()
+        if not user:
+            self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+            return
+        q = HDB.get_query_by_id(body.get("query_id")) if body.get("query_id") else None
+        if q:
+            if str(q.get("user_id")) != str(user["id"]):
+                self.send_json({"ok": False, "error": "본인 질의만 공유할 수 있습니다."}, 403)
+                return
+            question, answer = q["question"], q["answer"]
+        else:                              # 폴백: 이력 저장 전 등 — 클라이언트 제공 텍스트
+            question = (body.get("question") or "").strip()
+            answer = (body.get("answer") or "").strip()
+        if not answer:
+            self.send_json({"ok": False, "error": "공유할 답변이 없습니다."}, 400)
+            return
+        token = HDB.create_share(question, answer, created_by=user["id"])
+        host = self.headers.get("Host", "localhost:5000")
+        proto = "https" if ("ngrok" in host or
+                            self.headers.get("X-Forwarded-Proto") == "https") else "http"
+        self.send_json({"ok": True, "token": token, "url": f"{proto}://{host}/s/{token}",
+                        "expires_hours": HDB.SHARE_TTL_HOURS})
+
+    def _get_share_api(self):
+        """/api/share/<token> → 공유 답변 JSON (인증 불필요 — 토큰이 곧 열람 권한)."""
+        import raas_history_db as HDB
+        token = self.path.rsplit("/", 1)[-1].split("?")[0]
+        data = HDB.get_share(token)
+        if not data:
+            self.send_json({"ok": False, "error": "만료되었거나 존재하지 않는 공유 링크입니다."}, 404)
+            return
+        self.send_json({"ok": True, **data})
+
+    def _get_share_page(self):
+        """/s/<token> → 읽기전용 공유 페이지(share.html). 토큰은 페이지 JS가 URL에서 읽음."""
+        if os.path.exists(SHARE_HTML_FILE):
+            with open(SHARE_HTML_FILE, "r", encoding="utf-8") as f:
+                self.send_html(f.read())
+        else:
+            self.send_html("<h2>share.html 파일이 없습니다</h2>")
 
     def _get_raas_web_js(self):
         # 메인 프론트 JS (html에서 분리). ?v=버전 캐시버스터와 함께 서빙 — 디스크 서빙이라 재시작 불필요.
@@ -1885,6 +1931,8 @@ class RAASHandler(BaseHTTPRequestHandler):
     }
     GET_PREFIX = [   # 순서 의미 있음(더 구체적인 prefix 먼저)
         ("/raas_web.js", _get_raas_web_js),
+        ("/api/share/", _get_share_api),   # /api/share/<token> — /s/ 보다 먼저(더 구체적)
+        ("/s/", _get_share_page),          # /s/<token> 읽기전용 공유 페이지
         ("/api/timeseries/program/", _get_timeseries_program),
         ("/api/snapshot/", _get_snapshot),
         ("/api/trend", _get_trend),
@@ -1929,6 +1977,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         "/api/style/get": _post_style_get,
         "/api/style/set": _post_style_set,
         "/api/query": _post_query,
+        "/api/share": _post_share,
         "/api/storyline/today": _post_storyline_today,
         "/api/data_check": _post_data_check,
         "/api/data_refresh": _post_data_refresh,

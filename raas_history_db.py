@@ -6,6 +6,7 @@ IP → 사용자 이름 매핑 포함
 
 import sqlite3
 import json
+import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
 from contextlib import contextmanager
@@ -55,6 +56,17 @@ def init_db():
                 ip         TEXT PRIMARY KEY,
                 name       TEXT NOT NULL,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # ── 공유 링크 (답변 스냅샷 + 추측불가 토큰 + 만료) ───────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS shares (
+                token      TEXT PRIMARY KEY,
+                question   TEXT NOT NULL,
+                answer     TEXT NOT NULL,
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL
             )
         """)
         # ── 계정 / 세션 (Part 2: 사용자 관리) ───────────────────
@@ -280,6 +292,47 @@ def get_conn():
         conn.commit()
     finally:
         conn.close()
+
+
+# ── 공유 링크 (스냅샷 + 추측불가 토큰 + 1일 만료) ────────────────
+SHARE_TTL_HOURS = 24
+
+def get_query_by_id(qid) -> Optional[dict]:
+    """질의 이력 1건 조회(공유 스냅샷용). {question, answer, user_id} 또는 None."""
+    try:
+        with get_conn() as conn:
+            r = conn.execute("SELECT user_id, question, answer FROM query_history WHERE id=?",
+                             (int(qid),)).fetchone()
+        return dict(r) if r else None
+    except Exception:
+        return None
+
+def create_share(question: str, answer: str, created_by=None) -> str:
+    """답변 스냅샷을 저장하고 추측불가 토큰 반환. 만료 = 지금 + SHARE_TTL_HOURS."""
+    token = secrets.token_urlsafe(16)
+    expires = datetime.utcnow() + timedelta(hours=SHARE_TTL_HOURS)
+    with get_conn() as conn:
+        conn.execute("INSERT INTO shares(token, question, answer, created_by, expires_at) "
+                     "VALUES(?,?,?,?,?)",
+                     (token, question or "", answer or "", str(created_by) if created_by else None,
+                      expires.strftime("%Y-%m-%d %H:%M:%S")))
+    return token
+
+def get_share(token: str) -> Optional[dict]:
+    """토큰으로 공유 답변 조회. 만료·부재면 None. {question, answer, created_at}."""
+    if not token:
+        return None
+    with get_conn() as conn:
+        r = conn.execute("SELECT question, answer, created_at, expires_at FROM shares WHERE token=?",
+                         (token,)).fetchone()
+    if not r:
+        return None
+    try:
+        if datetime.strptime(r["expires_at"], "%Y-%m-%d %H:%M:%S") < datetime.utcnow():
+            return None                     # 만료
+    except Exception:
+        pass
+    return {"question": r["question"], "answer": r["answer"], "created_at": r["created_at"]}
 
 
 # ── 스토리라인 내용 캐시 (이력 DB 재설계 §B) ─────────────────────
