@@ -1857,14 +1857,6 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
                "오늘 피크": _peak(today), "어제 피크": _peak(yday),
                "지난주 동요일 피크": _peak(lastwk)}
 
-    # 오늘 추이 — 10분 간격 다운샘플 CSV (토큰 절약, 피크는 위에서 전체 행으로 계산)
-    ser = ["time,전체,파워FM,러브FM,고릴라M,픽채널"]
-    for r in today:
-        hh = _rt_hhmm(r)
-        if hh[4:5] == "0":                      # 매 10분(HH:M0)만 추림
-            ser.append(",".join([hh] + [str(_rt_int(r.get(f)) or "") for f in
-                                        ("T00", "F00", "L00", "G00", "P00")]))
-
     # 편성표 조인 — 프로그램 언급 시('지금 컬투쇼 몇 명?') 소속 채널 + 방송시각 컨텍스트 첨부.
     #   실시간 집계는 채널 단위뿐이라, 방송 중 여부 판단 재료(시작시각·편성 요일)를 결정적으로 제공.
     prog = extract_program(question)
@@ -1893,6 +1885,44 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
                 "방송 시간": f"{_cur['stime']}~{_cur['etime']}",
                 "판정": f"현재 시각 {now_hhmm}이 편성 창에 속함(STIME 기준 역산)",
             }
+    # 추이 — 프로그램/현재방송 스코프면 1분 해상도(편성창~현재), 아니면 10분 전체(24h 가독).
+    #   성별·연령을 물으면 그 채널 인증자 비율도 같은 해상도로 시계열 제공(분당 데이터 존재).
+    one_min = bool(prog_block)
+    win_start = None
+    if prog_block:
+        _ws = (prog_block.get("방송 시작시각") or prog_block.get("방송 시간", "").split("~")[0] or "").strip()
+        if len(_ws) == 5 and _ws[2] == ":":
+            win_start = _ws
+    def _keep(hh):
+        if not hh:
+            return False
+        if not one_min:
+            return hh[4:5] == "0"               # 10분
+        return (win_start is None) or (hh >= win_start)   # 1분(편성창 이후)
+    ser = ["time,전체,파워FM,러브FM,고릴라M,픽채널"]
+    for r in today:
+        hh = _rt_hhmm(r)
+        if _keep(hh):
+            ser.append(",".join([hh] + [str(_rt_int(r.get(f)) or "") for f in
+                                        ("T00", "F00", "L00", "G00", "P00")]))
+    # 성별/연령 추이(요청 시) — 파워FM(F00)/러브FM(L00)만 인증 비율 존재
+    demo_ser = demo_ch = None
+    want_sex = any(k in question for k in ("성별", "남녀", "여성", "남성", "여자", "남자"))
+    want_age = any(k in question for k in ("연령", "나이", "세대", "대별", "20대", "30대", "40대", "50대", "60대"))
+    if (want_sex or want_age) and ch_code in ("F00", "L00"):
+        demo_ch = ch_code
+        cols = []
+        if want_sex:
+            cols += [("여%", f"R_{demo_ch}_SEX_F"), ("남%", f"R_{demo_ch}_SEX_M")]
+        if want_age:
+            cols += [(f"{nm}%", f"R_{demo_ch}_AGE_{f}") for nm, f in _RT_AGES]
+        lines = ["time," + ",".join(c[0] for c in cols)]
+        for r in today:
+            hh = _rt_hhmm(r)
+            if _keep(hh):
+                lines.append(",".join([hh] + [str(_rt_flt(r.get(c[1])) or "") for c in cols]))
+        demo_ser = "\n".join(lines)
+
     head = (f"분석 대상: 실시간 동시사용자(1분 집계) · 기준시각 오늘 {now_hhmm}"
             + (f" · 관심 채널: {ch_name}" if ch_code and ch_code != "T00" else ""))
     defs = ("[용어 정의]\n"
@@ -1909,8 +1939,13 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
                + json.dumps(rt_extra, ensure_ascii=False)
                + "\n\n### realtime_compare — 어제/지난주 동시각·피크 비교\n"
                + json.dumps(compare, ensure_ascii=False)
-               + "\n\n### realtime_series — 오늘 추이(10분 간격)\n" + "\n".join(ser))
+               + f"\n\n### realtime_series — 오늘 동시사용자 추이({'1분·편성창' if one_min else '10분 간격'})\n"
+               + "\n".join(ser))
     providers = ["realtime_now", "realtime_extra", "realtime_compare", "realtime_series"]
+    if demo_ser:
+        context += (f"\n\n### realtime_series_demographic — {ch_name} 인증자 성별/연령 비율 추이"
+                    f"({'1분·편성창' if one_min else '10분 간격'}, 분모=인증자수)\n" + demo_ser)
+        providers.append("realtime_series_demographic")
     if prog_block:
         context += ("\n\n### realtime_program — 질의 프로그램 편성 컨텍스트\n"
                     + json.dumps(prog_block, ensure_ascii=False))
