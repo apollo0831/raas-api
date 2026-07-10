@@ -226,6 +226,11 @@ check_true("engagement provider 등록", "engagement" in G._PROVIDER_BY_NAME)
 check_true("온톨로지: SMS/GG 필드 정의", bool(get_adapter().get_field_info("SMS")) and bool(get_adapter().get_field_info("GG")))
 check_true("extract에 참여 지표(SMS·TOTAL)", "SMS" in G._EXTRACT_FIELDS and "TOTAL" in G._EXTRACT_FIELDS)
 check_true("참여 순위는 참여 provider(DAU랭킹 아님)", G._wants_engagement("프로그램별 공감로그 참여 순위"))
+# 데이터 출처 주의문(온톨로지 raas:sourceCaveat) — 참여 provider 사용 시 전체 노출용
+_cav = G.caveats_for(["engagement"])
+check_true("참여 caveat(m&studio 안내) 온톨로지 기반", bool(_cav) and "m&studio" in _cav[0])
+check_true("caveat 오탐 방지: 비참여 provider는 주의문 없음",
+           not G.caveats_for(["program_kpi", "metric_timeseries"]))
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
 check(("편성표 프로그램 라우팅"), ((ROUTER.route("컬투쇼 코너 편성 알려줘", lenient=True) or {})
                                .get("program") or {}).get("code"), "F09")

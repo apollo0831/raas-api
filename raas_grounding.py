@@ -1036,6 +1036,24 @@ def _p_today_lineup(ent):
 
 _ENGAGE_FIELDS = ("SMS", "GG", "TOTAL", "SMS_WR", "GG_WR", "TOTAL_WR", "SMS_RATIO", "GG_RATIO")
 
+# provider → 온톨로지 sourceCaveat를 끌어올 필드. 데이터 정확도 주의문을 답변에 전체 노출.
+#   새 provider에 주의문이 필요하면 여기 한 줄 + 온톨로지 지표에 raas:sourceCaveat만 추가.
+_PROVIDER_CAVEAT_FIELDS = {"engagement": _ENGAGE_FIELDS}
+
+
+def caveats_for(providers_used) -> list:
+    """사용된 provider들의 데이터 출처 주의문(온톨로지 raas:sourceCaveat) distinct 목록."""
+    fields = []
+    for p in providers_used or []:
+        fields += list(_PROVIDER_CAVEAT_FIELDS.get(p, ()))
+    if not fields:
+        return []
+    try:
+        from raas_onto import get_adapter
+        return get_adapter().get_field_caveats(fields)
+    except Exception:
+        return []
+
 
 def _p_engagement(ent):
     """[참여] 프로그램별 문자(SMS)·공감로그(GG) 참여 — 과거 1년(평일). 정의는 온톨로지.

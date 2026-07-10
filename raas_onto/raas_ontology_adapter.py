@@ -344,6 +344,22 @@ class OntologyAdapter:
             "formula": self._onto.value_str(self._onto.get_one(metric_iri, "raas:formula")),
         }
 
+    def get_field_caveats(self, fields) -> list:
+        """필드명들 → 그 지표의 데이터 출처 주의문(raas:sourceCaveat) distinct 목록.
+           답변에 [small] 푸터로 전체 노출(예: 참여 지표 → 'm&studio에서 확인')."""
+        out = []
+        for f in fields or []:
+            mv = self._field_to_variant.get(f)
+            if not mv:
+                continue
+            metric = self._onto.get_one(mv, "raas:ofMetric")
+            if not metric:
+                continue
+            cav = self._onto.value_str(self._onto.get_one(metric, "raas:sourceCaveat"))
+            if cav and cav not in out:
+                out.append(cav)
+        return out
+
     def get_channel_nature(self, code: str) -> str:
         """채널 편성 성격: 'programmed' | 'non-programmed' | ''(미상)."""
         return self._onto.value_str(self._onto.get_one(f"raas:{code}", "raas:channelNature"))

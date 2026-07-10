@@ -1309,6 +1309,13 @@ class RAASHandler(BaseHTTPRequestHandler):
                                    scope=_ground["provenance"].get("program"), source="general",
                                    input_tokens=_gusage.get("input_tokens"),
                                    output_tokens=_gusage.get("output_tokens"))
+                # 데이터 출처 주의문([small]) — 전체 사용자 노출. 온톨로지 raas:sourceCaveat 기반
+                #   (예: 문자·공감로그 → 'm&studio에서 확인'). 사용된 provider에 따라 결정적 append.
+                try:
+                    for _cav in GROUND.caveats_for(_ground["providers_used"]):
+                        sse_g({"type": "token", "text": "\n\n[small]\n※ " + _cav + "\n[/small]"})
+                except Exception as _e:
+                    print(f"[caveat] {_e}")
                 if user.get("is_admin"):
                     _ov = _ground["provenance"].get("overlay_items") or []
                     _vr = None
