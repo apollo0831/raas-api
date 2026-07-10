@@ -68,7 +68,9 @@ function _authHeaders() {
 // 401 응답 시 토큰 클리어하고 게이트로 복귀
 async function _authedFetch(url, options) {
   options = options || {};
-  options.headers = Object.assign({}, options.headers || {}, _authHeaders());
+  // ngrok 무료: 헤더 없으면 fetch 응답에 경고 HTML을 반환 → JSON 파싱 실패. skip 헤더로 우회.
+  options.headers = Object.assign({ 'ngrok-skip-browser-warning': 'true' },
+                                  options.headers || {}, _authHeaders());
   const res = await fetch(url, options);
   if (res.status === 401) {
     RAAS_TOKEN = '';
@@ -2107,7 +2109,7 @@ async function shareAnswer(queryId, btn) {
   const orig = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '↗ 링크 생성 중…'; }
   try {
-    const res = await fetch('/api/share', {
+    const res = await _authedFetch('/api/share', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query_id: queryId }),
     });

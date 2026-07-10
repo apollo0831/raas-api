@@ -103,7 +103,8 @@ function mountCharts(){
   const token=(location.pathname.split('/s/')[1]||'').replace(/\/$/,'');
   const cont=document.getElementById('content');
   try{
-    const r=await fetch('/api/share/'+encodeURIComponent(token));
+    const r=await fetch('/api/share/'+encodeURIComponent(token),
+      {headers:{'ngrok-skip-browser-warning':'true'}});   // ngrok 무료 경고 인터스티셜 우회
     const d=await r.json();
     if(!d.ok){ cont.innerHTML='<div class="err">'+escapeHtml(d.error||'불러올 수 없습니다')+'</div>'; return; }
     document.getElementById('meta').textContent=(d.created_at||'').slice(0,10);
