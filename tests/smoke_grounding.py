@@ -229,6 +229,20 @@ check_true("참여 순위는 참여 provider(DAU랭킹 아님)", G._wants_engage
 # 데이터 출처 주의문(온톨로지 raas:sourceCaveat) — 참여 provider 사용 시 전체 노출용
 _cav = G.caveats_for(["engagement"])
 check_true("참여 caveat(m&studio 안내) 온톨로지 기반", bool(_cav) and "m&studio" in _cav[0])
+# 프로그램 성별·연령·디바이스 분포(룩업 3종) — 감지·provider·라우팅·온톨로지
+check("분포 의도 감지(연령+성별+디바이스)",
+      sorted(G._wants_program_demo("컬투쇼 어제 연령대 성별 디바이스 분포")), ["age", "device", "gender"])
+check_true("분포 오탐 방지: '컬투쇼 DAU'는 분포 아님", not G._wants_program_demo("컬투쇼 어제 DAU"))
+_pd = G._p_program_demographics(G.resolve_entities("컬투쇼 어제 연령대 분포 알려줘")) or {}
+check_true("program_demographics: 연령 분포 반환(합≈100)",
+           bool(_pd.get("연령대 분포")) and 95 <= sum(float(v) for v in _pd["연령대 분포"]["분포%"].values()) <= 105,
+           f"keys={list(_pd)}")
+check_true("'연령대 분포' → program_demographics 포함",
+           "program_demographics" in G.assemble("컬투쇼 어제 연령대 분포", overlay_ctx={"mode": "normal"}).get("providers_used", []))
+check_true("'지금 동시청취'는 분포 아님(realtime)",
+           "program_demographics" not in G.assemble("파워FM 지금 동시청취자", overlay_ctx={"mode": "normal"}).get("providers_used", []))
+check_true("온톨로지: 분포 3종 정의", all(bool(get_adapter()._onto.get_one(f"raas:{m}", "raas:definition"))
+           for m in ("ProgramGenderDist", "ProgramAgeDist", "ProgramDeviceDist")))
 check_true("caveat 오탐 방지: 비참여 provider는 주의문 없음",
            not G.caveats_for(["program_kpi", "metric_timeseries"]))
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))

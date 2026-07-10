@@ -935,6 +935,27 @@ def _wants_engagement(q: str) -> bool:
     return any(s in (q or "").lower() for s in _ENGAGE_SIGNAL)
 
 
+# 프로그램별 일자별 성별·연령·디바이스 분포(룩업) — 실시간 '지금'이 아닌 일자 단위
+_DEMO_GENDER = {"F": "여", "M": "남"}
+_DEMO_AGE = {"UNDER20": "10대이하", "20_24": "20-24", "25_29": "25-29", "30_34": "30-34",
+             "35_39": "35-39", "40_44": "40-44", "45_49": "45-49", "50_54": "50-54",
+             "55_59": "55-59", "OVER60": "60대이상"}
+_DEMO_DEVICE = {"SP": "스마트폰", "PC": "PC", "PW": "웹", "PWR": "웹(기타)", "MWEB": "모바일웹",
+                "CAR": "차량", "WATCH": "워치", "AI": "AI스피커"}
+
+def _wants_program_demo(q: str) -> set:
+    """프로그램 성별·연령·디바이스 분포 의도(일자 단위). 반환: {'gender','age','device'} 부분집합."""
+    t = q or ""
+    kinds = set()
+    if any(k in t for k in ("성별", "남녀", "여성", "남성", "남자", "여자")):
+        kinds.add("gender")
+    if any(k in t for k in ("연령", "나이", "세대", "대별", "10대", "20대", "30대", "40대", "50대", "60대")):
+        kinds.add("age")
+    if any(k in t for k in ("디바이스", "기기", "스마트폰", "AI스피커", "차량", "워치")):
+        kinds.add("device")
+    return kinds
+
+
 _EDITORIAL_SIGNAL = ("편성 변화", "편성변화", "편성 이력", "편성이력", "편성 연혁", "편성연혁",
                      "편성 개편", "편성개편", "편성 변천", "편성변천", "과거 편성", "예전 편성",
                      "예전 프로그램", "이전 프로그램", "과거 프로그램", "역대 프로그램", "역대 편성",
@@ -1098,6 +1119,47 @@ def _p_engagement(ent):
     return {"code": c, "name": _resolve_name(c), "series": series, "metric_defs": defs, "note": note}
 
 
+def _p_program_demographics(ent):
+    """[프로필 분포] 프로그램별 일자별 성별·연령·디바이스 분포(비율%). 룩업 3종.
+       PERIOD: ALL=청취시작·1MIN=1분이상·10MIN=10분이상. '컬투쇼 어제 연령대/성별/디바이스 분포' 등."""
+    code = ent.get("code")
+    if not code or (len(code) == 3 and code.endswith("00") and not ent.get("all_programs")):
+        pass  # 채널코드도 룩업에 존재(F00 등) — 그대로 조회 허용
+    q = ent.get("_question") or ""
+    kinds = _wants_program_demo(q)
+    if not code or not kinds:
+        return None
+    import raas_datasource as DSRC
+    period = "10MIN" if ("10분" in q or "깊은" in q) else ("1MIN" if "1분" in q else "ALL")
+
+    def _snap(idx, labels):
+        dd = idx.get(code) or {}
+        if not dd:
+            return None
+        date = (ent.get("as_of_date") or "").replace("-", "/")
+        if not date or date not in dd:
+            date = max(dd)
+        cell = (dd.get(date) or {}).get(period) or {}
+        out = {labels.get(k, k): v for k, v in cell.items() if v not in (None, "")}
+        return {"as_of": date, "분포%": out} if out else None
+
+    res = {"program": _resolve_name(code), "code": code,
+           "PERIOD": {"ALL": "청취시작", "1MIN": "1분이상청취", "10MIN": "10분이상청취"}[period]}
+    if "gender" in kinds:
+        g = _snap(DSRC.get_program_gender_index(), _DEMO_GENDER)
+        if g:
+            res["성별 분포"] = g
+    if "age" in kinds:
+        a = _snap(DSRC.get_program_age_index(), _DEMO_AGE)
+        if a:
+            res["연령대 분포"] = a
+    if "device" in kinds:
+        d = _snap(DSRC.get_program_device_index(), _DEMO_DEVICE)
+        if d:
+            res["디바이스 분포"] = d
+    return res if len(res) > 3 else None
+
+
 PROVIDERS = [
     {"name": "program_kpi", "needs": "program",
      "desc": "프로그램의 최신 핵심 KPI 스냅샷(DAU/WAU/MAU·신규·복귀·이탈·실청취·깊은청취·유지율과 증감)",
@@ -1114,6 +1176,9 @@ PROVIDERS = [
     {"name": "engagement", "needs": "program",
      "desc": "프로그램별 문자(SMS)·공감로그(GG) 참여(과거 1년, 평일) — 참여 건수·참여자수(_WR)·1인당(_RATIO)·합계(TOTAL). '컬투쇼 문자 참여·공감로그 몇 건·프로그램별 참여 순위·1인당 참여' 등",
      "fetch": _p_engagement},
+    {"name": "program_demographics", "needs": "program",
+     "desc": "프로그램별 일자별 청취자 성별·연령대·디바이스 분포(비율%, 룩업). PERIOD 청취시작/1분이상/10분이상. '컬투쇼 어제 연령대·성별·디바이스 분포·주 시청층' 등",
+     "fetch": _p_program_demographics},
     {"name": "field_projection", "needs": "program",
      "desc": "질문이 지목한 필드(지표+속성)를 일자별 표로 묶음 — 특정 필드 콕 집기/지표+속성 혼합('DAU와 게스트 일자별') 대응",
      "fetch": _p_field_projection},
@@ -2047,6 +2112,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         names = ["today_lineup"] + names      # '오늘 게스트/편성' 질의는 당일 broadplan 반드시 포함
     if _wants_engagement(question) and "engagement" not in names:
         names = ["engagement"] + names        # '문자·공감로그 참여' 질의는 참여 데이터 반드시 포함
+    if _wants_program_demo(question) and ent.get("scope_kind") == "program" and "program_demographics" not in names:
+        names = ["program_demographics"] + names   # 프로그램 성별·연령·디바이스 분포 질의
     if edit:
         # 편성 연혁 질의는 편성 전용 맥락으로 확정 — KPI·시계열 provider가 섞이면 LLM이 편성
         #   서술 대신 '데이터 없음' KPI 프레임으로 새는 걸 방지(Haiku 선택 비결정성 제거).
