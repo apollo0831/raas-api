@@ -1711,6 +1711,12 @@ def _rt_int(v):
     except Exception:
         return None
 
+def _rt_flt(v):
+    try:
+        return round(float(v), 1) if v not in (None, "", "None") else None
+    except Exception:
+        return None
+
 def _rt_pct(cur, base):
     if cur is None or base in (None, 0):
         return None
@@ -1789,7 +1795,7 @@ def _rt_current_program(ch_code: str):
 
 def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
     import raas_datasource as DSRC
-    today = DSRC.get_realtime_today()
+    today = DSRC.get_rt_concurrent()          # 확장 실시간(디바이스×채널·인증 비율 포함)
     if not today:
         context = ("분석 대상: 실시간 동시사용자(1분 집계)\n"
                    "### realtime_now — 조회 실패\n"
@@ -1802,16 +1808,34 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
     now_hhmm = _rt_hhmm(latest)
     total_now = _rt_int(latest.get("T00"))
 
-    # 스냅샷 — 채널·디바이스·성별·연령 분해 (키를 한글명으로 결정적 변환)
+    # 스냅샷 — 채널·디바이스×채널·보라×채널·인증 성별/연령 비율 (키를 한글명으로 결정적 변환)
+    _RT_CHS = (("전체", ""), ("파워FM", "_F00"), ("러브FM", "_L00"), ("고릴라M", "_G00"), ("픽채널", "_P00"))
+    device = {nm: {chn: _rt_int(latest.get(f + suf)) for chn, suf in _RT_CHS}
+              for nm, f in _RT_DEVICES}
+
+    def _prof(ch):                            # 채널별 인증 프로필(비율 %) — 분모=인증자합계
+        return {"인증자수": _rt_int(latest.get(f"{ch}_REALINFO")),
+                "성별비율%": {"여": _rt_flt(latest.get(f"R_{ch}_SEX_F")),
+                            "남": _rt_flt(latest.get(f"R_{ch}_SEX_M"))},
+                "연령비율%": {nm: _rt_flt(latest.get(f"R_{ch}_AGE_{f}")) for nm, f in _RT_AGES}}
     snap = {"기준시각": now_hhmm, "전체": total_now,
             "채널별": {nm: _rt_int(latest.get(f)) for nm, f in _RT_CHANNELS},
-            "디바이스별": {nm: _rt_int(latest.get(f)) for nm, f in _RT_DEVICES},
-            "보는라디오": _rt_int(latest.get("BA")),
-            "성별(본인인증자만)": {"남": _rt_int(latest.get("SEX_M")),
-                              "여": _rt_int(latest.get("SEX_F")),
-                              "인증자합계": _rt_int(latest.get("SEX_TM"))},
-            "연령대(본인인증자만)": {**{nm: _rt_int(latest.get(f)) for nm, f in _RT_AGES},
-                               "인증자합계": _rt_int(latest.get("AGE_TM"))}}
+            "디바이스별(전체·채널)": device,
+            "보는라디오": {"전체": _rt_int(latest.get("BA")),
+                       "파워FM": _rt_int(latest.get("BA_F00")),
+                       "러브FM": _rt_int(latest.get("BA_L00"))},
+            "인증프로필(성별·연령 비율)": {"파워FM": _prof("F00"), "러브FM": _prof("L00")}}
+
+    # 분당 문자·공감로그(infobank) + 분당 유입(tempsummary3) — 별도 Feed 최신값
+    _msg = DSRC.get_rt_msg() or []
+    _inf = DSRC.get_rt_inflow() or []
+    _ml, _il = (_msg[-1] if _msg else {}), (_inf[-1] if _inf else {})
+    rt_extra = {
+        "분당 문자·공감로그": {
+            "파워FM": {"SMS": _rt_int(_ml.get("F00_SMS")), "공감로그": _rt_int(_ml.get("F00_GG"))},
+            "러브FM": {"SMS": _rt_int(_ml.get("L00_SMS")), "공감로그": _rt_int(_ml.get("L00_GG"))}},
+        "분당 유입": {"파워FM": _rt_int(_il.get("F00_START")), "러브FM": _rt_int(_il.get("L00_START")),
+                   "고릴라M": _rt_int(_il.get("G00_START")), "픽채널": _rt_int(_il.get("P00_START"))}}
 
     # 어제/지난주 같은 시각 비교 + 피크 (계산은 코드가, LLM은 읽기만)
     def _at(rows, hhmm):
@@ -1873,16 +1897,20 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
             + (f" · 관심 채널: {ch_name}" if ch_code and ch_code != "T00" else ""))
     defs = ("[용어 정의]\n"
             "- 동시사용자: 1분 버킷 내 활성 세션의 고유 사용자 수(dc UUID, 세션 겹침 기반)\n"
-            "- 성별·연령은 본인인증 사용자만 집계 — 전체보다 작은 부분집합이므로 비율은 "
-            "'인증자합계'를 분모로만 말할 것(전체 대비 비율 금지)\n"
+            "- 디바이스별은 전체·채널(파워FM/러브FM/고릴라M/픽채널)로 분해 제공. DV_AI는 AI스피커 7사 합산.\n"
+            "- 인증프로필의 성별·연령은 **비율(%)**이며 분모는 그 채널의 '인증자수'(본인인증자, 전체보다 작음). "
+            "전체 대비 비율로 말하지 말 것. 성별·연령은 파워FM/러브FM만 제공(고릴라M/픽채널 없음).\n"
             "- 보는라디오는 시청 모드(카테고리) — 디바이스 분해와 별개 축이라 합산 금지\n"
+            "- 분당 문자·공감로그/유입은 그 1분의 값(누적 아님)\n"
             "- 비교값·증감%·피크는 코드가 계산한 값 — 그대로 사용하고 재계산하지 말 것")
     context = (head + "\n\n### realtime_now — 현재 동시사용자 스냅샷\n"
                + json.dumps(snap, ensure_ascii=False)
+               + "\n\n### realtime_extra — 분당 문자·공감로그·유입\n"
+               + json.dumps(rt_extra, ensure_ascii=False)
                + "\n\n### realtime_compare — 어제/지난주 동시각·피크 비교\n"
                + json.dumps(compare, ensure_ascii=False)
                + "\n\n### realtime_series — 오늘 추이(10분 간격)\n" + "\n".join(ser))
-    providers = ["realtime_now", "realtime_compare", "realtime_series"]
+    providers = ["realtime_now", "realtime_extra", "realtime_compare", "realtime_series"]
     if prog_block:
         context += ("\n\n### realtime_program — 질의 프로그램 편성 컨텍스트\n"
                     + json.dumps(prog_block, ensure_ascii=False))

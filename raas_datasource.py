@@ -353,8 +353,9 @@ _rt_yday_feed     = Feed("realtime_yesterday", _rt_loader("-1d@d", "@d", _RT_NAR
 _rt_lastweek_feed = Feed("realtime_lastweek",  _rt_loader("-7d@d", "-6d@d", _RT_NARROW), daily_at="00:05")
 
 def get_realtime_today() -> list:
-    """오늘 0시~현재 1분 단위 동시사용자 행 목록 (60초 캐시)."""
-    return _rt_today_feed.get() or []
+    """(호환 별칭) 확장 실시간 rt_concurrent로 이관 — 채널 동시자 필드 동일.
+       구 WIDE Feed(_rt_today_feed)는 lazy라 더는 조회되지 않음."""
+    return get_rt_concurrent()
 
 def get_realtime_yesterday() -> list:
     return _rt_yday_feed.get() or []
