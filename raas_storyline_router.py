@@ -109,9 +109,12 @@ def extract_program(text: str) -> Optional[dict]:
         if _PROGRAM_NAME_RX[code].search(text):
             info = PROGRAM_DIRECTORY[code]
             return {"code": code, "name": info["name"], "channel": info["channel"]}
-    # 3) 별칭 매칭
-    for alias, code in PROGRAM_ALIASES.items():
-        if _ALIAS_RX[alias].search(text):
+    # 3) 별칭 매칭 — 온톨로지 altLabel + 하드코딩 병합(긴 별칭 우선). 온톨로지에 별칭을
+    #    추가하면 여기 자동 반영(코드 수정 불필요). 예: '철파엠'→F05(김영철의 파워FM).
+    aliases = _merged_aliases()
+    for alias in sorted(aliases, key=len, reverse=True):
+        if alias in text:
+            code = aliases[alias]
             info = PROGRAM_DIRECTORY.get(code)
             if info:
                 return {"code": code, "name": info["name"], "channel": info["channel"]}
@@ -143,6 +146,32 @@ def _program_tokens():
                 toks.setdefault(t, code)
     _PROGRAM_TOKENS = toks
     return toks
+
+_MERGED_ALIASES = None
+
+def _merged_aliases() -> dict:
+    """프로그램 별칭 맵 = 온톨로지 altLabel/label ∪ 하드코딩 PROGRAM_ALIASES (코드로).
+       온톨로지가 프로그램 별칭의 원천 — 여기 추가하면 엔티티 해석이 자동 인식.
+       채널명·짧은(1글자) 토큰은 오검색 방지로 제외. 하드코딩이 충돌 시 우선(큐레이션)."""
+    global _MERGED_ALIASES
+    if _MERGED_ALIASES is not None:
+        return _MERGED_ALIASES
+    merged: dict[str, str] = {}
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+        for code in PROGRAM_DIRECTORY:
+            m = a.get_program_meta(code) or {}
+            for al in list(m.get("alt_labels") or []) + [m.get("label")]:
+                al = (al or "").strip()
+                if len(al) >= 2 and al not in _FZ_STOP:
+                    merged.setdefault(al, code)
+    except Exception:
+        pass
+    merged.update(PROGRAM_ALIASES)     # 하드코딩 별칭 우선
+    _MERGED_ALIASES = merged
+    return merged
+
 
 def _fuzzy_program(text: str):
     """질의 토큰 중 프로그램명 토큰과 편집거리≥0.8로 유사한 것 → 그 프로그램. 오타 1글자 정도 허용."""

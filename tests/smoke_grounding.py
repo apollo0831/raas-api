@@ -319,6 +319,9 @@ check_true("주별 앵커 헤더 명시", "주 시작(월요일)" in _ts_w)
 print("── 4.7 오타 퍼지매칭 · 특정일 속성 · 게스트 역검색 ────")
 from raas_storyline_router import extract_program as _xp
 check("오타 '주현연' → F08", (_xp("12시엔 주현연") or {}).get("code"), "F08")
+# 온톨로지 altLabel이 엔티티 별칭으로 자동 반영(하드코딩 아님) — '철파엠'→F05(김영철의 파워FM)
+check("온톨로지 별칭 '철파엠' → F05", (_xp("어제 철파엠 문자 참여자수") or {}).get("code"), "F05")
+check("온톨로지 별칭 '영철파워' → F05", (_xp("영철파워 어때") or {}).get("code"), "F05")
 check("오타 '컬투쑈' → F09", (_xp("컬투쑈") or {}).get("code"), "F09")
 check("비프로그램 문장 → None", _xp("안녕하세요 반가워요"), None)
 _ps = G._p_point_snapshot(G.resolve_entities("7월1일 12시엔 주현영 게스트 누구야?")) or {}
