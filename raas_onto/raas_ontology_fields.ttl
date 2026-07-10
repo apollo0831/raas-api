@@ -950,5 +950,59 @@ raas:Part_TOTAL_WR a raas:MetricVariant ;
 
 
 # =============================================================================
+# 실시간 지표 (tempsummary·infobank·tempsummary3, 1분 집계) — 채널 접미 규칙 공통
+#   접미 없음=전체, _F00=파워FM, _L00=러브FM, _G00=고릴라M, _P00=픽채널
+#   (원천의 FM/AM·_F/_G/_L/_P를 RAAS가 F00/L00/G00/P00으로 정규화)
+# =============================================================================
+raas:RTConcurrent a raas:Metric ;
+    rdfs:label "실시간 동시사용자"@ko ;
+    raas:unit "명" ; raas:hasMeasureType raas:Count ;
+    raas:definition "1분 버킷 내 활성 세션의 고유 사용자 수(dc UUID). 필드: T00(전체)·F00·L00·G00·P00(채널)"@ko ;
+    raas:dictionarySection "F. realtime" .
+
+raas:RTDevice a raas:Metric ;
+    rdfs:label "실시간 디바이스별 동시사용자"@ko ;
+    raas:unit "명" ; raas:hasMeasureType raas:Count ;
+    raas:definition "디바이스별 실시간 동시사용자. DV_SP(스마트폰·태블릿)·DV_PC·DV_PW(웹)·DV_MWEB(모바일웹)·DV_WATCH·DV_CAR·DV_AI(AI스피커 7사 합산 파생). 각 디바이스에 채널 접미(DV_SP_F00 등)로 채널별 분해."@ko ;
+    raas:dictionarySection "F. realtime" .
+
+raas:RTViewRadio a raas:Metric ;
+    rdfs:label "실시간 보는라디오 동시사용자"@ko ;
+    raas:unit "명" ; raas:hasMeasureType raas:Count ;
+    raas:definition "보는라디오(시청 모드) 실시간 동시사용자. BA(전체)·BA_F00·BA_L00(채널별). 디바이스 분해와 별개 축이라 합산 금지."@ko ;
+    raas:dictionarySection "F. realtime" .
+
+raas:RTAuthUsers a raas:Metric ;
+    rdfs:label "실시간 본인인증 동시사용자"@ko ;
+    raas:unit "명" ; raas:hasMeasureType raas:Count ;
+    raas:definition "본인인증(실제 성별·연령 확보) 동시사용자 수 — 성별·연령 비율의 분모. F00_REALINFO(파워FM)·L00_REALINFO(러브FM). 전체 동시자보다 작은 부분집합."@ko ;
+    raas:dictionarySection "F. realtime" .
+
+raas:RTAgeRatio a raas:Metric ;
+    rdfs:label "실시간 인증자 연령대 비율"@ko ;
+    raas:unit "%" ; raas:hasMeasureType raas:Ratio ;
+    raas:definition "채널별 본인인증자 중 연령대 비율(%). R_{F00|L00}_AGE_{0_19…60} = 해당 연령대 인증자 / 채널 인증자합계(REALINFO)×100. 분모는 인증자합계뿐(전체 대비 금지)."@ko ;
+    raas:dictionarySection "F. realtime" .
+
+raas:RTSexRatio a raas:Metric ;
+    rdfs:label "실시간 인증자 성별 비율"@ko ;
+    raas:unit "%" ; raas:hasMeasureType raas:Ratio ;
+    raas:definition "채널별 본인인증자 중 성별 비율(%). R_{F00|L00}_SEX_{F|M} = 해당 성별 인증자 / 채널 인증자합계×100."@ko ;
+    raas:dictionarySection "F. realtime" .
+
+raas:RTInflow a raas:Metric ;
+    rdfs:label "실시간 분당 유입수"@ko ;
+    raas:unit "명" ; raas:hasMeasureType raas:Count ;
+    raas:definition "채널별 분당 신규 유입 사용자 수. F00_START·G00_START·L00_START·P00_START (원천 tempsummary3)."@ko ;
+    raas:dictionarySection "F. realtime" .
+
+raas:RTMessage a raas:Metric ;
+    rdfs:label "실시간 분당 문자·공감로그"@ko ;
+    raas:unit "건" ; raas:hasMeasureType raas:Count ;
+    raas:definition "채널별 분당 문자참여(SMS)·공감로그(GG) 작성 수. F00_SMS·F00_GG·L00_SMS·L00_GG (원천 infobank). 참여 아카이브(일간 SUMMARY_INDEX_02)와 별개의 실시간 분단위 집계."@ko ;
+    raas:dictionarySection "F. realtime" .
+
+
+# =============================================================================
 # 끝
 # =============================================================================

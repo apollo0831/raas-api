@@ -363,6 +363,102 @@ def get_realtime_lastweek() -> list:
     """지난주 동요일(7일 전) 하루치 — '지난주 이 시간' 비교용."""
     return _rt_lastweek_feed.get() or []
 
+
+# ── 실시간 확장 3-Feed (Phase 1) — 소스별 분리, 각 60초 캐시 ──────────────
+# 네이밍 통일: 원천의 FM/AM·_F/_G/_L/_P → RAAS 코드(F00/L00/G00/P00)로 정규화.
+#   ① rt_concurrent(tempsummary): 채널 동시자 + 디바이스×채널 + 보라×채널 + 인증 성별·연령 비율
+#   ② rt_msg(infobank): 분당 채널별 SMS·공감로그(GG)      ③ rt_inflow(tempsummary3): 분당 채널별 유입
+# AI스피커: 원천 7사×채널을 RAAS가 DV_AI(집계)로 파생, 원시 벤더는 드롭(온톨로지엔 DV_AI만).
+_RT_DEV_REAL = ("DV_SP", "DV_PC", "DV_PW", "DV_MWEB", "DV_WATCH", "DV_CAR")
+_RT_AI_VENDORS = ("DV_AI_SKT", "DV_AI_TMAP", "DV_AI_BTV", "DV_AI_BIXBY", "DV_AI_LGU", "DV_AI_KT", "DV_AI_KKO")
+_RT_CH_SUF = (("", ""), ("_F", "_F00"), ("_G", "_G00"), ("_L", "_L00"), ("_P", "_P00"))
+_RT_AGES = ("0_19", "20_24", "25_29", "30_34", "35_39", "40_44", "45_49", "50_54", "55_59", "60")
+
+def _build_rt_concurrent_spl():
+    ev = []
+    for a in _RT_AGES:
+        ev.append(f'| eval R_FM_AGE_{a}=round(AGE_F{a}/AGE_FM*100,1)')
+        ev.append(f'| eval R_AM_AGE_{a}=round(AGE_L{a}/AGE_LM*100,1)')
+    ev += ['| eval R_FM_SEX_F=round(SEX_F_F/SEX_FM*100,1)', '| eval R_FM_SEX_M=round(SEX_M_F/SEX_FM*100,1)',
+           '| eval R_AM_SEX_F=round(SEX_F_L/SEX_LM*100,1)', '| eval R_AM_SEX_M=round(SEX_M_L/SEX_LM*100,1)']
+    dev = " ".join(d + s for d in _RT_DEV_REAL for s, _ in _RT_CH_SUF)
+    ai = " ".join(v + s for v in _RT_AI_VENDORS for s, _ in _RT_CH_SUF)
+    age_out = " ".join(f"R_F00_AGE_{a}" for a in _RT_AGES) + " " + " ".join(f"R_L00_AGE_{a}" for a in _RT_AGES)
+    return (f"search index={RT_INDEX} earliest=@d latest=now | fillnull value=0 "
+            + " ".join(ev)
+            + " | rename R_FM_* as R_F00_*, R_AM_* as R_L00_*, AGE_FM as F00_REALINFO, AGE_LM as L00_REALINFO"
+            + " | table _time T00 F00 L00 G00 P00 BA BA_F00 BA_L00 F00_REALINFO L00_REALINFO "
+            + dev + " " + ai + " R_F00_SEX_F R_F00_SEX_M R_L00_SEX_F R_L00_SEX_M " + age_out
+            + " | sort 0 _time")
+
+_RT_CONCURRENT_SPL = _build_rt_concurrent_spl()
+
+def _rt_concurrent_load():
+    try:
+        rows = splunk_search(_RT_CONCURRENT_SPL)
+    except Exception as e:
+        print(f"  [rt_concurrent] 조회 실패: {e}")
+        return [], "error"
+    out = []
+    for r in rows:
+        o = {}
+        for src, dst in _RT_CH_SUF:            # AI 파생: 채널별 7사 합
+            o["DV_AI" + dst] = sum(_i(r.get(v + src)) for v in _RT_AI_VENDORS)
+        for k, v in r.items():
+            if k.startswith(_RT_AI_VENDORS):   # 원시 AI 벤더 드롭
+                continue
+            if k.startswith(_RT_DEV_REAL) and k[-2:] in ("_F", "_G", "_L", "_P"):
+                o[k + "00"] = v                # 실장비 채널접미 _F → _F00
+            else:
+                o[k] = v
+        out.append(o)
+    return out, "splunk"
+
+_RT_MSG_SPL = r"""search index=infobank earliest=@d latest=now
+| stats values(*) as * by BOARD_KEY
+| eval _time = strptime(MSG_DATE, "%Y%m%d%H%M%S")
+| join type=left PGM_KEY [| inputlookup BROADPLAN.csv | search IS_END="N" | rename INFO_PGM_CODE as PGM_KEY | fields PGM_KEY, SEQ]
+| eval FMAM=case(SEQ like "F%","FM",SEQ like "L%","AM")
+| eval apart=case(FMAM=="FM" AND (MSG_COM=="001" OR MSG_COM=="023"),"FM_SUM_1", FMAM=="FM" AND MSG_COM=="007","FM_SUM_7", FMAM=="FM" AND (MSG_COM=="009" OR MSG_COM=="024"),"FM_SUM_9", FMAM=="AM" AND (MSG_COM=="001" OR MSG_COM=="023"),"AM_SUM_1", FMAM=="AM" AND MSG_COM=="007","AM_SUM_7", FMAM=="AM" AND (MSG_COM=="009" OR MSG_COM=="024"),"AM_SUM_9")
+| timechart span=1m count by apart
+| fillnull value=0
+| rename FM_SUM_1 as F00_SMS, FM_SUM_9 as F00_GG, AM_SUM_1 as L00_SMS, AM_SUM_9 as L00_GG
+| table _time F00_SMS F00_GG L00_SMS L00_GG | sort 0 _time"""
+
+def _rt_msg_load():
+    try:
+        return splunk_search(_RT_MSG_SPL), "splunk"
+    except Exception as e:
+        print(f"  [rt_msg] 조회 실패: {e}")
+        return [], "error"
+
+_RT_INFLOW_SPL = (f"search index=tempsummary3 earliest=@d latest=now | fillnull value=0 F00 G00 L00 P00 T00 "
+                  "| rename F00 as F00_START, G00 as G00_START, L00 as L00_START, P00 as P00_START "
+                  "| table _time F00_START G00_START L00_START P00_START | sort 0 _time")
+
+def _rt_inflow_load():
+    try:
+        return splunk_search(_RT_INFLOW_SPL), "splunk"
+    except Exception as e:
+        print(f"  [rt_inflow] 조회 실패: {e}")
+        return [], "error"
+
+_rt_concurrent_feed = Feed("rt_concurrent", _rt_concurrent_load, ttl_sec=60)
+_rt_msg_feed        = Feed("rt_msg",        _rt_msg_load,        ttl_sec=60)
+_rt_inflow_feed     = Feed("rt_inflow",     _rt_inflow_load,     ttl_sec=60)
+
+def get_rt_concurrent() -> list:
+    """오늘 1분 단위 확장 실시간 — 채널 동시자·디바이스×채널·보라×채널·인증 성별/연령 비율."""
+    return _rt_concurrent_feed.get() or []
+
+def get_rt_msg() -> list:
+    """오늘 1분 단위 채널별 SMS·공감로그(GG) — [{_time,F00_SMS,F00_GG,L00_SMS,L00_GG}]."""
+    return _rt_msg_feed.get() or []
+
+def get_rt_inflow() -> list:
+    """오늘 1분 단위 채널별 유입 — [{_time,F00_START,G00_START,L00_START,P00_START}]."""
+    return _rt_inflow_feed.get() or []
+
 # 최근 14일(오늘 제외) 일자별 피크값·피크시각 — 과거 불변 → 일일 캐시. 스코프별 지연 생성.
 #   argmax 관용구: sort로 (date, 값) 정렬 후 stats last()가 그날 최대값 행의 시각·값.
 _RT_PEAK_DAYS = 14
