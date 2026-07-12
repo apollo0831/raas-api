@@ -243,6 +243,12 @@ check_true("'지금 동시청취'는 분포 아님(realtime)",
            "program_demographics" not in G.assemble("파워FM 지금 동시청취자", overlay_ctx={"mode": "normal"}).get("providers_used", []))
 check_true("온톨로지: 분포 3종 정의", all(bool(get_adapter()._onto.get_one(f"raas:{m}", "raas:definition"))
            for m in ("ProgramGenderDist", "ProgramAgeDist", "ProgramDeviceDist")))
+# 분포 기간 모드 — '지난 30일'이면 스냅샷 아니라 기간평균+일별 추이(연령·디바이스도 동일)
+_pdp = G._p_program_demographics(G.resolve_entities("컬투쇼 지난 30일간 연령대 분포")) or {}
+check_true("분포 기간 모드: 연령 기간평균+일별",
+           _pdp.get("기준", "").startswith("기간") and bool((_pdp.get("연령대 분포") or {}).get("기간평균%"))
+           and "일별" in str(_pdp.get("연령대 분포")),
+           f"기준={_pdp.get('기준')}")
 check_true("caveat 오탐 방지: 비참여 provider는 주의문 없음",
            not G.caveats_for(["program_kpi", "metric_timeseries"]))
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))

@@ -1131,33 +1131,49 @@ def _p_program_demographics(ent):
         return None
     import raas_datasource as DSRC
     period = "10MIN" if ("10분" in q or "깊은" in q) else ("1MIN" if "1분" in q else "ALL")
+    lb = ent.get("lookback") or 0
+    as_of = (ent.get("as_of_date") or "").replace("-", "/")
 
-    def _snap(idx, labels):
+    def _view(idx, labels):
         dd = idx.get(code) or {}
         if not dd:
             return None
-        date = (ent.get("as_of_date") or "").replace("-", "/")
-        if not date or date not in dd:
-            date = max(dd)
+        alldates = sorted(dd)
+        if lb and lb > 1:                        # 기간 모드 — 기간평균 + 일별 추이(CSV)
+            rows = [(d, dd[d].get(period) or {}) for d in alldates[-lb:] if dd[d].get(period)]
+            if not rows:
+                return None
+            types = list(rows[-1][1].keys())     # 최신 셀 기준 TYPE 순서
+            acc = {t: [] for t in types}
+            for _, cell in rows:
+                for t in types:
+                    fv = _rt_flt(cell.get(t))
+                    if fv is not None:
+                        acc[t].append(fv)
+            avg = {labels.get(t, t): round(sum(acc[t]) / len(acc[t]), 1) for t in types if acc[t]}
+            csv = ["date," + ",".join(labels.get(t, t) for t in types)]
+            for d, cell in rows:
+                csv.append(",".join([d[5:]] + [str(cell.get(t, "")) for t in types]))
+            return {"기간": f"{rows[0][0]}~{rows[-1][0]} ({len(rows)}일)",
+                    "기간평균%": avg, "일별(CSV, 평균은 코드계산)": "\n".join(csv)}
+        # 스냅샷 모드(단일일)
+        date = as_of if (as_of and as_of in dd) else alldates[-1]
         cell = (dd.get(date) or {}).get(period) or {}
         out = {labels.get(k, k): v for k, v in cell.items() if v not in (None, "")}
         return {"as_of": date, "분포%": out} if out else None
 
     res = {"program": _resolve_name(code), "code": code,
-           "PERIOD": {"ALL": "청취시작", "1MIN": "1분이상청취", "10MIN": "10분이상청취"}[period]}
-    if "gender" in kinds:
-        g = _snap(DSRC.get_program_gender_index(), _DEMO_GENDER)
-        if g:
-            res["성별 분포"] = g
-    if "age" in kinds:
-        a = _snap(DSRC.get_program_age_index(), _DEMO_AGE)
-        if a:
-            res["연령대 분포"] = a
-    if "device" in kinds:
-        d = _snap(DSRC.get_program_device_index(), _DEMO_DEVICE)
-        if d:
-            res["디바이스 분포"] = d
-    return res if len(res) > 3 else None
+           "PERIOD": {"ALL": "청취시작", "1MIN": "1분이상청취", "10MIN": "10분이상청취"}[period],
+           "기준": ("기간(일별+평균)" if lb and lb > 1 else "단일일 스냅샷")}
+    for kind, idx, labels, key in (
+            ("gender", DSRC.get_program_gender_index, _DEMO_GENDER, "성별 분포"),
+            ("age", DSRC.get_program_age_index, _DEMO_AGE, "연령대 분포"),
+            ("device", DSRC.get_program_device_index, _DEMO_DEVICE, "디바이스 분포")):
+        if kind in kinds:
+            v = _view(idx(), labels)
+            if v:
+                res[key] = v
+    return res if len(res) > 4 else None
 
 
 PROVIDERS = [
