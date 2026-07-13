@@ -1184,6 +1184,103 @@ def _p_program_demographics(ent):
     return res if len(res) > 5 else None
 
 
+_CORRELATE_SIGNAL = ("상관", "동반", "같이 움직", "함께 움직", "같이 갔", "같이 떨어", "같이 올랐",
+                     "같이 하락", "같이 상승", "연관", "관련이", "관계가", "무엇과", "뭐랑", "뭐와",
+                     "어떤 지표와", "영향을 미", "영향을 준", "좌우", "따라 움직", "동조", "함께 떨어")
+
+
+def _wants_correlate(q: str) -> bool:
+    """교차지표 동반움직임/상관 의도 — 'DAU가 여성비율·참여와 같이 갔나' 등.
+       원인 흐름분해(flow_decomp, '왜 빠졌어')와 별개: 지표 간 관계를 물을 때."""
+    return any(s in (q or "") for s in _CORRELATE_SIGNAL)
+
+
+# 교차상관 후보 팩터(드라이버 공간) — (source, field, dims, label).
+# 곧 Phase 3에서 온톨로지 raas:mayDrive로 이관 예정(지금은 명시 목록).
+_CORRELATE_FACTORS = [
+    ("kpi", "deep_rate", None, "깊은청취율"),
+    ("kpi", "engage_rate", None, "참여율"),
+    ("kpi", "real_rate", None, "실청취율"),
+    ("kpi", "react_rate", None, "복귀율"),
+    ("kpi", "churn_rate", None, "이탈률"),
+    ("kpi", "habit_rate", None, "습관형성률"),
+    ("kpi", "new", None, "신규사용자"),
+    ("kpi", "react", None, "복귀사용자"),
+    ("engagement", "SMS", None, "문자참여"),
+    ("engagement", "GG", None, "공감로그참여"),
+    ("pgm_gender", "F", {"DEPTH": "ALL"}, "여성비율"),
+    ("pgm_gender", "M", {"DEPTH": "ALL"}, "남성비율"),
+    ("pgm_age", "20_24", {"DEPTH": "ALL"}, "20-24비율"),
+    ("pgm_age", "40_44", {"DEPTH": "ALL"}, "40-44비율"),
+    ("pgm_age", "OVER60", {"DEPTH": "ALL"}, "60대이상비율"),
+    ("pgm_device", "SP", {"DEPTH": "ALL"}, "스마트폰비율"),
+    ("pgm_device", "AI", {"DEPTH": "ALL"}, "AI스피커비율"),
+]
+
+# 대상지표(target) 감지 — 기본 DAU. (source, field, dims, label)
+_TARGET_HINTS = [
+    (("참여율",), ("kpi", "engage_rate", None, "참여율")),
+    (("깊은청취", "몰입"), ("kpi", "deep_rate", None, "깊은청취율")),
+    (("실청취",), ("kpi", "real_rate", None, "실청취율")),
+    (("이탈",), ("kpi", "churn_rate", None, "이탈률")),
+    (("복귀율",), ("kpi", "react_rate", None, "복귀율")),
+    (("습관",), ("kpi", "habit_rate", None, "습관형성률")),
+    (("문자참여", "문자 참여"), ("engagement", "SMS", None, "문자참여")),
+    (("여성비율", "여성 비율"), ("pgm_gender", "F", {"DEPTH": "ALL"}, "여성비율")),
+]
+
+
+def _target_metric(q: str):
+    # DAU가 언급되면 대상(subject)일 확률이 큼 — 비교 팩터로 언급된 지표를 target으로 오인 방지
+    if "dau" in (q or "").lower() or "활성 사용자" in q or "활성사용자" in q \
+            or "청취자 수" in q or "청취자수" in q:
+        return ("kpi", "dau", None, "DAU")
+    for keys, tgt in _TARGET_HINTS:
+        if any(k in q for k in keys):
+            return tgt
+    return ("kpi", "dau", None, "DAU")
+
+
+def _p_metric_correlate(ent):
+    """[교차지표] 대상지표(기본 DAU) 대비 후보 팩터들의 동반움직임·상관을 결정적으로 계산.
+       소스를 가로질러(참여·성별·연령·디바이스·기타 KPI) 같은 창에서 정렬·상관 — 숫자는 코드,
+       관계·인과 해석은 LLM(+온톨로지). '무엇과 같이 움직였나' 류."""
+    q = ent.get("_question") or ""
+    code = ent.get("code")
+    if not code or ent.get("scope_kind") != "program" or not _wants_correlate(q):
+        return None
+    import raas_series as SR
+    import raas_analytics as AN
+    t_src, t_field, t_dims, t_label = _target_metric(q)
+    lb = ent.get("lookback") or 45
+    target = SR.series(t_src, code, t_field, dims=t_dims)[-lb:]
+    if len(target) < 5:
+        return None
+    lo, hi = target[0][0], target[-1][0]
+    factors = {}
+    for src, field, dims, label in _CORRELATE_FACTORS:
+        if (src, field) == (t_src, t_field):
+            continue
+        ser = [(d, v) for d, v in SR.series(src, code, field, dims=dims) if lo <= d <= hi]
+        if len(ser) >= 5:
+            factors[label] = ser
+    if not factors:
+        return None
+    dec = AN.decompose(target, factors)
+    top = [{"지표": r["factor"], "r": r["r"], "방향": r["direction"], "강도": r["strength"],
+            "표본": r["n"], "변화%": (r["change"] or {}).get("pct")} for r in dec["factors"][:8]]
+    if not top:
+        return None
+    return {
+        "program": _resolve_name(code), "code": code,
+        "대상지표": t_label, "창": f"{lo}~{hi} ({len(target)}일)",
+        "대상변화": dec["target_change"],
+        "동반움직임(|r| 상위)": top,
+        "주의": "r은 '함께 움직인 정도'일 뿐 상관≠인과. 어떤 관계가 실제 의미 있는지는 "
+                "온톨로지 관계(Phase 3)·도메인 해석으로 판단해야 함(우연 상관 배제).",
+    }
+
+
 PROVIDERS = [
     {"name": "program_kpi", "needs": "program",
      "desc": "프로그램의 최신 핵심 KPI 스냅샷(DAU/WAU/MAU·신규·복귀·이탈·실청취·깊은청취·유지율과 증감)",
@@ -1215,6 +1312,10 @@ PROVIDERS = [
     {"name": "metric_timeseries", "needs": "program",
      "desc": "주요 지표 시계열(의도 기반: 추이 질의는 전체, 원인·포인트 질의는 최근 4주)",
      "fetch": _p_metric_timeseries},
+    {"name": "metric_correlate", "needs": "program",
+     "desc": "대상지표(기본 DAU) 대비 여러 지표(참여·성별·연령·디바이스·기타 KPI)의 동반움직임·상관을 "
+             "소스 가로질러 결정적으로 계산 — 'DAU가 여성비율·문자참여와 같이 움직였나·무엇과 연관·상관' 등 지표 간 관계 질의",
+     "fetch": _p_metric_correlate},
     {"name": "data_coverage", "needs": "program",
      "desc": "데이터 보유 기간·범위 — '언제부터/언제까지 데이터 있나·며칠치·수집 기간' 등 데이터 커버리지 질의(실제 룩업 최초/최신일)",
      "fetch": _p_data_coverage},
@@ -2138,6 +2239,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
         names = ["engagement"] + names        # '문자·공감로그 참여' 질의는 참여 데이터 반드시 포함
     if _wants_program_demo(question) and ent.get("scope_kind") == "program" and "program_demographics" not in names:
         names = ["program_demographics"] + names   # 프로그램 성별·연령·디바이스 분포 질의
+    if _wants_correlate(question) and ent.get("scope_kind") == "program" and "metric_correlate" not in names:
+        names = ["metric_correlate"] + names   # 지표 간 동반움직임·상관 질의(교차지표)
     if edit:
         # 편성 연혁 질의는 편성 전용 맥락으로 확정 — KPI·시계열 provider가 섞이면 LLM이 편성
         #   서술 대신 '데이터 없음' KPI 프레임으로 새는 걸 방지(Haiku 선택 비결정성 제거).
