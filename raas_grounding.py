@@ -1791,6 +1791,17 @@ _RANK_FIELD_MAP = [
     (("dau", "활성", "일활", "청취자"), "dau", "DAU"),
 ]
 _RANK_EXCLUDE = {"T00", "F00", "L00", "G00", "P00"}
+# 인구 카테고리 순위(성별·연령·디바이스 비율%) — 통합 접근자(raas_series.ranking)로 전 프로그램 정렬.
+# (keys, source, field, label). KPI 필드가 아니라 분포 소스라 별도 경로.
+_RANK_DEMO_MAP = [
+    (("남성", "남자"), "pgm_gender", "M", "남성 비율"),
+    (("여성", "여자"), "pgm_gender", "F", "여성 비율"),
+    (("스마트폰", "모바일"), "pgm_device", "SP", "스마트폰 비율"),
+    (("ai스피커", "ai 스피커", "인공지능 스피커"), "pgm_device", "AI", "AI스피커 비율"),
+    (("차량", "자동차", "카오디오"), "pgm_device", "CAR", "차량 비율"),
+    (("60대", "60세 이상", "고령", "노년"), "pgm_age", "OVER60", "60대이상 비율"),
+    (("10대", "청소년"), "pgm_age", "UNDER20", "10대이하 비율"),
+]
 
 def _to_float(v):
     try:
@@ -1813,6 +1824,13 @@ def _detect_ranking(question: str):
                  and any(s in t for s in _RANK_SUPERLATIVE) and "프로그램" in t)
     if not any(s.lower() in tl for s in _RANK_SIGNAL) and not by_change:
         return None
+    # 인구 카테고리 순위(성별·연령·디바이스 비율) — 변화량 순위가 아닐 때만(분포는 _chg 없음)
+    if not by_change:
+        for keys, src, field, lab in _RANK_DEMO_MAP:
+            if any(k.lower() in tl for k in keys):
+                asc = any(k in t for k in ("낮은", "최저", "하위", "worst", "적은", "least"))
+                return {"demo": True, "source": src, "field": field, "label": lab,
+                        "asc": asc, "by_change": False}
     fld, label = "dau", "DAU"
     for keys, f, lab in _RANK_FIELD_MAP:
         if any(k.lower() in tl for k in keys):
@@ -1826,7 +1844,39 @@ def _detect_ranking(question: str):
     return {"field": fld, "label": label, "asc": asc, "by_change": False}
 
 
+def _assemble_ranking_demo(question, spec, overlay_ctx=None) -> dict:
+    """인구 카테고리 비율(성별·연령·디바이스) 전 프로그램 순위 — 통합 접근자 위임.
+       비율은 구성비(%)라 규모(청취자 수)와 별개임을 명시(구성비 공리)."""
+    import raas_series as SR
+    rows = [(c, v) for c, v in SR.ranking(spec["source"], spec["field"], dims={"DEPTH": "ALL"})
+            if c not in _RANK_EXCLUDE and not (len(c) == 3 and c.endswith("00"))]
+    if not rows:
+        return {"ok": False, "reason": "분포 데이터 없음"}
+    if spec["asc"]:
+        rows = sorted(rows, key=lambda x: x[1])          # 낮은순(기본은 접근자가 내림차순)
+    top = [{"code": c, "name": _resolve_name(c), "비율%": round(v, 1)} for c, v in rows[:15]]
+    payload = {"metric": spec["label"], "depth": "청취시작(ALL)", "window": "일간(최신)",
+               "order": "asc(낮은순)" if spec["asc"] else "desc(높은순)",
+               "count": len(rows), "ranking": top}
+    head = (f"순위 분석: 전 프로그램 {spec['label']} "
+            f"{'하위' if spec['asc'] else '상위'} (분포 룩업 최신, 대상 {len(rows)}개)")
+    context = (head + f"\n\n### program_ranking(분포) — 전 프로그램 {spec['label']} 순위\n"
+               + json.dumps(payload, ensure_ascii=False, default=str)
+               + "\n\n## 해석 주의\n- 이 순위는 '구성비(%)' 기준 — 규모(청취자 수)와 별개다."
+                 " 비율이 높아도 절대 인원은 적을 수 있으니, 규모가 궁금하면 DAU 순위와 함께 볼 것.")
+    targets = [("program", it["code"]) for it in top[:8]] + [("global", None)]
+    otext, overlay_ids = _fetch_overlay(targets, overlay_ctx)
+    if otext:
+        context += "\n\n" + otext
+    return {"ok": True, "context": context,
+            "providers_used": ["program_ranking_demo"], "entities_brief": head,
+            "provenance": {"providers": ["program_ranking_demo"], "scope": "ranking",
+                           "metric": spec["field"], "overlay_items": overlay_ids}}
+
+
 def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
+    if spec.get("demo"):
+        return _assemble_ranking_demo(question, spec, overlay_ctx)
     try:
         rows = S._kpi_rows() or []
     except Exception:

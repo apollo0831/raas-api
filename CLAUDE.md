@@ -97,7 +97,7 @@ raas_history_db.py  ← SQLite: query_history·knowledge_items·improvements·da
 | **program** | "컬투쇼 어제 왜 빠졌어?", "영스트리트 역대 DJ", "오늘 게스트 누구야?", "컬투쇼 문자 참여" | provider 13종(KPI·시계열·흐름분해·코호트·편성·요일·개편·편성표·특일·편성이력·오늘편성·참여) |
 | **channel** | "러브FM 어때?", "전사 트렌드", "러브FM 시간대별 편성 변화" | 채널행(F00/L00/G00/P00/T00) + 채널 소속 프로그램 KPI(`channel_programs`)·시간대별 편성 이력(`channel_history`, 종영승계+현행). '편성 변화·연혁' 의도면 `_wants_editorial`이 편성이력을 주경로로 세우고 KPI·아카이브 경쟁 제거 |
 | **compare** | "파워FM vs 러브FM 비교", "채널별 핵심 지표 비교"(→4채널) | 엔티티 2~4개 KPI·시계열 나란히 |
-| **ranking** | "프로그램별 DAU 순위", "가장 많이 증가한 프로그램"(변화량 순위) | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬(`_chg`도 지원) |
+| **ranking** | "프로그램별 DAU 순위", "가장 많이 증가한 프로그램"(변화량 순위), "남성 비율 높은 프로그램" | `_kpi_rows()`에서 최신일 전 프로그램 지표 정렬(`_chg`도 지원). **인구 카테고리(성별·연령·디바이스 비율) 순위**는 `_RANK_DEMO_MAP`→`raas_series.ranking(분포소스)`로 전 프로그램 정렬(`program_ranking_demo`, 구성비 주의문 포함) |
 | **meta** | "어떤 지표 있나", "뭘 볼 수 있어" | 온톨로지 지표 카탈로그(`get_metric_definitions_block`) — `_detect_meta`/`_assemble_meta` |
 | **realtime** | "지금 동시 청취자 몇 명", "실시간 현황" | `tempsummary` 1분 집계 — 스냅샷(채널·디바이스·성별·연령)·어제/지난주 동시각 비교·오늘 추이(10분 다운샘플). `_detect_realtime`/`_assemble_realtime` |
 | **digest** | "어제 방송 특이사항"(스토리라인 단일경로) | z-score 이상탐지(get_cached_anomalies) |
