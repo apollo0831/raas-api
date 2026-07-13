@@ -99,8 +99,10 @@ def period_avg(source, code, field, days, window=None, dims=None):
     return round(sum(tail) / len(tail), 2) if tail else None
 
 
-def ranking(source, field, date=None, window=None, dims=None, codes=None) -> list:
-    """[(code, value)] 내림차순 — 한 날짜(없으면 각 코드 최신) 기준 코드 순위."""
+def ranking(source, field, date=None, window=None, dims=None, codes=None, days=None) -> list:
+    """[(code, value)] 내림차순 — 코드별 순위.
+       days 지정 시 각 코드의 최근 days개 관측치 평균으로(기간 순위),
+       date 지정 시 그 날, 둘 다 없으면 각 코드 최신."""
     src = REG.get_source(source)
     if not _grid(src):
         return []
@@ -109,7 +111,9 @@ def ranking(source, field, date=None, window=None, dims=None, codes=None) -> lis
     out = []
     for code in (codes or list(idx.keys())):
         code = code.upper()
-        if nd:
+        if days:
+            v = period_avg(source, code, field, days, window, dims)
+        elif nd:
             leaf = _leaf(src, (idx.get(code) or {}).get(nd), window, dims)
             v = _fn((leaf or {}).get(field))
         else:

@@ -129,6 +129,10 @@ check_true("성별 순위 → program_ranking_demo provider",
            "program_ranking_demo" in G.assemble("여성 비율 가장 높은 프로그램").get("providers_used", []))
 check_true("DAU 순위는 여전히 KPI 랭킹(회귀)",
            "program_ranking" in G.assemble("프로그램별 DAU 순위").get("providers_used", []))
+# 인구 카테고리 순위 기간 반영 — '지난 한달간'→30일 평균, 기간 없으면 최신 스냅샷
+check("'지난 한달간' → 30일 평균 순위", G._demo_rank_period("지난 한달간 남성 비율 높은 프로그램"), 30)
+check("'지난주' → 7일 평균 순위", G._demo_rank_period("지난주 여성 비율 순위"), 7)
+check("기간 없으면 최신 스냅샷", G._demo_rank_period("남성 비율 가장 높은 프로그램"), None)
 # 오탐 방지: 단일 엔티티 변화 질의는 순위가 아니다
 check_true("오탐 방지: '컬투쇼 DAU 증가했어?' 순위 아님",
            G._detect_ranking("컬투쇼 DAU 증가했어?") is None)

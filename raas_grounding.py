@@ -1803,6 +1803,15 @@ _RANK_DEMO_MAP = [
     (("10대", "청소년"), "pgm_age", "UNDER20", "10대이하 비율"),
 ]
 
+def _demo_rank_period(q: str):
+    """인구 카테고리 순위의 기간 의도 → 평균 낼 일수(None=최신 스냅샷)."""
+    t = q or ""
+    if any(k in t for k in ("월간", "월별", "지난달", "전월", "한달", "한 달", "1개월", "한 개월", "30일", "최근 한 달")):
+        return 30
+    if any(k in t for k in ("주간", "주별", "지난주", "전주", "한주", "한 주", "7일", "최근 한 주")):
+        return 7
+    return None
+
 def _to_float(v):
     try:
         return float(str(v).replace(",", "").replace("%", ""))
@@ -1848,18 +1857,20 @@ def _assemble_ranking_demo(question, spec, overlay_ctx=None) -> dict:
     """인구 카테고리 비율(성별·연령·디바이스) 전 프로그램 순위 — 통합 접근자 위임.
        비율은 구성비(%)라 규모(청취자 수)와 별개임을 명시(구성비 공리)."""
     import raas_series as SR
-    rows = [(c, v) for c, v in SR.ranking(spec["source"], spec["field"], dims={"DEPTH": "ALL"})
+    days = _demo_rank_period(question)                    # 30/7 = 기간평균 순위, None = 최신 스냅샷
+    rows = [(c, v) for c, v in SR.ranking(spec["source"], spec["field"], dims={"DEPTH": "ALL"}, days=days)
             if c not in _RANK_EXCLUDE and not (len(c) == 3 and c.endswith("00"))]
     if not rows:
         return {"ok": False, "reason": "분포 데이터 없음"}
     if spec["asc"]:
         rows = sorted(rows, key=lambda x: x[1])          # 낮은순(기본은 접근자가 내림차순)
     top = [{"code": c, "name": _resolve_name(c), "비율%": round(v, 1)} for c, v in rows[:15]]
-    payload = {"metric": spec["label"], "depth": "청취시작(ALL)", "window": "일간(최신)",
+    win_kr = {30: "지난 30일 평균", 7: "지난 7일 평균"}.get(days, "일간(최신)")
+    payload = {"metric": spec["label"], "depth": "청취시작(ALL)", "window": win_kr,
                "order": "asc(낮은순)" if spec["asc"] else "desc(높은순)",
                "count": len(rows), "ranking": top}
     head = (f"순위 분석: 전 프로그램 {spec['label']} "
-            f"{'하위' if spec['asc'] else '상위'} (분포 룩업 최신, 대상 {len(rows)}개)")
+            f"{'하위' if spec['asc'] else '상위'} ({win_kr}, 대상 {len(rows)}개)")
     context = (head + f"\n\n### program_ranking(분포) — 전 프로그램 {spec['label']} 순위\n"
                + json.dumps(payload, ensure_ascii=False, default=str)
                + "\n\n## 해석 주의\n- 이 순위는 '구성비(%)' 기준 — 규모(청취자 수)와 별개다."
