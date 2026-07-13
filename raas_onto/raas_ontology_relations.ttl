@@ -1,0 +1,114 @@
+@prefix raas: <http://sbs.co.kr/raas#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# =============================================================================
+# 지표 관계·해석 온톨로지 (metric ↔ metric) — Phase 3
+#
+# 데이터(상관계수, Phase 2 raas_analytics)가 '증거'라면, 여기 관계는
+# "어떤 상관이 실제 의미 있는가"의 '해석 지식'이다. 상관값 자체는 코드가 계산하고,
+# 이 온톨로지는 (1) 어떤 지표를 후보 팩터로 볼지 (2) 그 지표와 규모(DAU)의 관계 유형·기대부호
+# (3) 상관을 인과로 오독하지 않게 하는 해석 공리를 제공한다.
+#
+# 새 팩터 추가 = 아래 raas:CorrelationFactor 개체 하나 추가(코드 수정 없음).
+# grounding metric_correlate provider가 get_correlation_factors()로 팩터를,
+# get_metric_relations_block()로 해석 지식을 읽어 LLM context에 넣는다.
+# =============================================================================
+
+# ── 상관 후보 팩터 — 대상지표(기본 DAU) 대비 비교할 지표들 ──────────────────
+#   factorSource/Field/Depth = 통합 접근자(raas_series) 좌표. relationToDAU = 관계 유형.
+#   expectedSign = 규모와 같이 움직일 것으로 기대되는 방향(+동행 / -역행 / 0 구성).
+
+raas:cf_new a raas:CorrelationFactor ;
+    raas:factorLabel "신규사용자" ; raas:factorSource "kpi" ; raas:factorField "new" ;
+    raas:relationToDAU "mayDrive" ; raas:expectedSign "+" ;
+    raas:relationNote "신규 유입이 규모를 밀어올리는 선행 성장 동력" .
+
+raas:cf_react a raas:CorrelationFactor ;
+    raas:factorLabel "복귀사용자" ; raas:factorSource "kpi" ; raas:factorField "react" ;
+    raas:relationToDAU "mayDrive" ; raas:expectedSign "+" ;
+    raas:relationNote "휴면 사용자의 복귀 유입이 규모를 회복시킴" .
+
+raas:cf_churn a raas:CorrelationFactor ;
+    raas:factorLabel "이탈률" ; raas:factorSource "kpi" ; raas:factorField "churn_rate" ;
+    raas:relationToDAU "mayDrive" ; raas:expectedSign "-" ;
+    raas:relationNote "이탈이 규모를 직접 끌어내림(규모 하락의 주요 견인)" .
+
+raas:cf_react_rate a raas:CorrelationFactor ;
+    raas:factorLabel "복귀율" ; raas:factorSource "kpi" ; raas:factorField "react_rate" ;
+    raas:relationToDAU "relatesTo" ; raas:expectedSign "+" ;
+    raas:relationNote "복귀율은 재유입 강도 — 규모 회복과 동반" .
+
+raas:cf_engage_rate a raas:CorrelationFactor ;
+    raas:factorLabel "참여율" ; raas:factorSource "kpi" ; raas:factorField "engage_rate" ;
+    raas:relationToDAU "relatesTo" ; raas:expectedSign "+" ;
+    raas:relationNote "참여는 활성·충성 신호 — 규모와 동반하나 인과는 양방향 가능" .
+
+raas:cf_deep_rate a raas:CorrelationFactor ;
+    raas:factorLabel "깊은청취율" ; raas:factorSource "kpi" ; raas:factorField "deep_rate" ;
+    raas:relationToDAU "relatesTo" ; raas:expectedSign "+" ;
+    raas:relationNote "청취 품질(10분+) — 규모가 큰 날 품질도 동반되는 구조" .
+
+raas:cf_real_rate a raas:CorrelationFactor ;
+    raas:factorLabel "실청취율" ; raas:factorSource "kpi" ; raas:factorField "real_rate" ;
+    raas:relationToDAU "relatesTo" ; raas:expectedSign "+" .
+
+raas:cf_habit_rate a raas:CorrelationFactor ;
+    raas:factorLabel "습관형성률" ; raas:factorSource "kpi" ; raas:factorField "habit_rate" ;
+    raas:relationToDAU "relatesTo" ; raas:expectedSign "+" ;
+    raas:relationNote "신규의 7일내 재방문 — 장기 규모의 선행 지표" .
+
+raas:cf_sms a raas:CorrelationFactor ;
+    raas:factorLabel "문자참여" ; raas:factorSource "engagement" ; raas:factorField "SMS" ;
+    raas:relationToDAU "relatesTo" ; raas:expectedSign "+" ;
+    raas:relationNote "문자 참여 건수 — 활성·몰입 신호(평일만 집계, m&studio 출처)" .
+
+raas:cf_gg a raas:CorrelationFactor ;
+    raas:factorLabel "공감로그참여" ; raas:factorSource "engagement" ; raas:factorField "GG" ;
+    raas:relationToDAU "relatesTo" ; raas:expectedSign "+" .
+
+raas:cf_gender_f a raas:CorrelationFactor ;
+    raas:factorLabel "여성비율" ; raas:factorSource "pgm_gender" ; raas:factorField "F" ; raas:factorDepth "ALL" ;
+    raas:relationToDAU "compositional" ; raas:expectedSign "0" ;
+    raas:complementOf "남성비율" ;
+    raas:relationNote "구성비(F+M=100). 규모와의 상관은 구성 효과일 수 있음 — 인과 아님" .
+
+raas:cf_gender_m a raas:CorrelationFactor ;
+    raas:factorLabel "남성비율" ; raas:factorSource "pgm_gender" ; raas:factorField "M" ; raas:factorDepth "ALL" ;
+    raas:relationToDAU "compositional" ; raas:expectedSign "0" ;
+    raas:complementOf "여성비율" ;
+    raas:relationNote "여성비율과 정의상 완전 역상관(합=100) — 둘 중 하나만 해석" .
+
+raas:cf_age_2024 a raas:CorrelationFactor ;
+    raas:factorLabel "20-24비율" ; raas:factorSource "pgm_age" ; raas:factorField "20_24" ; raas:factorDepth "ALL" ;
+    raas:relationToDAU "compositional" ; raas:expectedSign "0" .
+
+raas:cf_age_4044 a raas:CorrelationFactor ;
+    raas:factorLabel "40-44비율" ; raas:factorSource "pgm_age" ; raas:factorField "40_44" ; raas:factorDepth "ALL" ;
+    raas:relationToDAU "compositional" ; raas:expectedSign "0" ;
+    raas:relationNote "연령 구성비(전 연령대 합=100). 핵심 청취층 이동의 신호로만 해석" .
+
+raas:cf_age_over60 a raas:CorrelationFactor ;
+    raas:factorLabel "60대이상비율" ; raas:factorSource "pgm_age" ; raas:factorField "OVER60" ; raas:factorDepth "ALL" ;
+    raas:relationToDAU "compositional" ; raas:expectedSign "0" .
+
+raas:cf_dev_sp a raas:CorrelationFactor ;
+    raas:factorLabel "스마트폰비율" ; raas:factorSource "pgm_device" ; raas:factorField "SP" ; raas:factorDepth "ALL" ;
+    raas:relationToDAU "compositional" ; raas:expectedSign "0" ;
+    raas:relationNote "디바이스 구성비(합=100). 평일 PC 청취 이탈 시 스마트폰 비중 자동 상승 등 구성 효과 주의" .
+
+raas:cf_dev_ai a raas:CorrelationFactor ;
+    raas:factorLabel "AI스피커비율" ; raas:factorSource "pgm_device" ; raas:factorField "AI" ; raas:factorDepth "ALL" ;
+    raas:relationToDAU "compositional" ; raas:expectedSign "0" .
+
+# ── 해석 공리 — 상관을 인과로 오독하지 않게 하는 도메인 지식 ──────────────────
+raas:CompositionalRatioAxiom a raas:MetricInterpretationAxiom ;
+    rdfs:label "구성비 해석 공리"@ko ;
+    rdfs:comment "성별·연령·디바이스 '비율' 지표는 한 (창·깊이) 셀 안에서 합=100인 구성비다. 규모(DAU)와 상관이 나와도 인과가 아니라 구성 효과(특정 세그먼트가 이탈하면 남은 세그먼트 비율이 자동 상승)일 수 있다. 상보 비율(여성/남성)은 정의상 완전 역상관이므로 둘 중 하나만 해석한다. '비율 변화 자체'가 발견이면 유효하나, '남성비율이 DAU를 낮췄다'式 인과 서술은 금지."@ko .
+
+raas:DriverDirectionAxiom a raas:MetricInterpretationAxiom ;
+    rdfs:label "드라이버 방향 공리"@ko ;
+    rdfs:comment "relationToDAU=mayDrive인 지표는 expectedSign(기대부호)이 있다. 관측 상관 방향이 기대와 일치하면 드라이버 가설이 강화되고(예: 이탈률↑→DAU↓), 반대면 교란변수를 의심해 재검토한다. relatesTo는 방향 가설 없이 동반만 의미."@ko .
+
+raas:CorrelationNotCausationAxiom a raas:MetricInterpretationAxiom ;
+    rdfs:label "상관≠인과 공리"@ko ;
+    rdfs:comment "강한 상관도 공통 원인일 수 있다 — 특히 주중/주말 리듬과 편성(특집·게스트)이 여러 지표를 동시에 움직인다. 상관은 '함께 움직였다'까지만 말하고, 인과 주장은 흐름분해(flow_decomp)·편성 맥락으로 뒷받침될 때만."@ko .

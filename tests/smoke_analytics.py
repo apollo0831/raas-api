@@ -55,5 +55,18 @@ check("게이트: 비상관 질의→None", G._p_metric_correlate({**ent, "_ques
 res = G.assemble("컬투쇼 DAU가 무엇과 연관", overlay_ctx={"mode": "normal"})
 check("라우팅: metric_correlate 포함", "metric_correlate" in res.get("providers_used", []))
 
+print("── Phase 3: 온톨로지 관계 ──")
+from raas_onto import get_adapter
+_A = get_adapter()
+facs = _A.get_correlation_factors()
+check("CorrelationFactor 로드(>=10)", len(facs) >= 10, f"n={len(facs)}")
+check("구성비/드라이버 분류 존재", any(f["relation"] == "compositional" for f in facs)
+      and any(f["relation"] == "mayDrive" for f in facs))
+blk = _A.get_metric_relations_block()
+check("관계블록 구성비 공리 포함", "구성비 해석 공리" in blk and "합=100" in blk)
+check("provider에 관계지식 주입", bool(r) and "관계지식(온톨로지)" in r)
+check("팩터가 온톨로지 유래(라벨 일치)", bool(r) and any(
+    x["지표"] in [f["label"] for f in facs] for x in r["동반움직임(|r| 상위)"]))
+
 print(f"\n{'✓ 전체 통과' if not fail else f'✗ {fail}건 실패'} (ok={ok}, fail={fail})")
 sys.exit(1 if fail else 0)

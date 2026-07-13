@@ -265,8 +265,13 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   decompose·change·rank_by_change`. 접근자가 주는 [(date,val)] 시계열을 공통창 정렬→상관·동반움직임.
   **숫자만** — 관계·인과 판단은 온톨로지·LLM. grounding `metric_correlate` provider가 대상지표(기본 DAU)
   대비 후보 팩터(참여·성별·연령·디바이스·기타 KPI, `_CORRELATE_FACTORS`)를 소스 가로질러 상관해
-  '무엇과 같이 움직였나'에 답한다(`_wants_correlate` 게이트+강제포함). 팩터 목록은 Phase 3에서
-  온톨로지 raas:mayDrive로 이관 예정. 회귀: `python tests/smoke_analytics.py`.
+  '무엇과 같이 움직였나'에 답한다(`_wants_correlate` 게이트+강제포함). 회귀: `python tests/smoke_analytics.py`.
+- `raas_onto/raas_ontology_relations.ttl` [Phase 3] — 지표 관계·해석 온톨로지. `raas:CorrelationFactor`
+  (팩터별 source/field/depth + relationToDAU: mayDrive+기대부호 / relatesTo / **compositional**) +
+  해석 공리 3종(구성비·드라이버방향·상관≠인과). metric_correlate가 팩터를 **여기서 읽고**(하드코딩
+  아님 — 추가는 TTL만) 관계지식 블록을 답변에 주입 → LLM이 **의미 있는 상관 vs 구성 효과(합=100)**를
+  가른다(예: 스마트폰비율 −0.97을 구성효과로 단정·주말리듬 공통원인 지목). 어댑터:
+  `get_correlation_factors`/`get_metric_relations_block`. 커버리지 맵 교차관계=CorrelationFactor 수.
 
 ## 설계 문서 / 개발 메모
 - `docs/`: grounding_retrieval_design · knowledge_loop_design · ab_harness_design (설계 근거),

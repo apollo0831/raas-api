@@ -69,6 +69,7 @@ ONTOLOGY_FILES = [
     "raas_ontology_person.ttl",
     "raas_ontology_episode.ttl",
     "raas_ontology_contributed.ttl",   # 승인 기여 지식(승격 배치 생성)
+    "raas_ontology_relations.ttl",   # 지표 관계·해석(교차상관 팩터·구성비 공리) — Phase 3
 ]
 
 
@@ -379,6 +380,45 @@ class OntologyAdapter:
                     continue
             out.append({"label": self._onto.label_ko(iri), "text": text})
         return out
+
+    def get_correlation_factors(self) -> list:
+        """raas:CorrelationFactor → 교차상관 후보 팩터 목록(Phase 3).
+        [{source, field, dims, label, relation, sign, note, complement}]. dims는 factorDepth 있으면 {DEPTH:..}.
+        grounding metric_correlate가 하드코딩 대신 이걸 읽어 팩터 구성(추가=TTL만)."""
+        out = []
+        for iri in self._onto.instances_of("raas:CorrelationFactor"):
+            g = lambda p: self._onto.value_str(self._onto.get_one(iri, p))
+            src, field = g("raas:factorSource"), g("raas:factorField")
+            if not (src and field):
+                continue
+            depth = g("raas:factorDepth")
+            out.append({
+                "source": src, "field": field,
+                "dims": ({"DEPTH": depth} if depth else None),
+                "label": g("raas:factorLabel") or field,
+                "relation": g("raas:relationToDAU"), "sign": g("raas:expectedSign"),
+                "note": g("raas:relationNote"), "complement": g("raas:complementOf"),
+            })
+        return out
+
+    def get_metric_relations_block(self) -> str:
+        """지표 관계·해석 지식 텍스트 블록 — 팩터별 관계유형/기대부호 + 해석 공리.
+        metric_correlate 답변 context에 주입해 LLM이 '의미 있는 상관 vs 구성 효과'를 가른다."""
+        _REL_KO = {"mayDrive": "드라이버(인과 가설)", "relatesTo": "연관(동반)", "compositional": "구성비(합=100)"}
+        lines = ["[지표 관계 지식 — 상관 해석용]"]
+        for f in self.get_correlation_factors():
+            rel = _REL_KO.get(f["relation"], f["relation"] or "")
+            sign = {"+": "동행 기대", "-": "역행 기대", "0": ""}.get(f["sign"], "")
+            tail = " · ".join(x for x in (sign, f["note"]) if x)
+            lines.append(f"- {f['label']}: {rel}" + (f" ({tail})" if tail else ""))
+        axioms = self._onto.instances_of("raas:MetricInterpretationAxiom")
+        if axioms:
+            lines.append("\n[해석 공리]")
+            for iri in axioms:
+                txt = self._onto.value_str(self._onto.get_one(iri, "rdfs:comment"))
+                if txt:
+                    lines.append(f"- {self._onto.label_ko(iri)}: {txt}")
+        return "\n".join(lines)
 
     def get_program_airings(self, channel_code: str = None, name_contains: str = None) -> list:
         """종영 프로그램 편성 이력(raas:ProgramAiring) → 정렬된 dict 목록.

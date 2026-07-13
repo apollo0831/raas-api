@@ -51,7 +51,22 @@ def render(cov):
   </div>
 '''
     daily_nodes = [s["label"] for s in sources if s["grain"] == "daily" and s["onto_metrics"]]
-    relnodes = ('<span class="redge">?—?</span>'.join(f'<span class="rnode">{html.escape(n)}</span>' for n in daily_nodes))
+    built = st["relations"] > 0
+    edge = '<span class="redge redge-on">━</span>' if built else '<span class="redge">?—?</span>'
+    relnodes = edge.join(f'<span class="rnode">{html.escape(n)}</span>' for n in daily_nodes)
+    rel_cls = " built" if built else ""
+    rel_tag = "구축됨" if built else "미구축"
+    if built:
+        rel_desc = (f'패밀리 간 <b>관계(metric ↔ metric)</b>가 온톨로지에 <b>{st["relations"]}개</b> 선언됨'
+                    f'(raas:CorrelationFactor + 해석 공리). <b>metric_correlate</b> provider가 이 관계를 '
+                    f'상관값과 함께 LLM에 주입해 <b>의미 있는 상관 vs 구성 효과(합=100)</b>를 가른다. '
+                    f'"DAU가 여성비율·문자참여와 같이 갔나" 같은 <b>패밀리 교차 질문</b>이 답해진다. '
+                    f'팩터·관계 추가는 TTL만 — 코드 무관.')
+    else:
+        rel_desc = (f'패밀리들은 각자 <b>온톨로지 정의가 잘 되어 있지만</b>, 서로를 잇는 '
+                    f'<b>관계(metric ↔ metric)</b>는 아직 {st["relations"]}개다. 이 레이어가 비어 있는 한 '
+                    f'"DAU 하락이 여성 이탈·참여 저하와 같이 갔나?" 같은 <b>패밀리를 가로지르는 질문</b>은 '
+                    f'답할 수 없다 — 통합 계층(Phase 1~3)이 채우는 자리다.')
 
     warn = ""
     if st["uncovered"]:
@@ -59,10 +74,21 @@ def render(cov):
     if st["undefined"]:
         warn += f'<div class="note"><span class="mk m">●</span><div><b>정의 공백</b> — 소스가 채운다는데 온톨로지에 없음(철자?): {html.escape(", ".join(st["undefined"]))}</div></div>'
 
+    rel_stat_cls = "good" if built else "flag"
+    rel_stat_k = "교차지표 관계 (구축됨)" if built else "교차지표 관계 ← 미구축"
+    if built:
+        note_rel = (f'<div class="note"><span class="mk g">●</span><div><b>교차지표 관계 {st["relations"]}개 '
+                    f'구축됨</b> — metric_correlate가 상관값 + 관계 해석(구성비 vs 드라이버)을 함께 제공. '
+                    f'인사이트가 패밀리를 가로지름. 팩터 추가는 TTL만.</div></div>')
+    else:
+        note_rel = (f'<div class="note"><span class="mk m">●</span><div><b>교차지표 관계 {st["relations"]}개</b> — '
+                    f'데이터·정의는 있는데 "무엇이 무엇과 관련되나"가 없어 인사이트가 패밀리 안에 갇힘.</div></div>')
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     return _TEMPLATE.format(
         stat_src=st["sources"], stat_met=st["metrics"], stat_cov=st["covered"],
-        stat_rel=st["relations"], groups=groups, relnodes=relnodes, warn=warn, stamp=stamp)
+        stat_rel=st["relations"], rel_stat_cls=rel_stat_cls, rel_stat_k=rel_stat_k,
+        rel_cls=rel_cls, rel_tag=rel_tag, rel_desc=rel_desc, note_rel=note_rel,
+        groups=groups, relnodes=relnodes, warn=warn, stamp=stamp)
 
 
 _TEMPLATE = '''<title>RAAS 정보 체계 맵 — 데이터 × 온톨로지</title>
@@ -117,6 +143,11 @@ _TEMPLATE = '''<title>RAAS 정보 체계 맵 — 데이터 × 온톨로지</titl
   .stat .n{{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1;}}
   .stat .k{{font-size:12px;color:var(--ink-soft);margin-top:6px;}}
   .stat.flag .n{{color:var(--miss);}} .stat.flag .k{{color:var(--miss);}}
+  .stat.good .n{{color:var(--good);}} .stat.good .k{{color:var(--good);}}
+  .relbox.built{{border-style:solid;border-color:var(--good);background:var(--good-bg);}}
+  .relbox.built h3 .tag{{color:var(--good);border-color:var(--good);}}
+  .redge.redge-on{{color:var(--good);opacity:1;font-weight:700;}}
+  .relbox.built .relgraph .ex{{border-left-color:var(--good);}}
   .legend{{display:flex;flex-wrap:wrap;gap:16px;margin:18px 0 26px;font-size:12.5px;color:var(--ink-soft);}}
   .legend span{{display:inline-flex;align-items:center;gap:6px;}}
   .dot{{width:9px;height:9px;border-radius:50%;flex:none;}}
@@ -173,7 +204,7 @@ _TEMPLATE = '''<title>RAAS 정보 체계 맵 — 데이터 × 온톨로지</titl
     <div class="stat"><div class="n">{stat_src}</div><div class="k">데이터 소스(Feed)</div></div>
     <div class="stat"><div class="n">{stat_met}</div><div class="k">온톨로지 지표 정의</div></div>
     <div class="stat"><div class="n">{stat_cov}</div><div class="k">커버된 지표</div></div>
-    <div class="stat flag"><div class="n">{stat_rel}</div><div class="k">교차지표 관계 ← 미구축</div></div>
+    <div class="stat {rel_stat_cls}"><div class="n">{stat_rel}</div><div class="k">{rel_stat_k}</div></div>
   </div>
   <div class="legend">
     <span><i class="dot good"></i>소스·온톨로지·답변 연결됨</span>
@@ -185,19 +216,19 @@ _TEMPLATE = '''<title>RAAS 정보 체계 맵 — 데이터 × 온톨로지</titl
     <div>지표 패밀리</div><div>데이터 소스 (Splunk)</div><div>온톨로지 개념</div><div>답변 provider / scope</div>
   </div>
 {groups}
-  <div class="relbox">
-    <h3><span class="tag">미구축</span> 교차지표 관계 레이어</h3>
-    <p>패밀리들은 각자 <b>온톨로지 정의가 잘 되어 있지만</b>, 서로를 잇는 <b>관계(metric ↔ metric)</b>는 아직 {stat_rel}개다. 이 레이어가 비어 있는 한 "DAU 하락이 여성 이탈·참여 저하와 같이 갔나?" 같은 <b>패밀리를 가로지르는 질문</b>은 답할 수 없다 — 통합 계층(Phase 1~3)이 채우는 자리다.</p>
+  <div class="relbox{rel_cls}">
+    <h3><span class="tag">{rel_tag}</span> 교차지표 관계 레이어</h3>
+    <p>{rel_desc}</p>
     <div class="relgraph">
       {relnodes}
-      <div class="ex">예: "컬투쇼 DAU −8%가 40대 비율 상승·문자참여 −20%와 동반했는가" → 동반움직임·상관·분해로 답할 자리</div>
+      <div class="ex">예: "컬투쇼 DAU −8%가 40대 비율 상승·문자참여 −20%와 동반했는가" → 동반움직임·상관·분해 + 관계 해석으로 답</div>
     </div>
   </div>
   <section class="notes">
     <h2>읽는 법 · 진단 포인트</h2>
     <div class="note"><span class="mk g">●</span><div><b>일간 격자 소스</b>는 공통 좌표(코드×날짜)를 공유 — 교차분석의 재료는 이미 갖춰짐, 잇는 계층만 없다.</div></div>
     <div class="note"><span class="mk w">●</span><div><b>속성 소스</b>(편성 연혁·오늘 게스트)는 지표가 아니라 사실/속성 — 자유질의엔 충분하나 교차분석 대상 아님(의도된 상태).</div></div>
-    <div class="note"><span class="mk m">●</span><div><b>교차지표 관계 {stat_rel}개</b> — 데이터·정의는 있는데 "무엇이 무엇과 관련되나"가 없어 인사이트가 패밀리 안에 갇힘.</div></div>
+    {note_rel}
     {warn}
   </section>
   <div class="foot">generated {stamp} · raas_metrics_registry.coverage() → tools/gen_coverage_map.py · 데이터/온톨로지 추가 시 재실행하면 갱신</div>

@@ -157,17 +157,12 @@ def ontology_metrics() -> list:
 
 
 def _count_relations() -> int:
-    """교차지표 관계(metric↔metric) 선언 수 — Phase 3 전까지 0."""
+    """교차지표 관계(metric↔metric) 선언 수 — raas:CorrelationFactor의 relationToDAU 엣지 수(Phase 3)."""
     try:
         from raas_onto import get_adapter
         o = get_adapter()._onto
-        n = 0
-        for pred in ("raas:relatesTo", "raas:mayDrive", "raas:decomposesInto"):
-            try:
-                n += len(o.triples_with_predicate(pred))
-            except Exception:
-                pass
-        return n
+        return sum(1 for iri in o.instances_of("raas:CorrelationFactor")
+                   if o.get_one(iri, "raas:relationToDAU"))
     except Exception:
         return 0
 

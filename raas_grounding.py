@@ -1251,14 +1251,21 @@ def _p_metric_correlate(ent):
         return None
     import raas_series as SR
     import raas_analytics as AN
+    from raas_onto import get_adapter
     t_src, t_field, t_dims, t_label = _target_metric(q)
     lb = ent.get("lookback") or 45
     target = SR.series(t_src, code, t_field, dims=t_dims)[-lb:]
     if len(target) < 5:
         return None
     lo, hi = target[0][0], target[-1][0]
+    # 팩터 목록은 온톨로지(raas:CorrelationFactor)에서 — 추가는 TTL만(코드 무관). 없으면 하드코딩 폴백.
+    try:
+        onto_f = get_adapter().get_correlation_factors()
+        cat = [(f["source"], f["field"], f["dims"], f["label"]) for f in onto_f] or _CORRELATE_FACTORS
+    except Exception:
+        cat = _CORRELATE_FACTORS
     factors = {}
-    for src, field, dims, label in _CORRELATE_FACTORS:
+    for src, field, dims, label in cat:
         if (src, field) == (t_src, t_field):
             continue
         ser = [(d, v) for d, v in SR.series(src, code, field, dims=dims) if lo <= d <= hi]
@@ -1271,14 +1278,19 @@ def _p_metric_correlate(ent):
             "표본": r["n"], "변화%": (r["change"] or {}).get("pct")} for r in dec["factors"][:8]]
     if not top:
         return None
-    return {
+    res = {
         "program": _resolve_name(code), "code": code,
         "대상지표": t_label, "창": f"{lo}~{hi} ({len(target)}일)",
         "대상변화": dec["target_change"],
         "동반움직임(|r| 상위)": top,
-        "주의": "r은 '함께 움직인 정도'일 뿐 상관≠인과. 어떤 관계가 실제 의미 있는지는 "
-                "온톨로지 관계(Phase 3)·도메인 해석으로 판단해야 함(우연 상관 배제).",
     }
+    try:                                      # 관계 지식(온톨로지) — 의미 있는 상관 vs 구성 효과 판별
+        rel = get_adapter().get_metric_relations_block()
+        if rel:
+            res["관계지식(온톨로지)"] = rel
+    except Exception:
+        pass
+    return res
 
 
 PROVIDERS = [
