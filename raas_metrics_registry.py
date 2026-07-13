@@ -25,6 +25,11 @@ class Source:
     providers: list                 # 답변 경로(grounding provider / scope)
     extra_dims: dict = field(default_factory=dict)   # {"DEPTH":[...], "CATEGORY":[...]}
     note: str = ""
+    # 인덱스 물리 형태 — 통합 접근자(raas_series)가 셀을 뜨는 방식:
+    #   "flat"    : {code:{date:row}}                         (kpi·engagement·history)
+    #   "profile" : {code:{date:{PERIOD:{TYPE:{CATEGORY:v}}}}} (분포)
+    #   ""        : 접근자 비대상(분/편성)
+    shape: str = "flat"
 
 
 # ── 일간 격자 (코드 × 날짜) — 교차분석이 가능한 공통 좌표 ─────────────────
@@ -32,7 +37,7 @@ _DAILY = [
     Source(
         name="kpi", label="청취 KPI", grain="daily",
         axis="일간 격자 · (코드 × 날짜)",
-        lookups=["raas_kpi_latest.csv"], index_fn="get_cached_timeline(서버)",
+        lookups=["raas_kpi_latest.csv"], index_fn="get_timeline",
         available_periods=["1D", "1W", "1M"],
         onto_metrics=["활성 사용자 수", "1분 이상 청취자 수", "10분 이상 청취자 수",
                       "신규 사용자", "복귀 사용자", "이탈률", "복귀율", "깊은청취율",
@@ -54,7 +59,7 @@ _DAILY = [
         available_periods=["1D", "1W", "1M"],
         onto_metrics=["프로그램 성별 분포"],
         providers=["program_demographics"],
-        extra_dims={"DEPTH": ["ALL", "1MIN", "10MIN"], "CATEGORY": ["F", "M"]},
+        extra_dims={"DEPTH": ["ALL", "1MIN", "10MIN"], "CATEGORY": ["F", "M"]}, shape="profile",
     ),
     Source(
         name="pgm_age", label="연령대 분포", grain="daily",
@@ -63,7 +68,7 @@ _DAILY = [
         available_periods=["1D", "1W", "1M"],
         onto_metrics=["프로그램 연령대 분포"],
         providers=["program_demographics"],
-        extra_dims={"DEPTH": ["ALL", "1MIN", "10MIN"], "CATEGORY": ["UNDER20", "…", "OVER60"]},
+        extra_dims={"DEPTH": ["ALL", "1MIN", "10MIN"], "CATEGORY": ["UNDER20", "…", "OVER60"]}, shape="profile",
     ),
     Source(
         name="pgm_device", label="디바이스 분포", grain="daily",
@@ -72,7 +77,7 @@ _DAILY = [
         available_periods=["1D"],
         onto_metrics=["프로그램 디바이스 분포"],
         providers=["program_demographics"],
-        extra_dims={"DEPTH": ["ALL", "1MIN", "10MIN"], "CATEGORY": ["SP", "PC", "AI", "…"]},
+        extra_dims={"DEPTH": ["ALL", "1MIN", "10MIN"], "CATEGORY": ["SP", "PC", "AI", "…"]}, shape="profile",
     ),
     Source(
         name="history_archive", label="장기 아카이브", grain="daily",
@@ -96,7 +101,7 @@ _MINUTE = [
         onto_metrics=["실시간 동시사용자", "실시간 디바이스별 동시사용자", "실시간 보는라디오 동시사용자",
                       "실시간 본인인증 동시사용자", "실시간 인증자 연령대 비율", "실시간 인증자 성별 비율",
                       "실시간 분당 유입수", "실시간 분당 문자·공감로그"],
-        providers=["realtime scope"],
+        providers=["realtime scope"], shape="",
     ),
 ]
 
@@ -109,7 +114,7 @@ _EDITORIAL = [
         available_periods=[],
         onto_metrics=[],           # 지표가 아님 — ProgramAiring 51 사실 + 편성 해석 공리 3종
         providers=["program_history", "channel_history"],
-        note="ProgramAiring(불변 사실) + 라이브 현행. 조립은 LLM(공리 적용)",
+        note="ProgramAiring(불변 사실) + 라이브 현행. 조립은 LLM(공리 적용)", shape="",
     ),
     Source(
         name="today_lineup", label="오늘 편성·게스트", grain="editorial",
@@ -118,7 +123,7 @@ _EDITORIAL = [
         available_periods=[],
         onto_metrics=[],           # 게스트·보는라디오 = 속성(지표 수준 정의 없음)
         providers=["today_lineup"],
-        note="게스트·view_radio — 상세 KPI 배치가 못 담은 '오늘' 공백 메움. 교차분석 대상 아님",
+        note="게스트·view_radio — 상세 KPI 배치가 못 담은 '오늘' 공백 메움. 교차분석 대상 아님", shape="",
     ),
 ]
 

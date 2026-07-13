@@ -1130,22 +1130,26 @@ def _p_program_demographics(ent):
     kinds = _wants_program_demo(q)
     if not code or not kinds:
         return None
-    import raas_datasource as DSRC
-    window = "1D"                                # 집계창 — 현재 일간 고정(주/월 라우팅은 통합 접근자에서)
+    import raas_series as SR
+    # 집계창(PERIOD) 라우팅 — 통합 접근자가 소스 형태 무관하게 처리(1D 없으면 device는 자동 생략)
+    if any(k in q for k in ("월간", "월별", "월 단위", "지난달", "전월", "이번달", "개월")):
+        window, wlabel, unit = "1M", "월간(1M)", "개월"
+    elif any(k in q for k in ("주간", "주별", "주 단위", "지난주", "전주", "이번주")):
+        window, wlabel, unit = "1W", "주간(1W)", "주"
+    else:
+        window, wlabel, unit = "1D", "일간(1D)", "일"
+    rowlabel = {"1D": "일별", "1W": "주별", "1M": "월별"}[window]
     depth = "10MIN" if ("10분" in q or "깊은" in q) else ("1MIN" if "1분" in q else "ALL")
+    dims = {"DEPTH": depth}
     lb = ent.get("lookback") or 0
     as_of = (ent.get("as_of_date") or "").replace("-", "/")
 
-    def _cell(dd, d):
-        return (dd.get(d, {}).get(window) or {}).get(depth) or {}
-
-    def _view(idx, labels):
-        dd = idx.get(code) or {}
-        dates = [d for d in sorted(dd) if _cell(dd, d)]
+    def _view(source, labels):
+        dates = SR.available_dates(source, code, window=window, dims=dims)
         if not dates:
             return None
-        if lb and lb > 1:                        # 기간 모드 — 기간평균 + 일별 추이(CSV)
-            rows = [(d, _cell(dd, d)) for d in dates[-lb:]]
+        if lb and lb > 1:                        # 기간 모드 — 기간평균 + 기간 내 추이(CSV)
+            rows = [(d, SR.cell(source, code, d, window=window, dims=dims)) for d in dates[-lb:]]
             cats = list(rows[-1][1].keys())      # 최신 셀 기준 CATEGORY 순서
             acc = {c: [] for c in cats}
             for _, cell in rows:
@@ -1157,24 +1161,24 @@ def _p_program_demographics(ent):
             csv = ["date," + ",".join(labels.get(c, c) for c in cats)]
             for d, cell in rows:
                 csv.append(",".join([d[5:]] + [str(cell.get(c, "")) for c in cats]))
-            return {"기간": f"{rows[0][0]}~{rows[-1][0]} ({len(rows)}일)",
-                    "기간평균%": avg, "일별(CSV, 평균은 코드계산)": "\n".join(csv)}
-        # 스냅샷 모드(단일일)
+            return {"기간": f"{rows[0][0]}~{rows[-1][0]} ({len(rows)}{unit})",
+                    "기간평균%": avg, f"{rowlabel}(CSV, 평균은 코드계산)": "\n".join(csv)}
+        # 스냅샷 모드(단일 기간)
         date = as_of if (as_of and as_of in dates) else dates[-1]
-        cell = _cell(dd, date)
+        cell = SR.cell(source, code, date, window=window, dims=dims)
         out = {labels.get(k, k): v for k, v in cell.items() if v not in (None, "")}
         return {"as_of": date, "분포%": out} if out else None
 
     res = {"program": _resolve_name(code), "code": code,
            "청취깊이": {"ALL": "청취시작", "1MIN": "1분이상청취", "10MIN": "10분이상청취"}[depth],
-           "집계창": "일간(1D)",
-           "기준": ("기간(일별+평균)" if lb and lb > 1 else "단일일 스냅샷")}
-    for kind, idx, labels, key in (
-            ("gender", DSRC.get_program_gender_index, _DEMO_GENDER, "성별 분포"),
-            ("age", DSRC.get_program_age_index, _DEMO_AGE, "연령대 분포"),
-            ("device", DSRC.get_program_device_index, _DEMO_DEVICE, "디바이스 분포")):
+           "집계창": wlabel,
+           "기준": ("기간(추이+평균)" if lb and lb > 1 else "단일 기간 스냅샷")}
+    for kind, source, labels, key in (
+            ("gender", "pgm_gender", _DEMO_GENDER, "성별 분포"),
+            ("age", "pgm_age", _DEMO_AGE, "연령대 분포"),
+            ("device", "pgm_device", _DEMO_DEVICE, "디바이스 분포")):
         if kind in kinds:
-            v = _view(idx(), labels)
+            v = _view(source, labels)
             if v:
                 res[key] = v
     return res if len(res) > 5 else None

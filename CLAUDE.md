@@ -256,6 +256,11 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   자동 반영). `python raas_metrics_registry.py`로 자체검증(라벨 불일치·데이터공백·정의공백 탐지).
 - `tools/gen_coverage_map.py` — `coverage()`를 진단 맵 HTML로 렌더(손으로 안 그림). 데이터/온톨로지
   추가 후 재실행하면 갱신. 현재: 소스 9·지표 26·커버 26·교차관계 0(미구축=Phase 1~3의 타깃).
+- `raas_series.py` [Phase 1] — 통합 접근자. 소스 물리형태(shape: flat `{code:{date:row}}` /
+  profile `{code:{date:{PERIOD:{TYPE:{CATEGORY}}}}}`) 무관하게 `series/snapshot/period_avg/ranking/
+  cell/available_dates`를 균일 반환. **구조 어댑터만**(도메인 규칙 없음). window(1D/1W/1M)·dims(DEPTH)로
+  창·깊이 선택 — 분포 provider가 이걸 위임받아 주간/월간 라우팅을 소스 공통으로 처리(device는 1M 없으면
+  자동 생략). 회귀: `python tests/smoke_series.py`(기존 소스별 헬퍼와 값 대조).
 
 ## 설계 문서 / 개발 메모
 - `docs/`: grounding_retrieval_design · knowledge_loop_design · ab_harness_design (설계 근거),

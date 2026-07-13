@@ -245,10 +245,16 @@ check_true("온톨로지: 분포 3종 정의", all(bool(get_adapter()._onto.get_
            for m in ("ProgramGenderDist", "ProgramAgeDist", "ProgramDeviceDist")))
 # 분포 기간 모드 — '지난 30일'이면 스냅샷 아니라 기간평균+일별 추이(연령·디바이스도 동일)
 _pdp = G._p_program_demographics(G.resolve_entities("컬투쇼 지난 30일간 연령대 분포")) or {}
-check_true("분포 기간 모드: 연령 기간평균+일별",
+check_true("분포 기간 모드: 연령 기간평균+추이CSV",
            _pdp.get("기준", "").startswith("기간") and bool((_pdp.get("연령대 분포") or {}).get("기간평균%"))
-           and "일별" in str(_pdp.get("연령대 분포")),
+           and "평균은 코드계산" in str(_pdp.get("연령대 분포")),
            f"기준={_pdp.get('기준')}")
+# 분포 창(PERIOD) 라우팅 — 통합 접근자(raas_series) 위임. 주간/월간 데이터 접근
+_pdw = G._p_program_demographics(G.resolve_entities("컬투쇼 지난주 연령대 분포")) or {}
+check("분포 주간 라우팅 → 집계창 1W", _pdw.get("집계창"), "주간(1W)")
+_pdm = G._p_program_demographics(G.resolve_entities("컬투쇼 지난달 성별 디바이스 분포")) or {}
+check("분포 월간 라우팅 → 집계창 1M", _pdm.get("집계창"), "월간(1M)")
+check_true("분포 월간: device는 1M 미보유→자동 생략", "디바이스 분포" not in _pdm and bool(_pdm.get("성별 분포")))
 check_true("caveat 오탐 방지: 비참여 provider는 주의문 없음",
            not G.caveats_for(["program_kpi", "metric_timeseries"]))
 check_true("편성표 의도", METRICS.is_schedule_query("컬투쇼 코너 편성 알려줘"))
