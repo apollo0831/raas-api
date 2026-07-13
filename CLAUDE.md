@@ -247,6 +247,16 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
 - 주간: PERIOD=1W
 - 월간: PERIOD=1M
 
+## 통합 지표 레지스트리 · 커버리지 맵 (A-lite 리팩터)
+목표: **데이터·온톨로지가 늘수록 코드 없이 교차분석·인사이트가 커지는 구조.** 3계층으로 단계 구축:
+①통합 접근 계층(series/snapshot/period_avg/ranking, 소스 불문 공통 좌표) ②교차지표 연산(동반움직임·
+상관·분해, 결정적) ③온톨로지 관계(metric↔metric). 원칙 불변: provider 얇게·숫자는 계산·규칙은 온톨로지.
+- `raas_metrics_registry.py` — 소스 **선언** 시드(grain·available_periods·extra_dims·onto_metrics·
+  providers). `coverage()`가 선언 × 온톨로지 인벤토리를 대조해 커버/공백을 낸다(온톨로지에 지표 추가 시
+  자동 반영). `python raas_metrics_registry.py`로 자체검증(라벨 불일치·데이터공백·정의공백 탐지).
+- `tools/gen_coverage_map.py` — `coverage()`를 진단 맵 HTML로 렌더(손으로 안 그림). 데이터/온톨로지
+  추가 후 재실행하면 갱신. 현재: 소스 9·지표 26·커버 26·교차관계 0(미구축=Phase 1~3의 타깃).
+
 ## 설계 문서 / 개발 메모
 - `docs/`: grounding_retrieval_design · knowledge_loop_design · ab_harness_design (설계 근거),
   field_lineage_map(필드 계보) · decisions(의사결정 로그) · RAAS_*(제품·UX·지표 참고자료)
