@@ -255,7 +255,12 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   providers). `coverage()`가 선언 × 온톨로지 인벤토리를 대조해 커버/공백을 낸다(온톨로지에 지표 추가 시
   자동 반영). `python raas_metrics_registry.py`로 자체검증(라벨 불일치·데이터공백·정의공백 탐지).
 - `tools/gen_coverage_map.py` — `coverage()`를 진단 맵 HTML로 렌더(손으로 안 그림). 데이터/온톨로지
-  추가 후 재실행하면 갱신. 현재: 소스 9·지표 26·커버 26·교차관계 0(미구축=Phase 1~3의 타깃).
+  추가 후 재실행하면 갱신. 관리자 UI에서도 조회(아래).
+- **관리자 진단 UI**(RAAS 관리자 모달 '시스템 진단'): ① `📻 커버리지 맵`(`showCoverageMap`→`GET /api/coverage`,
+  권한 is_admin OR 총괄관리·데이터) — 요청 시 즉석 렌더, **Splunk 미접촉·답변 경로와 완전 분리**(읽기전용
+  진단). ② `♻ 온톨로지 새로고침`(`reloadOntology`→`POST /api/ontology/reload`, is_admin) — TTL 편집 후
+  **서버 재시작 없이** `reload_adapter()`로 재로드 → 맵·답변 양쪽 즉시 반영. 일상 지식 추가는 여전히
+  지식 개선 루프(오버레이, TTL·재시작 불필요) — TTL 편집은 구조 변경(새 지표·팩터·공리)에만.
 - `raas_series.py` [Phase 1] — 통합 접근자. 소스 물리형태(shape: flat `{code:{date:row}}` /
   profile `{code:{date:{PERIOD:{TYPE:{CATEGORY}}}}}`) 무관하게 `series/snapshot/period_avg/ranking/
   cell/available_dates`를 균일 반환. **구조 어댑터만**(도메인 규칙 없음). window(1D/1W/1M)·dims(DEPTH)로

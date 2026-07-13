@@ -14,7 +14,7 @@ Phase 5 통합으로 도입. 운영 코드(briefing/query/server)는 이 패키�
 - raas_*.ttl               — 5개 온톨로지 파일 (도메인 지식 SSoT)
 - phase5_regression_test.py — 회귀 테스트 (Phase 5 마이그레이션 검증)
 """
-from .raas_ontology_adapter import get_adapter, OntologyAdapter
+from .raas_ontology_adapter import get_adapter, OntologyAdapter, reload_adapter
 from .raas_zscore_detector import get_detector, ZScoreDetector
 
-__all__ = ['get_adapter', 'OntologyAdapter', 'get_detector', 'ZScoreDetector']
+__all__ = ['get_adapter', 'OntologyAdapter', 'reload_adapter', 'get_detector', 'ZScoreDetector']

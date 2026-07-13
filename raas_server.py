@@ -507,6 +507,34 @@ class RAASHandler(BaseHTTPRequestHandler):
     def _get_version(self):
         self.send_json({"version": _app_version()})
 
+    def _get_coverage(self):
+        """관리자 커버리지 맵 — 요청 시 즉석 렌더(레지스트리+온톨로지만, Splunk 미접촉).
+           읽기전용 진단으로 답변 경로와 완전 분리. 권한: is_admin OR 총괄관리·데이터."""
+        if not self._require_stats_viewer():
+            return
+        try:
+            from tools.gen_coverage_map import render
+            import raas_metrics_registry as REG
+            self.send_html(render(REG.coverage()))
+        except Exception as e:
+            self.send_html(f"<h2>커버리지 맵 생성 실패</h2><pre>{str(e)}</pre>")
+
+    def _post_ontology_reload(self, body):
+        """TTL 편집 후 재시작 없이 온톨로지 재로드(관리자 전용). 맵·답변 양쪽에 즉시 반영."""
+        user = self._require_admin()
+        if not user:
+            return
+        try:
+            from raas_onto import reload_adapter
+            reload_adapter()
+            import raas_metrics_registry as REG
+            st = REG.coverage()["stats"]
+            self.send_json({"ok": True, "sources": st["sources"], "metrics": st["metrics"],
+                            "relations": st["relations"],
+                            "message": f"온톨로지 재로드 완료 — 지표 {st['metrics']} · 교차관계 {st['relations']}"})
+        except Exception as e:
+            self.send_json({"ok": False, "error": str(e)}, 500)
+
     def _get_timeseries_program(self):
         try:
             parts = self.path.split("?", 1)
@@ -1928,6 +1956,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         "/api/suggestions": _get_suggestions,
         "/api/posthog-config": _get_posthog_config,
         "/api/status": _get_status,
+        "/api/coverage": _get_coverage,
     }
     GET_PREFIX = [   # 순서 의미 있음(더 구체적인 prefix 먼저)
         ("/raas_web.js", _get_raas_web_js),
@@ -1976,6 +2005,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         "/api/knowledge/promote/preview": _post_knowledge_promote_preview,
         "/api/style/get": _post_style_get,
         "/api/style/set": _post_style_set,
+        "/api/ontology/reload": _post_ontology_reload,
         "/api/query": _post_query,
         "/api/share": _post_share,
         "/api/storyline/today": _post_storyline_today,

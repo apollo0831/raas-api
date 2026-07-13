@@ -1495,6 +1495,15 @@ table.story-table th{
         Splunk 캐시를 비우고 즉시 재적재한 뒤 데이터 점검을 자동 실행합니다. (데이터 직무 관리자 전용)
       </div>
     </div>
+    <!-- 시스템 진단 — 커버리지 맵(읽기전용, 답변 무관) + 온톨로지 재로드(TTL 편집 반영) -->
+    <div id="adminDiagnostics" style="padding:0 4px 14px;border-bottom:1px solid var(--line);margin-bottom:14px">
+      <div class="adm-section-title">시스템 진단</div>
+      <button class="today-digest-btn" onclick="showCoverageMap()">📻 데이터 × 온톨로지 커버리지 맵</button>
+      <button class="today-digest-btn" onclick="reloadOntology()" style="margin-top:8px">♻ 온톨로지 새로고침</button>
+      <div style="font-size:var(--fs-xs);color:var(--dim);margin-top:6px">
+        커버리지 맵: 데이터·온톨로지 현황(읽기전용 — 답변 품질엔 영향 없음). 온톨로지 새로고침: TTL 편집 후 서버 재시작 없이 맵·답변에 반영.
+      </div>
+    </div>
     <div class="hist-modal-body" id="adminModalBody">
       <div class="hist-empty-msg">로드 중...</div>
     </div>

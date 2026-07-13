@@ -280,6 +280,36 @@ function startDataRefresh() {
   submitQuery('최신 데이터 다시 가져오기', 'data_refresh', { endpoint: '/api/data_refresh' });
 }
 
+// 📻 커버리지 맵 — 새 탭에 즉석 렌더된 진단 맵. 팝업차단 회피 위해 창을 먼저 연다.
+async function showCoverageMap() {
+  const w = window.open('', '_blank');
+  if (!w) { alert('팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.'); return; }
+  w.document.write('<p style="font-family:sans-serif;padding:2rem;color:#555">커버리지 맵 로딩 중…</p>');
+  try {
+    const res = await _authedFetch('/api/coverage');
+    if (!res.ok) {
+      w.document.body.innerHTML = '<p style="font-family:sans-serif;padding:2rem">권한이 없거나 오류가 발생했습니다 (' + res.status + ').</p>';
+      return;
+    }
+    const html = await res.text();
+    w.document.open(); w.document.write(html); w.document.close();
+  } catch (e) {
+    try { w.document.body.innerHTML = '<p style="font-family:sans-serif;padding:2rem">불러오기 실패: ' + escapeHtml(e.message) + '</p>'; } catch (_) {}
+  }
+}
+
+// ♻ 온톨로지 새로고침 — TTL 편집 후 재시작 없이 재로드(관리자 전용).
+async function reloadOntology() {
+  if (!(RAAS_USER && RAAS_USER.is_admin)) return;
+  try {
+    const res = await _authedFetch('/api/ontology/reload', { method: 'POST' });
+    const data = await res.json();
+    alert(data.ok ? ('✓ ' + data.message) : ('실패: ' + (data.error || '오류')));
+  } catch (e) {
+    alert('온톨로지 새로고침 실패: ' + e.message);
+  }
+}
+
 async function _loadAdminUsers() {
   const body = document.getElementById('adminModalBody');
   body.innerHTML = '<div class="hist-empty-msg">로드 중…</div>';
