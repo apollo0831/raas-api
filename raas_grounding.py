@@ -2243,6 +2243,21 @@ def _detect_meta(question: str) -> bool:
         return False
     return any(o in t for o in _META_OBJ) and any(a in t for a in _META_ASK)
 
+def _meta_data_sources() -> str:
+    """레지스트리 기반 '보유 데이터 소스' 요약 — 지표가 아닌 데이터(편성이력·아카이브·오늘편성)도
+       메타 답변에 포함. 소스 추가 시 자동 반영(하드코딩 아님)."""
+    try:
+        import raas_metrics_registry as REG
+        grain_ko = {"daily": "일간", "minute": "실시간(분)", "editorial": "편성/서술"}
+        lines = ["[보유 데이터 소스 — 레지스트리 자동 집계]"]
+        for s in REG.SOURCES:
+            win = ("·".join(s.available_periods) if s.available_periods else "-")
+            lines.append(f"- {s.label} ({grain_ko.get(s.grain, s.grain)}, 창 {win})")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def _assemble_meta(question, overlay_ctx=None) -> dict:
     try:
         from raas_onto import get_adapter
@@ -2251,10 +2266,12 @@ def _assemble_meta(question, overlay_ctx=None) -> dict:
         catalog = ""
     if not catalog:
         return {"ok": False, "reason": "카탈로그 없음"}
+    sources = _meta_data_sources()
     context = ("분석 대상: 지표 카탈로그(메타) — 시스템이 제공하는 지표 목록·정의\n"
-               "안내: 어떤 지표/데이터를 볼 수 있는지 묻는 질의. 아래 카탈로그를 근거로 "
-               "범주별로 소개하되 질문 범위에 맞게 간결히.\n\n"
-               "### metric_catalog — 제공 지표 체계·정의\n" + catalog)
+               "안내: 어떤 지표/데이터를 볼 수 있는지 묻는 질의. 아래 카탈로그·소스 목록을 근거로 "
+               "범주별로 소개하되 질문 범위에 맞게 간결히. 카탈로그에 없는 것은 없다고 답할 것.\n\n"
+               "### metric_catalog — 제공 지표 체계·정의\n" + catalog
+               + (("\n\n### data_sources — 보유 데이터 소스\n" + sources) if sources else ""))
     return {"ok": True, "context": context, "providers_used": ["metric_catalog"],
             "entities_brief": "지표 카탈로그(메타)",
             "provenance": {"providers": ["metric_catalog"], "scope": "meta"}}

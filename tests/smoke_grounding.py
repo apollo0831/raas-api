@@ -148,6 +148,11 @@ check("B '어제 게스트' → T00+all_programs", (_b.get("code"), _b.get("all_
 check_true("C 메타 감지: '어떤 지표들을 볼 수 있어?'", G._detect_meta("어떤 지표들을 볼 수 있어?"))
 check_true("C 메타 assemble ok + catalog provider",
            (G._assemble_meta("어떤 지표 있나") or {}).get("providers_used") == ["metric_catalog"])
+# 카탈로그가 온톨로지에서 동적 집계 — 신규 지표군(참여·프로필분포·실시간) 자동 포함(하드코딩 아님)
+_cat = (G._assemble_meta("어떤 데이터 있나") or {}).get("context", "")
+check_true("메타 카탈로그: 참여·분포·실시간 모두 포함(동적)",
+           all(k in _cat for k in ("문자 참여", "성별 분포", "실시간 동시사용자", "보유 데이터 소스")),
+           "누락 지표군")
 # 오탐 방지: 값/순위/날짜 질의는 메타 아님
 check_true("오탐 방지: '어떤 프로그램이 DAU 가장 높아?' 메타 아님",
            not G._detect_meta("어떤 프로그램이 DAU 가장 높아?"))

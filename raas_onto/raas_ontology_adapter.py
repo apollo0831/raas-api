@@ -479,60 +479,42 @@ class OntologyAdapter:
                 lines.append(f"   {sd} ~ {r['end_date']}  {r['name']}{real}")
         return "\n".join(lines)
 
+    # dictionarySection 코드 → 사람이 읽는 범주명. 미등재 섹션은 코드 그대로 노출.
+    _SECTION_KO = {
+        "B. user_size": "사용자 규모",
+        "C. user_growth": "사용자 흐름 (신규/복귀)",
+        "D. user_quality": "청취 품질",
+        "E. participation": "참여 (문자·공감로그)",
+        "E. user_habit": "습관",
+        "F. realtime": "실시간 동시사용자",
+        "F. user_retention": "유지율 (코호트)",
+        "G. profile": "청취자 프로필 분포 (성별·연령·디바이스)",
+    }
+
     def get_metric_definitions_block(self) -> str:
-        """TTL raas:definition/formula/rdfs:comment 기반 지표 정의 텍스트 블록.
-        LLM 시스템 프롬프트의 [지표 정의] 섹션을 대체한다."""
-        GROUPS = [
-            ("사용자 규모", [
-                ("raas:AU_Day",   None),
-                ("raas:AU_Week",  None),
-                ("raas:AU_Month", None),
-                ("raas:AU_R7",    None),
-                ("raas:AU_R30",   None),
-            ]),
-            ("사용자 흐름 (신규/복귀/이탈)", [
-                ("raas:NewUser",         "raas:NewUser"),
-                ("raas:ReactivatedUser", "raas:ReactivatedUser"),
-                ("raas:ReactRate",       "raas:ReactRate"),
-                ("raas:ChurnRate",       "raas:ChurnRate"),
-            ]),
-            ("청취 품질", [
-                ("raas:RealListenRate",  "raas:RealListenRate"),
-                ("raas:DeepListenRate",  "raas:DeepListenRate"),
-                ("raas:EngageRate",      "raas:EngageRate"),
-                ("raas:HabitRate",       "raas:HabitRate"),
-            ]),
-            ("유지율", [
-                ("raas:RetentionRate_D1_All",     None),
-                ("raas:RetentionRate_D7_All",     None),
-                ("raas:RetentionRate_W1_All",     None),
-                ("raas:RetentionRate_M1_All",     None),
-                ("raas:RetentionRate_D1_NewUser", None),
-                ("raas:RetentionRate_D7_NewUser", None),
-                ("raas:RetentionRate_W1_NewUser", None),
-                ("raas:RetentionRate_M1_NewUser", None),
-            ]),
-        ]
+        """온톨로지의 모든 raas:Metric을 dictionarySection별로 **동적 집계**한 지표 카탈로그.
+        TTL에 지표를 추가하면(또는 새 섹션이 생기면) 코드 수정 없이 자동 반영된다 —
+        하드코딩 목록이 아니라 인벤토리 조회이므로 신규 데이터 확보가 곧 최신 카탈로그가 됨."""
+        groups: dict[str, list] = {}
+        for m in self._onto.instances_of("raas:Metric"):
+            sec = self._onto.value_str(self._onto.get_one(m, "raas:dictionarySection")) or "기타"
+            label = self._onto.label_ko(m)
+            defn = (self._onto.value_str(self._onto.get_one(m, "raas:definition"))
+                    or self._onto.value_str(self._onto.get_one(m, "rdfs:comment")) or "")
+            formula = self._onto.value_str(self._onto.get_one(m, "raas:formula")) or ""
+            groups.setdefault(sec, []).append((label, defn, formula))
+        total = sum(len(v) for v in groups.values())
         lines = [
-            "[지표 체계 및 정의]",
-            "- 지표 소개 시 반드시 아래 4개 범주로 분류하여 답변할 것: 사용자 규모 / 사용자 흐름(유입·이탈) / 청취 품질 / 유지율",
-            "- 실청취자 = 1분이상 청취한 사용자 (dau_1min 필드) — '실청취자 수', '1분이상 청취자 수', 'dau_1min'은 동일한 값",
+            f"[지표 체계 및 정의 — 온톨로지에서 자동 집계(현재 {total}종, 지표 추가 시 자동 반영)]",
+            "- 아래 카탈로그의 범주 그대로 소개하되, 질문 범위에 맞게 간결히. 카탈로그에 없는 지표는 없다고 답할 것.",
+            "- 실청취자 = 1분이상 청취한 사용자 (dau_1min 필드).",
         ]
-        for group_name, items in GROUPS:
-            lines.append(f"\n{group_name}")
-            for variant_iri, metric_iri in items:
-                label = self._onto.label_ko(variant_iri)
-                comment = self._onto.value_str(self._onto.get_one(variant_iri, "rdfs:comment"))
-                if metric_iri:
-                    m = self._metric_dict(metric_iri)
-                    defn = m.get("definition") or comment or ""
-                    formula = m.get("formula") or ""
-                    label = label or m.get("label") or ""
-                    line = f"- {label}: {defn}"
-                    if formula:
-                        line += f" (계산식: {formula})"
-                else:
-                    line = f"- {label}: {comment}" if comment else f"- {label}"
+        for sec in sorted(groups):                       # 섹션 코드순(B→C→…→G)
+            lines.append(f"\n{self._SECTION_KO.get(sec, sec)}")
+            for label, defn, formula in groups[sec]:
+                line = f"- {label}" + (f": {defn}" if defn else "")
+                if formula:
+                    line += f" (계산식: {formula})"
                 lines.append(line)
         return "\n".join(lines)
 
