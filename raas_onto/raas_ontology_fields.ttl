@@ -950,26 +950,30 @@ raas:Part_TOTAL_WR a raas:MetricVariant ;
 
 
 # =============================================================================
-# 프로그램별 일자별 청취자 프로필 분포 (룩업 program_user_{gender|age|device}_day)
-#   값=프로그램별 그 구간 비율(%). PERIOD: ALL=청취시작·1MIN=1분이상청취·10MIN=10분이상청취.
-#   디바이스는 AI스피커 3사(KKO/KT/LGU)를 AI로 병합. 원천 일부 날짜는 카운트→RAAS가 비율로 정규화.
+# 프로그램별 청취자 프로필 분포 (룩업 program_user_{gender|age|device}_{day|week|mon})
+#   값=프로그램별 그 CATEGORY 비율(%). 축 3개(2026-07 스키마 통일):
+#     PERIOD   = 집계 시간창  1D/1W/1M          (KPI PERIOD와 동일 의미)
+#     TYPE     = 청취 깊이     ALL/1MIN/10MIN     (청취시작·1분이상·10분이상)
+#     CATEGORY = 인구 카테고리 F/M · 연령대 · 디바이스
+#   gender·age는 일/주/월 3창, device는 일간(1D)만. AI스피커 3사(KKO/KT/LGU)를 AI로 병합.
+#   원천 일부 날짜는 카운트(CATEGORY=TOTAL) → RAAS가 비율로 정규화.
 # =============================================================================
 raas:ProgramGenderDist a raas:Metric ;
     rdfs:label "프로그램 성별 분포"@ko ;
     raas:unit "%" ; raas:hasMeasureType raas:Ratio ;
-    raas:definition "프로그램 청취자의 성별 비율(여 F/남 M). 일자·PERIOD(청취시작/1분이상/10분이상)별."@ko ;
+    raas:definition "프로그램 청취자의 성별 비율(여 F/남 M). PERIOD(집계창 1D/1W/1M)·TYPE(청취깊이 청취시작/1분이상/10분이상)별."@ko ;
     raas:dictionarySection "G. profile" .
 
 raas:ProgramAgeDist a raas:Metric ;
     rdfs:label "프로그램 연령대 분포"@ko ;
     raas:unit "%" ; raas:hasMeasureType raas:Ratio ;
-    raas:definition "프로그램 청취자의 연령대 비율(10대이하·20-24·…·60대이상). 일자·PERIOD별. 주 시청 연령층 파악."@ko ;
+    raas:definition "프로그램 청취자의 연령대 비율(10대이하·20-24·…·60대이상). PERIOD(집계창)·TYPE(청취깊이)별. 주 시청 연령층 파악."@ko ;
     raas:dictionarySection "G. profile" .
 
 raas:ProgramDeviceDist a raas:Metric ;
     rdfs:label "프로그램 디바이스 분포"@ko ;
     raas:unit "%" ; raas:hasMeasureType raas:Ratio ;
-    raas:definition "프로그램 청취자의 디바이스 비율(스마트폰 SP·PC·웹 PW·모바일웹 MWEB·차량 CAR·워치 WATCH·AI스피커 AI[3사 병합]). 일자·PERIOD별."@ko ;
+    raas:definition "프로그램 청취자의 디바이스 비율(스마트폰 SP·PC·웹 PW·모바일웹 MWEB·차량 CAR·워치 WATCH·AI스피커 AI[3사 병합]). 집계창 일간(1D)만·TYPE(청취깊이)별."@ko ;
     raas:dictionarySection "G. profile" .
 
 

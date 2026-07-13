@@ -69,10 +69,13 @@ raas_datasource.py  ← Splunk 수집 단일 소유 (splunk_search·fetch_lookup
     참여 Feed(engagement, SUMMARY_INDEX_02, 과거 1년·평일, 07:15): 프로그램별 일자별 문자(SMS)·
       공감로그(GG) 참여 — SMS·GG·TOTAL(건수)·*_WR(참여자수)·*_RATIO(1인당). 로드 시 {code:{date:row}}
       인덱싱(get_engagement_index/series). 필드 정의는 온톨로지(raas:*Participation)
-    프로필 분포 Feed 3종(pgm_gender·pgm_age·pgm_device, program_user_*_day.csv, 2026-03~): 프로그램별
-      일자별 성별(F/M)·연령대·디바이스 분포 비율%. wide 룩업을 {code:{date:{period:{TYPE:%}}}}로 언피벗.
-      PERIOD ALL(청취시작)/1MIN/10MIN. 디바이스 AI 3사 병합, 카운트 날짜는 비율로 정규화.
-      get_program_{gender|age|device}_index. 정의는 온톨로지(raas:Program*Dist)
+    프로필 분포 Feed 3종(pgm_gender·pgm_age·pgm_device, program_user_*_{day|week|mon}.csv, 2026-03~):
+      프로그램별 성별(F/M)·연령대·디바이스 분포 비율%. 축 3개(2026-07 스키마 통일): PERIOD=집계창
+      1D/1W/1M(KPI와 동일)·TYPE=청취깊이 ALL/1MIN/10MIN·CATEGORY=인구 카테고리. gender·age는 일/주/월
+      3파일을 PERIOD로 통합, device는 일간(1D)만. wide 룩업을 {code:{date:{PERIOD:{TYPE:{CATEGORY:%}}}}}로
+      언피벗. 로더는 컬럼명이 아닌 값으로 창/깊이 판별(소스 뒤바뀜 자동 교정+경고). 디바이스 AI 3사 병합,
+      CATEGORY=TOTAL 카운트 날짜는 비율로 정규화. get_program_{gender|age|device}_index. 정의는
+      온톨로지(raas:Program*Dist)
     확장 실시간 3-Feed(rt_concurrent·rt_msg·rt_inflow, 60초): 디바이스×채널·인증 성별/연령 비율·
       분당 SMS/GG·유입. 네이밍 F00/L00/G00/P00 통일, AI 7사→DV_AI 파생
     장기 아카이브 Feed(history_metrics, 일일): real_dau.csv+summary_uuid_stats, 최대 10년 —

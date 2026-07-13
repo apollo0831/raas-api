@@ -1120,8 +1120,9 @@ def _p_engagement(ent):
 
 
 def _p_program_demographics(ent):
-    """[프로필 분포] 프로그램별 일자별 성별·연령·디바이스 분포(비율%). 룩업 3종.
-       PERIOD: ALL=청취시작·1MIN=1분이상·10MIN=10분이상. '컬투쇼 어제 연령대/성별/디바이스 분포' 등."""
+    """[프로필 분포] 프로그램별 성별·연령·디바이스 분포(비율%). 룩업 3종.
+       축: PERIOD=집계창(1D/1W/1M) · TYPE=청취깊이(ALL/1MIN/10MIN) · CATEGORY=인구 카테고리.
+       '컬투쇼 어제 연령대/성별/디바이스 분포' 등. 창 선택은 현재 1D 고정(Phase 1에서 확장)."""
     code = ent.get("code")
     if not code or (len(code) == 3 and code.endswith("00") and not ent.get("all_programs")):
         pass  # 채널코드도 룩업에 존재(F00 등) — 그대로 조회 허용
@@ -1130,40 +1131,43 @@ def _p_program_demographics(ent):
     if not code or not kinds:
         return None
     import raas_datasource as DSRC
-    period = "10MIN" if ("10분" in q or "깊은" in q) else ("1MIN" if "1분" in q else "ALL")
+    window = "1D"                                # 집계창 — 현재 일간 고정(주/월 라우팅은 통합 접근자에서)
+    depth = "10MIN" if ("10분" in q or "깊은" in q) else ("1MIN" if "1분" in q else "ALL")
     lb = ent.get("lookback") or 0
     as_of = (ent.get("as_of_date") or "").replace("-", "/")
 
+    def _cell(dd, d):
+        return (dd.get(d, {}).get(window) or {}).get(depth) or {}
+
     def _view(idx, labels):
         dd = idx.get(code) or {}
-        if not dd:
+        dates = [d for d in sorted(dd) if _cell(dd, d)]
+        if not dates:
             return None
-        alldates = sorted(dd)
         if lb and lb > 1:                        # 기간 모드 — 기간평균 + 일별 추이(CSV)
-            rows = [(d, dd[d].get(period) or {}) for d in alldates[-lb:] if dd[d].get(period)]
-            if not rows:
-                return None
-            types = list(rows[-1][1].keys())     # 최신 셀 기준 TYPE 순서
-            acc = {t: [] for t in types}
+            rows = [(d, _cell(dd, d)) for d in dates[-lb:]]
+            cats = list(rows[-1][1].keys())      # 최신 셀 기준 CATEGORY 순서
+            acc = {c: [] for c in cats}
             for _, cell in rows:
-                for t in types:
-                    fv = _rt_flt(cell.get(t))
+                for c in cats:
+                    fv = _rt_flt(cell.get(c))
                     if fv is not None:
-                        acc[t].append(fv)
-            avg = {labels.get(t, t): round(sum(acc[t]) / len(acc[t]), 1) for t in types if acc[t]}
-            csv = ["date," + ",".join(labels.get(t, t) for t in types)]
+                        acc[c].append(fv)
+            avg = {labels.get(c, c): round(sum(acc[c]) / len(acc[c]), 1) for c in cats if acc[c]}
+            csv = ["date," + ",".join(labels.get(c, c) for c in cats)]
             for d, cell in rows:
-                csv.append(",".join([d[5:]] + [str(cell.get(t, "")) for t in types]))
+                csv.append(",".join([d[5:]] + [str(cell.get(c, "")) for c in cats]))
             return {"기간": f"{rows[0][0]}~{rows[-1][0]} ({len(rows)}일)",
                     "기간평균%": avg, "일별(CSV, 평균은 코드계산)": "\n".join(csv)}
         # 스냅샷 모드(단일일)
-        date = as_of if (as_of and as_of in dd) else alldates[-1]
-        cell = (dd.get(date) or {}).get(period) or {}
+        date = as_of if (as_of and as_of in dates) else dates[-1]
+        cell = _cell(dd, date)
         out = {labels.get(k, k): v for k, v in cell.items() if v not in (None, "")}
         return {"as_of": date, "분포%": out} if out else None
 
     res = {"program": _resolve_name(code), "code": code,
-           "PERIOD": {"ALL": "청취시작", "1MIN": "1분이상청취", "10MIN": "10분이상청취"}[period],
+           "청취깊이": {"ALL": "청취시작", "1MIN": "1분이상청취", "10MIN": "10분이상청취"}[depth],
+           "집계창": "일간(1D)",
            "기준": ("기간(일별+평균)" if lb and lb > 1 else "단일일 스냅샷")}
     for kind, idx, labels, key in (
             ("gender", DSRC.get_program_gender_index, _DEMO_GENDER, "성별 분포"),
@@ -1173,7 +1177,7 @@ def _p_program_demographics(ent):
             v = _view(idx(), labels)
             if v:
                 res[key] = v
-    return res if len(res) > 4 else None
+    return res if len(res) > 5 else None
 
 
 PROVIDERS = [

@@ -636,63 +636,92 @@ def get_engagement_series(code: str, metric: str) -> list:
     return sorted(out)
 
 
-# ── 프로그램별 일자별 성별·연령·디바이스 분포 (룩업, 일일) ──────────────
-# program_user_{gender|age|device}_day.csv — 프로그램 코드가 열, (DATE,PERIOD,TYPE)가 행인 wide.
-# 값=프로그램별 그 TYPE 비율(%). RAAS가 코드별로 언피벗 인덱싱 {code:{date:{period:{TYPE:val}}}}.
-# PERIOD: ALL=청취시작·1MIN=1분이상·10MIN=10분이상. 디바이스는 AI스피커 3사(AI-*)를 AI로 병합.
-# TYPE: 성별 F/M · 연령 UNDER20/20_24/…/OVER60 · 디바이스 SP/PC/PW/MWEB/CAR/WATCH/AI/…
+# ── 프로그램별 성별·연령·디바이스 분포 (룩업, 일일) ──────────────────────
+# program_user_{gender|age|device}_{day|week|mon}.csv — 프로그램 코드가 열,
+#   (DATE, PERIOD, TYPE, CATEGORY)가 행인 wide. 값=프로그램별 그 CATEGORY 비율(%).
+# 축 3개(2026-07 스키마 통일):
+#   PERIOD   = 집계 시간창  1D/1W/1M          (KPI PERIOD와 동일 의미)
+#   TYPE     = 청취 깊이     ALL/1MIN/10MIN     (청취시작·1분이상·10분이상)
+#   CATEGORY = 인구 카테고리 F/M · UNDER20..OVER60 · SP/PC/PW/MWEB/CAR/WATCH/AI..
+# gender·age는 _day/_week/_mon 3파일을 PERIOD로 통합, device는 _day(1D)만.
+# 언피벗 인덱스: {code:{date:{PERIOD:{TYPE:{CATEGORY:val}}}}}.
+# 값 기반 판별 — 컬럼명을 신뢰하지 않고 값으로 창/깊이를 가른다(소스 오생성 시 뒤바뀜 자동 교정).
 _PGM_CODE_RX = re.compile(r"^[FLGPMRT][0-9]{2}$")
+_DEMO_WINDOWS = {"1D", "1W", "1M"}
+_DEMO_DEPTHS = {"ALL", "1MIN", "10MIN"}
 
-def _load_program_demo(lookup, merge_ai=False):
+def _load_program_demo(lookups, merge_ai=False):
+    if isinstance(lookups, str):
+        lookups = [lookups]
     def load():
-        try:
-            rows = splunk_search(f"| inputlookup {lookup}", timeout=120)
-        except Exception as e:
-            print(f"  [{lookup}] 조회 실패: {e}")
-            return {}, "error"
         idx: dict = {}
-        for r in rows:
-            date = (r.get("DATE") or "").strip()
-            period = (r.get("PERIOD") or "").strip()
-            typ = (r.get("TYPE") or "").strip()
-            if not (date and period and typ):
+        loaded = []
+        swap_warned = False
+        for lookup in lookups:
+            try:
+                rows = splunk_search(f"| inputlookup {lookup}", timeout=120)
+            except Exception as e:
+                print(f"  [{lookup}] 조회 실패: {e}")
                 continue
-            ai = merge_ai and typ.startswith("AI-")     # AI스피커 3사 → 'AI'로 합산
-            for k, v in r.items():
-                if not _PGM_CODE_RX.match(k):
+            loaded.append(lookup)
+            for r in rows:
+                date = (r.get("DATE") or "").strip()
+                p = (r.get("PERIOD") or "").strip()
+                t = (r.get("TYPE") or "").strip()
+                cat = (r.get("CATEGORY") or "").strip()
+                if not (date and cat):
                     continue
-                d = idx.setdefault(k, {}).setdefault(date, {}).setdefault(period, {})
-                if ai:
-                    d["AI"] = round((_fn(d.get("AI")) or 0.0) + (_fn(v) or 0.0), 1)
+                # 창(window)·깊이(depth)를 값으로 판별 — 컬럼명이 뒤바뀌어 있어도 교정
+                if p in _DEMO_WINDOWS and t in _DEMO_DEPTHS:
+                    window, depth = p, t
+                elif t in _DEMO_WINDOWS and p in _DEMO_DEPTHS:
+                    window, depth = t, p
+                    if not swap_warned:
+                        print(f"  [{lookup}] ⚠ PERIOD/TYPE 뒤바뀜 감지 — 값으로 교정(소스 정정 권장)")
+                        swap_warned = True
                 else:
-                    d[typ] = v
-        # 포맷 통일 — TYPE=TOTAL(카운트) 있는 셀은 비율(%)로 정규화(초기 날짜는 이미 %라 그대로).
+                    continue
+                if merge_ai and cat.startswith("AI-"):   # AI스피커 3사 → 'AI'로 합산
+                    cat = "AI"
+                for k, v in r.items():
+                    if not _PGM_CODE_RX.match(k):
+                        continue
+                    cell = idx.setdefault(k, {}).setdefault(date, {}) \
+                              .setdefault(window, {}).setdefault(depth, {})
+                    if cat == "AI":
+                        cell["AI"] = round((_fn(cell.get("AI")) or 0.0) + (_fn(v) or 0.0), 1)
+                    else:
+                        cell[cat] = v
+        # 포맷 통일 — CATEGORY=TOTAL(카운트) 있는 셀은 비율(%)로 정규화(초기 날짜는 이미 %라 그대로).
         for _dd in idx.values():
-            for _pp in _dd.values():
-                for d in _pp.values():
-                    tot = _fn(d.get("TOTAL"))
-                    if tot and tot > 0:
-                        for t in list(d):
-                            if t != "TOTAL":
-                                d[t] = round((_fn(d[t]) or 0.0) / tot * 100, 1)
-                        d.pop("TOTAL", None)
-        return idx, "splunk"
+            for _date in _dd.values():
+                for _win in _date.values():
+                    for cell in _win.values():
+                        tot = _fn(cell.get("TOTAL"))
+                        if tot and tot > 0:
+                            for c in list(cell):
+                                if c != "TOTAL":
+                                    cell[c] = round((_fn(cell[c]) or 0.0) / tot * 100, 1)
+                            cell.pop("TOTAL", None)
+        return idx, ("splunk" if loaded else "error")
     return load
 
-_pgm_gender_feed = Feed("pgm_gender", _load_program_demo("program_user_gender_day.csv"), daily_at=KPI_REFRESH_AT)
-_pgm_age_feed    = Feed("pgm_age",    _load_program_demo("program_user_age_day.csv"),    daily_at=KPI_REFRESH_AT)
+_GENDER_LOOKUPS = ["program_user_gender_day.csv", "program_user_gender_week.csv", "program_user_gender_mon.csv"]
+_AGE_LOOKUPS    = ["program_user_age_day.csv",    "program_user_age_week.csv",    "program_user_age_mon.csv"]
+_pgm_gender_feed = Feed("pgm_gender", _load_program_demo(_GENDER_LOOKUPS), daily_at=KPI_REFRESH_AT)
+_pgm_age_feed    = Feed("pgm_age",    _load_program_demo(_AGE_LOOKUPS),    daily_at=KPI_REFRESH_AT)
 _pgm_device_feed = Feed("pgm_device", _load_program_demo("program_user_device_day.csv", merge_ai=True), daily_at=KPI_REFRESH_AT)
 
 def get_program_gender_index() -> dict:
-    """{code:{date:{period:{F|M:비율%}}}} — 프로그램별 일자별 성별 분포(일일 캐시)."""
+    """{code:{date:{PERIOD:{TYPE:{F|M:비율%}}}}} — 성별 분포(일/주/월 통합, 일일 캐시)."""
     return _pgm_gender_feed.get() or {}
 
 def get_program_age_index() -> dict:
-    """{code:{date:{period:{연령TYPE:비율%}}}} — 프로그램별 일자별 연령 분포(일일 캐시)."""
+    """{code:{date:{PERIOD:{TYPE:{연령CATEGORY:비율%}}}}} — 연령 분포(일/주/월 통합, 일일 캐시)."""
     return _pgm_age_feed.get() or {}
 
 def get_program_device_index() -> dict:
-    """{code:{date:{period:{디바이스TYPE:비율%}}}} — 프로그램별 일자별 디바이스 분포(AI 병합, 일일 캐시)."""
+    """{code:{date:{PERIOD:{TYPE:{디바이스CATEGORY:비율%}}}}} — 디바이스 분포(1D만·AI 병합, 일일 캐시)."""
     return _pgm_device_feed.get() or {}
 
 
