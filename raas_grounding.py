@@ -81,7 +81,8 @@ def _parse_abs_date(q: str):
             m = re.search(r"(?<!\d)(\d{1,2})\s*/\s*(\d{1,2})(?!\d)", t)
         if not m:
             return None
-        y, mo, d = None, int(m.group(1)), int(m.group(2))
+        _ym = re.search(r"(20\d{2})\s*년", t)      # '2025년 12월 31일'의 연도 포착
+        y, mo, d = (int(_ym.group(1)) if _ym else None), int(m.group(1)), int(m.group(2))
     if not (1 <= mo <= 12 and 1 <= d <= 31):
         return None
     return (y, mo, d)
@@ -2056,7 +2057,81 @@ def _rt_current_program(ch_code: str):
     return {"name": nm, "code": c, "stime": _rt_stime_fmt(st),
             "etime": "24:00" if et == "2400" else _rt_stime_fmt(et)}
 
+def _rt_channel_from_q(question: str):
+    """질문에서 채널 감지 → (필드, 표시명). 없으면 전체(T00)."""
+    for nm, code in _RT_CHANNELS:
+        if nm in (question or ""):
+            return code, nm
+    return "T00", "전체"
+
+
+def _rt_history_branch(question: str, overlay_ctx=None):
+    """특정 과거일(연·월·일) 분단위 채널 동시자 질의면 history 경로로 답, 아니면 None.
+       보관 범위 밖이면 '언제부터 있는지' 안내(데이터로 동적 확인 — 하드코딩 아님)."""
+    cand = _parse_abs_date(question)
+    if not cand:
+        return None                                   # 절대일자 없음 → 오늘/어제 등 today 경로
+    import raas_datasource as DSRC
+    today_str = _dt.date.today().strftime("%Y-%m-%d")
+    y = cand[0]
+    if not y:                                         # 연도 없으면 '가장 최근 그 월·일'로 해석
+        y = _dt.date.today().year
+        if "%04d-%02d-%02d" % (y, cand[1], cand[2]) > today_str:
+            y -= 1
+    date = "%04d-%02d-%02d" % (y, cand[1], cand[2])
+    if date >= today_str:
+        return None                                   # 오늘·미래는 실시간 today 경로
+    ch_field, ch_name = _rt_channel_from_q(question)
+    earliest = DSRC.get_rt_earliest()
+    base = {"providers_used": ["realtime_history"],
+            "entities_brief": f"과거 분단위 동시자({ch_name}, {date})",
+            "provenance": {"providers": ["realtime_history"], "scope": "realtime"}, "ok": True}
+    if earliest and date < earliest:                  # 보관 범위 밖 — 언제부터 있는지 안내
+        base["context"] = (
+            f"분석 대상: 과거 분단위 동시사용자 — 요청일 {date} ({ch_name})\n"
+            f"### realtime_history — 보관 범위 밖\n"
+            f"분단위(1분 집계) 동시사용자 데이터는 **{earliest}부터** 보유합니다. "
+            f"요청하신 {date}는 그 이전이라 데이터가 없습니다.\n"
+            f"안내: 이 사실을 명확히 전하고, {earliest} 이후 날짜라면 조회 가능함을 알려주세요. "
+            f"(그보다 과거의 '일간' 규모는 별도 아카이브로 조회 가능하나, 분단위는 아님)")
+        return base
+    rows = DSRC.get_rt_history(date)
+    vals = [(_rt_hhmm(r), _rt_int(r.get(ch_field))) for r in rows]
+    vals = [(t, v) for t, v in vals if t and v is not None]
+    if not vals:
+        base["context"] = (
+            f"분석 대상: 과거 분단위 동시사용자 — {date} ({ch_name})\n"
+            f"### realtime_history — {date} 데이터 없음\n"
+            f"해당일 분단위 집계가 없습니다"
+            + (f" (분단위 보관 시작 {earliest})." if earliest else ".")
+            + " 이 사실을 사용자에게 안내하세요.")
+        return base
+    peak = max(vals, key=lambda x: x[1])
+    low = min(vals, key=lambda x: x[1])
+    avg = round(sum(v for _, v in vals) / len(vals))
+    ten = [(t, v) for t, v in vals if t[4:5] == "0"]  # 10분 간격 다운샘플(가독)
+    csv = "time,concurrent\n" + "\n".join(f"{t},{v}" for t, v in ten)
+    summary = {"channel": ch_name, "date": date, "해상도": "원천 1분(추이는 10분 다운샘플)",
+               "피크": {"시각": peak[0], "값": peak[1]}, "최저": {"시각": low[0], "값": low[1]},
+               "평균": avg, "표본(분)": len(vals), "분단위 보관시작": earliest}
+    context = (
+        f"분석 대상: 과거 분단위 동시사용자(1분 집계) — {ch_name}, {date}\n"
+        f"안내: 아래는 그 날짜 하루의 채널 동시자 시계열(보관 데이터). 추이·피크시간대를 짚어 답하고, "
+        f"필요시 10분 CSV로 차트를 그리세요. 동시사용자=1분 버킷 내 활성 세션 고유 사용자 수(dc UUID).\n\n"
+        f"### realtime_history — {ch_name} {date} 1분 동시자\n"
+        + json.dumps(summary, ensure_ascii=False)
+        + f"\n\n[10분 간격 추이 CSV]\n{csv}")
+    onto = _rt_ontology_block(ch_field if ch_field != "T00" else "")
+    if onto:
+        context += "\n\n" + onto
+    base["context"] = context
+    return base
+
+
 def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
+    hist = _rt_history_branch(question, overlay_ctx)   # 과거 특정일 분단위 → history 경로
+    if hist is not None:
+        return hist
     import raas_datasource as DSRC
     today = DSRC.get_rt_concurrent()          # 확장 실시간(디바이스×채널·인증 비율 포함)
     if not today:

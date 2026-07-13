@@ -461,6 +461,52 @@ def get_rt_inflow() -> list:
     """오늘 1분 단위 채널별 유입 — [{_time,F00_START,G00_START,L00_START,P00_START}]."""
     return _rt_inflow_feed.get() or []
 
+# ── 과거일 분단위 채널 동시자 (온디맨드) — 보관 범위 내 임의 날짜 ────────────
+#   오늘 창 캐시 Feed와 달리, 임의 과거일을 그때그때 조회(채널만·narrow, 필요 시 확장).
+#   tempsummary 보관은 유한(약 수개월) — 보관 시작일은 get_rt_earliest로 동적 확인.
+def _rt_date_bounds(date_str: str):
+    """'YYYY-MM-DD' → (earliest, latest) Splunk MM/DD/YYYY 하루 경계."""
+    import datetime as _dt
+    d = _dt.datetime.strptime(date_str.replace("/", "-")[:10], "%Y-%m-%d").date()
+    nd = d + _dt.timedelta(days=1)
+    return d.strftime("%m/%d/%Y:00:00:00"), nd.strftime("%m/%d/%Y:00:00:00")
+
+_rt_history_cache: dict = {}      # {date: rows} 소량 프로세스 캐시(과거 불변이라 안전)
+
+def get_rt_history(date_str: str) -> list:
+    """특정 과거일의 1분 채널 동시자 시계열 [{_time,T00,F00,L00,G00,P00}] (온디맨드).
+       tempsummary 보관 범위(get_rt_earliest 이후) 내만 결과 있음."""
+    key = (date_str or "").replace("/", "-")[:10]
+    if not key:
+        return []
+    if key in _rt_history_cache:
+        return _rt_history_cache[key]
+    try:
+        e, l = _rt_date_bounds(key)
+        rows = splunk_search(_rt_spl(e, l, _RT_NARROW), timeout=120)
+    except Exception as ex:
+        print(f"  [rt_history {key}] 조회 실패: {ex}")
+        return []
+    _rt_history_cache[key] = rows
+    return rows
+
+def _load_rt_earliest():
+    """tempsummary 분단위 보관 시작일(가장 오래된 _time) — tstats로 빠르게."""
+    try:
+        r = splunk_search(f'| tstats min(_time) as e where index={RT_INDEX}', timeout=60)
+        import datetime as _dt
+        t = float(r[0].get("e")) if (r and r[0].get("e")) else None
+        return (_dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d") if t else None), "splunk"
+    except Exception as ex:
+        print(f"  [rt_earliest] 조회 실패: {ex}")
+        return None, "error"
+
+_rt_earliest_feed = Feed("rt_earliest", _load_rt_earliest, daily_at="00:10")
+
+def get_rt_earliest() -> str:
+    """분단위 동시사용자 보관 시작일 'YYYY-MM-DD'(동적 — 보관기간 롤오버 반영)."""
+    return _rt_earliest_feed.get()
+
 # 최근 14일(오늘 제외) 일자별 피크값·피크시각 — 과거 불변 → 일일 캐시. 스코프별 지연 생성.
 #   argmax 관용구: sort로 (date, 값) 정렬 후 stats last()가 그날 최대값 행의 시각·값.
 _RT_PEAK_DAYS = 14

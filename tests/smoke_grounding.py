@@ -164,6 +164,13 @@ check_true("실시간 감지: '지금 동시 청취자 몇 명'", G._detect_real
 check_true("실시간 감지: '실시간 현황'", G._detect_realtime("실시간 현황 보여줘"))
 check_true("오탐 방지: '지금 이상 있어?' 실시간 아님", not G._detect_realtime("지금 이상 있어?"))
 check_true("오탐 방지: '어제 DAU는?' 실시간 아님", not G._detect_realtime("어제 DAU는?"))
+# 과거 특정일 분단위 — 연도 파싱 + history 경로. 보관 범위 밖이면 '언제부터' 안내
+check("절대일자 연도 파싱: '2025년 12월 31일'", G._parse_abs_date("2025년 12월 31일"), (2025, 12, 31))
+_rh = G._assemble_realtime("2025년 12월 31일 파워FM 분당 동시사용자 추이") or {}
+check("과거 분단위 → realtime_history provider", _rh.get("providers_used"), ["realtime_history"])
+check_true("보관 범위 밖 → '부터' 안내(하드코딩 아님)", "부터" in _rh.get("context", ""))
+check_true("연도없는 상대일('지금')은 history 아님(today 경로)",
+           "realtime_history" not in (G._assemble_realtime("지금 동시 청취자 몇 명") or {}).get("providers_used", []))
 # 채널 매핑 결정성 — tempsummary는 필드명이 곧 RAAS 코드
 check("실시간 채널 매핑(필드=코드)",
       G._RT_CHANNELS,

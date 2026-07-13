@@ -64,6 +64,10 @@ raas_datasource.py  ← Splunk 수집 단일 소유 (splunk_search·fetch_lookup
     Feed 클래스: daily_at(일배치형)/ttl_sec(실시간형) 정책 — 새 룩업·직접쿼리 소스 추가용
     타임라인 조회 헬퍼(get_metric_trend·get_snapshot_at·get_available_dates·_i·_fn)
     실시간 동시사용자 Feed 3종: 오늘(60초)·어제·지난주 동요일(자정 경계 일일) — 로컬 저장 없음(저장소=Splunk)
+    과거일 분단위(온디맨드): get_rt_history(date)가 tempsummary 보관 범위 내 임의 과거일의 1분 채널
+      동시자를 그때그때 조회(채널만·narrow, 소량 캐시). get_rt_earliest()가 보관 시작일을 동적 확인
+      (tstats min(_time), 일일 캐시 — 보관기간 롤오버 반영, 하드코딩 금지). grounding realtime scope의
+      _rt_history_branch가 특정 과거일 감지 시: 범위 밖이면 '데이터는 X부터' 안내, 범위 내면 시계열+피크
     오늘 편성·게스트 Feed(today_lineup, index=broadplan): 당일 프로그램별 GUEST·view_radio(Y/N) —
       상세 KPI 배치가 아직 못 담은 '오늘' 공백을 메움. daily_at=KPI_REFRESH_AT 공유(get_today_lineup)
     참여 Feed(engagement, SUMMARY_INDEX_02, 과거 1년·평일, 07:15): 프로그램별 일자별 문자(SMS)·
