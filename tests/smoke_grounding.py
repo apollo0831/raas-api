@@ -194,6 +194,18 @@ check_true("차트 해상도 오버라이드 감지: '1분 단위로'", G._rt_wa
 check_true("오버라이드 없으면 10분(기본)", not G._rt_wants_1min("동시자 추이 그려줘"))
 _c1 = G._assemble_realtime("2026-03-20 파워FM 분당 동시자 1분 단위로 그려줘") or {}
 check_true("1분 오버라이드 → 1분 간격 CSV", "[1분 간격 추이 CSV]" in _c1.get("context", ""))
+# RT-1c: 성별/연령 인증비율 시계열(접근자 위임) — 연령 필드 dim 정정(과거 AGE_T 오표기로 비어있던 버그)
+check("연령 dim 정정(AGE_T 아님)", G._RT_AGES[0], ("0-19", "0_19"))
+_dsx = G._rt_demo_block("파워FM 성별 동시 추이", "F00", "today", 10)
+check_true("성별 추이 헬퍼: 여%/남% 컬럼", _dsx and _dsx.startswith("time,여%,남%"))
+_dag = G._rt_demo_block("연령대별 추이", "F00", "today", 10)
+check_true("연령 추이 헬퍼: 실제값(빈칸 아님)", _dag and _dag.startswith("time,0-19%")
+           and any(c.strip() not in ("", ",") for c in _dag.splitlines()[1].split(",")[1:]))
+check_true("인증비율은 F00/L00만(G00 None)", G._rt_demo_block("성별 추이", "G00", "today", 10) is None)
+# 과거일 성별/연령 개방(RT-1c ②)
+_hd = G._assemble_realtime("2026-04-01 파워FM 성별 동시사용자 추이") or {}
+check_true("과거일 성별 추이 개방 → realtime_history_demographic",
+           "realtime_history_demographic" in _hd.get("context", ""))
 # 시간 의도 분류: 월평균·기간범위=미지원 / 단일일=single
 check("temporal: 월평균 → unsupported", G._rt_temporal("2026년 4월 월평균 분당 동시사용자"), ("unsupported", None))
 check("temporal: 기간범위(~) → unsupported", G._rt_temporal("4월1일~4월7일 분당 동시사용자")[0], "unsupported")

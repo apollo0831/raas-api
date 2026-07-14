@@ -279,8 +279,10 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   datasource `rt_fetch(source,when)`가 오늘(60초 캐시)/과거일(광역 온디맨드, 디바이스·성별·연령 포함)을
   하나로. 회귀: `python tests/smoke_rt_series.py`(접근자 값=원천 대조). 설계 docs/rt_accessor_design.md.
   [RT-1b] 시계열 3소비자 위임 완료: 오늘 추이(`ser`)·과거 history 차트·엑셀 추출이 rt_series/rt_table
-  경유(채널 필드리스트·다운샘플 중복 제거, 출력 불변). 스냅샷 dict(device×채널·인증 성별/연령)와
-  demo_ser는 형태가 달라 인라인 유지(RT-1c 후보).
+  경유(채널 필드리스트·다운샘플 중복 제거, 출력 불변).
+  [RT-1c] 성별/연령 시계열도 접근자 위임(`_rt_demo_block`, 오늘·과거일 공용) → **과거일 성별/연령
+  개방**(광역 fetch). 잠복 버그 정정: `_RT_AGES`가 `AGE_T…` 오표기라 연령비율이 스냅샷·추이에서
+  비어 있던 것을 dim(`0_19`…)으로 고쳐 실제값 반영. 스냅샷 device dict는 인라인 유지(단일 최신행).
 - `raas_analytics.py` [Phase 2] — 교차지표 결정적 연산: `align·pearson·co_movement·correlate_many·
   decompose·change·rank_by_change`. 접근자가 주는 [(date,val)] 시계열을 공통창 정렬→상관·동반움직임.
   **숫자만** — 관계·인과 판단은 온톨로지·LLM. grounding `metric_correlate` provider가 대상지표(기본 DAU)

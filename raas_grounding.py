@@ -1995,10 +1995,11 @@ _RT_CHANNELS = [("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"),
 _RT_DEVICES = [("스마트폰(태블릿 포함)", "DV_SP"), ("PC클라이언트", "DV_PC"),
                ("웹브라우저(SBS홈페이지)", "DV_PW"), ("모바일웹", "DV_MWEB"),
                ("워치", "DV_WATCH"), ("자동차", "DV_CAR"), ("AI스피커(7사 합산)", "DV_AI")]
-_RT_AGES = [("0-19", "AGE_T0_19"), ("20-24", "AGE_T20_24"), ("25-29", "AGE_T25_29"),
-            ("30-34", "AGE_T30_34"), ("35-39", "AGE_T35_39"), ("40-44", "AGE_T40_44"),
-            ("45-49", "AGE_T45_49"), ("50-54", "AGE_T50_54"), ("55-59", "AGE_T55_59"),
-            ("60+", "AGE_T60")]
+# (label, dim) — dim은 실시간 인증 연령비율 필드 접미(R_{ch}_AGE_{dim}). 과거 'AGE_T…' 오표기 정정.
+_RT_AGES = [("0-19", "0_19"), ("20-24", "20_24"), ("25-29", "25_29"),
+            ("30-34", "30_34"), ("35-39", "35_39"), ("40-44", "40_44"),
+            ("45-49", "45_49"), ("50-54", "50_54"), ("55-59", "55_59"),
+            ("60+", "60")]
 
 def _rt_hhmm(row) -> str:
     """행 _time(ISO) → 'HH:MM'."""
@@ -2161,6 +2162,38 @@ def _rt_resolve_target(question: str) -> dict:
             "ch_field": ch_field, "disp": disp, "win": None}
 
 
+def _rt_wants_demo(question: str):
+    """(want_sex, want_age) — 실시간 성별/연령 인증비율 시계열 요청 여부."""
+    q = question or ""
+    return (any(k in q for k in ("성별", "남녀", "여성", "남성", "여자", "남자")),
+            any(k in q for k in ("연령", "나이", "세대", "대별", "10대", "20대", "30대", "40대", "50대", "60대")))
+
+
+def _rt_demo_block(question: str, ch_code: str, when: str, resolution: int, window=None):
+    """성별/연령 인증비율(%) 시계열 CSV — 통합 접근자(sex_ratio/age_ratio) 위임. 오늘·과거일 공용.
+       인증비율은 파워FM(F00)·러브FM(L00)만(분모=인증자수). 반환 CSV or None."""
+    if ch_code not in ("F00", "L00"):
+        return None
+    want_sex, want_age = _rt_wants_demo(question)
+    if not (want_sex or want_age):
+        return None
+    import raas_rt_series as RT
+    cols = []                                    # (라벨, metric, dims)
+    if want_sex:
+        cols += [("여%", "sex_ratio", {"sex": "F"}), ("남%", "sex_ratio", {"sex": "M"})]
+    if want_age:
+        cols += [(f"{nm}%", "age_ratio", {"age": d}) for nm, d in _RT_AGES]
+    ser = {lab: dict(RT.rt_series(met, ch_code, when, resolution, dims=dm, window=window))
+           for lab, met, dm in cols}
+    times = sorted(set().union(*[set(s) for s in ser.values()])) if ser else []
+    if not times:
+        return None
+    lines = ["time," + ",".join(lab for lab, _, _ in cols)]
+    for t in times:
+        lines.append(",".join([t] + [str(ser[lab].get(t, "") or "") for lab, _, _ in cols]))
+    return "\n".join(lines)
+
+
 def _rt_temporal(question: str):
     """실시간 과거 질의의 시간 의도 분류 → ('single', 'YYYY-MM-DD') / ('unsupported', None) / None(오늘).
        월평균·기간범위(~)·월단위는 분단위 미지원으로 분리(오늘 경로로 새거나 오답 방지)."""
@@ -2246,6 +2279,10 @@ def _rt_history_branch(question: str, overlay_ctx=None):
                   "1개 프로그램만 방송하므로(도메인 공리) 이 편성창의 채널 동시청취 = 프로그램 동시청취.")
     context = (head + "\n" + guide + f"\n\n### realtime_history — {disp} {date} 1분 동시자\n"
                + json.dumps(summary, ensure_ascii=False) + f"\n\n[{res_kr} 간격 추이 CSV]\n{csv}")
+    _demo = _rt_demo_block(question, ch_field, date, (1 if step1 else 10), window)  # 과거일 성별/연령 개방
+    if _demo:
+        context += (f"\n\n### realtime_history_demographic — {disp} {date} 인증자 성별/연령 비율"
+                    f"({res_kr} 간격, 분모=인증자수)\n" + _demo)
     onto = _rt_ontology_block(ch_field if ch_field != "T00" else "")
     if onto:
         context += "\n\n" + onto
@@ -2356,12 +2393,6 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
         _ws = (prog_block.get("방송 시작시각") or prog_block.get("방송 시간", "").split("~")[0] or "").strip()
         if len(_ws) == 5 and _ws[2] == ":":
             win_start = _ws
-    def _keep(hh):
-        if not hh:
-            return False
-        if not one_min:
-            return hh[4:5] == "0"               # 10분
-        return (win_start is None) or (hh >= win_start)   # 1분(편성창 이후)
     import raas_rt_series as RT
     _res = 1 if one_min else 10
     _win = (win_start, "24:00") if (one_min and win_start) else None
@@ -2369,23 +2400,8 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
     ser = ["time,전체,파워FM,러브FM,고릴라M,픽채널"]
     for _row in _ctb["rows"]:
         ser.append(",".join([_row[0]] + [str(v or "") for v in _row[1:]]))
-    # 성별/연령 추이(요청 시) — 파워FM(F00)/러브FM(L00)만 인증 비율 존재
-    demo_ser = demo_ch = None
-    want_sex = any(k in question for k in ("성별", "남녀", "여성", "남성", "여자", "남자"))
-    want_age = any(k in question for k in ("연령", "나이", "세대", "대별", "20대", "30대", "40대", "50대", "60대"))
-    if (want_sex or want_age) and ch_code in ("F00", "L00"):
-        demo_ch = ch_code
-        cols = []
-        if want_sex:
-            cols += [("여%", f"R_{demo_ch}_SEX_F"), ("남%", f"R_{demo_ch}_SEX_M")]
-        if want_age:
-            cols += [(f"{nm}%", f"R_{demo_ch}_AGE_{f}") for nm, f in _RT_AGES]
-        lines = ["time," + ",".join(c[0] for c in cols)]
-        for r in today:
-            hh = _rt_hhmm(r)
-            if _keep(hh):
-                lines.append(",".join([hh] + [str(_rt_flt(r.get(c[1])) or "") for c in cols]))
-        demo_ser = "\n".join(lines)
+    # 성별/연령 추이(요청 시) — 통합 접근자 위임(과거 AGE_T 오표기 정정으로 연령비율 실제값 반영). F00/L00만.
+    demo_ser = _rt_demo_block(question, ch_code, "today", _res, _win)
 
     head = (f"분석 대상: 실시간 동시사용자(1분 집계) · 기준시각 오늘 {now_hhmm}"
             + (f" · 관심 채널: {ch_name}" if ch_code and ch_code != "T00" else ""))
