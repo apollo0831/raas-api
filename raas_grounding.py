@@ -1820,6 +1820,8 @@ _RANK_SIGNAL = ("순위", "랭킹", "top", "상위", "하위", "높은 프로그
 _RANK_FIELD_MAP = [
     (("깊은청취", "깊은 청취", "deep"), "deep_rate", "깊은청취율"),
     (("실청취", "real_rate"), "real_rate", "실청취율"),
+    (("롤링mau", "롤링 mau", "dau_r30"), "dau_r30", "롤링MAU"),   # 'mau'보다 먼저(포함관계)
+    (("롤링wau", "롤링 wau", "dau_r7"), "dau_r7", "롤링WAU"),
     (("mau", "월간", "월활"), "mau", "MAU"),
     (("wau", "주간", "주활"), "wau", "WAU"),
     (("이탈", "churn"), "churn_rate", "이탈률"),
@@ -1858,6 +1860,23 @@ _RANK_CHANGE_UP   = ("증가", "늘어", "늘은", "는 ", "상승", "오른", "
 _RANK_CHANGE_DOWN = ("감소", "줄어", "줄은", "하락", "떨어", "급감")
 _RANK_SUPERLATIVE = ("가장", "제일", "많이", "최다", "최대")
 
+def _rank_period_from(question: str):
+    """변화량 순위의 기간 시작일 'YYYY-MM-DD'(None=전주대비 WoW). 임의 기간 델타 순위용."""
+    t = question or ""
+    today = _dt.date.today()
+    if any(k in t for k in ("올해", "금년", "연초", "올 들어", "연간", "올해 들어")):
+        return f"{today.year}-01-01"
+    if "작년" in t:
+        return f"{today.year - 1}-01-01"
+    m = re.search(r"(\d+)\s*개월", t)
+    if m:
+        return (today - _dt.timedelta(days=int(m.group(1)) * 30)).strftime("%Y-%m-%d")
+    m = re.search(r"최근\s*(\d+)\s*일|지난\s*(\d+)\s*일", t)
+    if m:
+        n = int(m.group(1) or m.group(2))
+        return (today - _dt.timedelta(days=n)).strftime("%Y-%m-%d")
+    return None
+
 def _detect_ranking(question: str):
     t = question or ""
     tl = t.lower()
@@ -1882,9 +1901,11 @@ def _detect_ranking(question: str):
             fld, label = f, lab
             break
     if by_change:
-        # 감소 질의(가장 많이 감소=가장 음수)면 오름차순 정렬
-        return {"field": fld, "label": label, "asc": (_chg_down and not _chg_up),
-                "by_change": True}
+        asc = (_chg_down and not _chg_up)          # 감소 질의(가장 많이 감소=가장 음수)면 오름차순
+        pf = _rank_period_from(question)           # '올해 들어/최근 N개월' 등 기간 델타 순위
+        if pf:
+            return {"field": fld, "label": label, "asc": asc, "period_change": True, "period_from": pf}
+        return {"field": fld, "label": label, "asc": asc, "by_change": True}   # 없으면 전주대비 WoW
     asc = any(k in t for k in ("낮은", "최저", "하위", "worst", "적은", "least"))
     return {"field": fld, "label": label, "asc": asc, "by_change": False}
 
@@ -1973,7 +1994,62 @@ def _planner_ranking(question, overlay_ctx=None):
     return r if ok else None
 
 
+def _assemble_ranking_period_change(question, spec, overlay_ctx=None):
+    """[기간 델타 순위] 각 프로그램 지표를 '기간 시작~현재' 델타로 rank_by_change.
+       dau 계열은 아카이브 병합(연초까지), 그 외 KPI는 상세 타임라인(≈3월~). 전주대비(WoW)와 별개."""
+    import raas_datasource as DSRC
+    import raas_analytics as AN
+    field, pf = spec["field"], spec["period_from"]
+    pf_slash = pf.replace("-", "/")
+    hist = set(_HIST_METRICS)
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        rows = []
+    codes, seen = [], set()
+    for r in rows:
+        c = r.get("PGM_CODE")
+        if c and c not in seen and c not in _RANK_EXCLUDE and not c.endswith("00") and c != "L04":
+            seen.add(c); codes.append(c)
+    code_series = {}
+    for c in codes:
+        if field in hist:
+            s = DSRC.get_history_series_merged(c, field)          # 아카이브+상세 병합
+        else:
+            s = sorted((d, _to_float(row.get(field)))
+                       for d, row in (DSRC.get_timeline().get(c) or {}).items())
+        s = [(d, v) for d, v in s if v is not None and (d or "").replace("-", "/") >= pf_slash]
+        if len(s) >= 2:
+            code_series[c] = s
+    if not code_series:
+        return {"ok": False, "reason": "기간 데이터 없음"}
+    ranked = AN.rank_by_change(code_series, ascending=spec["asc"])
+    top = [{"code": r["code"], "name": _resolve_name(r["code"]), "시작값": r["from"],
+            "현재값": r["to"], "변화": r["abs"], "변화%": r["pct"]} for r in ranked[:15]]
+    period_lbl = f"{pf}~현재"
+    payload = {"metric": spec["label"], "기간": period_lbl,
+               "정렬": "감소 상위(변화% 오름차순)" if spec["asc"] else "증가 상위(변화% 내림차순)",
+               "대상": len(code_series), "순위": top}
+    head = (f"순위 분석: 전 프로그램 {spec['label']} {period_lbl} "
+            f"{'감소' if spec['asc'] else '증가'} 상위 (대상 {len(code_series)}개)")
+    context = (head + f"\n\n### program_ranking(기간변화) — {spec['label']} {period_lbl} 변화량 순위\n"
+               + json.dumps(payload, ensure_ascii=False, default=str)
+               + "\n\n## 해석 주의\n- 이 순위는 '기간 첫 관측치 → 현재'의 실제 델타(전주대비 WoW와 다름). "
+                 "롤링MAU·롤링WAU·DAU·1분청취는 아카이브 병합으로 연초까지 산출, 그 외 지표는 상세 데이터 "
+                 "보유 구간만 반영.")
+    targets = [("program", it["code"]) for it in top[:8]] + [("global", None)]
+    otext, overlay_ids = _fetch_overlay(targets, overlay_ctx)
+    if otext:
+        context += "\n\n" + otext
+    return {"ok": True, "context": context, "providers_used": ["program_ranking_period"],
+            "entities_brief": head,
+            "provenance": {"providers": ["program_ranking_period"], "scope": "ranking",
+                           "metric": field, "overlay_items": overlay_ids}}
+
+
 def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
+    if spec.get("period_change"):
+        return _assemble_ranking_period_change(question, spec, overlay_ctx)
     if spec.get("demo"):
         return _assemble_ranking_demo(question, spec, overlay_ctx)
     try:

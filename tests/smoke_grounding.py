@@ -121,6 +121,15 @@ check("'가장 많이 증가한 프로그램' → 변화량 순위",
       (_rk_up.get("field"), _rk_up.get("by_change"), _rk_up.get("asc")), ("dau", True, False))
 _rk_dn = G._detect_ranking("DAU 가장 많이 감소한 프로그램") or {}
 check("'가장 많이 감소' → 오름차순(음수 우선)", _rk_dn.get("asc"), True)
+check_true("기간 없으면 전주대비(WoW) by_change", _rk_dn.get("by_change") and not _rk_dn.get("period_change"))
+# 기간 변화량 순위 — '올해 들어 롤링MAU 감소': dau_r30 매핑 + 연초 델타(전주대비 아님)
+_rk_yr = G._detect_ranking("올해 들어 롤링MAU가 가장 많이 감소한 프로그램") or {}
+check("'올해 롤링MAU 감소' → dau_r30·기간델타",
+      (_rk_yr.get("field"), _rk_yr.get("period_change"), _rk_yr.get("period_from")),
+      ("dau_r30", True, "2026-01-01"))
+check_true("기간 변화량 순위 → program_ranking_period provider",
+           "program_ranking_period" in G.assemble("올해 들어 롤링MAU 가장 많이 감소한 프로그램").get("providers_used", []))
+check("period_from: 최근 3개월", bool(G._rank_period_from("최근 3개월 DAU 감소")), True)
 # 인구 카테고리 순위 — 분포 소스 랭킹(통합 접근자). 과거 'DAU로 폴백해 성별 없음' 회귀 방지
 _rk_m = G._detect_ranking("남성 청취자 비율 가장 높은 프로그램") or {}
 check("'남성 비율 높은 프로그램' → 분포 순위", (_rk_m.get("demo"), _rk_m.get("source"), _rk_m.get("field")),
