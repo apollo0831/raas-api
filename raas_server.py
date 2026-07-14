@@ -1416,7 +1416,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                                    user_role=user_role, intent="grounded",
                                    scope=_ground["provenance"].get("program"), source="general",
                                    input_tokens=_gusage.get("input_tokens"),
-                                   output_tokens=_gusage.get("output_tokens"))
+                                   output_tokens=_gusage.get("output_tokens"),
+                                   providers_used=_ground.get("providers_used"))  # 개선화면 '직접 활용' 표기용
                 # 데이터 출처 주의문([small]) — 전체 사용자 노출. 온톨로지 raas:sourceCaveat 기반
                 #   (예: 문자·공감로그 → 'm&studio에서 확인'). 사용된 provider에 따라 결정적 append.
                 try:
@@ -1522,7 +1523,8 @@ class RAASHandler(BaseHTTPRequestHandler):
             if not user:
                 self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401); return
             q = (body.get("question") or "").strip()
-            ctx = GROUND.improve_context(q, user_id=str(user["id"]))
+            ctx = GROUND.improve_context(q, user_id=str(user["id"]),
+                                         query_id=body.get("query_id"))
             self.send_json(ctx if ctx.get("ok") else {"ok": False, **ctx})
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)

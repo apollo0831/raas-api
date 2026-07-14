@@ -1203,7 +1203,7 @@ const QUICK_QUERIES = [
   // '이번 주 브리핑'은 우측 KPI 패널(주간 탭 + ✨ AI 요약)로 이전
   '지금 동시 청취자 몇 명이야?',
   '오늘 프로그램별 게스트 누구야?',
-  'RAAS에는 어떤 지표들이 있나',
+  'RAAS에 어떤 데이터들이 있어?',
   '파워FM vs 러브FM 주간 신규유입 추이 비교',
   '지난주 컬투쇼 게스트 일자별로',
   '컬투쇼 코너 편성 알려줘',
@@ -2205,7 +2205,7 @@ function _thankReason(queryId, reason) {
 // HISTORY MODAL
 // ────────────────────────────────────────────────
 let _histDays = 0, _histOffset = 0, _histTotal = 0;
-let _histMode = 'all';   // 'all' | 'journey'(분석 여정) | 'query'(일반 질의)
+let _histMode = 'all';   // 'all' | 'bad'(👎 아쉬움) | 'improve'(내 기여) | 'review'(검토 큐)
 const HIST_PAGE_SIZE = 20;
 let _histAllItems = [];
 
@@ -2267,6 +2267,7 @@ async function loadHistAll() {
   if (_histMode === 'review')  { _loadReviewQueue(); return; }
   try {
     const params = new URLSearchParams({ limit: HIST_PAGE_SIZE, offset: _histOffset, days: _histDays });
+    if (_histMode === 'bad') params.set('feedback', '-1');   // 👎 아쉬움만
     const res = await fetch('/api/query/history/all?' + params);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
@@ -2388,20 +2389,27 @@ async function _loadImproveContext() {
   try {
     const r = await _authedFetch('/api/improve/context', { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: _improveState.question }) });
+      body: JSON.stringify({ question: _improveState.question, query_id: _improveState.qid }) });
     const d = await r.json();
     if (!d.ok) { dataEl.innerHTML = ontoEl.innerHTML = '<div class="imp-mean">프로그램 미식별 — 개선 대상 아님</div>'; return; }
     _improveState.program = d.program;
     _improveState.scopeKind = d.scope_kind || 'program';
     dataEl.innerHTML =
-      '<div class="imp-sub">사용된 데이터 필드</div>' +
-      (d.used_fields || []).map(f => `<div class="imp-item"><b>${escapeHtml(f.label || f.field)}</b> <code>${escapeHtml(f.field)}</code><div class="imp-mean">${escapeHtml(f.meaning || '')}</div>${f.source ? `<div class="imp-src">📄 ${escapeHtml(f.source)}</div>` : ''}</div>`).join('') +
-      `<div class="imp-form"><div class="imp-sub">스플렁크 필드 추가 요청 <span class="imp-tag">요청형 · 관리자 처리 후 반영</span></div>
-        <input id="impReqField" placeholder="필드명 (예: gender_segment)">
-        <textarea id="impReqDesc" placeholder="왜 필요한지 설명"></textarea>
+      '<div class="imp-sub">이 답변에 사용된 데이터</div>' +
+      ((d.used_providers || []).length
+        ? (d.used_providers || []).map(p => `<div class="imp-item"><b>${escapeHtml(p.label || p.name)}</b>${p.source ? `<div class="imp-src">📄 ${escapeHtml(p.source)}</div>` : ''}</div>`).join('')
+        : '<div class="imp-mean">직접 사용된 데이터 소스 없음</div>') +
+      ((d.used_fields || []).length
+        ? '<div class="imp-sub">사용된 지표 필드</div>' +
+          (d.used_fields || []).map(f => `<div class="imp-item"><b>${escapeHtml(f.label || f.field)}</b> <code>${escapeHtml(f.field)}</code><div class="imp-mean">${escapeHtml(f.meaning || '')}</div></div>`).join('')
+        : '') +
+      `<div class="imp-form"><div class="imp-sub">데이터 추가 요청 <span class="imp-tag">요청형 · 관리자 처리 후 반영</span></div>
+        <input id="impReqField" placeholder="필요한 데이터가 무엇인가요">
+        <textarea id="impReqDesc" placeholder="설명 추가"></textarea>
         <button class="imp-btn" onclick="_submitDataRequest()">요청 등록</button></div>`;
     ontoEl.innerHTML =
-      '<div class="imp-sub">참고한 온톨로지</div>' +
+      '<div class="imp-sub">이 답변에 사용된 온톨로지</div>' +
+      ((d.ontology_items || []).length ? '' : '<div class="imp-mean">직접 사용된 온톨로지 항목 없음</div>') +
       (d.ontology_items || []).map(o => `<div class="imp-item"><b>${escapeHtml(o.label)}</b><div class="imp-mean">${escapeHtml(o.purpose || '')}</div>${o.source ? `<div class="imp-src">📄 ${escapeHtml(o.source)}</div>` : ''}</div>`).join('') +
       ((d.my_knowledge || []).length ? '<div class="imp-sub">내 기여 (미승인)</div>' + d.my_knowledge.map(k => `<div class="imp-item">• ${escapeHtml(k.content)}</div>`).join('') : '') +
       `<div class="imp-form"><div class="imp-sub">온톨로지 수정·추가 <span class="imp-tag imp-tag-now">즉시 · 내 재질의에 반영</span></div>

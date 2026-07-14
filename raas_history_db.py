@@ -45,6 +45,7 @@ def init_db():
             ("topic_key",     "TEXT"),   # f"{intent}:{scope}:{metric}" 그룹핑/인기 집계용
             ("source",        "TEXT"),   # 'general'(일반 질의) | 'storyline'(스토리라인 칩)
             ("feedback_reason", "TEXT"), # 👎 아쉬움 사유(사용자 서술) — 약점 신호에 함께 노출
+            ("providers_used", "TEXT"),  # 이 답변이 실제 쓴 provider 목록(JSON) — 개선화면 '직접 활용' 표기
         ]:
             try:
                 conn.execute(f"ALTER TABLE query_history ADD COLUMN {col} {typedef}")
@@ -838,22 +839,25 @@ def save_query(user_id: str, question: str, answer: str,
                # 질의 노드화 ETL (Phase 3-1) — classify_intent + 후처리 결과
                intent: str = None, scope: str = None, scope_keyword: str = None,
                metric: str = None, metrics: Optional[list] = None,
-               topic_key: str = None, source: str = "general") -> int:
+               topic_key: str = None, source: str = "general",
+               providers_used: Optional[list] = None) -> int:
     """질의 1건 DB 저장. JSONL 로그도 함께 기록.
     intent/scope/metric 등 fact 인자는 모두 optional — None이어도 정상 저장.
-    source: 'general'(일반 질의) | 'storyline'(스토리라인 칩 질의)."""
+    source: 'general'(일반 질의) | 'storyline'(스토리라인 칩 질의).
+    providers_used: 이 답변이 실제 쓴 provider 목록 → 개선화면이 '직접 활용 데이터'로 표기."""
     chart_json   = json.dumps(chart_data, ensure_ascii=False) if chart_data is not None else None
     metrics_json = json.dumps(metrics,    ensure_ascii=False) if metrics    else None
+    providers_json = json.dumps(providers_used, ensure_ascii=False) if providers_used else None
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO query_history "
             "(user_id, question, answer, chart_data, ip, user_name, user_role, "
             " input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, "
-            " intent, scope, scope_keyword, metric, metrics_json, topic_key, source) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " intent, scope, scope_keyword, metric, metrics_json, topic_key, source, providers_used) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (user_id, question, answer, chart_json, ip, user_name, user_role,
              input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-             intent, scope, scope_keyword, metric, metrics_json, topic_key, source)
+             intent, scope, scope_keyword, metric, metrics_json, topic_key, source, providers_json)
         )
         row_id = cur.lastrowid
 
@@ -862,6 +866,20 @@ def save_query(user_id: str, question: str, answer: str,
                 intent=intent, scope=scope, scope_keyword=scope_keyword,
                 metric=metric, metrics=metrics, topic_key=topic_key, user_role=user_role)
     return row_id
+
+
+def get_query_providers(query_id) -> Optional[list]:
+    """저장된 답변의 실제 사용 provider 목록(JSON) → 개선화면 '직접 활용 데이터' 재현용.
+       없으면(구 답변·비grounding) None."""
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT providers_used FROM query_history WHERE id = ?", (query_id,)).fetchone()
+        if row and row["providers_used"]:
+            return json.loads(row["providers_used"])
+    except Exception:
+        pass
+    return None
 
 
 def _append_log(row_id, user_id, question, answer, ip, user_name,
@@ -945,18 +963,18 @@ def get_history(user_id: str, limit: int = 20, days: int = 7) -> list:
     ]
 
 
-def get_all_history(limit: int = 50, offset: int = 0, days: int = 0) -> dict:
-    """전체 사용자 질의 이력. 최신순, 페이지네이션."""
-    where = ""
-    params_count: list = []
-    params_rows:  list = []
+def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=None) -> dict:
+    """전체 사용자 질의 이력. 최신순, 페이지네이션. feedback 지정 시 그 값만(-1=아쉬움)."""
+    conds: list = []
+    base: list = []
     if days > 0:
         since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-        where = "WHERE created_at >= ?"
-        params_count = [since]
-        params_rows  = [since, limit, offset]
-    else:
-        params_rows = [limit, offset]
+        conds.append("created_at >= ?"); base.append(since)
+    if feedback is not None:
+        conds.append("feedback = ?"); base.append(feedback)
+    where = ("WHERE " + " AND ".join(conds)) if conds else ""
+    params_count = list(base)
+    params_rows  = base + [limit, offset]
 
     with get_conn() as conn:
         total = conn.execute(f"SELECT COUNT(*) FROM query_history {where}", params_count).fetchone()[0]

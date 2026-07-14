@@ -3255,22 +3255,67 @@ def _field_onto_item(f):
             "formula": m.get("formula"), "source": src}
 
 
-def improve_context(question: str, user_id=None) -> dict:
-    """개선하기 화면용 — 이 질문이 실제 쓰는 데이터 필드(의미·출처)·온톨로지 항목·본인 기여.
-       [P1] 온톨로지 항목 = 실제 사용한 것(필드 지표정의 + 분석형일 때만 분해 프레임워크), 출처 TTL 표기."""
+# 개선하기 데이터 섹션 — provider별 '어디서' 소스 라벨(친숙 표기). 없으면 desc만 표시.
+_PROVIDER_SOURCE = {
+    "program_kpi": "raas_kpi_latest.csv", "point_snapshot": "raas_kpi_latest.csv",
+    "channel_programs": "raas_kpi_latest.csv", "metric_timeseries": "KPI 타임라인",
+    "flow_decomp": "KPI 타임라인(파생)", "cohort": "코호트 룩업",
+    "stickiness": "KPI 타임라인(파생)", "weekday": "KPI 타임라인(요일)",
+    "engagement": "참여 룩업(문자·공감로그)", "program_demographics": "성별·연령·디바이스 분포 룩업",
+    "long_history": "장기 아카이브(real_dau·stats_1d)", "today_lineup": "오늘 편성(broadplan)",
+    "schedule": "주간 편성표 룩업", "programming": "편성 이력", "program_history": "편성 이력 온톨로지",
+    "channel_history": "편성 이력 온톨로지", "metric_correlate": "교차지표(다중 소스)",
+    "data_coverage": "보유 범위 점검", "calendar": "캘린더 온톨로지",
+    "period_events": "캘린더 온톨로지(이벤트·특일)", "realtime_now": "실시간 tempsummary",
+    "realtime_history": "실시간 tempsummary(과거일)",
+}
+
+def improve_context(question: str, user_id=None, query_id=None) -> dict:
+    """개선하기 화면용 — 이 '답변'이 실제 쓴 데이터(provider·필드)·온톨로지만 표면화(전체 나열 아님).
+       provider 목록은 답변 시점에 저장된 것(providers_used)을 그대로 읽어 결정적으로 재현한다
+       (모달 열 때 LLM 재선택 금지 — 비결정적이고 실제 답변과 어긋남). 저장 없으면 KPI 스냅샷 폴백."""
     ent = resolve_entities(question)
     if not ent.get("code"):
         return {"ok": False, "reason": "프로그램 미식별"}
-    kpi = _p_program_kpi(ent) or {}
-    used_fields = [it for f in kpi.keys() if (it := _field_onto_item(f))]
-    # 온톨로지 항목 = 실제 사용한 지표 정의(distinct) + 분석형이면 분해 프레임워크(cause.ttl)
+    # 이 답변이 실제 쓴 provider = 답변 생성 시 저장된 목록(결정적). uploaded_data 등 비provider는 제외.
+    used = []
+    if query_id:
+        try:
+            import raas_history_db as HDB
+            used = [n for n in (HDB.get_query_providers(query_id) or []) if n in _PROVIDER_BY_NAME]
+        except Exception as e:
+            print(f"[improve_context] provider 조회 실패: {e}")
+    # 데이터 섹션: 사용된 provider(친숙 라벨+소스) + 필드형 provider의 실제 필드만
+    used_providers, used_fields, seen_f = [], [], set()
+    for n in used:
+        p = _PROVIDER_BY_NAME.get(n)
+        if not p:
+            continue
+        used_providers.append({"name": n, "label": p.get("desc") or n,
+                               "source": _PROVIDER_SOURCE.get(n, "")})
+        try:
+            data = p["fetch"](ent)                      # 캐시 조회 — 필드형이면 키 추출
+        except Exception:
+            data = None
+        if isinstance(data, dict):
+            for f in data:
+                if f not in seen_f and (it := _field_onto_item(f)):
+                    seen_f.add(f); used_fields.append(it)
+    # 안전망: 저장 provider 없음(구 답변·비grounding) → KPI 스냅샷으로 최소 표기(과거 동작 폴백)
+    if not used_providers:
+        kpi = _p_program_kpi(ent) or {}
+        used_fields = [it for f in kpi.keys() if (it := _field_onto_item(f))]
+        if used_fields:
+            used_providers = [{"name": "program_kpi", "label": "프로그램 KPI 스냅샷",
+                               "source": _PROVIDER_SOURCE.get("program_kpi", "")}]
+    # 온톨로지 섹션: 사용 필드의 지표 정의(distinct) + 분석형 provider가 쓰였을 때만 분해 프레임워크
     onto, seen = [], set()
     for it in used_fields:
         if it["label"] not in seen:
             seen.add(it["label"])
             onto.append({"label": it["label"], "purpose": it.get("meaning") or "",
                          "source": it["source"]})
-    if ent.get("analytical"):
+    if any(n in used for n in ("flow_decomp", "cohort", "stickiness", "programming")):
         try:
             for d in (S._query_decompositions() or []):
                 onto.append({"label": d.get("label"), "purpose": d.get("purpose"),
@@ -3290,6 +3335,7 @@ def improve_context(question: str, user_id=None) -> dict:
         "ok": True,
         "program": {"code": ent["code"], "name": ent["name"], "channel": ent["channel"]},
         "scope_kind": ent.get("scope_kind"),    # program|channel → 개선 모달 target 자동추론
+        "used_providers": used_providers,        # 이 답변이 실제 쓴 데이터 소스(provider)
         "used_fields": used_fields,
         "ontology_items": onto,
         "my_knowledge": my,
