@@ -1921,6 +1921,52 @@ def _assemble_ranking_demo(question, spec, overlay_ctx=None) -> dict:
                            "metric": spec["field"], "overlay_items": overlay_ids}}
 
 
+# ── [P-1c] 랭킹 플래너 경로 — 해석을 plan에서, 렌더러(_assemble_ranking)는 키워드와 공유 ──
+_RANK_KPI_LABELS = {"dau": "DAU", "new": "신규유입", "react": "복귀", "churn_rate": "이탈률",
+                    "react_rate": "복귀율", "real_rate": "실청취율", "deep_rate": "깊은청취율",
+                    "engage_rate": "참여율", "habit_rate": "습관형성률", "d7_ret": "유지율"}
+_RANK_DEMO_SRC = {"gender_dist": ("pgm_gender", "sex"), "age_dist": ("pgm_age", "age"),
+                  "device_dist": ("pgm_device", "device")}
+_RANK_DEMO_LABEL = {(src, fld): lab for keys, src, fld, lab in _RANK_DEMO_MAP}  # (source,field)→라벨 재사용
+
+
+def _plan_to_rank_spec(plan, question):
+    """PlanRequest(intent=ranking) → _assemble_ranking spec. 매핑 불가면 None."""
+    asc = any(k in (question or "") for k in ("낮은", "최저", "하위", "worst", "적은", "least"))
+    metric, dims = plan.get("metric"), (plan.get("dims") or {})
+    if metric in _RANK_DEMO_SRC:
+        src, dimkey = _RANK_DEMO_SRC[metric]
+        field = dims.get(dimkey)
+        if not field:
+            return None
+        label = _RANK_DEMO_LABEL.get((src, field)) or f"{field} 비율"
+        return {"demo": True, "source": src, "field": field, "label": label, "asc": asc, "by_change": False}
+    if metric in _RANK_KPI_LABELS:
+        return {"field": metric, "label": _RANK_KPI_LABELS[metric], "asc": asc, "by_change": False}
+    return None
+
+
+def _planner_ranking(question, overlay_ctx=None):
+    """[P-1c] 랭킹 질의를 플래너→spec→_assemble_ranking(공유 렌더러). 실패·범위밖은 None(키워드 폴백).
+       변화량 순위는 키워드가 담당(플래너 범위 밖). 호출측이 랭킹류일 때만 부름(LLM 호출 게이트)."""
+    if call_claude is None:
+        return None
+    if any(k in (question or "") for k in ("증가", "감소", "늘어", "줄어", "상승", "하락", "급증", "급감")):
+        return None
+    try:
+        import raas_planner
+        plan = (raas_planner.plan(question).get("plan") or {})
+    except Exception:
+        return None
+    if plan.get("intent") != "ranking" or plan.get("domain") != "daily" or (plan.get("confidence") or 0) < 0.6:
+        return None
+    spec = _plan_to_rank_spec(plan, question)
+    if not spec:
+        return None
+    r = _assemble_ranking(question, spec, overlay_ctx)
+    return r if r.get("ok") else None
+
+
 def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
     if spec.get("demo"):
         return _assemble_ranking_demo(question, spec, overlay_ctx)
@@ -2564,9 +2610,10 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     # 참여(문자·공감로그) 순위는 KPI 랭킹(program_ranking, DAU 기준)이 아니라 참여 provider가 담당
     #   ('공감로그 참여 순위'가 DAU로 정렬되던 문제 방지). 전체 스냅샷을 주고 LLM이 정렬.
     rank_spec = None if _wants_engagement(question) else _detect_ranking(question)
-    if rank_spec:
-        _r = _assemble_ranking(question, rank_spec, overlay_ctx)
-        if _r.get("ok"):
+    if rank_spec:                                  # 랭킹류로 판정된 질의만 플래너 호출(LLM 게이트)
+        _rp = _planner_ranking(question, overlay_ctx)   # [P-1c] 플래너 우선(정밀 metric/dims), 실패시 키워드
+        _r = _rp if _rp is not None else _assemble_ranking(question, rank_spec, overlay_ctx)
+        if isinstance(_r, dict) and _r.get("ok"):
             return _r
     if _detect_guest_search(question):        # '임지연 어느 프로그램 출연?' 역검색(값→프로그램)
         _g = _assemble_guest_search(question)

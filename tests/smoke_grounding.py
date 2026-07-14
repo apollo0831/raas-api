@@ -219,6 +219,15 @@ _exp = G._execute_rt({"domain": "realtime", "metric": "concurrent",
 check_true("실행기 프로그램 해석: 컬투쇼→편성창 14:00~16:00", "편성창 14:00~16:00" in _exp.get("context", ""))
 check_true("플래너 게이트: 날짜없는 실시간은 플래너 스킵(폴백)",
            G._planner_realtime("지금 동시사용자 몇 명") is None)
+# P-1c: 랭킹 플래너 spec 매핑 == 키워드 spec(동일 렌더러 공유)
+check("plan→rank spec: 남성 gender_dist",
+      G._plan_to_rank_spec({"metric": "gender_dist", "dims": {"sex": "M"}}, "남성 높은"),
+      {"demo": True, "source": "pgm_gender", "field": "M", "label": "남성 비율", "asc": False, "by_change": False})
+check("plan→rank spec: DAU KPI",
+      G._plan_to_rank_spec({"metric": "dau"}, "DAU 순위"),
+      {"field": "dau", "label": "DAU", "asc": False, "by_change": False})
+check_true("plan→rank spec: 매핑 불가 metric → None",
+           G._plan_to_rank_spec({"metric": "sms"}, "문자 순위") is None)
 # 시간 의도 분류: 월평균·기간범위=미지원 / 단일일=single
 check("temporal: 월평균 → unsupported", G._rt_temporal("2026년 4월 월평균 분당 동시사용자"), ("unsupported", None))
 check("temporal: 기간범위(~) → unsupported", G._rt_temporal("4월1일~4월7일 분당 동시사용자")[0], "unsupported")
