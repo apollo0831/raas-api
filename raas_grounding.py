@@ -1886,10 +1886,14 @@ def _detect_ranking(question: str):
     #   예 "지난주 활성사용자가 가장 많이 증가한 프로그램은?" → dau_chg 내림차순.
     by_change = ((_chg_up or _chg_down)
                  and any(s in t for s in _RANK_SUPERLATIVE) and "프로그램" in t)
-    if not any(s.lower() in tl for s in _RANK_SIGNAL) and not by_change:
+    pf = _rank_period_from(question)               # '올해 초/연초/최근 N개월' 등 기간 시작
+    # 기간 델타(순위 or 프로그램별 표) — 기간마커 + (증감순위 or '변화/증감/대비' + 프로그램별)
+    period_delta = bool(pf) and (by_change or (
+        any(k in t for k in ("변화", "증감", "대비")) and ("프로그램별" in t or "프로그램" in t)))
+    if not any(s.lower() in tl for s in _RANK_SIGNAL) and not by_change and not period_delta:
         return None
-    # 인구 카테고리 순위(성별·연령·디바이스 비율) — 변화량 순위가 아닐 때만(분포는 _chg 없음)
-    if not by_change:
+    # 인구 카테고리 순위(성별·연령·디바이스 비율) — 변화/기간델타 아닐 때만(분포는 _chg 없음)
+    if not by_change and not period_delta:
         for keys, src, field, lab in _RANK_DEMO_MAP:
             if any(k.lower() in tl for k in keys):
                 asc = any(k in t for k in ("낮은", "최저", "하위", "worst", "적은", "least"))
@@ -1900,12 +1904,11 @@ def _detect_ranking(question: str):
         if any(k.lower() in tl for k in keys):
             fld, label = f, lab
             break
-    if by_change:
-        asc = (_chg_down and not _chg_up)          # 감소 질의(가장 많이 감소=가장 음수)면 오름차순
-        pf = _rank_period_from(question)           # '올해 들어/최근 N개월' 등 기간 델타 순위
-        if pf:
-            return {"field": fld, "label": label, "asc": asc, "period_change": True, "period_from": pf}
-        return {"field": fld, "label": label, "asc": asc, "by_change": True}   # 없으면 전주대비 WoW
+    if period_delta:                               # 기간 첫값→현재 델타(순위 또는 프로그램별 표)
+        asc = (_chg_down and not _chg_up)          # 감소 명시면 오름차순, 아니면 내림차순
+        return {"field": fld, "label": label, "asc": asc, "period_change": True, "period_from": pf}
+    if by_change:                                  # 기간마커 없는 순수 증감 순위 = 전주대비 WoW
+        return {"field": fld, "label": label, "asc": (_chg_down and not _chg_up), "by_change": True}
     asc = any(k in t for k in ("낮은", "최저", "하위", "worst", "적은", "least"))
     return {"field": fld, "label": label, "asc": asc, "by_change": False}
 
@@ -2025,7 +2028,7 @@ def _assemble_ranking_period_change(question, spec, overlay_ctx=None):
         return {"ok": False, "reason": "기간 데이터 없음"}
     ranked = AN.rank_by_change(code_series, ascending=spec["asc"])
     top = [{"code": r["code"], "name": _resolve_name(r["code"]), "시작값": r["from"],
-            "현재값": r["to"], "변화": r["abs"], "변화%": r["pct"]} for r in ranked[:15]]
+            "현재값": r["to"], "변화": r["abs"], "변화%": r["pct"]} for r in ranked[:30]]  # 프로그램별 표=전체
     period_lbl = f"{pf}~현재"
     payload = {"metric": spec["label"], "기간": period_lbl,
                "정렬": "감소 상위(변화% 오름차순)" if spec["asc"] else "증가 상위(변화% 내림차순)",

@@ -130,6 +130,10 @@ check("'올해 롤링MAU 감소' → dau_r30·기간델타",
 check_true("기간 변화량 순위 → program_ranking_period provider",
            "program_ranking_period" in G.assemble("올해 들어 롤링MAU 가장 많이 감소한 프로그램").get("providers_used", []))
 check("period_from: 최근 3개월", bool(G._rank_period_from("최근 3개월 DAU 감소")), True)
+# 기간 델타 '표'(방향/최상급 없어도) — '프로그램별 올해 초 대비 변화'
+_rk_tbl = G._detect_ranking("프로그램별 올해 초 대비 롤링MAU 변화 보여줘") or {}
+check("'프로그램별 올해초 대비 변화' → 기간델타 표",
+      (_rk_tbl.get("field"), _rk_tbl.get("period_change")), ("dau_r30", True))
 # 인구 카테고리 순위 — 분포 소스 랭킹(통합 접근자). 과거 'DAU로 폴백해 성별 없음' 회귀 방지
 _rk_m = G._detect_ranking("남성 청취자 비율 가장 높은 프로그램") or {}
 check("'남성 비율 높은 프로그램' → 분포 순위", (_rk_m.get("demo"), _rk_m.get("source"), _rk_m.get("field")),
