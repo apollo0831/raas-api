@@ -1157,19 +1157,38 @@ def _p_long_history(ent):
     if not any(series.values()):
         return None
     cov = {m: f"{s[0][0]} ~ {s[-1][0]} ({len(s)}일)" for m, s in series.items() if s}
-    # 월평균 CSV — 전체 아카이브를 월 단위로 (10년×4지표도 ~100행)
-    monthly = defaultdict(dict)
-    for m, s in series.items():
-        agg = defaultdict(lambda: [0.0, 0])
-        for d, v in s:
-            a = agg[d[:7].replace("/", "-")]
-            a[0] += v; a[1] += 1
-        for ym, (sm, c) in agg.items():
-            monthly[ym][m] = round(sm / c)
-    lines = ["month," + ",".join(_HIST_METRICS)]
-    for ym in sorted(monthly):
-        lines.append(ym + "," + ",".join(str(monthly[ym].get(m, "")) for m in _HIST_METRICS))
-    out = {"지표별 아카이브 범위": cov, "월평균(CSV)": "\n".join(lines)}
+    # 월평균 CSV — 전체 아카이브를 월 단위로 (10년×4지표도 ~100행).
+    # (a) 전체 일 기준 (b) 평일만(주말·공휴일 제외) — 평일 판정은 캘린더 온톨로지에 위임
+    #   (is_workday, provider에 요일·공휴일 규칙 하드코딩 안 함). 롤링지표(r7/r30)는 이미
+    #   창집계라 '평일만'이 무의미 → 일별 점지표(dau·dau_1min)에만 평일 필터 CSV 제공.
+    from raas_onto import get_adapter
+    _adapter = get_adapter()
+    _POINT = tuple(m for m in _HIST_METRICS if m in ("dau", "dau_1min"))
+
+    def _monthly_csv(metrics, workday_only):
+        mm = defaultdict(dict)
+        for m in metrics:
+            agg = defaultdict(lambda: [0.0, 0])
+            for d, v in series.get(m) or []:
+                if workday_only and not _adapter.is_workday(d):
+                    continue
+                a = agg[d[:7].replace("/", "-")]
+                a[0] += v; a[1] += 1
+            for ym, (sm, c) in agg.items():
+                if c:
+                    mm[ym][m] = round(sm / c)
+        ls = ["month," + ",".join(metrics)]
+        for ym in sorted(mm):
+            ls.append(ym + "," + ",".join(str(mm[ym].get(m, "")) for m in metrics))
+        return "\n".join(ls)
+
+    out = {"지표별 아카이브 범위": cov,
+           "월평균(전체 일, CSV)": _monthly_csv(_HIST_METRICS, False)}
+    if _POINT:
+        out["월평균(평일만·주말·공휴일 제외, CSV)"] = _monthly_csv(_POINT, True)
+        out["_평일필터_주의"] = ("'평일만' 열은 캘린더 온톨로지의 공휴일(2018~2027 등록)로 주말·공휴일을 "
+                              "제외한 월평균. 등록 범위 밖 날짜는 주말만 제외됨. 롤링지표(dau_r7·dau_r30)는 "
+                              "이미 창집계라 평일필터를 적용하지 않음(전체 일 열만 제공).")
     # 특정 연도 언급 → 그 해 일별(포커스 지표 1개, 최대 2개 연도). '25년'(2자리)도 인식.
     q = ent.get("_question") or ""
     yrs = _history_years(q)[:2]
