@@ -108,6 +108,7 @@ function mountCharts(){
     const d=await r.json();
     if(!d.ok){ cont.innerHTML='<div class="err">'+escapeHtml(d.error||'불러올 수 없습니다')+'</div>'; return; }
     document.getElementById('meta').textContent=(d.created_at||'').slice(0,10);
+    if(d.question) document.title = d.question.length>70 ? d.question.slice(0,70)+'…' : d.question;  // 탭 제목=질문
     cont.innerHTML='<div class="q"><div class="qlabel">질문</div>'+escapeHtml(d.question)+'</div>'
       +'<div class="a">'+renderAiText(d.answer)+'</div>';
     mountCharts();
