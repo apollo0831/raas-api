@@ -206,6 +206,19 @@ check_true("인증비율은 F00/L00만(G00 None)", G._rt_demo_block("성별 추�
 _hd = G._assemble_realtime("2026-04-01 파워FM 성별 동시사용자 추이") or {}
 check_true("과거일 성별 추이 개방 → realtime_history_demographic",
            "realtime_history_demographic" in _hd.get("context", ""))
+# P-1b: 플래너 실행기(_execute_rt) 출력 == 키워드 경로(_rt_history_branch) — 공유 렌더러
+_q = "2026-03-20 파워FM 분당 동시자 추이"
+_kw = G._rt_history_branch(_q) or {}
+_ex = G._execute_rt({"domain": "realtime", "metric": "concurrent",
+                     "entity": {"kind": "channel", "code": "F00"},
+                     "time": {"when": "date", "date": "2026-03-20"}}, _q) or {}
+check_true("실행기==키워드 경로(동일 렌더러)", _kw.get("context") and _kw.get("context") == _ex.get("context"))
+_exp = G._execute_rt({"domain": "realtime", "metric": "concurrent",
+                      "entity": {"kind": "program", "code": "F09"},
+                      "time": {"date": "2026-04-01"}}, "컬투쇼") or {}
+check_true("실행기 프로그램 해석: 컬투쇼→편성창 14:00~16:00", "편성창 14:00~16:00" in _exp.get("context", ""))
+check_true("플래너 게이트: 날짜없는 실시간은 플래너 스킵(폴백)",
+           G._planner_realtime("지금 동시사용자 몇 명") is None)
 # 시간 의도 분류: 월평균·기간범위=미지원 / 단일일=single
 check("temporal: 월평균 → unsupported", G._rt_temporal("2026년 4월 월평균 분당 동시사용자"), ("unsupported", None))
 check("temporal: 기간범위(~) → unsupported", G._rt_temporal("4월1일~4월7일 분당 동시사용자")[0], "unsupported")

@@ -2094,6 +2094,7 @@ def _rt_current_program(ch_code: str):
     return {"name": nm, "code": c, "stime": _rt_stime_fmt(st),
             "etime": "24:00" if et == "2400" else _rt_stime_fmt(et)}
 
+_CODE_RX = re.compile(r"^[TFLGPMR][0-9]{2}$")      # 엔티티 코드 형태(플래너 실행기 등)
 _RT_CH_PREF = {"F": "F00", "L": "L00", "M": "L00", "G": "G00", "P": "P00"}
 _RT_CH_PREFIXES = {"F00": ("F",), "L00": ("L", "M"), "G00": ("G",), "P00": ("P",)}
 
@@ -2235,10 +2236,22 @@ def _rt_history_branch(question: str, overlay_ctx=None):
               "아카이브 최대 10년)로 답할 수 있음을 알려주세요.")
         return _prov
     date = kind[1]
-    tgt = _rt_resolve_target(question)                 # 공용 해석(프로그램→채널+편성창)
-    ch_field, disp, is_program = tgt["ch_field"], tgt["disp"], tgt["kind"] == "program"
+    tgt = _rt_resolve_target(question)                 # [해석·키워드] 프로그램→채널+편성창
     w_start, w_end = tgt["win"] if tgt["win"] else (None, None)
-    _prov["entities_brief"] = f"과거 분단위 동시자({disp}, {date})"
+    return _rt_history_render(question, date, tgt["ch_field"], tgt["disp"],
+                              tgt["kind"] == "program", w_start, w_end, overlay_ctx)
+
+
+def _rt_history_render(question, date, ch_field, disp, is_program, w_start, w_end,
+                       overlay_ctx=None, resolution=None):
+    """[렌더러·공유] 해석 결과(대상·날짜·편성창)를 받아 과거 분단위 동시자 context를 조립.
+       키워드 경로(_rt_history_branch)와 플래너 경로(_execute_rt)가 이 하나를 공유한다."""
+    import raas_datasource as DSRC
+    import raas_rt_series as RT
+    earliest = DSRC.get_rt_earliest()
+    _prov = {"ok": True, "providers_used": ["realtime_history"],
+             "entities_brief": f"과거 분단위 동시자({disp}, {date})",
+             "provenance": {"providers": ["realtime_history"], "scope": "realtime"}}
     if earliest and date < earliest:                  # 보관 범위 밖 — 언제부터
         _prov["context"] = (
             f"분석 대상: 과거 분단위 동시사용자 — 요청일 {date} ({disp})\n"
@@ -2247,7 +2260,6 @@ def _rt_history_branch(question: str, overlay_ctx=None):
             f"요청하신 {date}는 그 이전이라 데이터가 없습니다. {earliest} 이후 날짜면 조회 가능하며, "
             f"그 이전의 '일간' 규모는 아카이브로 조회 가능합니다(분단위는 아님).")
         return _prov
-    import raas_rt_series as RT
     window = (w_start, w_end) if (is_program and w_start) else None
     vals = RT.rt_series("concurrent", ch_field, date, 1, window=window)   # 통합 접근자 위임
     if not vals:
@@ -2260,7 +2272,7 @@ def _rt_history_branch(question: str, overlay_ctx=None):
     peak = max(vals, key=lambda x: x[1])
     low = min(vals, key=lambda x: x[1])
     avg = round(sum(v for _, v in vals) / len(vals))
-    step1 = _rt_wants_1min(question)                   # 사용자가 '1분 단위'면 오버라이드
+    step1 = (resolution == 1) if resolution in (1, 10) else _rt_wants_1min(question)  # plan 우선, 없으면 질의
     pts = vals if step1 else RT.rt_series("concurrent", ch_field, date, 10, window=window)
     res_kr = "1분" if step1 else "10분"
     csv = "time,concurrent\n" + "\n".join(f"{t},{v}" for t, v in pts)
@@ -2288,6 +2300,47 @@ def _rt_history_branch(question: str, overlay_ctx=None):
         context += "\n\n" + onto
     _prov["context"] = context
     return _prov
+
+
+def _execute_rt(plan: dict, question: str, overlay_ctx=None):
+    """[실행기·P-1b] PlanRequest(realtime, 특정일) → 공유 렌더러 호출. 미지원이면 None(폴백).
+       해석을 키워드가 아니라 plan에서 받는다 — 값·출력은 키워드 경로와 동일 렌더러가 생성."""
+    if plan.get("domain") != "realtime":
+        return None
+    date = (plan.get("time") or {}).get("date")
+    if not date:
+        return None                                    # P-1b 범위: 과거 특정일만(오늘은 키워드 대시보드)
+    ent = plan.get("entity") or {}
+    code = (ent.get("code") or "T00").upper()
+    if ent.get("kind") == "program" and _CODE_RX.match(code) and not code.endswith("00"):
+        pw = _program_window(code)
+        if not pw:
+            return None
+        ch_field, w_start, w_end, disp = pw
+        is_program = True
+    else:
+        ch_field = code if _CODE_RX.match(code) else "T00"
+        w_start = w_end = None
+        is_program = False
+        disp = _CH_NAME_BY_CODE.get(ch_field, ch_field) if ch_field != "T00" else "전체"
+    return _rt_history_render(question, date, ch_field, disp, is_program, w_start, w_end,
+                             overlay_ctx, resolution=plan.get("resolution"))
+
+
+def _planner_realtime(question: str, overlay_ctx=None):
+    """[P-1b] 과거 특정일 실시간을 플래너→실행기 경로로. 그 외/저신뢰/실패는 None(키워드 폴백).
+       오늘 실시간·헤드리스(call_claude=None)는 기존 경로 유지 → 안전한 점진 전환."""
+    if call_claude is None or not _parse_abs_date(question):
+        return None
+    try:
+        import raas_planner
+        pr = raas_planner.plan(question)
+    except Exception:
+        return None
+    plan = pr.get("plan")
+    if not plan or plan.get("domain") != "realtime" or (plan.get("confidence") or 0) < 0.6:
+        return None
+    return _execute_rt(plan, question, overlay_ctx)
 
 
 def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
@@ -2499,7 +2552,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     """질문 → 근거 context 조립. overlay_ctx={user_id, mode:'normal'|'requery'}.
        반환: {ok, context, providers_used, entities_brief, provenance}"""
     if _detect_realtime(question):     # 실시간은 비교·순위보다 먼저 (동시사용자 자체가 주제)
-        return _assemble_realtime(question, overlay_ctx)
+        _pr = _planner_realtime(question, overlay_ctx)   # [P-1b] 과거 특정일은 플래너→실행기, 실패시 폴백
+        return _pr if _pr is not None else _assemble_realtime(question, overlay_ctx)
     cmp_ents = _detect_compare(question)
     if cmp_ents:
         return _assemble_compare(question, cmp_ents, overlay_ctx)

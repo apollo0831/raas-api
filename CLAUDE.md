@@ -288,7 +288,10 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   를 메뉴로 Haiku가 구조 요청 생성 → 검증기가 등록된 것만 통과·엔티티/시간 결정적 해석(코드·별칭).
   **값은 안 만듦**(실행기·접근자가 계산). 흩어진 감지기 19종을 대체할 토대. 평가:
   `python tests/eval_planner.py`(대표 18케이스 shadow, 실 Haiku, ~90-100%). 설계 docs/p1_planner_design.md.
-  P-1b에서 실행기(plan→context) + realtime scope부터 A/B 전환 예정.
+  [P-1b] **realtime 과거 특정일** 질의가 프로덕션에서 플래너 경로로: `assemble`→`_planner_realtime`
+  (날짜 있는 실시간만·conf≥0.6, 아니면 키워드 폴백)→`_execute_rt`(plan→해석)→`_rt_history_render`
+  (**키워드와 공유 렌더러** — 출력 동일). 오늘/단순 실시간·헤드리스는 기존 경로. 안전한 점진 전환.
+  P-1c에서 intent 확대(series·ranking·extract), 키워드는 fast-path/폴백 강등.
 - `raas_analytics.py` [Phase 2] — 교차지표 결정적 연산: `align·pearson·co_movement·correlate_many·
   decompose·change·rank_by_change`. 접근자가 주는 [(date,val)] 시계열을 공통창 정렬→상관·동반움직임.
   **숫자만** — 관계·인과 판단은 온톨로지·LLM. grounding `metric_correlate` provider가 대상지표(기본 DAU)
