@@ -483,12 +483,30 @@ class RAASHandler(BaseHTTPRequestHandler):
         self.send_json({"ok": True, **data})
 
     def _get_share_page(self):
-        """/s/<token> → 읽기전용 공유 페이지(share.html). 토큰은 페이지 JS가 URL에서 읽음."""
-        if os.path.exists(SHARE_HTML_FILE):
-            with open(SHARE_HTML_FILE, "r", encoding="utf-8") as f:
-                self.send_html(f.read())
-        else:
+        """/s/<token> → 읽기전용 공유 페이지(share.html). 토큰은 페이지 JS가 URL에서 읽음.
+        SNS 크롤러(카톡 등)는 JS를 실행 안 하므로 <title>/og:title을 서버가 질문으로 주입한다."""
+        if not os.path.exists(SHARE_HTML_FILE):
             self.send_html("<h2>share.html 파일이 없습니다</h2>")
+            return
+        with open(SHARE_HTML_FILE, "r", encoding="utf-8") as f:
+            html = f.read()
+        try:
+            import raas_history_db as HDB, html as _html
+            token = self.path.rsplit("/", 1)[-1].split("?")[0]
+            data = HDB.get_share(token) or {}
+            q = (data.get("question") or "").strip()
+            if q:
+                short = q if len(q) <= 90 else q[:90] + "…"
+                t = _html.escape(short)          # <title>/속성 겸용(quote=True 기본)
+                meta = ('<title>' + t + '</title>'
+                        '<meta property="og:title" content="' + t + '">'
+                        '<meta property="og:description" content="RAAS 공유 답변">'
+                        '<meta property="og:type" content="article">'
+                        '<meta name="twitter:card" content="summary">')
+                html = html.replace("<title>RAAS 공유 답변</title>", meta, 1)
+        except Exception:
+            pass   # 주입 실패해도 정적 페이지는 그대로 서빙(JS가 탭 제목 보정)
+        self.send_html(html)
 
     def _get_raas_web_js(self):
         # 메인 프론트 JS (html에서 분리). ?v=버전 캐시버스터와 함께 서빙 — 디스크 서빙이라 재시작 불필요.
@@ -677,7 +695,9 @@ class RAASHandler(BaseHTTPRequestHandler):
             limit  = int(params.get("limit", 50))
             offset = int(params.get("offset", 0))
             days   = int(params.get("days", 0))
-            result = get_all_history(limit=limit, offset=offset, days=days)
+            _fb    = params.get("feedback")
+            feedback = int(_fb) if _fb not in (None, "") else None
+            result = get_all_history(limit=limit, offset=offset, days=days, feedback=feedback)
             self.send_json({"ok": True, **result})
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
