@@ -2012,7 +2012,8 @@ def _to_float(v):
 
 _RANK_CHANGE_UP   = ("증가", "늘어", "늘은", "는 ", "상승", "오른", "급증")
 _RANK_CHANGE_DOWN = ("감소", "줄어", "줄은", "하락", "떨어", "급감")
-_RANK_SUPERLATIVE = ("가장", "제일", "많이", "최다", "최대")
+_RANK_CHANGE_ANY  = ("변동", "변화", "등락", "출렁")   # 방향 무관(절대 변동폭)
+_RANK_SUPERLATIVE = ("가장", "제일", "많이", "최다", "최대", "큰", "많은")
 
 def _rank_period_from(question: str):
     """변화량 순위의 기간 시작일 'YYYY-MM-DD'(None=전주대비 WoW). 임의 기간 델타 순위용."""
@@ -2040,14 +2041,15 @@ def _detect_ranking(question: str):
     tl = t.lower()
     _chg_up   = any(k in t for k in _RANK_CHANGE_UP)
     _chg_down = any(k in t for k in _RANK_CHANGE_DOWN)
-    # 변화량 순위: '가장/제일/많이' + '증가/감소' + '프로그램' 조합만 인정(오탐 방지).
-    #   예 "지난주 활성사용자가 가장 많이 증가한 프로그램은?" → dau_chg 내림차순.
-    by_change = ((_chg_up or _chg_down)
+    _chg_any  = any(k in t for k in _RANK_CHANGE_ANY)   # 변동/변화/등락(방향 무관)
+    # 변화량 순위: (증가/감소/변동) + (가장/많이/큰…) + '프로그램' 조합만 인정(오탐 방지).
+    #   예 "가장 많이 증가한 프로그램"·"어제 dau 변동 큰 프로그램" → 관심프로그램 앵커 아니라 순위.
+    by_change = ((_chg_up or _chg_down or _chg_any)
                  and any(s in t for s in _RANK_SUPERLATIVE) and "프로그램" in t)
     pf = _rank_period_from(question)               # '올해 초/연초/최근 N개월' 등 기간 시작
-    # 기간 델타(순위 or 프로그램별 표) — 기간마커 + (증감순위 or '변화/증감/대비' + 프로그램별)
+    # 기간 델타(순위 or 프로그램별 표) — 기간마커 + (증감순위 or '변화/증감/대비/변동' + 프로그램별)
     period_delta = bool(pf) and (by_change or (
-        any(k in t for k in ("변화", "증감", "대비")) and ("프로그램별" in t or "프로그램" in t)))
+        any(k in t for k in ("변화", "증감", "대비", "변동")) and ("프로그램별" in t or "프로그램" in t)))
     if not any(s.lower() in tl for s in _RANK_SIGNAL) and not by_change and not period_delta:
         return None
     # 인구 카테고리 순위(성별·연령·디바이스 비율) — 변화/기간델타 아닐 때만(분포는 _chg 없음)
@@ -2066,7 +2068,9 @@ def _detect_ranking(question: str):
         asc = (_chg_down and not _chg_up)          # 감소 명시면 오름차순, 아니면 내림차순
         return {"field": fld, "label": label, "asc": asc, "period_change": True, "period_from": pf}
     if by_change:                                  # 기간마커 없는 순수 증감 순위 = 전주대비 WoW
-        return {"field": fld, "label": label, "asc": (_chg_down and not _chg_up), "by_change": True}
+        _abs = _chg_any and not (_chg_up or _chg_down)   # '변동 큰'(방향 무관) → 절대 변동폭 순
+        return {"field": fld, "label": label, "asc": (_chg_down and not _chg_up),
+                "by_change": True, "abs": _abs}
     asc = any(k in t for k in ("낮은", "최저", "하위", "worst", "적은", "least"))
     return {"field": fld, "label": label, "asc": asc, "by_change": False}
 
@@ -2133,8 +2137,9 @@ def _planner_ranking(question, overlay_ctx=None):
        변화량 순위는 키워드가 담당(플래너 범위 밖). 호출측이 랭킹류일 때만 부름(LLM 호출 게이트)."""
     if call_claude is None:
         return None
-    if any(k in (question or "") for k in ("증가", "감소", "늘어", "줄어", "상승", "하락", "급증", "급감")):
-        return None
+    if any(k in (question or "") for k in
+           ("증가", "감소", "늘어", "줄어", "상승", "하락", "급증", "급감", "변동", "변화", "등락")):
+        return None                                # 변화·변동 순위는 키워드가 담당(abs·기간델타 지원)
     try:
         import raas_planner
         plan = (raas_planner.plan(question).get("plan") or {})
@@ -2267,9 +2272,13 @@ def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
         items.append(it)
     if not items:
         return {"ok": False, "reason": "지표 데이터 없음"}
-    items.sort(key=lambda x: x["_v"], reverse=not spec["asc"])
+    if spec.get("abs"):                            # '변동 큰'(방향 무관) → |변화| 큰 순
+        items.sort(key=lambda x: abs(x["_v"]), reverse=True)
+    else:
+        items.sort(key=lambda x: x["_v"], reverse=not spec["asc"])
     top = [{k: v for k, v in it.items() if k != "_v"} for it in items[:15]]
-    _metric_kr = f"{spec['label']} 변화량(전주대비%)" if by_change else spec["label"]
+    _metric_kr = (f"{spec['label']} 변동폭(전주대비%, 절대값 순)" if spec.get("abs")
+                  else f"{spec['label']} 변화량(전주대비%)" if by_change else spec["label"])
     payload = {"date": latest, "metric": _metric_kr, "field": rank_fld,
                "order": "asc(낮은순)" if spec["asc"] else "desc(높은순)",
                "count": len(items), "ranking": top}

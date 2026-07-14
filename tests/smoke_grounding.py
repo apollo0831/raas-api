@@ -122,6 +122,10 @@ check("'가장 많이 증가한 프로그램' → 변화량 순위",
 _rk_dn = G._detect_ranking("DAU 가장 많이 감소한 프로그램") or {}
 check("'가장 많이 감소' → 오름차순(음수 우선)", _rk_dn.get("asc"), True)
 check_true("기간 없으면 전주대비(WoW) by_change", _rk_dn.get("by_change") and not _rk_dn.get("period_change"))
+# '변동 큰 프로그램'(방향 무관) → 순위(관심프로그램 앵커 아님) + 절대변동폭
+_rk_var = G._detect_ranking("어제 dau 변동수치 큰 프로그램 보여줘") or {}
+check("'변동 큰 프로그램' → by_change·abs", (_rk_var.get("by_change"), _rk_var.get("abs")), (True, True))
+check_true("'증가' 명시는 abs 아님(방향 정렬)", G._detect_ranking("가장 많이 증가한 프로그램").get("abs") == False)
 # 기간 변화량 순위 — '올해 들어 롤링MAU 감소': dau_r30 매핑 + 연초 델타(전주대비 아님)
 _rk_yr = G._detect_ranking("올해 들어 롤링MAU가 가장 많이 감소한 프로그램") or {}
 check("'올해 롤링MAU 감소' → dau_r30·기간델타",
