@@ -97,7 +97,7 @@ raas:BroadcastConcurrencyAxiom a raas:DomainAxiom ;
 
 raas:HourlyMetricSubstitutionAxiom a raas:DomainAxiom ;
     rdfs:label "시간대별 지표 갈음 공리"@ko ;
-    raas:appliesTo raas:F00, raas:L00, raas:G00, raas:P00 ;
+    raas:appliesTo raas:F00, raas:L00 ;
     rdfs:comment "RAAS는 '시간대별(시간 단위) 활성사용자/청취자 수'를 보유하지 않는다(활성사용자는 일간·주간·월간·프로그램별 단위만 존재). 편성형 채널은 동시간에 한 프로그램만 방송하므로(동시방송 공리) 시간대 ≈ 프로그램이다. 따라서 시간대별 청취자 수(추이)를 요청받으면 (1) '시간대별 활성사용자는 미보유'임을 먼저 명확히 밝히고 (2) 그 최선의 갈음으로 '프로그램별 활성사용자(편성 순서대로)'를 제시·제안한다. 조용히 일간(DAU) 하나로 대체하지 말 것. 참고: 분단위 '동시청취자'는 실시간 집계로 별도 존재하나 '활성사용자'와는 다른 지표다."@ko .
 
 
