@@ -171,6 +171,21 @@ check("과거 분단위 → realtime_history provider", _rh.get("providers_used"
 check_true("보관 범위 밖 → '부터' 안내(하드코딩 아님)", "부터" in _rh.get("context", ""))
 check_true("연도없는 상대일('지금')은 history 아님(today 경로)",
            "realtime_history" not in (G._assemble_realtime("지금 동시 청취자 몇 명") or {}).get("providers_used", []))
+# '동시자'(축약)도 실시간 신호 — KPI로 새지 않음
+check_true("실시간 감지: '분당 동시자'", G._detect_realtime("파워FM 분당 동시자"))
+# 실시간 질의는 extract가 가로채지 않음(DAU 오답 방지)
+check_true("extract 가드: 실시간+뽑아줘 → extract 아님",
+           not G.detect_extract("분당 동시사용자 날짜별로 뽑아줘"))
+# 시간 의도 분류: 월평균·기간범위=미지원 / 단일일=single
+check("temporal: 월평균 → unsupported", G._rt_temporal("2026년 4월 월평균 분당 동시사용자"), ("unsupported", None))
+check("temporal: 기간범위(~) → unsupported", G._rt_temporal("4월1일~4월7일 분당 동시사용자")[0], "unsupported")
+check("temporal: 단일일 → single", G._rt_temporal("2026-03-20 파워FM 분당 동시자"), ("single", "2026-03-20"))
+# 프로그램 과거 분단위 — 채널·편성창 해석(T00 조용한 폴백·날조 방지)
+_pw = G._program_window("F09")
+check_true("프로그램 편성창 해석: 컬투쇼→F00 채널+STIME", bool(_pw) and _pw[0] == "F00" and _pw[1] == "14:00")
+_rp = G._assemble_realtime("2026년 4월1일 컬투쇼 동시사용자") or {}
+check_true("과거 프로그램 분단위 → 편성창·프로그램명(T00 폴백 아님)",
+           "컬투쇼" in _rp.get("context", "") and "편성창" in _rp.get("context", ""))
 # 채널 매핑 결정성 — tempsummary는 필드명이 곧 RAAS 코드
 check("실시간 채널 매핑(필드=코드)",
       G._RT_CHANNELS,

@@ -307,6 +307,8 @@ def _wants_bulk_dump(question: str) -> bool:
     return any(b in q for b in _BULK_MARK) and any(d in q for d in _BREAKDOWN_MARK)
 
 def detect_extract(question: str) -> bool:
+    if _detect_realtime(question):     # 실시간(분단위) 질의는 KPI 추출표로 가로채지 않음(DAU 오답 방지)
+        return False
     t = (question or "").lower()
     return any(s in t for s in _EXTRACT_SIGNAL) or _wants_bulk_dump(question)
 
@@ -1945,7 +1947,8 @@ def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
 # ─── Realtime scope — 실시간 동시사용자(summary_gorealra_1m, 1분 집계) ────────
 #    "지금/실시간/동시청취" 질의. 데이터 획득은 raas_datasource(60초/일일 캐시),
 #    여기서는 스냅샷·어제/지난주 동시각 비교·오늘 추이를 결정적으로 계산해 근거로 조립.
-_RT_SIGNAL = ("동시사용자", "동시 사용자", "동시접속", "동시 접속", "동시청취", "동시 청취", "실시간")
+_RT_SIGNAL = ("동시사용자", "동시 사용자", "동시접속", "동시 접속", "동시청취", "동시 청취",
+              "동시자", "동시 청취자", "동시청취자", "실시간")
 _RT_NOW_HINT = ("청취", "듣는", "듣고", "접속자", "사용자", "몇 명", "몇명")
 
 def _detect_realtime(question: str) -> bool:
@@ -2057,6 +2060,10 @@ def _rt_current_program(ch_code: str):
     return {"name": nm, "code": c, "stime": _rt_stime_fmt(st),
             "etime": "24:00" if et == "2400" else _rt_stime_fmt(et)}
 
+_RT_CH_PREF = {"F": "F00", "L": "L00", "M": "L00", "G": "G00", "P": "P00"}
+_RT_CH_PREFIXES = {"F00": ("F",), "L00": ("L", "M"), "G00": ("G",), "P00": ("P",)}
+
+
 def _rt_channel_from_q(question: str):
     """질문에서 채널 감지 → (필드, 표시명). 없으면 전체(T00)."""
     for nm, code in _RT_CHANNELS:
@@ -2065,67 +2072,141 @@ def _rt_channel_from_q(question: str):
     return "T00", "전체"
 
 
-def _rt_history_branch(question: str, overlay_ctx=None):
-    """특정 과거일(연·월·일) 분단위 채널 동시자 질의면 history 경로로 답, 아니면 None.
-       보관 범위 밖이면 '언제부터 있는지' 안내(데이터로 동적 확인 — 하드코딩 아님)."""
-    cand = _parse_abs_date(question)
+def _program_window(code: str):
+    """프로그램 code → (channel_code, stime'HH:MM', etime'HH:MM', name).
+       편성창=채널 내 STIME 정렬로 다음 프로그램 시작 직전까지. 편성형 채널 동시방송 공리의 근거."""
+    ch = _RT_CH_PREF.get((code or "")[:1])
+    if not ch:
+        return None
+    prefs = _RT_CH_PREFIXES[ch]
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        rows = []
+    slots = {}
+    for r in rows:
+        c = r.get("PGM_CODE") or ""
+        if c.endswith("00") or not c.startswith(prefs):
+            continue
+        st = (r.get("STIME") or "").strip()
+        if len(st) == 4:
+            slots[c] = st
+    if code not in slots:
+        return None
+    order = sorted(slots.items(), key=lambda x: x[1])
+    stime = slots[code]
+    etime = "2400"
+    for i, (c, st) in enumerate(order):
+        if c == code:
+            etime = order[i + 1][1] if i + 1 < len(order) else "2400"
+            break
+    _hm = lambda s: f"{s[:2]}:{s[2:]}"
+    return ch, _hm(stime), ("24:00" if etime == "2400" else _hm(etime)), _resolve_name(code)
+
+
+def _rt_temporal(question: str):
+    """실시간 과거 질의의 시간 의도 분류 → ('single', 'YYYY-MM-DD') / ('unsupported', None) / None(오늘).
+       월평균·기간범위(~)·월단위는 분단위 미지원으로 분리(오늘 경로로 새거나 오답 방지)."""
+    q = question or ""
+    if any(k in q for k in ("월평균", "월 평균", "~", "부터")) or \
+            (re.search(r"\d{1,2}\s*월", q) and not re.search(r"\d{1,2}\s*월\s*\d{1,2}\s*일", q)):
+        return ("unsupported", None)
+    cand = _parse_abs_date(q)
     if not cand:
-        return None                                   # 절대일자 없음 → 오늘/어제 등 today 경로
-    import raas_datasource as DSRC
+        return None
     today_str = _dt.date.today().strftime("%Y-%m-%d")
     y = cand[0]
-    if not y:                                         # 연도 없으면 '가장 최근 그 월·일'로 해석
+    if not y:
         y = _dt.date.today().year
         if "%04d-%02d-%02d" % (y, cand[1], cand[2]) > today_str:
             y -= 1
     date = "%04d-%02d-%02d" % (y, cand[1], cand[2])
-    if date >= today_str:
-        return None                                   # 오늘·미래는 실시간 today 경로
-    ch_field, ch_name = _rt_channel_from_q(question)
+    return None if date >= today_str else ("single", date)
+
+
+def _rt_history_branch(question: str, overlay_ctx=None):
+    """과거 분단위 동시자 질의 → history 경로(프로그램/채널/전체 인식). 아니면 None.
+       보관 범위 밖이면 '언제부터'를, 월/기간 집계는 '미지원'을 데이터 기반으로 안내."""
+    kind = _rt_temporal(question)
+    if kind is None:
+        return None
+    import raas_datasource as DSRC
     earliest = DSRC.get_rt_earliest()
-    base = {"providers_used": ["realtime_history"],
-            "entities_brief": f"과거 분단위 동시자({ch_name}, {date})",
-            "provenance": {"providers": ["realtime_history"], "scope": "realtime"}, "ok": True}
-    if earliest and date < earliest:                  # 보관 범위 밖 — 언제부터 있는지 안내
-        base["context"] = (
-            f"분석 대상: 과거 분단위 동시사용자 — 요청일 {date} ({ch_name})\n"
+    _prov = {"providers_used": ["realtime_history"],
+             "provenance": {"providers": ["realtime_history"], "scope": "realtime"}, "ok": True}
+    if kind[0] == "unsupported":                      # 월평균·기간범위·월단위 — 분단위 미지원
+        _prov["entities_brief"] = "과거 분단위(기간/월 집계 미지원)"
+        _prov["context"] = (
+            "분석 대상: 과거 분단위 동시사용자\n### realtime_history — 기간/월 집계 미지원\n"
+            f"분단위(1분 집계) 동시사용자는 **특정일 단위**로만 조회합니다(예: 2026-04-01). "
+            f"월평균·기간범위(여러 날) 분단위 집계는 아직 미지원입니다"
+            + (f" (분단위 보관 {earliest}부터)." if earliest else ".")
+            + " 안내: 특정일 하나로 다시 물어주시도록 안내하고, 기간 단위 '규모'는 일간 지표(DAU 등, "
+              "아카이브 최대 10년)로 답할 수 있음을 알려주세요.")
+        return _prov
+    date = kind[1]
+    # 대상 해석 — 프로그램(우선) → 채널 → 전체. 프로그램이면 편성창으로 자름(오귀속·날조 방지).
+    prog_win = None
+    try:
+        from raas_storyline_router import extract_program
+        p = extract_program(question)
+        if p and p.get("code"):
+            prog_win = _program_window(p["code"])
+    except Exception:
+        prog_win = None
+    if prog_win:
+        ch_field, w_start, w_end, disp = prog_win[0], prog_win[1], prog_win[2], prog_win[3]
+        is_program = True
+    else:
+        ch_field, disp = _rt_channel_from_q(question)
+        w_start = w_end = None
+        is_program = False
+    _prov["entities_brief"] = f"과거 분단위 동시자({disp}, {date})"
+    if earliest and date < earliest:                  # 보관 범위 밖 — 언제부터
+        _prov["context"] = (
+            f"분석 대상: 과거 분단위 동시사용자 — 요청일 {date} ({disp})\n"
             f"### realtime_history — 보관 범위 밖\n"
             f"분단위(1분 집계) 동시사용자 데이터는 **{earliest}부터** 보유합니다. "
-            f"요청하신 {date}는 그 이전이라 데이터가 없습니다.\n"
-            f"안내: 이 사실을 명확히 전하고, {earliest} 이후 날짜라면 조회 가능함을 알려주세요. "
-            f"(그보다 과거의 '일간' 규모는 별도 아카이브로 조회 가능하나, 분단위는 아님)")
-        return base
+            f"요청하신 {date}는 그 이전이라 데이터가 없습니다. {earliest} 이후 날짜면 조회 가능하며, "
+            f"그 이전의 '일간' 규모는 아카이브로 조회 가능합니다(분단위는 아님).")
+        return _prov
     rows = DSRC.get_rt_history(date)
     vals = [(_rt_hhmm(r), _rt_int(r.get(ch_field))) for r in rows]
     vals = [(t, v) for t, v in vals if t and v is not None]
+    if is_program and w_start:                         # 프로그램: 편성창 [start,end)로 필터
+        vals = [(t, v) for t, v in vals if w_start <= t < w_end]
     if not vals:
-        base["context"] = (
-            f"분석 대상: 과거 분단위 동시사용자 — {date} ({ch_name})\n"
+        _prov["context"] = (
+            f"분석 대상: 과거 분단위 동시사용자 — {date} ({disp})\n"
             f"### realtime_history — {date} 데이터 없음\n"
-            f"해당일 분단위 집계가 없습니다"
-            + (f" (분단위 보관 시작 {earliest})." if earliest else ".")
-            + " 이 사실을 사용자에게 안내하세요.")
-        return base
+            f"해당일{'·해당 편성창' if is_program else ''} 분단위 집계가 없습니다"
+            + (f" (분단위 보관 시작 {earliest})." if earliest else ".") + " 이 사실을 안내하세요.")
+        return _prov
     peak = max(vals, key=lambda x: x[1])
     low = min(vals, key=lambda x: x[1])
     avg = round(sum(v for _, v in vals) / len(vals))
-    ten = [(t, v) for t, v in vals if t[4:5] == "0"]  # 10분 간격 다운샘플(가독)
+    ten = [(t, v) for t, v in vals if t[4:5] == "0"]
     csv = "time,concurrent\n" + "\n".join(f"{t},{v}" for t, v in ten)
-    summary = {"channel": ch_name, "date": date, "해상도": "원천 1분(추이는 10분 다운샘플)",
+    summary = {"대상": disp, "date": date, "해상도": "원천 1분(추이는 10분 다운샘플)",
                "피크": {"시각": peak[0], "값": peak[1]}, "최저": {"시각": low[0], "값": low[1]},
                "평균": avg, "표본(분)": len(vals), "분단위 보관시작": earliest}
-    context = (
-        f"분석 대상: 과거 분단위 동시사용자(1분 집계) — {ch_name}, {date}\n"
-        f"안내: 아래는 그 날짜 하루의 채널 동시자 시계열(보관 데이터). 추이·피크시간대를 짚어 답하고, "
-        f"필요시 10분 CSV로 차트를 그리세요. 동시사용자=1분 버킷 내 활성 세션 고유 사용자 수(dc UUID).\n\n"
-        f"### realtime_history — {ch_name} {date} 1분 동시자\n"
-        + json.dumps(summary, ensure_ascii=False)
-        + f"\n\n[10분 간격 추이 CSV]\n{csv}")
+    if is_program:
+        summary["편성창"] = f"{prog_win[0]} {w_start}~{w_end}"
+    head = (f"분석 대상: 과거 분단위 동시사용자(1분 집계) — {disp}, {date}"
+            + (f" (편성창 {w_start}~{w_end})" if is_program else ""))
+    guide = ("안내: 아래는 그 날짜의 분단위 동시자(보관 데이터). 추이·피크시간대를 짚어 답하고, 필요시 10분 "
+             "CSV로 차트. 동시사용자=1분 버킷 내 활성 세션 고유 사용자 수(dc UUID). "
+             "편성 시각·채널을 임의로 지어내지 말 것 — 근거에 있는 값만 사용.")
+    if is_program:
+        guide += (f" 참고: {disp}는 {prog_win[0]} 채널 {w_start}~{w_end} 편성분이며, 편성형 채널은 동시간 "
+                  "1개 프로그램만 방송하므로(도메인 공리) 이 편성창의 채널 동시청취 = 프로그램 동시청취.")
+    context = (head + "\n" + guide + f"\n\n### realtime_history — {disp} {date} 1분 동시자\n"
+               + json.dumps(summary, ensure_ascii=False) + f"\n\n[10분 간격 추이 CSV]\n{csv}")
     onto = _rt_ontology_block(ch_field if ch_field != "T00" else "")
     if onto:
         context += "\n\n" + onto
-    base["context"] = context
-    return base
+    _prov["context"] = context
+    return _prov
 
 
 def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
