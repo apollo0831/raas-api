@@ -294,7 +294,12 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   [P-1c] **일간 랭킹**도 플래너 경로 추가: `_detect_ranking`이 랭킹류로 판정한 질의만
   `_planner_ranking`→`_plan_to_rank_spec`(gender_dist/age_dist/device_dist·KPI→spec)→
   `_assemble_ranking`(**키워드와 공유 렌더러**, spec 동일→출력 동일). 변화량·참여 순위는 키워드,
-  실패·저신뢰는 키워드 spec 폴백. 앞으로 series/extract도 같은 패턴으로 확대 예정.
+  실패·저신뢰는 키워드 spec 폴백.
+  [P-1d] 텔레메트리(`planner_stats`/`_record_planner`) — 플래너 채택/폴백을 confidence와 기록,
+  `GET /api/planner/stats`(관리자)로 모니터링(실트래픽 관찰→확대 판단). **경계**: series/compare/
+  general은 provider 번들(program_kpi·metric_timeseries·flow·cohort…)이 풍부해 focused 실행기로
+  줄이면 퇴화 → 기존 select_providers(이미 LLM) 경로 유지. 키워드 감지기는 플래너 커버 scope에서
+  **폴백 안전망**으로 존속(삭제 안 함).
 - `raas_analytics.py` [Phase 2] — 교차지표 결정적 연산: `align·pearson·co_movement·correlate_many·
   decompose·change·rank_by_change`. 접근자가 주는 [(date,val)] 시계열을 공통창 정렬→상관·동반움직임.
   **숫자만** — 관계·인과 판단은 온톨로지·LLM. grounding `metric_correlate` provider가 대상지표(기본 DAU)

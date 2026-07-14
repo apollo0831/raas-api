@@ -519,6 +519,20 @@ class RAASHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_html(f"<h2>커버리지 맵 생성 실패</h2><pre>{str(e)}</pre>")
 
+    def _get_planner_stats(self):
+        """[P-1d] 플래너 채택/폴백 누적 카운터 — 실트래픽 모니터링(확대 판단). 권한: stats-viewer."""
+        if not self._require_stats_viewer():
+            return
+        try:
+            import raas_grounding as GROUND
+            st = GROUND.planner_stats()
+            used = sum(v for k, v in st.items() if k.endswith(".used"))
+            total = sum(st.values())
+            self.send_json({"ok": True, "stats": st, "planner_used": used,
+                            "decisions": total, "used_ratio": (round(used / total, 3) if total else None)})
+        except Exception as e:
+            self.send_json({"ok": False, "error": str(e)}, 500)
+
     def _post_ontology_reload(self, body):
         """TTL 편집 후 재시작 없이 온톨로지 재로드(관리자 전용). 맵·답변 양쪽에 즉시 반영."""
         user = self._require_admin()
@@ -1957,6 +1971,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         "/api/posthog-config": _get_posthog_config,
         "/api/status": _get_status,
         "/api/coverage": _get_coverage,
+        "/api/planner/stats": _get_planner_stats,
     }
     GET_PREFIX = [   # 순서 의미 있음(더 구체적인 prefix 먼저)
         ("/raas_web.js", _get_raas_web_js),

@@ -1957,14 +1957,20 @@ def _planner_ranking(question, overlay_ctx=None):
         import raas_planner
         plan = (raas_planner.plan(question).get("plan") or {})
     except Exception:
+        _record_planner("ranking", "error")
         return None
-    if plan.get("intent") != "ranking" or plan.get("domain") != "daily" or (plan.get("confidence") or 0) < 0.6:
+    conf = plan.get("confidence")
+    if plan.get("intent") != "ranking" or plan.get("domain") != "daily" or (conf or 0) < 0.6:
+        _record_planner("ranking", "fallback_intent", conf)
         return None
     spec = _plan_to_rank_spec(plan, question)
     if not spec:
+        _record_planner("ranking", "fallback_unmapped", conf)
         return None
     r = _assemble_ranking(question, spec, overlay_ctx)
-    return r if r.get("ok") else None
+    ok = r.get("ok")
+    _record_planner("ranking", "used" if ok else "fallback_render", conf)
+    return r if ok else None
 
 
 def _assemble_ranking(question, spec, overlay_ctx=None) -> dict:
@@ -2348,6 +2354,23 @@ def _rt_history_render(question, date, ch_field, disp, is_program, w_start, w_en
     return _prov
 
 
+# ── [P-1d] 플래너 결정 텔레메트리 — 실트래픽에서 플래너 채택/폴백 관찰(확대 판단용) ──
+_PLANNER_STATS: dict = {}
+
+def _record_planner(scope: str, outcome: str, conf=None):
+    """플래너 경로 결정 기록(인메모리 카운터 + 서버로그). outcome: used|fallback_*|error."""
+    k = f"{scope}.{outcome}"
+    _PLANNER_STATS[k] = _PLANNER_STATS.get(k, 0) + 1
+    try:
+        print(f"[planner] {k}" + (f" conf={conf}" if conf is not None else ""))
+    except Exception:
+        pass
+
+def planner_stats() -> dict:
+    """플래너 채택/폴백 누적 카운터(관리자 모니터링). 서버 재시작 시 초기화."""
+    return dict(_PLANNER_STATS)
+
+
 def _execute_rt(plan: dict, question: str, overlay_ctx=None):
     """[실행기·P-1b] PlanRequest(realtime, 특정일) → 공유 렌더러 호출. 미지원이면 None(폴백).
        해석을 키워드가 아니라 plan에서 받는다 — 값·출력은 키워드 경로와 동일 렌더러가 생성."""
@@ -2377,16 +2400,24 @@ def _planner_realtime(question: str, overlay_ctx=None):
     """[P-1b] 과거 특정일 실시간을 플래너→실행기 경로로. 그 외/저신뢰/실패는 None(키워드 폴백).
        오늘 실시간·헤드리스(call_claude=None)는 기존 경로 유지 → 안전한 점진 전환."""
     if call_claude is None or not _parse_abs_date(question):
-        return None
+        return None                                    # 플래너 시도 아님(텔레메트리 제외)
     try:
         import raas_planner
         pr = raas_planner.plan(question)
     except Exception:
+        _record_planner("realtime", "error")
         return None
     plan = pr.get("plan")
-    if not plan or plan.get("domain") != "realtime" or (plan.get("confidence") or 0) < 0.6:
+    conf = (plan or {}).get("confidence")
+    if not plan or plan.get("domain") != "realtime":
+        _record_planner("realtime", "fallback_domain", conf)
         return None
-    return _execute_rt(plan, question, overlay_ctx)
+    if (conf or 0) < 0.6:
+        _record_planner("realtime", "fallback_lowconf", conf)
+        return None
+    res = _execute_rt(plan, question, overlay_ctx)
+    _record_planner("realtime", "used" if res is not None else "fallback_unsupported", conf)
+    return res
 
 
 def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
