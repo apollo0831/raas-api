@@ -361,19 +361,25 @@ def _build_extract_realtime(question: str) -> dict:
     else:
         rows = DSRC.get_rt_concurrent()
         label_date = _dt.date.today().strftime("%Y-%m-%d")
-    chans = [("전체", "T00"), ("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"), ("픽채널", "P00")]
+    tgt = _rt_resolve_target(question)                 # 공용 해석 — 프로그램/채널 지정 반영
+    if tgt["kind"] == "all":
+        chans = [("전체", "T00"), ("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"), ("픽채널", "P00")]
+    else:                                              # 프로그램/채널 → 그 채널 한 열
+        chans = [(tgt["disp"], tgt["ch_field"])]
+    win = tgt["win"]                                   # 프로그램이면 편성창으로 행 제한
     header = ["시각"] + [nm for nm, _ in chans]
     srows = []
     for r in rows or []:
         t = _rt_hhmm(r)
-        if not t:
+        if not t or (win and not (win[0] <= t < win[1])):
             continue
         srows.append([t] + [(_rt_int(r.get(code)) if _rt_int(r.get(code)) is not None else "")
                              for _, code in chans])
     if not srows:
         return {"ok": False, "reason": "분단위 데이터 없음"}
-    title = f"분단위 동시사용자(1분 간격) · {label_date}"
-    sheet = {"field": "rt_concurrent", "label": "분단위 동시사용자",
+    _scope = tgt["disp"] + (f" 편성창 {win[0]}~{win[1]}" if win else "")
+    title = f"분단위 동시사용자(1분 간격) · {_scope} · {label_date}"
+    sheet = {"field": "rt_concurrent", "label": f"분단위 동시사용자 — {tgt['disp']}",
              "header": header, "rows": srows}
     return {"ok": True, "payload": {
         "title": title, "date_from": label_date, "date_to": label_date, "row_label": "분",
@@ -2140,6 +2146,30 @@ def _program_window(code: str):
     return ch, _hm(stime), ("24:00" if etime == "2400" else _hm(etime)), _resolve_name(code)
 
 
+# ── 실시간 공용 해석 계층 — 대상·해상도를 한 곳에서 풀어 모든 경로(차트·추출·오늘추이)가 공유 ──
+def _rt_wants_1min(question: str) -> bool:
+    """사용자가 1분 해상도를 명시했는가(차트 기본 10분 오버라이드)."""
+    return any(k in (question or "") for k in
+               ("1분 단위", "1분단위", "1분 간격", "1분간격", "분단위로", "분 단위로", "1분해상도", "1분 해상도"))
+
+
+def _rt_resolve_target(question: str) -> dict:
+    """질의 → 실시간 조회 대상을 온톨로지로 해석(프로그램→채널+편성창). 모든 경로 공용.
+       반환 {kind: program|channel|all, ch_field, disp, win:(start,end)'HH:MM'|None}."""
+    try:
+        from raas_storyline_router import extract_program
+        p = extract_program(question)
+    except Exception:
+        p = None
+    if p and p.get("code"):
+        pw = _program_window(p["code"])
+        if pw:
+            return {"kind": "program", "ch_field": pw[0], "disp": pw[3], "win": (pw[1], pw[2])}
+    ch_field, disp = _rt_channel_from_q(question)
+    return {"kind": ("channel" if ch_field != "T00" else "all"),
+            "ch_field": ch_field, "disp": disp, "win": None}
+
+
 def _rt_temporal(question: str):
     """실시간 과거 질의의 시간 의도 분류 → ('single', 'YYYY-MM-DD') / ('unsupported', None) / None(오늘).
        월평균·기간범위(~)·월단위는 분단위 미지원으로 분리(오늘 경로로 새거나 오답 방지)."""
@@ -2181,22 +2211,9 @@ def _rt_history_branch(question: str, overlay_ctx=None):
               "아카이브 최대 10년)로 답할 수 있음을 알려주세요.")
         return _prov
     date = kind[1]
-    # 대상 해석 — 프로그램(우선) → 채널 → 전체. 프로그램이면 편성창으로 자름(오귀속·날조 방지).
-    prog_win = None
-    try:
-        from raas_storyline_router import extract_program
-        p = extract_program(question)
-        if p and p.get("code"):
-            prog_win = _program_window(p["code"])
-    except Exception:
-        prog_win = None
-    if prog_win:
-        ch_field, w_start, w_end, disp = prog_win[0], prog_win[1], prog_win[2], prog_win[3]
-        is_program = True
-    else:
-        ch_field, disp = _rt_channel_from_q(question)
-        w_start = w_end = None
-        is_program = False
+    tgt = _rt_resolve_target(question)                 # 공용 해석(프로그램→채널+편성창)
+    ch_field, disp, is_program = tgt["ch_field"], tgt["disp"], tgt["kind"] == "program"
+    w_start, w_end = tgt["win"] if tgt["win"] else (None, None)
     _prov["entities_brief"] = f"과거 분단위 동시자({disp}, {date})"
     if earliest and date < earliest:                  # 보관 범위 밖 — 언제부터
         _prov["context"] = (
@@ -2221,23 +2238,25 @@ def _rt_history_branch(question: str, overlay_ctx=None):
     peak = max(vals, key=lambda x: x[1])
     low = min(vals, key=lambda x: x[1])
     avg = round(sum(v for _, v in vals) / len(vals))
-    ten = [(t, v) for t, v in vals if t[4:5] == "0"]
-    csv = "time,concurrent\n" + "\n".join(f"{t},{v}" for t, v in ten)
-    summary = {"대상": disp, "date": date, "해상도": "원천 1분(추이는 10분 다운샘플)",
+    step1 = _rt_wants_1min(question)                   # 사용자가 '1분 단위'면 오버라이드
+    pts = vals if step1 else [(t, v) for t, v in vals if t[4:5] == "0"]
+    res_kr = "1분" if step1 else "10분"
+    csv = "time,concurrent\n" + "\n".join(f"{t},{v}" for t, v in pts)
+    summary = {"대상": disp, "date": date, "해상도": f"원천 1분(추이 {res_kr} 간격)",
                "피크": {"시각": peak[0], "값": peak[1]}, "최저": {"시각": low[0], "값": low[1]},
                "평균": avg, "표본(분)": len(vals), "분단위 보관시작": earliest}
     if is_program:
-        summary["편성창"] = f"{prog_win[0]} {w_start}~{w_end}"
+        summary["편성창"] = f"{ch_field} {w_start}~{w_end}"
     head = (f"분석 대상: 과거 분단위 동시사용자(1분 집계) — {disp}, {date}"
             + (f" (편성창 {w_start}~{w_end})" if is_program else ""))
     guide = ("안내: 아래는 그 날짜의 분단위 동시자(보관 데이터). 추이·피크시간대를 짚어 답하고, 필요시 10분 "
              "CSV로 차트. 동시사용자=1분 버킷 내 활성 세션 고유 사용자 수(dc UUID). "
              "편성 시각·채널을 임의로 지어내지 말 것 — 근거에 있는 값만 사용.")
     if is_program:
-        guide += (f" 참고: {disp}는 {prog_win[0]} 채널 {w_start}~{w_end} 편성분이며, 편성형 채널은 동시간 "
+        guide += (f" 참고: {disp}는 {ch_field} 채널 {w_start}~{w_end} 편성분이며, 편성형 채널은 동시간 "
                   "1개 프로그램만 방송하므로(도메인 공리) 이 편성창의 채널 동시청취 = 프로그램 동시청취.")
     context = (head + "\n" + guide + f"\n\n### realtime_history — {disp} {date} 1분 동시자\n"
-               + json.dumps(summary, ensure_ascii=False) + f"\n\n[10분 간격 추이 CSV]\n{csv}")
+               + json.dumps(summary, ensure_ascii=False) + f"\n\n[{res_kr} 간격 추이 CSV]\n{csv}")
     onto = _rt_ontology_block(ch_field if ch_field != "T00" else "")
     if onto:
         context += "\n\n" + onto
@@ -2342,7 +2361,7 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
             }
     # 추이 — 프로그램/현재방송 스코프면 1분 해상도(편성창~현재), 아니면 10분 전체(24h 가독).
     #   성별·연령을 물으면 그 채널 인증자 비율도 같은 해상도로 시계열 제공(분당 데이터 존재).
-    one_min = bool(prog_block)
+    one_min = bool(prog_block) or _rt_wants_1min(question)   # 프로그램 스코프거나 사용자가 1분 명시
     win_start = None
     if prog_block:
         _ws = (prog_block.get("방송 시작시각") or prog_block.get("방송 시간", "").split("~")[0] or "").strip()

@@ -182,6 +182,18 @@ check_true("실시간 추출: 1분 채널표(row_label=분)",
 check_true("실시간 추출: 월/기간 범위는 미지원 사유",
            not G.build_extract("2026년 4월 월평균 동시사용자 뽑아줘").get("ok"))
 check_true("비다운로드 실시간은 extract 아님", not G.detect_extract("지금 동시사용자 몇 명"))
+# 공용 해석 계층 — 프로그램 지정 추출/차트가 한 곳(_rt_resolve_target)에서 채널+편성창 해석
+_tg = G._rt_resolve_target("아침봉 분당 동시사용자")
+check("실시간 대상해석: 아침봉→프로그램+편성창", (_tg["kind"], bool(_tg["win"])), ("program", True))
+_ep = G.build_extract("2026년 4월10일 아침봉 분당 동시사용자 뽑아줘")
+check_true("실시간 추출: 프로그램 지정→단일 채널열+편성창 제한",
+           _ep.get("ok") and len(_ep["payload"]["sheets"][0]["header"]) == 2
+           and _ep["payload"]["row_count"] < 200)   # 하루(1440)가 아니라 편성창(~120)
+# 해상도 오버라이드 — '1분 단위로'면 차트도 1분
+check_true("차트 해상도 오버라이드 감지: '1분 단위로'", G._rt_wants_1min("1분 단위로 그려줘"))
+check_true("오버라이드 없으면 10분(기본)", not G._rt_wants_1min("동시자 추이 그려줘"))
+_c1 = G._assemble_realtime("2026-03-20 파워FM 분당 동시자 1분 단위로 그려줘") or {}
+check_true("1분 오버라이드 → 1분 간격 CSV", "[1분 간격 추이 CSV]" in _c1.get("context", ""))
 # 시간 의도 분류: 월평균·기간범위=미지원 / 단일일=single
 check("temporal: 월평균 → unsupported", G._rt_temporal("2026년 4월 월평균 분당 동시사용자"), ("unsupported", None))
 check("temporal: 기간범위(~) → unsupported", G._rt_temporal("4월1일~4월7일 분당 동시사용자")[0], "unsupported")
