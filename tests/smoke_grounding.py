@@ -322,6 +322,10 @@ check_true("실시간 '시간대별 동시사용자'는 hourly-AU 아님(별개)
 check_true("갈음 공리 로드(온톨로지)", "프로그램별" in G._hourly_au_guidance() and "미보유" in G._hourly_au_guidance())
 check_true("시간대별 AU 답변에 갈음 안내 주입",
            "프로그램별" in G.assemble("시간대별 파워FM 청취자 수 추이").get("context", ""))
+# 채널명 대소문자 정규화 + compare에 프로필 분포 포함
+check("fm 대소문자 정규화", G._norm_fmam("파워fm, 러브Fm"), "파워FM, 러브FM")
+_cmpd = G.assemble("파워fm, 러브fm 연령대 비교해줘", overlay_ctx={"mode": "admin"}).get("context", "")
+check_true("소문자 채널 비교 → 채널별 프로필 분포 2개", _cmpd.count("프로필 분포") == 2)
 # 대량 덤프 의도('전부'+'일자별/프로그램별')도 추출 경로 — '보여줘'라도(과거 '데이터 없음' 회귀 방지)
 check_true("추출 감지: '전체 프로그램별 일자별 전부 보여줘'",
            G.detect_extract("25년 12월 전체 프로그램별 일자별 DAU 전부 보여줘"))

@@ -192,6 +192,11 @@ _CH_NAME_BY_CODE["T00"] = "전체"
 #   (정식 채널명 '고릴라M'→G00은 위 채널명 루프에서 먼저 매칭되어 그대로 유지)
 _CHANNEL_ALIAS = {"고릴라": "T00"}
 
+def _norm_fmam(q: str) -> str:
+    """채널명 대소문자 정규화 — '파워fm/러브Fm' 등 → 'FM'(엔티티 매칭이 대소문자 민감)."""
+    return re.sub(r"[Ff][Mm]", "FM", q or "")
+
+
 def _detect_channel(q: str):
     t = q or ""
     # '전사/전체/앱 전체/고릴라 전체' → 전체(T00)를 먼저 (별칭 '고릴라'보다 우선)
@@ -514,6 +519,7 @@ def _build_extract_realtime(question: str) -> dict:
 def build_extract(question: str, overlay_ctx=None) -> dict:
     """자연어 추출 요청 → {ok, payload}. payload에 지표별 시트(행=날짜, 열=프로그램).
        실시간(동시사용자) 의도면 1분 간격 채널 표로 분기."""
+    question = _norm_fmam(question)    # 채널명 대소문자 정규화
     if _detect_realtime(question):
         return _build_extract_realtime(question)
     spec = _extract_parse(question)
@@ -1929,6 +1935,12 @@ def _assemble_compare(question, ents, overlay_ctx=None) -> dict:
                       + json.dumps(kpi, ensure_ascii=False, default=str))
         blocks.append(f"### {e['name']}({e['code']}) — 시계열(최근 {win}일, CSV)\n"
                       + _ts_csv(hist))
+        if _wants_program_demo(question):      # 성별·연령·디바이스 비교 — 채널/프로그램별 분포 포함
+            dm = _p_program_demographics({"code": e["code"], "_question": question,
+                                          "scope_kind": e["kind"], "lookback": lookback})
+            if dm:
+                blocks.append(f"### {e['name']}({e['code']}) — 프로필 분포(성별·연령·디바이스)\n"
+                              + json.dumps(dm, ensure_ascii=False, default=str))
     head = ("비교 분석: " + " vs ".join(f"{e['name']}({e['code']})" for e in ents)
             + f" · 기간 힌트: {_PERIOD_KO.get(period, '일간')} · 비교지표: {metric or '핵심 지표'}")
     context = head + "\n\n" + "\n\n".join(blocks)
@@ -2871,6 +2883,7 @@ def _assemble_meta(question, overlay_ctx=None) -> dict:
 def assemble(question: str, overlay_ctx=None) -> dict:
     """질문 → 근거 context 조립. overlay_ctx={user_id, mode:'normal'|'requery'}.
        반환: {ok, context, providers_used, entities_brief, provenance}"""
+    question = _norm_fmam(question)    # '파워fm/러브Fm' 대소문자 정규화(엔티티 매칭 일관)
     if _detect_realtime(question):     # 실시간은 비교·순위보다 먼저 (동시사용자 자체가 주제)
         _pr = _planner_realtime(question, overlay_ctx)   # [P-1b] 과거 특정일은 플래너→실행기, 실패시 폴백
         return _pr if _pr is not None else _assemble_realtime(question, overlay_ctx)
