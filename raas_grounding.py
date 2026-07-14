@@ -349,41 +349,32 @@ def _build_extract_realtime(question: str) -> dict:
     """실시간(분단위) 동시사용자 추출 — 행=1분, 열=채널(전체·파워FM·러브FM·고릴라M·픽채널).
        날짜 지정(보관 범위 내)이면 그 날, 없으면 오늘. 원자료 다운로드라 다운샘플 없이 전 분."""
     import raas_datasource as DSRC
+    import raas_rt_series as _RT
     kind = _rt_temporal(question)
     if kind and kind[0] == "unsupported":
         return {"ok": False, "reason": "분단위 다운로드는 특정일 또는 오늘만 지원 — 월/기간 범위는 아직 미지원"}
     if kind and kind[0] == "single":
         date = kind[1]
-        earliest = DSRC.get_rt_earliest()
-        if earliest and date < earliest:
-            return {"ok": False, "reason": f"분단위 데이터는 {earliest}부터 — {date}는 보관 범위 밖"}
-        rows, label_date = DSRC.get_rt_history(date), date
+        av = _RT.rt_available(date)
+        if not av["ok"]:
+            return {"ok": False, "reason": f"분단위 데이터는 {av['earliest']}부터 — {date}는 보관 범위 밖"}
+        when, label_date = date, date
     else:
-        rows = DSRC.get_rt_concurrent()
-        label_date = _dt.date.today().strftime("%Y-%m-%d")
+        when, label_date = "today", _dt.date.today().strftime("%Y-%m-%d")
     tgt = _rt_resolve_target(question)                 # 공용 해석 — 프로그램/채널 지정 반영
-    if tgt["kind"] == "all":
-        chans = [("전체", "T00"), ("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"), ("픽채널", "P00")]
-    else:                                              # 프로그램/채널 → 그 채널 한 열
-        chans = [(tgt["disp"], tgt["ch_field"])]
-    win = tgt["win"]                                   # 프로그램이면 편성창으로 행 제한
-    header = ["시각"] + [nm for nm, _ in chans]
-    srows = []
-    for r in rows or []:
-        t = _rt_hhmm(r)
-        if not t or (win and not (win[0] <= t < win[1])):
-            continue
-        srows.append([t] + [(_rt_int(r.get(code)) if _rt_int(r.get(code)) is not None else "")
-                             for _, code in chans])
-    if not srows:
+    targets = None if tgt["kind"] == "all" else [tgt["ch_field"]]
+    labels = None if tgt["kind"] == "all" else {tgt["ch_field"]: tgt["disp"]}
+    tb = _RT.rt_table("concurrent", targets, when, 1, window=tgt["win"], labels=labels)  # 접근자 위임
+    if not tb["rows"]:
         return {"ok": False, "reason": "분단위 데이터 없음"}
+    win = tgt["win"]
     _scope = tgt["disp"] + (f" 편성창 {win[0]}~{win[1]}" if win else "")
     title = f"분단위 동시사용자(1분 간격) · {_scope} · {label_date}"
     sheet = {"field": "rt_concurrent", "label": f"분단위 동시사용자 — {tgt['disp']}",
-             "header": header, "rows": srows}
+             "header": tb["header"], "rows": tb["rows"]}
     return {"ok": True, "payload": {
         "title": title, "date_from": label_date, "date_to": label_date, "row_label": "분",
-        "programs": [], "row_count": len(srows), "col_count": len(chans), "sheets": [sheet]}}
+        "programs": [], "row_count": len(tb["rows"]), "col_count": len(tb["channels"]), "sheets": [sheet]}}
 
 
 def build_extract(question: str, overlay_ctx=None) -> dict:
@@ -2223,11 +2214,9 @@ def _rt_history_branch(question: str, overlay_ctx=None):
             f"요청하신 {date}는 그 이전이라 데이터가 없습니다. {earliest} 이후 날짜면 조회 가능하며, "
             f"그 이전의 '일간' 규모는 아카이브로 조회 가능합니다(분단위는 아님).")
         return _prov
-    rows = DSRC.get_rt_history(date)
-    vals = [(_rt_hhmm(r), _rt_int(r.get(ch_field))) for r in rows]
-    vals = [(t, v) for t, v in vals if t and v is not None]
-    if is_program and w_start:                         # 프로그램: 편성창 [start,end)로 필터
-        vals = [(t, v) for t, v in vals if w_start <= t < w_end]
+    import raas_rt_series as RT
+    window = (w_start, w_end) if (is_program and w_start) else None
+    vals = RT.rt_series("concurrent", ch_field, date, 1, window=window)   # 통합 접근자 위임
     if not vals:
         _prov["context"] = (
             f"분석 대상: 과거 분단위 동시사용자 — {date} ({disp})\n"
@@ -2239,7 +2228,7 @@ def _rt_history_branch(question: str, overlay_ctx=None):
     low = min(vals, key=lambda x: x[1])
     avg = round(sum(v for _, v in vals) / len(vals))
     step1 = _rt_wants_1min(question)                   # 사용자가 '1분 단위'면 오버라이드
-    pts = vals if step1 else [(t, v) for t, v in vals if t[4:5] == "0"]
+    pts = vals if step1 else RT.rt_series("concurrent", ch_field, date, 10, window=window)
     res_kr = "1분" if step1 else "10분"
     csv = "time,concurrent\n" + "\n".join(f"{t},{v}" for t, v in pts)
     summary = {"대상": disp, "date": date, "해상도": f"원천 1분(추이 {res_kr} 간격)",
@@ -2373,12 +2362,13 @@ def _assemble_realtime(question: str, overlay_ctx=None) -> dict:
         if not one_min:
             return hh[4:5] == "0"               # 10분
         return (win_start is None) or (hh >= win_start)   # 1분(편성창 이후)
+    import raas_rt_series as RT
+    _res = 1 if one_min else 10
+    _win = (win_start, "24:00") if (one_min and win_start) else None
+    _ctb = RT.rt_table("concurrent", ["T00", "F00", "L00", "G00", "P00"], "today", _res, window=_win)
     ser = ["time,전체,파워FM,러브FM,고릴라M,픽채널"]
-    for r in today:
-        hh = _rt_hhmm(r)
-        if _keep(hh):
-            ser.append(",".join([hh] + [str(_rt_int(r.get(f)) or "") for f in
-                                        ("T00", "F00", "L00", "G00", "P00")]))
+    for _row in _ctb["rows"]:
+        ser.append(",".join([_row[0]] + [str(v or "") for v in _row[1:]]))
     # 성별/연령 추이(요청 시) — 파워FM(F00)/러브FM(L00)만 인증 비율 존재
     demo_ser = demo_ch = None
     want_sex = any(k in question for k in ("성별", "남녀", "여성", "남성", "여자", "남자"))
