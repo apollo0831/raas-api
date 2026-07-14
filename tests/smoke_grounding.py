@@ -134,6 +134,16 @@ check("period_from: 최근 3개월", bool(G._rank_period_from("최근 3개월 DA
 _rk_tbl = G._detect_ranking("프로그램별 올해 초 대비 롤링MAU 변화 보여줘") or {}
 check("'프로그램별 올해초 대비 변화' → 기간델타 표",
       (_rk_tbl.get("field"), _rk_tbl.get("period_change")), ("dau_r30", True))
+# 2자리 연도 파싱 + 절대일자 기간 시작
+check("2자리 연도 '26년 1월1일' 파싱", G._parse_abs_date("26년 1월1일"), (2026, 1, 1))
+check("'26년 1월1일 대비' → 기간 시작", G._rank_period_from("26년 1월1일 대비 롤링MAU"), "2026-01-01")
+# 2엔티티 기간 델타 비교(compare 스냅샷 아님) — 아카이브 병합 codes 지정
+_pcs = G._detect_period_compare("이숙영의 러브FM과 딘딘의 뮤직하이 둘 중 26년 1월1일 대비 롤링MAU 하락이 큰 프로그램은?") or {}
+check("2엔티티 기간비교 → period_change+codes",
+      (_pcs.get("field"), _pcs.get("period_change"), sorted(_pcs.get("codes") or [])),
+      ("dau_r30", True, ["F01", "L07"]))
+check_true("기간 없는 2엔티티는 여전히 compare(회귀)",
+           G._detect_period_compare("파워FM vs 러브FM 비교") is None)
 # 인구 카테고리 순위 — 분포 소스 랭킹(통합 접근자). 과거 'DAU로 폴백해 성별 없음' 회귀 방지
 _rk_m = G._detect_ranking("남성 청취자 비율 가장 높은 프로그램") or {}
 check("'남성 비율 높은 프로그램' → 분포 순위", (_rk_m.get("demo"), _rk_m.get("source"), _rk_m.get("field")),

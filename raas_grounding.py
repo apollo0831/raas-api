@@ -81,8 +81,10 @@ def _parse_abs_date(q: str):
             m = re.search(r"(?<!\d)(\d{1,2})\s*/\s*(\d{1,2})(?!\d)", t)
         if not m:
             return None
-        _ym = re.search(r"(20\d{2})\s*년", t)      # '2025년 12월 31일'의 연도 포착
-        y, mo, d = (int(_ym.group(1)) if _ym else None), int(m.group(1)), int(m.group(2))
+        _ym = re.search(r"(20\d{2}|\d{2})\s*년", t)   # '2025년'·'26년' 연도(2자리→2000+)
+        _yv = int(_ym.group(1)) if _ym else None
+        y = (_yv if (_yv is None or _yv >= 2000) else 2000 + _yv)
+        mo, d = int(m.group(1)), int(m.group(2))
     if not (1 <= mo <= 12 and 1 <= d <= 31):
         return None
     return (y, mo, d)
@@ -1875,6 +1877,10 @@ def _rank_period_from(question: str):
     if m:
         n = int(m.group(1) or m.group(2))
         return (today - _dt.timedelta(days=n)).strftime("%Y-%m-%d")
+    # 절대일자 기준('26년 1월1일 대비', '2026-01-01 대비') — 대비/기준/부터 문맥일 때 기간 시작
+    cand = _parse_abs_date(t)
+    if cand and any(k in t for k in ("대비", "기준", "부터", "이후", "이래", "비교")):
+        return "%04d-%02d-%02d" % ((cand[0] or today.year), cand[1], cand[2])
     return None
 
 def _detect_ranking(question: str):
@@ -1997,6 +2003,30 @@ def _planner_ranking(question, overlay_ctx=None):
     return r if ok else None
 
 
+def _detect_period_compare(question):
+    """2+ 프로그램 + 기간 대비 + 변화/하락 → 기간 델타 '비교' spec(codes 지정). 아니면 None.
+       'A와 B 중 26년 1월1일 대비 롤링MAU 하락 큰 것' 류 — compare 스냅샷 대신 아카이브 델타."""
+    pf = _rank_period_from(question)
+    if not pf:
+        return None
+    if not any(k in (question or "") for k in ("변화", "증감", "대비", "하락", "감소", "증가", "큰", "적은")):
+        return None
+    ents = _detect_compare(question)
+    if not ents or len(ents) < 2:
+        return None
+    tl = (question or "").lower()
+    fld, label = "dau", "DAU"
+    for keys, f, lab in _RANK_FIELD_MAP:
+        if any(k.lower() in tl for k in keys):
+            fld, label = f, lab
+            break
+    has_down = any(k in question for k in _RANK_CHANGE_DOWN)
+    has_up = any(k in question for k in _RANK_CHANGE_UP)
+    asc = has_down and not has_up                      # 하락 큰 것 위로(음수 우선), 증가면 내림차순
+    return {"field": fld, "label": label, "asc": asc, "period_change": True,
+            "period_from": pf, "codes": [e["code"] for e in ents]}
+
+
 def _assemble_ranking_period_change(question, spec, overlay_ctx=None):
     """[기간 델타 순위] 각 프로그램 지표를 '기간 시작~현재' 델타로 rank_by_change.
        dau 계열은 아카이브 병합(연초까지), 그 외 KPI는 상세 타임라인(≈3월~). 전주대비(WoW)와 별개."""
@@ -2009,11 +2039,13 @@ def _assemble_ranking_period_change(question, spec, overlay_ctx=None):
         rows = S._kpi_rows() or []
     except Exception:
         rows = []
-    codes, seen = [], set()
-    for r in rows:
-        c = r.get("PGM_CODE")
-        if c and c not in seen and c not in _RANK_EXCLUDE and not c.endswith("00") and c != "L04":
-            seen.add(c); codes.append(c)
+    codes = spec.get("codes")                          # 지정 엔티티만(2개 비교 등), 없으면 전 프로그램
+    if not codes:
+        codes, seen = [], set()
+        for r in rows:
+            c = r.get("PGM_CODE")
+            if c and c not in seen and c not in _RANK_EXCLUDE and not c.endswith("00") and c != "L04":
+                seen.add(c); codes.append(c)
     code_series = {}
     for c in codes:
         if field in hist:
@@ -2710,6 +2742,11 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     if _detect_realtime(question):     # 실시간은 비교·순위보다 먼저 (동시사용자 자체가 주제)
         _pr = _planner_realtime(question, overlay_ctx)   # [P-1b] 과거 특정일은 플래너→실행기, 실패시 폴백
         return _pr if _pr is not None else _assemble_realtime(question, overlay_ctx)
+    _pc = _detect_period_compare(question)             # 2엔티티 기간 델타 비교(아카이브) — compare보다 먼저
+    if _pc:
+        _rpc = _assemble_ranking_period_change(question, _pc, overlay_ctx)
+        if _rpc.get("ok"):
+            return _rpc
     cmp_ents = _detect_compare(question)
     if cmp_ents:
         return _assemble_compare(question, cmp_ents, overlay_ctx)
