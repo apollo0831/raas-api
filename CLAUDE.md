@@ -283,6 +283,12 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   [RT-1c] 성별/연령 시계열도 접근자 위임(`_rt_demo_block`, 오늘·과거일 공용) → **과거일 성별/연령
   개방**(광역 fetch). 잠복 버그 정정: `_RT_AGES`가 `AGE_T…` 오표기라 연령비율이 스냅샷·추이에서
   비어 있던 것을 dim(`0_19`…)으로 고쳐 실제값 반영. 스냅샷 device dict는 인라인 유지(단일 최신행).
+- `raas_planner.py` [P-1a] — LLM 질의 플래너(shadow, **프로덕션 미연결**). 질의→검증된
+  PlanRequest{intent·domain·metric·entity·time·dims·format·confidence}. 카탈로그(레지스트리+온톨로지)
+  를 메뉴로 Haiku가 구조 요청 생성 → 검증기가 등록된 것만 통과·엔티티/시간 결정적 해석(코드·별칭).
+  **값은 안 만듦**(실행기·접근자가 계산). 흩어진 감지기 19종을 대체할 토대. 평가:
+  `python tests/eval_planner.py`(대표 18케이스 shadow, 실 Haiku, ~90-100%). 설계 docs/p1_planner_design.md.
+  P-1b에서 실행기(plan→context) + realtime scope부터 A/B 전환 예정.
 - `raas_analytics.py` [Phase 2] — 교차지표 결정적 연산: `align·pearson·co_movement·correlate_many·
   decompose·change·rank_by_change`. 접근자가 주는 [(date,val)] 시계열을 공통창 정렬→상관·동반움직임.
   **숫자만** — 관계·인과 판단은 온톨로지·LLM. grounding `metric_correlate` provider가 대상지표(기본 DAU)
