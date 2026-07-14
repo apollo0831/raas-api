@@ -273,6 +273,12 @@ RAAS는 로컬에 쌓지 않고(저장소=Splunk) `raas_datasource`의 실시간
   cell/available_dates`를 균일 반환. **구조 어댑터만**(도메인 규칙 없음). window(1D/1W/1M)·dims(DEPTH)로
   창·깊이 선택 — 분포 provider가 이걸 위임받아 주간/월간 라우팅을 소스 공통으로 처리(device는 1M 없으면
   자동 생략). 회귀: `python tests/smoke_series.py`(기존 소스별 헬퍼와 값 대조).
+- `raas_rt_series.py` [RT-1] — 실시간 통합 접근자(분단위). 필드 템플릿 레지스트리(RT_METRICS:
+  concurrent·device·viewradio·sex_ratio·age_ratio·msg_*·inflow — 새 지표=한 줄)로 '필드명 인코딩'을
+  흡수. `rt_series(metric,target,when,resolution,dims,window)`/`rt_table`/`rt_snapshot`/`rt_available`.
+  datasource `rt_fetch(source,when)`가 오늘(60초 캐시)/과거일(광역 온디맨드, 디바이스·성별·연령 포함)을
+  하나로. 회귀: `python tests/smoke_rt_series.py`(접근자 값=원천 대조). RT-1b에서 소비자(차트·추출·
+  스냅샷) 위임 전환 예정 — 설계 docs/rt_accessor_design.md.
 - `raas_analytics.py` [Phase 2] — 교차지표 결정적 연산: `align·pearson·co_movement·correlate_many·
   decompose·change·rank_by_change`. 접근자가 주는 [(date,val)] 시계열을 공통창 정렬→상관·동반움직임.
   **숫자만** — 관계·인과 판단은 온톨로지·LLM. grounding `metric_correlate` provider가 대상지표(기본 DAU)

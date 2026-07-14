@@ -376,7 +376,7 @@ _RT_AI_VENDORS = ("DV_AI_SKT", "DV_AI_TMAP", "DV_AI_BTV", "DV_AI_BIXBY", "DV_AI_
 _RT_CH_SUF = (("", ""), ("_F", "_F00"), ("_G", "_G00"), ("_L", "_L00"), ("_P", "_P00"))
 _RT_AGES = ("0_19", "20_24", "25_29", "30_34", "35_39", "40_44", "45_49", "50_54", "55_59", "60")
 
-def _build_rt_concurrent_spl():
+def _build_rt_concurrent_spl(earliest="@d", latest="now"):
     ev = []
     for a in _RT_AGES:
         ev.append(f'| eval R_FM_AGE_{a}=round(AGE_F{a}/AGE_FM*100,1)')
@@ -386,7 +386,7 @@ def _build_rt_concurrent_spl():
     dev = " ".join(d + s for d in _RT_DEV_REAL for s, _ in _RT_CH_SUF)
     ai = " ".join(v + s for v in _RT_AI_VENDORS for s, _ in _RT_CH_SUF)
     age_out = " ".join(f"R_F00_AGE_{a}" for a in _RT_AGES) + " " + " ".join(f"R_L00_AGE_{a}" for a in _RT_AGES)
-    return (f"search index={RT_INDEX} earliest=@d latest=now | fillnull value=0 "
+    return (f"search index={RT_INDEX} earliest={earliest} latest={latest} | fillnull value=0 "
             + " ".join(ev)
             + " | rename R_FM_* as R_F00_*, R_AM_* as R_L00_*, AGE_FM as F00_REALINFO, AGE_LM as L00_REALINFO"
             + " | table _time T00 F00 L00 G00 P00 BA BA_F00 BA_L00 F00_REALINFO L00_REALINFO "
@@ -395,12 +395,9 @@ def _build_rt_concurrent_spl():
 
 _RT_CONCURRENT_SPL = _build_rt_concurrent_spl()
 
-def _rt_concurrent_load():
-    try:
-        rows = splunk_search(_RT_CONCURRENT_SPL)
-    except Exception as e:
-        print(f"  [rt_concurrent] 조회 실패: {e}")
-        return [], "error"
+def _rt_concurrent_post(rows):
+    """원시 rt_concurrent 행 → RAAS 표준(AI 7사 합산 DV_AI 파생, 실장비 채널접미 _F→_F00, 원시벤더 드롭).
+       오늘 Feed·과거일 광역 fetch가 공유(동일 후처리)."""
     out = []
     for r in rows:
         o = {}
@@ -414,10 +411,20 @@ def _rt_concurrent_load():
             else:
                 o[k] = v
         out.append(o)
-    return out, "splunk"
+    return out
 
-_RT_MSG_SPL = r"""search index=infobank earliest=@d latest=now
-| stats values(*) as * by BOARD_KEY
+def _rt_concurrent_load():
+    try:
+        rows = splunk_search(_RT_CONCURRENT_SPL)
+    except Exception as e:
+        print(f"  [rt_concurrent] 조회 실패: {e}")
+        return [], "error"
+    return _rt_concurrent_post(rows), "splunk"
+
+def _rt_msg_spl(earliest="@d", latest="now"):
+    return (f"search index=infobank earliest={earliest} latest={latest}\n" + _RT_MSG_BODY)
+
+_RT_MSG_BODY = r"""| stats values(*) as * by BOARD_KEY
 | eval _time = strptime(MSG_DATE, "%Y%m%d%H%M%S")
 | join type=left PGM_KEY [| inputlookup BROADPLAN.csv | search IS_END="N" | rename INFO_PGM_CODE as PGM_KEY | fields PGM_KEY, SEQ]
 | eval FMAM=case(SEQ like "F%","FM",SEQ like "L%","AM")
@@ -427,6 +434,8 @@ _RT_MSG_SPL = r"""search index=infobank earliest=@d latest=now
 | rename FM_SUM_1 as F00_SMS, FM_SUM_9 as F00_GG, AM_SUM_1 as L00_SMS, AM_SUM_9 as L00_GG
 | table _time F00_SMS F00_GG L00_SMS L00_GG | sort 0 _time"""
 
+_RT_MSG_SPL = _rt_msg_spl()
+
 def _rt_msg_load():
     try:
         return splunk_search(_RT_MSG_SPL), "splunk"
@@ -434,9 +443,12 @@ def _rt_msg_load():
         print(f"  [rt_msg] 조회 실패: {e}")
         return [], "error"
 
-_RT_INFLOW_SPL = (f"search index=tempsummary3 earliest=@d latest=now | fillnull value=0 F00 G00 L00 P00 T00 "
-                  "| rename F00 as F00_START, G00 as G00_START, L00 as L00_START, P00 as P00_START "
-                  "| table _time F00_START G00_START L00_START P00_START | sort 0 _time")
+def _rt_inflow_spl(earliest="@d", latest="now"):
+    return (f"search index=tempsummary3 earliest={earliest} latest={latest} | fillnull value=0 F00 G00 L00 P00 T00 "
+            "| rename F00 as F00_START, G00 as G00_START, L00 as L00_START, P00 as P00_START "
+            "| table _time F00_START G00_START L00_START P00_START | sort 0 _time")
+
+_RT_INFLOW_SPL = _rt_inflow_spl()
 
 def _rt_inflow_load():
     try:
@@ -506,6 +518,36 @@ _rt_earliest_feed = Feed("rt_earliest", _load_rt_earliest, daily_at="00:10")
 def get_rt_earliest() -> str:
     """분단위 동시사용자 보관 시작일 'YYYY-MM-DD'(동적 — 보관기간 롤오버 반영)."""
     return _rt_earliest_feed.get()
+
+# ── 실시간 통합 fetch (RT-1) — 소스·기간 무관 광역 행 반환 ────────────────────
+#   오늘=60초 캐시 Feed 재사용, 과거일=광역 온디맨드(보관 범위 내) + (source,date) 캐시.
+#   raas_rt_series(통합 접근자)가 이 하나로 오늘/과거일을 흡수. 과거일도 디바이스·성별·연령 포함.
+_rt_wide_cache: dict = {}      # {(source, 'YYYY-MM-DD'): rows}
+_RT_TODAY_GETTER = {"rt_concurrent": get_rt_concurrent, "rt_msg": get_rt_msg, "rt_inflow": get_rt_inflow}
+_RT_PAST_SPL = {"rt_concurrent": _build_rt_concurrent_spl, "rt_msg": _rt_msg_spl, "rt_inflow": _rt_inflow_spl}
+
+def rt_fetch(source: str, when: str = "today") -> list:
+    """실시간 광역 행 [{_time, …}] — source∈{rt_concurrent,rt_msg,rt_inflow}, when='today'|'YYYY-MM-DD'.
+       과거일은 오늘과 동일 광역 스키마(디바이스·성별·연령 포함). 보관 범위 밖이면 빈 리스트."""
+    if when in ("today", "now", "", None):
+        g = _RT_TODAY_GETTER.get(source)
+        return g() if g else []
+    key = (source, (when or "").replace("/", "-")[:10])
+    if key in _rt_wide_cache:
+        return _rt_wide_cache[key]
+    builder = _RT_PAST_SPL.get(source)
+    if not builder:
+        return []
+    try:
+        e, l = _rt_date_bounds(key[1])
+        rows = splunk_search(builder(e, l), timeout=120)
+        if source == "rt_concurrent":
+            rows = _rt_concurrent_post(rows)
+    except Exception as ex:
+        print(f"  [rt_fetch {source} {key[1]}] 실패: {ex}")
+        return []
+    _rt_wide_cache[key] = rows
+    return rows
 
 # 최근 14일(오늘 제외) 일자별 피크값·피크시각 — 과거 불변 → 일일 캐시. 스코프별 지연 생성.
 #   argmax 관용구: sort로 (date, 값) 정렬 후 stats last()가 그날 최대값 행의 시각·값.
