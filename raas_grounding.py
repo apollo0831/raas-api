@@ -307,8 +307,6 @@ def _wants_bulk_dump(question: str) -> bool:
     return any(b in q for b in _BULK_MARK) and any(d in q for d in _BREAKDOWN_MARK)
 
 def detect_extract(question: str) -> bool:
-    if _detect_realtime(question):     # 실시간(분단위) 질의는 KPI 추출표로 가로채지 않음(DAU 오답 방지)
-        return False
     t = (question or "").lower()
     return any(s in t for s in _EXTRACT_SIGNAL) or _wants_bulk_dump(question)
 
@@ -347,8 +345,46 @@ def _extract_parse(question: str) -> dict:
         print(f"[extract] parse 실패: {e}")
         return {}
 
+def _build_extract_realtime(question: str) -> dict:
+    """실시간(분단위) 동시사용자 추출 — 행=1분, 열=채널(전체·파워FM·러브FM·고릴라M·픽채널).
+       날짜 지정(보관 범위 내)이면 그 날, 없으면 오늘. 원자료 다운로드라 다운샘플 없이 전 분."""
+    import raas_datasource as DSRC
+    kind = _rt_temporal(question)
+    if kind and kind[0] == "unsupported":
+        return {"ok": False, "reason": "분단위 다운로드는 특정일 또는 오늘만 지원 — 월/기간 범위는 아직 미지원"}
+    if kind and kind[0] == "single":
+        date = kind[1]
+        earliest = DSRC.get_rt_earliest()
+        if earliest and date < earliest:
+            return {"ok": False, "reason": f"분단위 데이터는 {earliest}부터 — {date}는 보관 범위 밖"}
+        rows, label_date = DSRC.get_rt_history(date), date
+    else:
+        rows = DSRC.get_rt_concurrent()
+        label_date = _dt.date.today().strftime("%Y-%m-%d")
+    chans = [("전체", "T00"), ("파워FM", "F00"), ("러브FM", "L00"), ("고릴라M", "G00"), ("픽채널", "P00")]
+    header = ["시각"] + [nm for nm, _ in chans]
+    srows = []
+    for r in rows or []:
+        t = _rt_hhmm(r)
+        if not t:
+            continue
+        srows.append([t] + [(_rt_int(r.get(code)) if _rt_int(r.get(code)) is not None else "")
+                             for _, code in chans])
+    if not srows:
+        return {"ok": False, "reason": "분단위 데이터 없음"}
+    title = f"분단위 동시사용자(1분 간격) · {label_date}"
+    sheet = {"field": "rt_concurrent", "label": "분단위 동시사용자",
+             "header": header, "rows": srows}
+    return {"ok": True, "payload": {
+        "title": title, "date_from": label_date, "date_to": label_date, "row_label": "분",
+        "programs": [], "row_count": len(srows), "col_count": len(chans), "sheets": [sheet]}}
+
+
 def build_extract(question: str, overlay_ctx=None) -> dict:
-    """자연어 추출 요청 → {ok, payload}. payload에 지표별 시트(행=날짜, 열=프로그램)."""
+    """자연어 추출 요청 → {ok, payload}. payload에 지표별 시트(행=날짜, 열=프로그램).
+       실시간(동시사용자) 의도면 1분 간격 채널 표로 분기."""
+    if _detect_realtime(question):
+        return _build_extract_realtime(question)
     spec = _extract_parse(question)
     try:
         rows = S._kpi_rows() or []

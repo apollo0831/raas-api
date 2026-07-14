@@ -173,9 +173,15 @@ check_true("연도없는 상대일('지금')은 history 아님(today 경로)",
            "realtime_history" not in (G._assemble_realtime("지금 동시 청취자 몇 명") or {}).get("providers_used", []))
 # '동시자'(축약)도 실시간 신호 — KPI로 새지 않음
 check_true("실시간 감지: '분당 동시자'", G._detect_realtime("파워FM 분당 동시자"))
-# 실시간 질의는 extract가 가로채지 않음(DAU 오답 방지)
-check_true("extract 가드: 실시간+뽑아줘 → extract 아님",
-           not G.detect_extract("분당 동시사용자 날짜별로 뽑아줘"))
+# 실시간 다운로드 의도 → extract 경로이되 KPI가 아니라 1분 채널표(DAU 오답 방지)
+check_true("실시간 다운로드 → extract True", G.detect_extract("동시사용자 뽑아줘"))
+_rx = G.build_extract("동시사용자 뽑아줘")
+check_true("실시간 추출: 1분 채널표(row_label=분)",
+           _rx.get("ok") and _rx["payload"].get("row_label") == "분"
+           and _rx["payload"]["sheets"][0]["header"][:2] == ["시각", "전체"])
+check_true("실시간 추출: 월/기간 범위는 미지원 사유",
+           not G.build_extract("2026년 4월 월평균 동시사용자 뽑아줘").get("ok"))
+check_true("비다운로드 실시간은 extract 아님", not G.detect_extract("지금 동시사용자 몇 명"))
 # 시간 의도 분류: 월평균·기간범위=미지원 / 단일일=single
 check("temporal: 월평균 → unsupported", G._rt_temporal("2026년 4월 월평균 분당 동시사용자"), ("unsupported", None))
 check("temporal: 기간범위(~) → unsupported", G._rt_temporal("4월1일~4월7일 분당 동시사용자")[0], "unsupported")

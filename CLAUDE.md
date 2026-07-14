@@ -41,6 +41,9 @@ raas_server.py  ← 진입점, ThreadingHTTPServer on port 5000
     ├── POST /api/query/stream → [핵심] 자유질의 SSE 스트리밍
     │       0) 추출 의도(뽑아/엑셀/표로)면 GROUND.build_extract → SSE extract 이벤트
     │          (결정적 표 — 숫자는 코드, LLM 아님. 프론트 SheetJS로 엑셀 다운로드)
+    │          실시간(동시사용자) 의도면 _build_extract_realtime로 분기 — 행=1분, 열=채널
+    │          (전체·파워FM·러브FM·고릴라M·픽채널). 날짜 지정=그 날(보관 범위 내)/없으면 오늘,
+    │          월·기간범위는 미지원 사유 반환(row_label='분')
     │       1) 편성표 의도면 STORY.build_program_schedule (룩업)
     │       2) GROUND.assemble(question) → grounding 답변 스트리밍 (general scope가 catch-all)
     │       (구 raas_query_engine 폴백 QA 엔진은 2026-07 은퇴·삭제 — grounding 단일 경로)

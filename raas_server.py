@@ -1301,7 +1301,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                 if _ex.get("ok"):
                     p = _ex["payload"]
-                    _sm = (f"**{p['title']}**\n\n{p['col_count']}개 대상 × {p['row_count']}일"
+                    _sm = (f"**{p['title']}**\n\n{p['col_count']}개 대상 × {p['row_count']}{p.get('row_label', '일')}"
                            f" · 지표 {len(p['sheets'])}종을 추출했습니다. 아래 미리보기 확인 후 엑셀로 내려받으세요.")
                     sse_x({"type": "token", "text": _sm})
                     sse_x({"type": "extract", "payload": p})
