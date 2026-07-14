@@ -326,6 +326,12 @@ check_true("시간대별 AU 답변에 갈음 안내 주입",
 check("fm 대소문자 정규화", G._norm_fmam("파워fm, 러브Fm"), "파워FM, 러브FM")
 _cmpd = G.assemble("파워fm, 러브fm 연령대 비교해줘", overlay_ctx={"mode": "admin"}).get("context", "")
 check_true("소문자 채널 비교 → 채널별 프로필 분포 2개", _cmpd.count("프로필 분포") == 2)
+# 특정 월('N월') → 월간 소스(_mon) + 그 월 타겟
+_jun = G._p_program_demographics({"code": "F00", "_question": "6월달 파워FM 연령대", "scope_kind": "channel"}) or {}
+check("'6월달' → 월간(2026-06) 타겟", ((_jun.get("집계창"), (_jun.get("연령대 분포") or {}).get("as_of"))),
+      ("월간(2026-06)", "2026/06/01"))
+check_true("기간 없으면 일간(회귀)",
+           G._p_program_demographics({"code": "F00", "_question": "파워FM 연령대", "scope_kind": "channel"}).get("집계창") == "일간(1D)")
 # 대량 덤프 의도('전부'+'일자별/프로그램별')도 추출 경로 — '보여줘'라도(과거 '데이터 없음' 회귀 방지)
 check_true("추출 감지: '전체 프로그램별 일자별 전부 보여줘'",
            G.detect_extract("25년 12월 전체 프로그램별 일자별 DAU 전부 보여줘"))

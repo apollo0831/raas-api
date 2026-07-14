@@ -1308,7 +1308,15 @@ def _p_program_demographics(ent):
         return None
     import raas_series as SR
     # 집계창(PERIOD) 라우팅 — 통합 접근자가 소스 형태 무관하게 처리(1D 없으면 device는 자동 생략)
-    if any(k in q for k in ("월간", "월별", "월 단위", "지난달", "전월", "이번달", "개월")):
+    _month_target = None
+    _mm = re.search(r"(\d{1,2})\s*월(?!\s*\d{1,2}\s*일)", q)   # 'N월'(뒤에 '일' 없음) = 특정 월 → 월간
+    if _mm:
+        _yr = re.search(r"(20\d{2}|\d{2})\s*년", q)
+        _y = int(_yr.group(1)) if _yr else _dt.date.today().year
+        _y = _y if _y >= 2000 else 2000 + _y
+        _month_target = "%04d/%02d/01" % (_y, int(_mm.group(1)))   # 그 월의 1M 행
+        window, wlabel, unit = "1M", f"월간({_y}-{int(_mm.group(1)):02d})", "개월"
+    elif any(k in q for k in ("월간", "월별", "월 단위", "지난달", "전월", "이번달", "개월")):
         window, wlabel, unit = "1M", "월간(1M)", "개월"
     elif any(k in q for k in ("주간", "주별", "주 단위", "지난주", "전주", "이번주")):
         window, wlabel, unit = "1W", "주간(1W)", "주"
@@ -1318,7 +1326,7 @@ def _p_program_demographics(ent):
     depth = "10MIN" if ("10분" in q or "깊은" in q) else ("1MIN" if "1분" in q else "ALL")
     dims = {"DEPTH": depth}
     lb = ent.get("lookback") or 0
-    as_of = (ent.get("as_of_date") or "").replace("-", "/")
+    as_of = _month_target or (ent.get("as_of_date") or "").replace("-", "/")
 
     def _view(source, labels):
         dates = SR.available_dates(source, code, window=window, dims=dims)
