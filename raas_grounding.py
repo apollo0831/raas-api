@@ -247,7 +247,11 @@ def resolve_entities(question: str, default_code: str = None) -> dict:
     if prog:
         ent["scope_kind"] = "program"
         code = prog["code"]
-        ent.update(code=code, name=prog["name"], channel=prog["channel"])
+        # 이름은 라이브 우선(_resolve_name) — PROGRAM_DIRECTORY 하드코딩명이 낡으면 자동 교정
+        #   (예: L11이 디렉토리엔 '어예진의 방과후 목돈연구소'로 남아 있어도 현행 '인생은 오디션'으로).
+        _nm = _resolve_name(code)
+        ent.update(code=code, name=(_nm if _nm and _nm != code else prog["name"]),
+                   channel=prog["channel"])
     else:
         ch_code, ch_name = _detect_channel(question)
         _allp = _is_all_programs(question)

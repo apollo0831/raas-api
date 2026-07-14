@@ -63,6 +63,9 @@ e = G.resolve_entities("신규사용자 몇 명이야?", "F09")
 check("지표만(관심=컬투쇼)", (e.get("code"), e.get("scope_kind")), ("F09", "program"))
 e = G.resolve_entities("컬투쇼 어제 왜 빠졌어?")
 check("프로그램 명시", (e.get("code"), e.get("scope_kind")), ("F09", "program"))
+# 이름은 라이브 우선 — PROGRAM_DIRECTORY가 낡아도(L11='어예진의 방과후 목돈연구소') 현행명으로 교정
+e = G.resolve_entities("요즘 '인생은 오디션' 어때?")
+check("현행명 교정(L11)", (e.get("code"), e.get("name")), ("L11", "인생은 오디션"))
 e = G.resolve_entities("어제 MAU는?")
 check("MAU 지표만 → 전사", e.get("code"), "T00")
 # KPI 패널발 질의 — 스코프명(T00='고릴라 플랫폼 전체')을 명시하면 관심 기본값이 가로채면 안 됨
