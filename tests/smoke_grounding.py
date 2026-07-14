@@ -205,6 +205,14 @@ check_true("실시간 추출: 1분 채널표(row_label=분)",
 check_true("실시간 추출: 월/기간 범위는 미지원 사유",
            not G.build_extract("2026년 4월 월평균 동시사용자 뽑아줘").get("ok"))
 check_true("비다운로드 실시간은 extract 아님", not G.detect_extract("지금 동시사용자 몇 명"))
+# 복수일 범위 realtime 추출 — '지난주/최근 N일/A부터 B까지'
+check_true("범위 파싱: '지난주'→7일", len(G._rt_date_range("지난주 컬투쇼 뽑아줘") or []) == 7)
+check("범위 파싱: 'A부터 B까지' 연도상속",
+      len(G._rt_date_range("2026년 4월1일부터 4월5일까지") or []), 5)
+_exr = G.build_extract("지난주 월요일부터 일요일까지 컬투쇼 분당 동시사용자 뽑아줘")
+check_true("주간 프로그램 범위 추출: [날짜,시각,프로그램]",
+           _exr.get("ok") and _exr["payload"]["sheets"][0]["header"][:2] == ["날짜", "시각"]
+           and _exr["payload"]["row_count"] > 100)
 # 공용 해석 계층 — 프로그램 지정 추출/차트가 한 곳(_rt_resolve_target)에서 채널+편성창 해석
 _tg = G._rt_resolve_target("아침봉 분당 동시사용자")
 check("실시간 대상해석: 아침봉→프로그램+편성창", (_tg["kind"], bool(_tg["win"])), ("program", True))

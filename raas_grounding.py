@@ -347,11 +347,117 @@ def _extract_parse(question: str) -> dict:
         print(f"[extract] parse 실패: {e}")
         return {}
 
-def _build_extract_realtime(question: str) -> dict:
-    """실시간(분단위) 동시사용자 추출 — 행=1분, 열=채널(전체·파워FM·러브FM·고릴라M·픽채널).
-       날짜 지정(보관 범위 내)이면 그 날, 없으면 오늘. 원자료 다운로드라 다운샘플 없이 전 분."""
+def _rt_date_range(question: str):
+    """복수일 범위 → ['YYYY-MM-DD', …] 오름차순, 없으면 None. '지난주/이번주/최근 N일/A부터 B까지'."""
+    t = question or ""
+    today = _dt.date.today()
+    if "지난주" in t:
+        mon = today - _dt.timedelta(days=today.weekday() + 7)
+        return [(mon + _dt.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    if "이번주" in t or "금주" in t:
+        mon = today - _dt.timedelta(days=today.weekday())
+        return [(mon + _dt.timedelta(days=i)).strftime("%Y-%m-%d") for i in range((today - mon).days)]
+    m = re.search(r"최근\s*(\d+)\s*일|지난\s*(\d+)\s*일", t)
+    if m:
+        n = int(m.group(1) or m.group(2))
+        return [(today - _dt.timedelta(days=n - i)).strftime("%Y-%m-%d") for i in range(n)]
+    ab = re.findall(r"(?:(20\d{2}|\d{2})\s*년\s*)?(\d{1,2})\s*월\s*(\d{1,2})\s*일", t)
+    if len(ab) >= 2 and any(k in t for k in ("부터", "까지", "~")):
+        def _yr(g, default):
+            if not g:
+                return default
+            y = int(g)
+            return y if y >= 2000 else 2000 + y
+        try:
+            y0 = _yr(ab[0][0], today.year)
+            d0 = _dt.date(y0, int(ab[0][1]), int(ab[0][2]))
+            d1 = _dt.date(_yr(ab[1][0], y0), int(ab[1][1]), int(ab[1][2]))   # 둘째 연도 없으면 첫째 상속
+            if d1 >= d0 and (d1 - d0).days <= 92:
+                return [(d0 + _dt.timedelta(days=i)).strftime("%Y-%m-%d") for i in range((d1 - d0).days + 1)]
+        except Exception:
+            pass
+    return None
+
+
+def _program_weekdays(code: str) -> set:
+    """프로그램이 방송하는 요일(0=월…6=일) — KPI dau>0 기준. 주간 범위에서 비방송일 제외용."""
+    try:
+        rows = S._kpi_rows() or []
+    except Exception:
+        rows = []
+    wds = set()
+    for r in rows:
+        if r.get("PGM_CODE") != code:
+            continue
+        dau = str(r.get("dau") or "").strip()
+        if dau and dau not in ("0", "0.0"):
+            try:
+                wds.add(_dt.datetime.strptime((r.get("DATE") or "").replace("/", "-"), "%Y-%m-%d").weekday())
+            except Exception:
+                pass
+    return wds
+
+
+def _build_extract_realtime_range(question: str, dates: list):
+    """복수일 realtime 추출 — 행=[날짜,시각,…], 대상=프로그램(편성창·방송요일만)/채널/전체. 보관범위 내만."""
     import raas_datasource as DSRC
     import raas_rt_series as _RT
+    earliest = DSRC.get_rt_earliest()
+    today_str = _dt.date.today().strftime("%Y-%m-%d")
+    dates = [d for d in dates if d < today_str and (not earliest or d >= earliest)]
+    if not dates:
+        return {"ok": False, "reason": f"분단위 데이터는 {earliest or '보관 시작일'}부터 — 요청 기간이 보관 범위 밖"}
+    try:
+        from raas_storyline_router import extract_program
+        p = extract_program(question)
+    except Exception:
+        p = None
+    window = None
+    if p and p.get("code"):
+        pw = _program_window(p["code"])
+        if not pw:
+            return None
+        ch_field, w_start, w_end, disp = pw
+        window = (w_start, w_end)
+        wds = _program_weekdays(p["code"])
+        if wds:                                        # 방송 요일만(주말 비방송 제외)
+            dates = [d for d in dates
+                     if _dt.datetime.strptime(d, "%Y-%m-%d").weekday() in wds]
+        targets, labels = [ch_field], {ch_field: disp}
+    else:
+        tgt = _rt_resolve_target(question)
+        disp = tgt["disp"]
+        targets = None if tgt["kind"] == "all" else [tgt["ch_field"]]
+        labels = None if tgt["kind"] == "all" else {tgt["ch_field"]: disp}
+    if not dates:
+        return {"ok": False, "reason": "요청 기간에 해당 프로그램 방송일이 없습니다(비방송 요일 제외)."}
+    header, rows = None, []
+    for d in dates:
+        tb = _RT.rt_table("concurrent", targets, d, 1, window=window, labels=labels)
+        if header is None and tb["header"]:
+            header = ["날짜"] + tb["header"]
+        for r in tb["rows"]:
+            rows.append([d] + r)
+    if not rows or not header:
+        return {"ok": False, "reason": "기간 내 분단위 데이터 없음"}
+    scope = disp + (f" 편성창 {window[0]}~{window[1]}" if window else "")
+    title = f"분단위 동시사용자(1분) · {scope} · {dates[0]}~{dates[-1]} ({len(dates)}일)"
+    sheet = {"field": "rt_concurrent", "label": f"분단위 동시사용자 — {disp}", "header": header, "rows": rows}
+    return {"ok": True, "payload": {
+        "title": title, "date_from": dates[0], "date_to": dates[-1], "row_label": "분",
+        "programs": [], "row_count": len(rows), "col_count": len(header) - 1, "sheets": [sheet]}}
+
+
+def _build_extract_realtime(question: str) -> dict:
+    """실시간(분단위) 동시사용자 추출 — 행=1분, 열=채널(전체·파워FM·러브FM·고릴라M·픽채널).
+       날짜 지정(보관 범위 내)이면 그 날, 없으면 오늘. 복수일 범위(주간 등)는 range 경로."""
+    import raas_datasource as DSRC
+    import raas_rt_series as _RT
+    _dr = _rt_date_range(question)                     # 복수일 범위 먼저(주간·기간)
+    if _dr:
+        _r = _build_extract_realtime_range(question, _dr)
+        if _r is not None:
+            return _r
     kind = _rt_temporal(question)
     if kind and kind[0] == "unsupported":
         return {"ok": False, "reason": "분단위 다운로드는 특정일 또는 오늘만 지원 — 월/기간 범위는 아직 미지원"}
