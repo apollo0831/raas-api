@@ -308,7 +308,33 @@ def _wants_bulk_dump(question: str) -> bool:
     q = question or ""
     return any(b in q for b in _BULK_MARK) and any(d in q for d in _BREAKDOWN_MARK)
 
+# 시간대별(시간 단위) 활성사용자 — RAAS 미보유. 편성형 채널이라 '프로그램별'로 갈음(온톨로지 공리).
+_HOURLY_MARK = ("시간대별", "시간별", "시간당", "시별", "시간 단위", "hourly")
+_AU_TERM = ("청취자", "활성", "이용자", "사용자 수", "dau", "au")
+
+def _wants_hourly_au(question: str) -> bool:
+    """'시간대별 활성사용자/청취자 수' 의도 — 미보유 granularity. 실시간(동시자·분단위)은 별개."""
+    q = question or ""
+    return (any(k in q for k in _HOURLY_MARK)
+            and any(k in q.lower() for k in _AU_TERM)
+            and not _detect_realtime(q))
+
+def _hourly_au_guidance() -> str:
+    """시간대별 AU 미보유 → 프로그램별 갈음 안내 텍스트(온톨로지 공리에서). 폴백 문구 포함."""
+    try:
+        from raas_onto import get_adapter
+        for ax in get_adapter().get_domain_axioms():
+            if "갈음" in (ax.get("label") or "") or "시간대별 지표" in (ax.get("label") or ""):
+                return ax.get("text") or ""
+    except Exception:
+        pass
+    return ("시간대별 활성사용자는 미보유 — 편성형 채널은 시간대=프로그램이므로 '프로그램별 활성사용자'로 "
+            "갈음 가능함을 밝히고 편성 순서대로 제시·제안할 것(일간 DAU로 조용히 대체 금지).")
+
+
 def detect_extract(question: str) -> bool:
+    if _wants_hourly_au(question):     # 시간대별 AU는 추출표(DAU) 대신 답변경로로 → 한계+대안 안내
+        return False
     t = (question or "").lower()
     return any(s in t for s in _EXTRACT_SIGNAL) or _wants_bulk_dump(question)
 
@@ -2942,6 +2968,8 @@ def assemble(question: str, overlay_ctx=None) -> dict:
     if ent.get("rolling_note"):
         head += ("\n※ 해석: 'MAU/WAU'를 하위 기간(주·일) 추이로 요청 → 캘린더 지표는 월/주 확정값이라 "
                  "같은 개념의 롤링 지표(롤링MAU=dau_r30 등)로 제시. 답변에 이 점을 짧게 안내할 것.")
+    if _wants_hourly_au(question):     # 시간대별 AU 미보유 → 프로그램별 갈음 안내(온톨로지 공리)
+        head += "\n※ " + _hourly_au_guidance()
     context = head + "\n\n" + "\n\n".join(blocks)
     if onto:
         context += "\n\n## 온톨로지 근거\n" + onto

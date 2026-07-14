@@ -315,6 +315,13 @@ print("── 5.4 데이터 추출(extract) ────────────
 check_true("추출 감지: '프로그램별 DAU 뽑아줘'", G.detect_extract("파워FM 프로그램별 DAU 데이터 뽑아줘"))
 check_true("추출 감지: '엑셀로 다운로드'", G.detect_extract("이번주 DAU 엑셀로 다운로드"))
 check_true("추출 오탐 방지: '어제 DAU는?'", not G.detect_extract("어제 DAU는?"))
+# 시간대별 AU 미보유 → 추출표 대신 답변경로(프로그램별 갈음 안내). 온톨로지 공리 기반
+check_true("시간대별 AU 감지", G._wants_hourly_au("시간대별 파워FM 청취자 수 뽑아줘"))
+check_true("시간대별 AU는 extract 우회(답변경로)", not G.detect_extract("시간대별 파워FM 청취자 수 뽑아줘"))
+check_true("실시간 '시간대별 동시사용자'는 hourly-AU 아님(별개)", not G._wants_hourly_au("시간대별 동시사용자 뽑아줘"))
+check_true("갈음 공리 로드(온톨로지)", "프로그램별" in G._hourly_au_guidance() and "미보유" in G._hourly_au_guidance())
+check_true("시간대별 AU 답변에 갈음 안내 주입",
+           "프로그램별" in G.assemble("시간대별 파워FM 청취자 수 추이").get("context", ""))
 # 대량 덤프 의도('전부'+'일자별/프로그램별')도 추출 경로 — '보여줘'라도(과거 '데이터 없음' 회귀 방지)
 check_true("추출 감지: '전체 프로그램별 일자별 전부 보여줘'",
            G.detect_extract("25년 12월 전체 프로그램별 일자별 DAU 전부 보여줘"))
