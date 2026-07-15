@@ -18,6 +18,11 @@ from typing import Optional, List
 from raas_history_db import get_conn
 from raas_onboarding import list_active_profiles
 
+# 현행 intent 12종 taxonomy (grounding._INTENTS 미러 — 통계에서 레거시 intent 노이즈 제외용).
+# grounding에 새 intent 추가 시 여기도 갱신(단순 목록이라 import 결합 대신 미러 유지).
+CANONICAL_INTENTS = ("snapshot", "trend", "compare", "ranking", "correlate", "extract",
+                     "editorial", "schedule", "realtime", "meta", "digest", "concept")
+
 
 def _explode_providers(raw) -> list:
     """providers_used(JSON 리스트 문자열) → provider 이름 리스트. 파싱 실패·빈 값이면 []."""
@@ -229,6 +234,15 @@ def stats_topics(days: int = 30, limit: int = 20) -> dict:
             f"GROUP BY scope ORDER BY c DESC LIMIT ?",
             params + [limit]
         ).fetchall()
+        # 연산유형 — 현행 intent 12종만(레거시 제외). 신규 질의부터 채워짐
+        _iph = ",".join("?" * len(CANONICAL_INTENTS))
+        intent_rows = conn.execute(
+            f"SELECT intent, COUNT(*) AS c, MAX(created_at) AS last_asked "
+            f"FROM query_history "
+            f"{df}{'AND' if df else 'WHERE'} intent IN ({_iph}) "
+            f"GROUP BY intent ORDER BY c DESC",
+            params + list(CANONICAL_INTENTS)
+        ).fetchall()
         # 데이터소스 — providers_used(JSON 리스트) 전개 집계
         prov_raw = conn.execute(
             f"SELECT providers_used, created_at FROM query_history "
@@ -257,6 +271,10 @@ def stats_topics(days: int = 30, limit: int = 20) -> dict:
             {"scope": r["scope"], "count": r["c"], "last_asked": r["last_asked"]}
             for r in scope_rows
         ],
+        "by_intent": [
+            {"intent": r["intent"], "count": r["c"], "last_asked": r["last_asked"]}
+            for r in intent_rows
+        ],
         "by_provider": by_provider,
         "by_question": [
             {"question": r["question"], "count": r["c"], "last_asked": r["last_asked"]}
@@ -283,7 +301,7 @@ def stats_role_metric_matrix(days: int = 30, dimension: str = "metric",
           'dimension':   'metric' | 'scope',
         }
     """
-    if dimension not in ("metric", "scope", "provider"):
+    if dimension not in ("metric", "scope", "provider", "intent"):
         dimension = "metric"
     since = _since(days)
     df, params = _date_filter(since)
@@ -315,23 +333,30 @@ def stats_role_metric_matrix(days: int = 30, dimension: str = "metric",
         cols = [c for c, _ in sorted(col_ctr.items(), key=lambda kv: -kv[1])[:top_n]]
         cell_rows = [{"user_role": k[0], "col": k[1], "c": v} for k, v in cell_ctr.items()]
     else:
+        # intent 차원은 현행 12종 taxonomy로만 필터 — 은퇴 classify_intent 레거시 값 노이즈 제외
+        #   (신규 질의부터 채워짐 · CANONICAL_INTENTS는 grounding._INTENTS 미러)
+        extra, extra_p = "", []
+        if dimension == "intent":
+            ph = ",".join("?" * len(CANONICAL_INTENTS))
+            extra = f" AND intent IN ({ph})"
+            extra_p = list(CANONICAL_INTENTS)
         with get_conn() as conn:
             # 1) 상위 N개 col 선정 (모든 직무 합산 빈도)
             col_rows = conn.execute(
                 f"SELECT {dimension} AS col, COUNT(*) AS c FROM query_history "
                 f"{df}{'AND' if df else 'WHERE'} {dimension} IS NOT NULL "
-                f"AND user_role IS NOT NULL AND intent IS NOT NULL "
+                f"AND user_role IS NOT NULL AND intent IS NOT NULL{extra} "
                 f"GROUP BY {dimension} ORDER BY c DESC LIMIT ?",
-                params + [top_n]
+                params + extra_p + [top_n]
             ).fetchall()
             cols = [r["col"] for r in col_rows]
             # 2) role × col 셀
             cell_rows = conn.execute(
                 f"SELECT user_role, {dimension} AS col, COUNT(*) AS c FROM query_history "
                 f"{df}{'AND' if df else 'WHERE'} {dimension} IS NOT NULL "
-                f"AND user_role IS NOT NULL AND intent IS NOT NULL "
+                f"AND user_role IS NOT NULL AND intent IS NOT NULL{extra} "
                 f"GROUP BY user_role, {dimension}",
-                params
+                params + extra_p
             ).fetchall()
 
     # 매트릭스 구성

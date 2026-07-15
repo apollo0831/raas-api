@@ -565,11 +565,21 @@ function _renderStmByUser(rows) {
 // 인기 주제 탭 — 현행 축(대상 scope · 데이터소스 provider · 질문텍스트)
 function _renderStmTopics(d) {
   const scopes = (d && d.by_scope)    || [];
+  const intents= (d && d.by_intent)   || [];
   const provs  = (d && d.by_provider) || [];
   const qs     = (d && d.by_question) || [];
-  if (!scopes.length && !provs.length && !qs.length) {
+  if (!scopes.length && !intents.length && !provs.length && !qs.length) {
     return `<div class="stm-empty">기간 내 주제 통계가 없습니다.</div>`;
   }
+  const _INTENT_KO = { snapshot:'현황조회', trend:'추이', compare:'비교', ranking:'순위',
+    correlate:'상관·원인', extract:'추출', editorial:'편성연혁', schedule:'편성표',
+    realtime:'실시간', meta:'카탈로그', digest:'특이사항', concept:'개념·정의' };
+  const iBody = intents.map(t => `
+    <tr>
+      <td><span class="stm-tag">${escapeHtml(_INTENT_KO[t.intent] || t.intent)}</span> <span style="color:var(--dim);font-size:var(--fs-xs)">${escapeHtml(t.intent)}</span></td>
+      <td class="stm-num">${_fmtN(t.count)}</td>
+      <td style="font-size:var(--fs-xs);color:var(--dim)">${_fmtDate(t.last_asked)}</td>
+    </tr>`).join('');
   const sBody = scopes.map(s => `
     <tr>
       <td><span class="stm-tag">${escapeHtml(s.label || s.scope)}</span> <span style="color:var(--dim);font-size:var(--fs-xs)">${escapeHtml(s.scope)}</span></td>
@@ -589,6 +599,13 @@ function _renderStmTopics(d) {
       <td style="font-size:var(--fs-xs);color:var(--dim)">${_fmtDate(q.last_asked)}</td>
     </tr>`).join('');
   return `
+    <div class="stm-section">
+      <div class="stm-section-title">연산유형 <span class="stm-section-sub">질의가 무슨 연산인지(intent) 빈도 · 현행 12종</span></div>
+      ${intents.length ? `<table class="stm-table">
+        <thead><tr><th>연산유형</th><th>건수</th><th>마지막</th></tr></thead>
+        <tbody>${iBody}</tbody>
+      </table>` : '<div class="stm-empty">현행 intent 누적 중 — 새 질의가 쌓이면 표시됩니다</div>'}
+    </div>
     <div class="stm-section">
       <div class="stm-section-title">인기 대상 <span class="stm-section-sub">프로그램·채널별 질의 빈도</span></div>
       ${scopes.length ? `<table class="stm-table">
@@ -620,10 +637,12 @@ function setStmHeatDim(dim) {
 
 function _renderStmHeatmap(d) {
   const dim = (d && d.dimension) || 'metric';
-  const dimLabel = dim === 'metric' ? '지표' : dim === 'provider' ? '데이터소스' : 'scope';
+  const dimLabel = dim === 'metric' ? '지표' : dim === 'provider' ? '데이터소스'
+                 : dim === 'intent' ? '연산유형' : 'scope';
   const toolbar = `
     <div class="stm-heat-toolbar">
       <span class="label">차원:</span>
+      <button class="${dim==='intent'?'active':''}" onclick="setStmHeatDim('intent')">연산유형</button>
       <button class="${dim==='metric'?'active':''}" onclick="setStmHeatDim('metric')">지표</button>
       <button class="${dim==='scope' ?'active':''}" onclick="setStmHeatDim('scope')">scope</button>
       <button class="${dim==='provider'?'active':''}" onclick="setStmHeatDim('provider')">데이터소스</button>
