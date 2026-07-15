@@ -11,11 +11,20 @@ RAAS 질의맵 — 읽기 전용 SQL 집계 (Phase 3 Step 1).
   - raas_history_db.get_conn 컨텍스트 매니저 재사용.
 """
 
+import json
 from datetime import datetime, timedelta
 from typing import Optional, List
 
 from raas_history_db import get_conn
 from raas_onboarding import list_active_profiles
+
+
+def _explode_providers(raw) -> list:
+    """providers_used(JSON 리스트 문자열) → provider 이름 리스트. 파싱 실패·빈 값이면 []."""
+    try:
+        return [p for p in (json.loads(raw) if raw else []) if p]
+    except Exception:
+        return []
 
 
 def _since(days: int) -> Optional[str]:
@@ -106,7 +115,7 @@ def stats_by_role(days: int = 30) -> list:
     df, params = _date_filter(since)
     with get_conn() as conn:
         rows = conn.execute(
-            f"SELECT user_role, intent, scope, metric, "
+            f"SELECT user_role, intent, scope, metric, providers_used, "
             f"       input_tokens, output_tokens, user_id "
             f"FROM query_history "
             f"{df}{'AND' if df else 'WHERE'} user_role IS NOT NULL",
@@ -124,6 +133,12 @@ def stats_by_role(days: int = 30) -> list:
         tok_out = [r["output_tokens"] for r in grp if r["output_tokens"] is not None]
         avg_in  = round(sum(tok_in)/len(tok_in),  1) if tok_in  else 0
         avg_out = round(sum(tok_out)/len(tok_out),1) if tok_out else 0
+        # 현행 아키텍처 신호 — 이 직무가 가장 많이 건드린 데이터소스(provider)
+        prov_ctr: dict = {}
+        for r in grp:
+            for p in _explode_providers(r["providers_used"]):
+                prov_ctr[p] = prov_ctr.get(p, 0) + 1
+        top_provider = max(prov_ctr, key=prov_ctr.get) if prov_ctr else None
         out.append({
             "role":       role,
             "queries":    len(grp),
@@ -131,6 +146,7 @@ def stats_by_role(days: int = 30) -> list:
             "top_intent": _mode(grp, "intent"),
             "top_metric": _mode(grp, "metric"),
             "top_scope":  _mode(grp, "scope"),
+            "top_provider": top_provider,     # 현행: 주 데이터소스(providers_used 최빈)
             "avg_input_tokens":  avg_in,
             "avg_output_tokens": avg_out,
         })
@@ -254,7 +270,7 @@ def stats_role_metric_matrix(days: int = 30, dimension: str = "metric",
           'dimension':   'metric' | 'scope',
         }
     """
-    if dimension not in ("metric", "scope"):
+    if dimension not in ("metric", "scope", "provider"):
         dimension = "metric"
     since = _since(days)
     df, params = _date_filter(since)
@@ -267,24 +283,43 @@ def stats_role_metric_matrix(days: int = 30, dimension: str = "metric",
     if not roles:
         roles = ['제작','편성','서비스운영','CP','플랫폼전략','데이터','총괄관리','마케팅(광고·협찬)']
 
-    with get_conn() as conn:
-        # 1) 상위 N개 col 선정 (모든 직무 합산 빈도)
-        col_rows = conn.execute(
-            f"SELECT {dimension} AS col, COUNT(*) AS c FROM query_history "
-            f"{df}{'AND' if df else 'WHERE'} {dimension} IS NOT NULL "
-            f"AND user_role IS NOT NULL AND intent IS NOT NULL "
-            f"GROUP BY {dimension} ORDER BY c DESC LIMIT ?",
-            params + [top_n]
-        ).fetchall()
-        cols = [r["col"] for r in col_rows]
-        # 2) role × col 셀
-        cell_rows = conn.execute(
-            f"SELECT user_role, {dimension} AS col, COUNT(*) AS c FROM query_history "
-            f"{df}{'AND' if df else 'WHERE'} {dimension} IS NOT NULL "
-            f"AND user_role IS NOT NULL AND intent IS NOT NULL "
-            f"GROUP BY user_role, {dimension}",
-            params
-        ).fetchall()
+    if dimension == "provider":
+        # providers_used(JSON 리스트)는 SQL로 못 펼침 → Python에서 원소별 전개 후 집계
+        with get_conn() as conn:
+            rows = conn.execute(
+                f"SELECT user_role, providers_used FROM query_history "
+                f"{df}{'AND' if df else 'WHERE'} providers_used IS NOT NULL "
+                f"AND providers_used != '' AND user_role IS NOT NULL",
+                params
+            ).fetchall()
+        col_ctr: dict = {}
+        cell_ctr: dict = {}
+        for r in rows:
+            for p in _explode_providers(r["providers_used"]):
+                col_ctr[p] = col_ctr.get(p, 0) + 1
+                k = (r["user_role"], p)
+                cell_ctr[k] = cell_ctr.get(k, 0) + 1
+        cols = [c for c, _ in sorted(col_ctr.items(), key=lambda kv: -kv[1])[:top_n]]
+        cell_rows = [{"user_role": k[0], "col": k[1], "c": v} for k, v in cell_ctr.items()]
+    else:
+        with get_conn() as conn:
+            # 1) 상위 N개 col 선정 (모든 직무 합산 빈도)
+            col_rows = conn.execute(
+                f"SELECT {dimension} AS col, COUNT(*) AS c FROM query_history "
+                f"{df}{'AND' if df else 'WHERE'} {dimension} IS NOT NULL "
+                f"AND user_role IS NOT NULL AND intent IS NOT NULL "
+                f"GROUP BY {dimension} ORDER BY c DESC LIMIT ?",
+                params + [top_n]
+            ).fetchall()
+            cols = [r["col"] for r in col_rows]
+            # 2) role × col 셀
+            cell_rows = conn.execute(
+                f"SELECT user_role, {dimension} AS col, COUNT(*) AS c FROM query_history "
+                f"{df}{'AND' if df else 'WHERE'} {dimension} IS NOT NULL "
+                f"AND user_role IS NOT NULL AND intent IS NOT NULL "
+                f"GROUP BY user_role, {dimension}",
+                params
+            ).fetchall()
 
     # 매트릭스 구성
     role_idx = {r: i for i, r in enumerate(roles)}

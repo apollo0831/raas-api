@@ -513,7 +513,7 @@ function _renderStmByRole(rows) {
       <td>${escapeHtml(r.role || '—')}</td>
       <td class="stm-num">${_fmtN(r.queries)}</td>
       <td class="stm-num">${_fmtN(r.users)}</td>
-      <td><span class="stm-tag">${escapeHtml(r.top_intent||'—')}</span></td>
+      <td><span class="stm-tag">${escapeHtml(r.top_provider||'—')}</span></td>
       <td><span class="stm-tag">${escapeHtml(r.top_metric||'—')}</span></td>
       <td><span class="stm-tag">${escapeHtml(r.top_scope||'—')}</span></td>
       <td class="stm-num">${_fmtN(Math.round((r.avg_input_tokens||0)+(r.avg_output_tokens||0)))}</td>
@@ -526,7 +526,7 @@ function _renderStmByRole(rows) {
     <div class="stm-section">
       <div class="stm-section-title">직무별 상세</div>
       <table class="stm-table">
-        <thead><tr><th>직무</th><th>질문수</th><th>사용자</th><th>주 intent</th><th>주 지표</th><th>주 scope</th><th>평균 토큰</th></tr></thead>
+        <thead><tr><th>직무</th><th>질문수</th><th>사용자</th><th>주 데이터소스</th><th>주 지표</th><th>주 scope</th><th>평균 토큰</th></tr></thead>
         <tbody>${tbody}</tbody>
       </table>
     </div>`;
@@ -609,15 +609,17 @@ function setStmHeatDim(dim) {
 
 function _renderStmHeatmap(d) {
   const dim = (d && d.dimension) || 'metric';
+  const dimLabel = dim === 'metric' ? '지표' : dim === 'provider' ? '데이터소스' : 'scope';
   const toolbar = `
     <div class="stm-heat-toolbar">
       <span class="label">차원:</span>
       <button class="${dim==='metric'?'active':''}" onclick="setStmHeatDim('metric')">지표</button>
       <button class="${dim==='scope' ?'active':''}" onclick="setStmHeatDim('scope')">scope</button>
+      <button class="${dim==='provider'?'active':''}" onclick="setStmHeatDim('provider')">데이터소스</button>
     </div>`;
   if (!d || !d.cols || d.cols.length === 0 || d.grand_total === 0) {
     return toolbar + `<div class="stm-empty">데이터가 누적되면 직무별 관심 분포가 드러납니다.<br>
-      현재 ${dim==='metric'?'지표':'scope'} 정보가 있는 질의가 없습니다.</div>`;
+      현재 ${dimLabel} 정보가 있는 질의가 없습니다.</div>`;
   }
   const roles = d.roles, cols = d.cols, cells = d.cells;
   const max = Math.max(...cells.flat(), 1);
@@ -626,7 +628,7 @@ function _renderStmHeatmap(d) {
   const gridStyle = `grid-template-columns: minmax(120px, 1.2fr) repeat(${cols.length}, minmax(60px,1fr)) minmax(60px,0.7fr);`;
   // 헤더 행
   let html = `<div class="stm-heat" style="${gridStyle}">`;
-  html += `<div class="stm-heat-cell head">직무 \\ ${dim==='metric'?'지표':'scope'}</div>`;
+  html += `<div class="stm-heat-cell head">직무 \\ ${dimLabel}</div>`;
   for (const c of cols) html += `<div class="stm-heat-cell head" title="${escapeHtml(c)}">${escapeHtml(c)}</div>`;
   html += `<div class="stm-heat-cell head">합계</div>`;
   // 데이터 행
