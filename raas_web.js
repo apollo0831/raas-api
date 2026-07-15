@@ -824,109 +824,102 @@ function _layoutAndRenderGraph(data) {
     .map(e => ({ ...e, s: nodeById[e.source], t: nodeById[e.target] }))
     .filter(e => e.s && e.t);
 
-  // ── force simulation (~150 iter, Euler) ──
-  const REPULSION = 1400;   // 노드 간 척력 상수
-  const SPRING    = 0.04;   // 엣지 스프링
-  const REST      = 80;     // 엣지 기본 길이
-  const GRAVITY   = 0.012;  // 중앙 끌림
-  const DAMPING   = 0.82;
-  for (let iter = 0; iter < 150; iter++) {
-    // 척력
+  // ── force simulation — 라이브(rAF) + 자동 정착 ──
+  const REPULSION = 1400, SPRING = 0.04, REST = 80, GRAVITY = 0.012, DAMPING = 0.82;
+  function _step(alpha) {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i+1; j < nodes.length; j++) {
         const a = nodes[i], b = nodes[j];
         let dx = b.x - a.x, dy = b.y - a.y;
         let d2 = dx*dx + dy*dy;
-        if (d2 < 1) { dx = Math.random()-0.5; dy = Math.random()-0.5; d2 = 1; }
-        const f = REPULSION / d2;
-        const d = Math.sqrt(d2);
+        if (d2 < 1) { dx = (i*7%10-5)*0.1; dy = (j*7%10-5)*0.1; d2 = 1; }
+        const f = REPULSION / d2, d = Math.sqrt(d2);
         const fx = (dx/d) * f, fy = (dy/d) * f;
-        a.vx -= fx; a.vy -= fy;
-        b.vx += fx; b.vy += fy;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
       }
     }
-    // 인력 (엣지 스프링)
     for (const e of edges) {
       const a = e.s, b = e.t;
       const dx = b.x - a.x, dy = b.y - a.y;
-      const d  = Math.sqrt(dx*dx + dy*dy) || 1;
-      const f  = SPRING * (d - REST) * (1 + Math.log(1 + (e.weight || 1)) * 0.15);
+      const d = Math.sqrt(dx*dx + dy*dy) || 1;
+      const f = SPRING * (d - REST) * (1 + Math.log(1 + (e.weight || 1)) * 0.15);
       const fx = (dx/d) * f, fy = (dy/d) * f;
-      a.vx += fx; a.vy += fy;
-      b.vx -= fx; b.vy -= fy;
+      a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
     }
-    // 중력 (캔버스 중앙으로)
+    for (const n of nodes) { n.vx += (W/2 - n.x) * GRAVITY; n.vy += (H/2 - n.y) * GRAVITY; }
     for (const n of nodes) {
-      n.vx += (W/2 - n.x) * GRAVITY;
-      n.vy += (H/2 - n.y) * GRAVITY;
-    }
-    // 업데이트 + 댐핑
-    for (const n of nodes) {
-      if (n.pinned) continue;
+      if (n.pinned) { n.vx = n.vy = 0; continue; }   // 고정(드래그) 노드는 물리로 안 움직임
       n.vx *= DAMPING; n.vy *= DAMPING;
-      n.x += n.vx; n.y += n.vy;
-      // 화면 안에 가두기
+      n.x += n.vx * alpha; n.y += n.vy * alpha;
       n.x = Math.max(20, Math.min(W-20, n.x));
       n.y = Math.max(20, Math.min(H-20, n.y));
     }
   }
+  for (let iter = 0; iter < 80; iter++) _step(1);   // 초기 정착(좋은 시작 배치)
 
-  // ── SVG 그리기 ──
+  // ── SVG 그리기 (도형은 원점 중심 · 위치는 그룹 transform → 라이브 리드로우가 간단·정확) ──
   let s = '';
-  // edges 먼저
   for (const e of edges) {
     const w = Math.min(4, 0.8 + Math.log(1 + (e.weight || 1)));
-    const op = 0.4;
-    const stroke = '#7f93b0';   // rel — 유형 간 관계(교차 유형만)
-    const dash = '';
-    s += `<line x1="${e.s.x.toFixed(1)}" y1="${e.s.y.toFixed(1)}" x2="${e.t.x.toFixed(1)}" y2="${e.t.y.toFixed(1)}" stroke="${stroke}" stroke-width="${w}" stroke-opacity="${op}"${dash}/>`;
+    s += `<line x1="${e.s.x.toFixed(1)}" y1="${e.s.y.toFixed(1)}" x2="${e.t.x.toFixed(1)}" y2="${e.t.y.toFixed(1)}" stroke="#7f93b0" stroke-width="${w}" stroke-opacity="0.4"/>`;
   }
-  // nodes
   for (const n of nodes) {
-    const c = _graphNodeColor(n);
-    const r = n.r;
+    const c = _graphNodeColor(n), r = n.r;
     let shape = '';
     if (n.type === 'user') {
-      shape = `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${r}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
+      shape = `<circle cx="0" cy="0" r="${r}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
     } else if (n.type === 'role') {
-      // 육각형
-      shape = _hexagonSVG(n.x, n.y, r, c, '#13181f', 2);
+      shape = _hexagonSVG(0, 0, r, c, '#13181f', 2);
     } else if (n.type === 'metric') {
-      // 사각형
-      shape = `<rect x="${(n.x-r).toFixed(1)}" y="${(n.y-r).toFixed(1)}" width="${(r*2).toFixed(1)}" height="${(r*2).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2" rx="3"/>`;
+      shape = `<rect x="${-r}" y="${-r}" width="${(r*2).toFixed(1)}" height="${(r*2).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2" rx="3"/>`;
     } else if (n.type === 'scope') {
-      // 다이아몬드 (회전 사각형)
-      shape = `<polygon points="${n.x},${n.y-r} ${n.x+r},${n.y} ${n.x},${n.y+r} ${n.x-r},${n.y}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
+      shape = `<polygon points="0,${-r} ${r},0 0,${r} ${-r},0" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
     } else if (n.type === 'intent') {
-      // 삼각형 (위 꼭짓점) — 연산유형
-      shape = `<polygon points="${n.x},${(n.y-r).toFixed(1)} ${(n.x+r).toFixed(1)},${(n.y+r*0.8).toFixed(1)} ${(n.x-r).toFixed(1)},${(n.y+r*0.8).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
+      shape = `<polygon points="0,${-r} ${r},${(r*0.8).toFixed(1)} ${-r},${(r*0.8).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
     } else if (n.type === 'provider') {
-      // 알약(pill) — 데이터소스
-      shape = `<rect x="${(n.x-r*1.3).toFixed(1)}" y="${(n.y-r*0.75).toFixed(1)}" width="${(r*2.6).toFixed(1)}" height="${(r*1.5).toFixed(1)}" rx="${(r*0.75).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
+      shape = `<rect x="${(-r*1.3).toFixed(1)}" y="${(-r*0.75).toFixed(1)}" width="${(r*2.6).toFixed(1)}" height="${(r*1.5).toFixed(1)}" rx="${(r*0.75).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
     }
-    s += `<g class="gnode" data-id="${escapeHtml(n.id)}" style="cursor:pointer">${shape}<text class="stm-graph-node-label" x="${n.x.toFixed(1)}" y="${(n.y + r + 12).toFixed(1)}" text-anchor="middle">${escapeHtml(_graphNodeLabel(n))}</text></g>`;
+    s += `<g class="gnode" data-id="${escapeHtml(n.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})" style="cursor:pointer">${shape}<text class="stm-graph-node-label" x="0" y="${(r + 12).toFixed(1)}" text-anchor="middle">${escapeHtml(_graphNodeLabel(n))}</text></g>`;
   }
   svg.innerHTML = s;
 
-  // ── 인터랙션: 클릭 → 사이드 패널 상세, 드래그 → 위치 조정, 휠 → 줌 ──
+  // ── viewBox: 콘텐츠에 맞춰 화면 채우기(모바일에서 특히 크게) ──
   const _nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
-  let viewBox = [0, 0, W, H];
-  let dragging = null, panStart = null;
+  const mobile = (window.innerWidth || 800) < 640;
+  function _fit() {
+    let mnX = 1e9, mnY = 1e9, mxX = -1e9, mxY = -1e9;
+    for (const n of nodes) { mnX = Math.min(mnX, n.x); mnY = Math.min(mnY, n.y); mxX = Math.max(mxX, n.x); mxY = Math.max(mxY, n.y); }
+    if (!isFinite(mnX)) return [0, 0, W, H];
+    const pad = mobile ? 22 : 34;
+    return [mnX - pad, mnY - pad, Math.max(60, mxX - mnX) + pad*2, Math.max(60, mxY - mnY) + pad*2];
+  }
+  let viewBox = _fit();
+  svg.setAttribute('viewBox', viewBox.join(' '));
 
+  // ── 라이브 루프 (자동 정착 + 이전 루프 취소) ──
+  if (_STM.graphRaf) cancelAnimationFrame(_STM.graphRaf);
+  let alpha = 0.3, dragging = null, panStart = null;
+  function _tick() {
+    _step(alpha);
+    _redrawGraphPositions(svg, nodes, edges);
+    alpha *= 0.985;
+    if (dragging) alpha = Math.max(alpha, 0.25);   // 드래그 중엔 계속 활발(이웃이 딸려옴)
+    _STM.graphRaf = (alpha > 0.012 || dragging) ? requestAnimationFrame(_tick) : null;
+  }
+  function _kick(a) { alpha = Math.max(alpha, a || 0.4); if (!_STM.graphRaf) _STM.graphRaf = requestAnimationFrame(_tick); }
+
+  // ── 인터랙션: 노드 드래그(이웃 딸려옴) · 빈곳 팬 · 휠 줌 ──
   function _svgPoint(ev) {
     const r = svg.getBoundingClientRect();
-    const x = (ev.clientX - r.left) / r.width  * viewBox[2] + viewBox[0];
-    const y = (ev.clientY - r.top)  / r.height * viewBox[3] + viewBox[1];
-    return { x, y };
+    return { x: (ev.clientX - r.left) / r.width * viewBox[2] + viewBox[0],
+             y: (ev.clientY - r.top) / r.height * viewBox[3] + viewBox[1] };
   }
-
-  // Pointer 이벤트로 통일 — 마우스·터치·펜 공통(모바일 드래그 지원). SVG는 touch-action:none.
   svg.addEventListener('pointerdown', ev => {
     const target = ev.target.closest('.gnode');
     if (target) {
       ev.preventDefault();
       dragging = _nodeMap[target.dataset.id];
-      if (dragging) { dragging.pinned = true; _showNodeDetail(dragging, nodes, edges); }
+      if (dragging) { dragging.pinned = true; _showNodeDetail(dragging, nodes, edges); _kick(0.5); }
       try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
     } else {
       panStart = { x: ev.clientX, y: ev.clientY, vb: [...viewBox] };
@@ -936,13 +929,12 @@ function _layoutAndRenderGraph(data) {
     if (dragging) {
       ev.preventDefault();
       const p = _svgPoint(ev);
-      dragging.x = p.x; dragging.y = p.y;
-      _redrawGraphPositions(svg, nodes, edges);
+      dragging.x = p.x; dragging.y = p.y;   // 커서에 고정 → 스프링이 이웃을 당김(라이브 루프가 반영)
+      _kick(0.3);
     } else if (panStart) {
       const dx = (ev.clientX - panStart.x) * viewBox[2] / svg.getBoundingClientRect().width;
       const dy = (ev.clientY - panStart.y) * viewBox[3] / svg.getBoundingClientRect().height;
-      viewBox[0] = panStart.vb[0] - dx;
-      viewBox[1] = panStart.vb[1] - dy;
+      viewBox[0] = panStart.vb[0] - dx; viewBox[1] = panStart.vb[1] - dy;
       svg.setAttribute('viewBox', viewBox.join(' '));
     }
   });
@@ -958,6 +950,8 @@ function _layoutAndRenderGraph(data) {
     viewBox[2] *= factor; viewBox[3] *= factor;
     svg.setAttribute('viewBox', viewBox.join(' '));
   }, { passive: false });
+
+  _STM.graphRaf = requestAnimationFrame(_tick);   // 최초 살짝 정착 애니메이션 후 자동 정지
 }
 
 function _graphNodeRadius(n) {
@@ -981,7 +975,7 @@ function _hexagonSVG(cx, cy, r, fill, stroke, sw) {
 }
 
 function _redrawGraphPositions(svg, nodes, edges) {
-  // 엣지·노드 위치만 빠르게 업데이트 (전체 재그리지 않음)
+  // 엣지 좌표 + 노드 그룹 transform만 갱신 (도형은 원점 중심이라 translate만 바꾸면 됨)
   const lines = svg.querySelectorAll('line');
   edges.forEach((e, i) => {
     const ln = lines[i]; if (!ln) return;
@@ -990,29 +984,8 @@ function _redrawGraphPositions(svg, nodes, edges) {
   });
   const groups = svg.querySelectorAll('.gnode');
   nodes.forEach((n, i) => {
-    const g = groups[i]; if (!g) return;
-    const shape = g.firstChild;
-    if (shape.tagName === 'circle') {
-      shape.setAttribute('cx', n.x.toFixed(1));
-      shape.setAttribute('cy', n.y.toFixed(1));
-    } else if (shape.tagName === 'rect') {
-      shape.setAttribute('x', (n.x - n.r).toFixed(1));
-      shape.setAttribute('y', (n.y - n.r).toFixed(1));
-    } else if (shape.tagName === 'polygon' && n.type === 'role') {
-      // 육각형 재계산
-      const pts = [];
-      for (let k = 0; k < 6; k++) {
-        const a = Math.PI/3*k - Math.PI/6;
-        pts.push(`${(n.x + Math.cos(a)*n.r).toFixed(1)},${(n.y + Math.sin(a)*n.r).toFixed(1)}`);
-      }
-      shape.setAttribute('points', pts.join(' '));
-    } else if (shape.tagName === 'polygon') {
-      // 다이아몬드
-      shape.setAttribute('points',
-        `${n.x},${n.y-n.r} ${n.x+n.r},${n.y} ${n.x},${n.y+n.r} ${n.x-n.r},${n.y}`);
-    }
-    const txt = g.querySelector('text');
-    if (txt) { txt.setAttribute('x', n.x.toFixed(1)); txt.setAttribute('y', (n.y + n.r + 12).toFixed(1)); }
+    const g = groups[i];
+    if (g) g.setAttribute('transform', `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
   });
 }
 
