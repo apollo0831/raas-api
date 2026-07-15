@@ -87,6 +87,11 @@ check_true("후속감지: '이 중에'", G._looks_followup("이 중에 특별게
 check_true("독립질문은 후속 아님", not G._looks_followup("어제 컬투쇼 DAU 알려줘"))
 check("독립질문 재작성 안함(게이트)", G.rewrite_followup("어제 컬투쇼 DAU", [{"q":"a","a":"b"}]), ("어제 컬투쇼 DAU", False))
 check("recent 없으면 재작성 안함", G.rewrite_followup("이 중에 특별게스트?", []), ("이 중에 특별게스트?", False))
+# 게스트 특화 — '특별/고정 게스트' 반복판정: 게스트 이력(요일)+판정 공리를 provider가 얇게 제공
+check_true("게스트 반복 감지: '특별게스트'", G._wants_guest_history("컬투쇼 특별게스트 누구야"))
+check_true("독립 지표질의는 게스트반복 아님", not G._wants_guest_history("컬투쇼 어제 DAU"))
+_gh = G._p_guest_history(G.resolve_entities("애프터 클럽 특별게스트 누구야")) or {}
+check_true("guest_history: 이력+판정공리 제공", bool(_gh.get("게스트 이력(날짜·요일·게스트)")) and bool(_gh.get("판정 공리")))
 
 print("── 2. 개념신호 가드(과잉 캡처 방지) ─────────────────")
 for q in ["신규사용자 유치 전략 알려줘", "DAU가 뭐야?", "신규 늘리려면 어떻게 해?", "MAU 높이는 방법", "안녕하세요"]:

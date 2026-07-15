@@ -722,6 +722,55 @@ def _p_field_projection(ent):
     return {"fields": fields, "rows": rows} if rows else None
 
 
+# 게스트 반복 판정(특별 vs 고정) 신호
+_GUEST_RECUR_SIGNAL = ("특별게스트", "특별 게스트", "고정게스트", "고정 게스트", "일회성",
+                       "1회성", "특집 게스트", "특집게스트", "매주 나오", "매주 고정",
+                       "매주 출연", "반복 게스트", "정규 게스트", "게스트 패턴", "고정 출연")
+_WD_KO = ["월", "화", "수", "목", "금", "토", "일"]
+
+def _wants_guest_history(q: str) -> bool:
+    return any(s in (q or "") for s in _GUEST_RECUR_SIGNAL)
+
+def _p_guest_history(ent):
+    """[program] 게스트 이력(최근 ~6주 guestname×날짜·요일) + 고정/특별 판정 공리 + RegularGuest 명단.
+       특별=반복 안 하는 게스트라는 판정은 LLM이 공리로 수행(규칙·숫자 하드코딩 없음) — provider는 얇게 이력만."""
+    import datetime as _dt
+    code = ent.get("code")
+    if not code or ent.get("scope_kind") != "program":
+        return None
+    hist = S._load_program_history(code, 45) or ent.get("history") or []
+    rows = []
+    for h in hist:
+        g = (h.get("guestname") or "").strip()
+        d = (h.get("DATE") or "").strip()
+        if not (g and d):
+            continue
+        try:
+            wd = _WD_KO[_dt.datetime.strptime(d.replace("-", "/"), "%Y/%m/%d").weekday()]
+        except Exception:
+            wd = ""
+        rows.append(f"{d}({wd}) {g}")
+    if not rows:
+        return None
+    out = {"게스트 이력(날짜·요일·게스트)": rows[-42:]}   # 최근 6주
+    try:
+        from raas_onto import get_adapter
+        a = get_adapter()
+        regs = a._get_regular_guest_names() if hasattr(a, "_get_regular_guest_names") else set()
+        appearing = sorted({nm for nm in regs for r in rows if nm and nm in r})
+        if appearing:
+            out["온톨로지 등록 고정게스트(hasRegularGuest)"] = appearing
+        pol = a.get_guestname_policy(code)
+        if pol and pol.get("comment"):
+            out["게스트 정책"] = pol["comment"]
+        for ax in a.get_domain_axioms():
+            if "게스트" in (ax.get("label", "") + ax.get("text", "")):
+                out.setdefault("판정 공리", []).append(ax["text"])
+    except Exception as e:
+        print(f"[guest_history] {e}")
+    return out
+
+
 # 채널 코드 → 소속 프로그램 코드 프리픽스 (X00 집계코드는 제외 처리)
 _CH_PREFIX = {"F00": ("F",), "L00": ("L", "M"), "G00": ("G",), "P00": ("P",),
               "T00": ("F", "L", "M", "G", "P")}
@@ -1516,6 +1565,9 @@ PROVIDERS = [
     {"name": "engagement", "needs": "program",
      "desc": "프로그램별 문자(SMS)·공감로그(GG) 참여(과거 1년, 평일) — 참여 건수·참여자수(_WR)·1인당(_RATIO)·합계(TOTAL). '컬투쇼 문자 참여·공감로그 몇 건·프로그램별 참여 순위·1인당 참여' 등",
      "fetch": _p_engagement},
+    {"name": "guest_history", "needs": "program",
+     "desc": "게스트 이력(최근 6주 날짜·요일·게스트) + 고정/특별 판정 공리 + 등록 고정게스트. '특별 게스트·고정 게스트·일회성/특집 게스트·매주 나오는 게스트' 등 반복 패턴 질의",
+     "fetch": _p_guest_history},
     {"name": "program_demographics", "needs": "program",
      "desc": "프로그램별 일자별 청취자 성별·연령대·디바이스 분포(비율%, 룩업). PERIOD 청취시작/1분이상/10분이상. '컬투쇼 어제 연령대·성별·디바이스 분포·주 시청층' 등",
      "fetch": _p_program_demographics},
@@ -3073,6 +3125,8 @@ def _assemble_core(question: str, overlay_ctx=None) -> dict:
         names = ["today_lineup"] + names      # '오늘 게스트/편성' 질의는 당일 broadplan 반드시 포함
     if _wants_engagement(question) and "engagement" not in names:
         names = ["engagement"] + names        # '문자·공감로그 참여' 질의는 참여 데이터 반드시 포함
+    if _wants_guest_history(question) and ent.get("scope_kind") == "program" and "guest_history" not in names:
+        names = ["guest_history"] + names     # '특별/고정 게스트' 질의는 게스트 이력+판정 공리 반드시 포함
     if _wants_program_demo(question) and ent.get("scope_kind") == "program" and "program_demographics" not in names:
         names = ["program_demographics"] + names   # 프로그램 성별·연령·디바이스 분포 질의
     if _wants_correlate(question) and ent.get("scope_kind") == "program" and "metric_correlate" not in names:
