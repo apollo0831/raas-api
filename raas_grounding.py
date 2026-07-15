@@ -2007,23 +2007,39 @@ def _assemble_compare(question, ents, overlay_ctx=None) -> dict:
     period = _detect_period(question)
     metric = S.extract_kpi_metric(question)
     blocks, kpi_fields = [], []
+    _guest_cmp = _wants_guest_history(question)   # 다중 프로그램 특별/고정 게스트 비교
+    _gh_axiom_added = False
+    _used = ["compare_kpi", "compare_timeseries"]
     for e in ents:
         row = S._load_program_latest_row(e["code"])
         hist = S._load_program_history(e["code"], win)
         el = {"code": e["code"], "row": row, "history": hist, "scope_kind": e["kind"]}
-        kpi = _p_program_kpi(el) or {}
-        if not kpi_fields:
-            kpi_fields = list(kpi.keys())
-        blocks.append(f"### {e['name']}({e['code']}) — 최신 KPI 스냅샷\n"
-                      + json.dumps(kpi, ensure_ascii=False, default=str))
-        blocks.append(f"### {e['name']}({e['code']}) — 시계열(최근 {win}일, CSV)\n"
-                      + _ts_csv(hist))
+        # 게스트 비교 질의는 KPI·시계열 블록을 생략(게스트 이력만) — 표 규모·혼선 방지
+        if not _guest_cmp:
+            kpi = _p_program_kpi(el) or {}
+            if not kpi_fields:
+                kpi_fields = list(kpi.keys())
+            blocks.append(f"### {e['name']}({e['code']}) — 최신 KPI 스냅샷\n"
+                          + json.dumps(kpi, ensure_ascii=False, default=str))
+            blocks.append(f"### {e['name']}({e['code']}) — 시계열(최근 {win}일, CSV)\n"
+                          + _ts_csv(hist))
         if _wants_program_demo(question):      # 성별·연령·디바이스 비교 — 채널/프로그램별 분포 포함
             dm = _p_program_demographics({"code": e["code"], "_question": question,
                                           "scope_kind": e["kind"], "lookback": lookback})
             if dm:
                 blocks.append(f"### {e['name']}({e['code']}) — 프로필 분포(성별·연령·디바이스)\n"
                               + json.dumps(dm, ensure_ascii=False, default=str))
+        if _guest_cmp and e["kind"] == "program":   # 프로그램별 게스트 이력·고정/특별 판정
+            gh = _p_guest_history({"code": e["code"], "scope_kind": "program", "_question": question})
+            if gh:
+                if _gh_axiom_added:
+                    gh.pop("판정 공리", None)          # 공리는 한 번만(중복 방지)
+                else:
+                    _gh_axiom_added = "판정 공리" in gh
+                if "guest_history" not in _used:
+                    _used.append("guest_history")
+                blocks.append(f"### {e['name']}({e['code']}) — 게스트 이력·고정/특별 판정\n"
+                              + json.dumps(gh, ensure_ascii=False, default=str))
     head = ("비교 분석: " + " vs ".join(f"{e['name']}({e['code']})" for e in ents)
             + f" · 기간 힌트: {_PERIOD_KO.get(period, '일간')} · 비교지표: {metric or '핵심 지표'}")
     context = head + "\n\n" + "\n\n".join(blocks)
@@ -2036,9 +2052,9 @@ def _assemble_compare(question, ents, overlay_ctx=None) -> dict:
         context += "\n\n" + otext
     return {
         "ok": True, "context": context,
-        "providers_used": ["compare_kpi", "compare_timeseries"],
+        "providers_used": _used,
         "entities_brief": head,
-        "provenance": {"providers": ["compare_kpi", "compare_timeseries"], "scope": "compare",
+        "provenance": {"providers": _used, "scope": "compare",
                        "entities": [e["code"] for e in ents], "overlay_items": overlay_ids},
     }
 
