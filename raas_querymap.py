@@ -470,15 +470,20 @@ def co_query_pairs(days: int = 30, dimension: str = "metric",
 
 # ── 8) 사용자-질의 관계 그래프 빌더 ────────────────────────
 def build_graph(days: int = 30, max_users: int = 30,
-                max_metrics: int = 12, max_scopes: int = 12) -> dict:
+                max_metrics: int = 12, max_scopes: int = 12,
+                max_intents: int = 12, max_providers: int = 12) -> dict:
     """관리자용 관계 그래프 데이터.
 
-    노드 종류: user | role | metric | scope
+    노드 종류: user | role | scope | intent(연산유형) | provider(데이터소스) | metric(KPI)
     엣지 종류:
       - membership : user → role
-      - interest   : user → metric/scope (weight=count)
-      - co_query   : metric — metric, scope — scope (weight=동반 빈도)
+      - interest   : user → scope/metric (weight=count)
+      - operation  : user → intent   (weight=count)  [Phase A]
+      - data       : user → provider (weight=count)  [Phase A]
+      - co_query   : scope — scope, metric — metric (weight=동반 빈도)
       - similar    : user — user (weight=cosine, 같은 role 사용자 ≥3명일 때만)
+
+    질의 facet 체인: 누가(user/role) × 무엇을(scope) × 어떻게(intent) × 무슨 데이터로(provider).
 
     Returns:
       {nodes: [...], edges: [...], meta: {...}}
@@ -521,12 +526,36 @@ def build_graph(days: int = 30, max_users: int = 30,
         ).fetchall()
         scopes = [(r["scope"], r["c"]) for r in scope_rows]
 
-        # ── user × metric / user × scope 빈도 ──
-        uid_set     = {u["user_id"] for u in users}
-        metric_set  = {m for m, _ in metrics}
-        scope_set   = {s for s, _ in scopes}
+        # ── 상위 연산유형(intent, 현행 12종만) ── [Phase A]
+        _iph = ",".join("?" * len(CANONICAL_INTENTS))
+        intent_rows = conn.execute(
+            f"SELECT intent, COUNT(*) AS c FROM query_history "
+            f"{df}{'AND' if df else 'WHERE'} intent IN ({_iph}) "
+            f"GROUP BY intent ORDER BY c DESC LIMIT ?",
+            params + list(CANONICAL_INTENTS) + [max_intents]
+        ).fetchall()
+        intents = [(r["intent"], r["c"]) for r in intent_rows]
+
+        # ── 상위 데이터소스(provider, providers_used 전개) ── [Phase A]
+        prov_raw = conn.execute(
+            f"SELECT providers_used FROM query_history "
+            f"{df}{'AND' if df else 'WHERE'} providers_used IS NOT NULL AND providers_used != ''",
+            params
+        ).fetchall()
+        _pcount: dict = {}
+        for r in prov_raw:
+            for p in _explode_providers(r["providers_used"]):
+                _pcount[p] = _pcount.get(p, 0) + 1
+        providers = sorted(_pcount.items(), key=lambda kv: -kv[1])[:max_providers]
+
+        # ── user × (metric/scope/intent/provider) 빈도 ──
+        uid_set      = {u["user_id"] for u in users}
+        metric_set   = {m for m, _ in metrics}
+        scope_set    = {s for s, _ in scopes}
+        intent_set   = {i for i, _ in intents}
+        provider_set = {p for p, _ in providers}
         edge_rows = conn.execute(
-            f"SELECT user_id, metric, scope FROM query_history "
+            f"SELECT user_id, metric, scope, intent, providers_used FROM query_history "
             f"{df}{'AND' if df else 'WHERE'} intent IS NOT NULL "
             f"AND user_id IS NOT NULL AND user_role IS NOT NULL",
             params
@@ -552,6 +581,10 @@ def build_graph(days: int = 30, max_users: int = 30,
         nodes.append({"id": f"m:{m}", "type": "metric", "label": m, "weight": c})
     for s, c in scopes:
         nodes.append({"id": f"s:{s}", "type": "scope", "label": s, "weight": c})
+    for iv, c in intents:      # [Phase A] 연산유형 노드
+        nodes.append({"id": f"i:{iv}", "type": "intent", "label": iv, "weight": c})
+    for pv, c in providers:    # [Phase A] 데이터소스 노드
+        nodes.append({"id": f"p:{pv}", "type": "provider", "label": pv, "weight": c})
 
     # 엣지 빌드
     edges: list = []
@@ -578,6 +611,25 @@ def build_graph(days: int = 30, max_users: int = 30,
     for (uid, s), w in us_count.items():
         edges.append({"source": f"u:{uid}", "target": f"s:{s}",
                       "type": "interest", "weight": w})
+
+    # operation: user → intent, data: user → provider (집계) [Phase A]
+    ui_count: dict = {}
+    up_count: dict = {}
+    for r in edge_rows:
+        uid = str(r["user_id"])
+        if uid not in uid_set:
+            continue
+        if r["intent"] in intent_set:
+            ui_count[(uid, r["intent"])] = ui_count.get((uid, r["intent"]), 0) + 1
+        for p in _explode_providers(r["providers_used"]):
+            if p in provider_set:
+                up_count[(uid, p)] = up_count.get((uid, p), 0) + 1
+    for (uid, iv), w in ui_count.items():
+        edges.append({"source": f"u:{uid}", "target": f"i:{iv}",
+                      "type": "operation", "weight": w})
+    for (uid, pv), w in up_count.items():
+        edges.append({"source": f"u:{uid}", "target": f"p:{pv}",
+                      "type": "data", "weight": w})
 
     # co_query: metric—metric, scope—scope (별도 분리)
     for p in co_query_pairs(days=days, dimension="metric", min_support=1, top_n=30):
@@ -617,11 +669,13 @@ def build_graph(days: int = 30, max_users: int = 30,
         "edges": edges,
         "meta": {
             "days": days,
-            "n_users":   len(users),
-            "n_metrics": len(metrics),
-            "n_scopes":  len(scopes),
-            "n_roles":   sum(1 for n in nodes if n["type"] == "role"),
-            "n_edges":   len(edges),
+            "n_users":     len(users),
+            "n_metrics":   len(metrics),
+            "n_scopes":    len(scopes),
+            "n_intents":   len(intents),
+            "n_providers": len(providers),
+            "n_roles":     sum(1 for n in nodes if n["type"] == "role"),
+            "n_edges":     len(edges),
         },
     }
 

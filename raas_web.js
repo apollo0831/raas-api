@@ -696,11 +696,18 @@ const _GRAPH_ROLE_COLORS = {
 };
 
 function _graphNodeColor(node) {
-  if (node.type === 'role')   return _GRAPH_ROLE_COLORS[node.label] || '#8b95a5';
-  if (node.type === 'user')   return _GRAPH_ROLE_COLORS[node.role]  || '#8b95a5';
-  if (node.type === 'metric') return 'var(--accent)';
-  if (node.type === 'scope')  return 'var(--green)';
+  if (node.type === 'role')     return _GRAPH_ROLE_COLORS[node.label] || '#8b95a5';
+  if (node.type === 'user')     return _GRAPH_ROLE_COLORS[node.role]  || '#8b95a5';
+  if (node.type === 'metric')   return 'var(--accent)';
+  if (node.type === 'scope')    return 'var(--green)';
+  if (node.type === 'intent')   return '#a855f7';   // 연산유형 — 보라
+  if (node.type === 'provider') return '#f59e0b';   // 데이터소스 — 주황
   return 'var(--sub)';
+}
+// 그래프 노드 라벨 — intent는 한글로
+function _graphNodeLabel(n) {
+  const raw = n.type === 'intent' ? (_INTENT_KO[n.label] || n.label) : n.label;
+  return raw.length > 14 ? raw.slice(0, 13) + '…' : raw;
 }
 
 function _renderStmGraph(d) {
@@ -718,12 +725,16 @@ function _renderStmGraph(d) {
         <div class="meta">최근 ${_STM.days || 0}일 · 노드 ${d.nodes.length} · 엣지 ${d.edges.length}</div>
         <div class="row"><span class="k">사용자</span><span>${meta.n_users||0}</span></div>
         <div class="row"><span class="k">직무</span><span>${meta.n_roles||0}</span></div>
-        <div class="row"><span class="k">지표</span><span>${meta.n_metrics||0}</span></div>
+        <div class="row"><span class="k">연산유형</span><span>${meta.n_intents||0}</span></div>
+        <div class="row"><span class="k">데이터소스</span><span>${meta.n_providers||0}</span></div>
         <div class="row"><span class="k">대상</span><span>${meta.n_scopes||0}</span></div>
+        <div class="row"><span class="k">지표(KPI)</span><span>${meta.n_metrics||0}</span></div>
         <div class="stm-graph-legend">
-          <span class="lg"><span class="dot" style="background:#4f8ef7"></span>지표</span>
-          <span class="lg"><span class="dot" style="background:#34c78a"></span>대상</span>
           <span class="lg"><span class="dot" style="background:#8b95a5"></span>사용자/직무</span>
+          <span class="lg"><span class="dot" style="background:#a855f7"></span>연산유형</span>
+          <span class="lg"><span class="dot" style="background:#f59e0b"></span>데이터소스</span>
+          <span class="lg"><span class="dot" style="background:#34c78a"></span>대상</span>
+          <span class="lg"><span class="dot" style="background:#4f8ef7"></span>지표</span>
         </div>
         <div style="margin-top:14px;font-size:var(--fs-xs);color:var(--dim)">노드 드래그 · 휠 줌</div>
       </div>
@@ -813,6 +824,8 @@ function _layoutAndRenderGraph(data) {
     const stroke = e.type === 'similar' ? '#a78bfa'
                  : e.type === 'co_query' ? '#1ec9ff'
                  : e.type === 'membership' ? '#8b95a5'
+                 : e.type === 'operation' ? '#a855f7'
+                 : e.type === 'data' ? '#f59e0b'
                  : '#4f8ef7';
     const dash = e.type === 'similar' ? ' stroke-dasharray="3 3"' : '';
     s += `<line x1="${e.s.x.toFixed(1)}" y1="${e.s.y.toFixed(1)}" x2="${e.t.x.toFixed(1)}" y2="${e.t.y.toFixed(1)}" stroke="${stroke}" stroke-width="${w}" stroke-opacity="${op}"${dash}/>`;
@@ -833,8 +846,14 @@ function _layoutAndRenderGraph(data) {
     } else if (n.type === 'scope') {
       // 다이아몬드 (회전 사각형)
       shape = `<polygon points="${n.x},${n.y-r} ${n.x+r},${n.y} ${n.x},${n.y+r} ${n.x-r},${n.y}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
+    } else if (n.type === 'intent') {
+      // 삼각형 (위 꼭짓점) — 연산유형
+      shape = `<polygon points="${n.x},${(n.y-r).toFixed(1)} ${(n.x+r).toFixed(1)},${(n.y+r*0.8).toFixed(1)} ${(n.x-r).toFixed(1)},${(n.y+r*0.8).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
+    } else if (n.type === 'provider') {
+      // 알약(pill) — 데이터소스
+      shape = `<rect x="${(n.x-r*1.3).toFixed(1)}" y="${(n.y-r*0.75).toFixed(1)}" width="${(r*2.6).toFixed(1)}" height="${(r*1.5).toFixed(1)}" rx="${(r*0.75).toFixed(1)}" fill="${c}" stroke="#13181f" stroke-width="2"/>`;
     }
-    s += `<g class="gnode" data-id="${escapeHtml(n.id)}" style="cursor:pointer">${shape}<text class="stm-graph-node-label" x="${n.x.toFixed(1)}" y="${(n.y + r + 12).toFixed(1)}" text-anchor="middle">${escapeHtml(n.label.length > 14 ? n.label.slice(0,13)+'…' : n.label)}</text></g>`;
+    s += `<g class="gnode" data-id="${escapeHtml(n.id)}" style="cursor:pointer">${shape}<text class="stm-graph-node-label" x="${n.x.toFixed(1)}" y="${(n.y + r + 12).toFixed(1)}" text-anchor="middle">${escapeHtml(_graphNodeLabel(n))}</text></g>`;
   }
   svg.innerHTML = s;
 
@@ -895,6 +914,8 @@ function _graphNodeRadius(n) {
   if (n.type === 'role')   return Math.min(20, 11 + Math.log(1 + w));
   if (n.type === 'metric') return Math.min(13, 6 + Math.log(1 + w));
   if (n.type === 'scope')  return Math.min(13, 6 + Math.log(1 + w));
+  if (n.type === 'intent')   return Math.min(15, 8 + Math.log(1 + w));
+  if (n.type === 'provider') return Math.min(12, 6 + Math.log(1 + w));
   return 8;
 }
 
