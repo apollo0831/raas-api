@@ -384,6 +384,14 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 .wk-chip b{color:var(--red);margin-left:3px}
 .wk-rate{color:var(--dim);margin-left:5px}
 .wk-badge{font-size:11px;background:rgba(242,107,107,.15);color:var(--red);border-radius:6px;padding:1px 6px;font-weight:600}
+/* 아쉬움 분포 히트맵 */
+.fb-heat{border-collapse:collapse;font-size:var(--fs-xs);width:auto}
+.fb-heat th,.fb-heat td{border:1px solid var(--line);padding:4px 8px;text-align:center;white-space:nowrap}
+.fb-heat thead th,.fb-heat tbody th{background:var(--bg2);color:var(--text2);font-weight:600}
+.fb-heat tbody th{text-align:right;position:sticky;left:0}
+.fb-heat td{color:var(--text);font-variant-numeric:tabular-nums;min-width:44px}
+.fb-heat .fb-rate{font-size:9px;opacity:.75}
+.fb-heat .fb-tot{background:var(--bg2);font-weight:700}
 .imp-ab{display:flex;gap:12px;margin:10px 0}
 .imp-ab-col{flex:1;min-width:0}
 .imp-ab-col .imp-orig{margin:0}

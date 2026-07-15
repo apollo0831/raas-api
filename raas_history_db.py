@@ -746,6 +746,60 @@ def feedback_weakness(days=30, limit=15) -> list:
         return out
 
 
+_DIST_AXIS_COL = {"scope": "scope", "intent": "intent",
+                  "role": "user_role", "user_role": "user_role"}
+
+def _dist_vals(row, axis):
+    """행에서 축 값 리스트 추출. provider축은 providers_used(JSON 리스트)를 원소별 전개,
+       그 외는 단일 컬럼값. 미채움('' 또는 None)은 None으로(셀 집계에서 제외)."""
+    if axis in ("provider", "providers_used"):
+        raw = row["providers_used"] if "providers_used" in row.keys() else None
+        try:
+            lst = json.loads(raw) if raw else []
+        except Exception:
+            lst = []
+        return [p for p in lst if p] or [None]
+    col = _DIST_AXIS_COL.get(axis, axis)
+    v = row[col] if col in row.keys() else None
+    return [v if v not in (None, "") else None]
+
+def feedback_distribution(axis_x="intent", axis_y="scope", days=30, max_x=8, max_y=12) -> dict:
+    """아쉬움 분포 히트맵 매트릭스 — (axis_y 행 × axis_x 열) 셀별 {neg, tot, rate}.
+       축 후보: scope(프로그램/채널)·intent(질의유형)·role(직무)·provider(데이터소스, 리스트 전개).
+       아쉬움(neg)이 하나라도 있는 행/열만 상위 N개 노출(집중 지점을 보는 목적). rate=neg/tot(%)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT scope, intent, user_role, providers_used, feedback "
+            "FROM query_history WHERE created_at>=datetime('now',?)",
+            (f'-{int(days)} days',)).fetchall()
+    cells, xtot, ytot = {}, {}, {}
+    for r in rows:
+        neg = 1 if r["feedback"] == -1 else 0
+        for yv in _dist_vals(r, axis_y):
+            if yv is None:
+                continue
+            for xv in _dist_vals(r, axis_x):
+                if xv is None:
+                    continue
+                c = cells.setdefault((yv, xv), [0, 0]); c[0] += neg; c[1] += 1
+                a = xtot.setdefault(xv, [0, 0]); a[0] += neg; a[1] += 1
+                b = ytot.setdefault(yv, [0, 0]); b[0] += neg; b[1] += 1
+    # 아쉬움 있는 축값만, neg 많은 순 상위 N
+    x_keys = [k for k, v in sorted(xtot.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))
+              if v[0] > 0][:max_x]
+    y_keys = [k for k, v in sorted(ytot.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))
+              if v[0] > 0][:max_y]
+    def cell(y, x):
+        n, t = cells.get((y, x), [0, 0])
+        return {"x": x, "neg": n, "tot": t, "rate": round(n / t * 100, 1) if t else 0.0}
+    matrix = [{"y": y, "y_neg": ytot[y][0], "y_tot": ytot[y][1],
+               "cells": [cell(y, x) for x in x_keys]} for y in y_keys]
+    return {"axis_x": axis_x, "axis_y": axis_y, "days": days,
+            "x_keys": x_keys,
+            "col_totals": [{"x": x, "neg": xtot[x][0], "tot": xtot[x][1]} for x in x_keys],
+            "matrix": matrix}
+
+
 def feedback_negative_open(days=30, limit=25) -> list:
     """개선 시도가 아직 없는 '아쉬움' 질의 — 검토자가 바로 착수할 수 있는 약점 신호."""
     with get_conn() as conn:

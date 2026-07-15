@@ -2717,6 +2717,14 @@ async function _loadReviewQueue() {
         </div>
       </div>` : '';
     const dashHtml = _funnelDashboard(d.funnel);
+    // 🗺 아쉬움 분포 맵 — 프로그램 1차원을 넘어 2축(프로그램·질의유형·직무·데이터소스) 히트맵
+    const heatHtml = `<div class="imp-sec-hd">🗺 아쉬움 분포 맵 · 전체 기간 · 색=아쉬움율 · 숫자=👎/전체</div>
+      <div style="margin:0 14px 6px;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="hf-tab active" onclick="_setFbAxis('intent','scope',this)">프로그램 × 질의유형</button>
+        <button class="hf-tab" onclick="_setFbAxis('user_role','scope',this)">프로그램 × 직무</button>
+        <button class="hf-tab" onclick="_setFbAxis('scope','provider',this)">데이터소스 × 프로그램</button>
+      </div>
+      <div id="fbHeatmap" style="margin:0 14px 12px"></div>`;
     // 관리자 전용 승격 바 — 항상 노출(승인 0건·큐 비어도 닿을 수 있게)
     const promoteBar = (RAAS_USER && RAAS_USER.is_admin)
       ? `<div style="margin:0 14px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -2724,10 +2732,10 @@ async function _loadReviewQueue() {
           <span class="imp-mean" style="margin:0">승인 지식 ${(d.funnel && d.funnel.total_approved) || 0}건 → 온톨로지 졸업 · 관리자 전용</span>
         </div>` : '';
     if (!_anyQueue) {
-      body.innerHTML = styleHtml + dashHtml + promoteBar + '<div class="hist-empty-msg" style="margin-top:8px">검토 대기·약점 신호가 없습니다.</div>';
-      _loadStylePolicy(); return;
+      body.innerHTML = styleHtml + dashHtml + heatHtml + promoteBar + '<div class="hist-empty-msg" style="margin-top:8px">검토 대기·약점 신호가 없습니다.</div>';
+      _loadStylePolicy(); _renderFeedbackHeatmap(); return;
     }
-    let html = styleHtml + dashHtml + promoteBar;
+    let html = styleHtml + dashHtml + heatHtml + promoteBar;
     // 약점 신호 — 👎 집계 + 미개선 아쉬움 질의(클릭→바로 개선 착수)
     if (wk.length || neg.length) {
       html += '<div class="imp-sec-hd">⚠ 약점 신호 · 최근 30일 \'아쉬움\' 피드백 — 클릭해 바로 개선 착수</div>';
@@ -2833,7 +2841,48 @@ async function _loadReviewQueue() {
     }
     body.innerHTML = html;
     _loadStylePolicy();
+    _renderFeedbackHeatmap();
   } catch (e) { body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`; }
+}
+
+// 🗺 아쉬움 분포 히트맵 — 축 토글(프로그램·질의유형·직무·데이터소스), 색=아쉬움율·숫자=👎/전체
+let _fbAxis = { x: 'intent', y: 'scope', days: 3650 };   // 기본: 프로그램(행) × 질의유형(열), 전체 기간
+const _FB_INTENT_KO = { grounded: '현황/일반', trend: '추이분석', extract: '추출', anomaly: '이상탐지',
+  health: '건강도', compare: '비교', ranking: '순위', realtime: '실시간', digest: '특이사항',
+  meta: '메타', guest_search: '게스트검색' };
+function _fbAxisVal(axis, v) { return axis === 'intent' ? (_FB_INTENT_KO[v] || v) : v; }
+function _setFbAxis(x, y, btn) {
+  _fbAxis.x = x; _fbAxis.y = y;
+  if (btn) { btn.parentElement.querySelectorAll('.hf-tab').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+  _renderFeedbackHeatmap();
+}
+async function _renderFeedbackHeatmap() {
+  const box = document.getElementById('fbHeatmap');
+  if (!box) return;
+  box.innerHTML = '<div class="imp-mean">불러오는 중…</div>';
+  try {
+    const r = await _authedFetch('/api/feedback/dist', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x: _fbAxis.x, y: _fbAxis.y, days: _fbAxis.days }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '로드 실패');
+    if (!(d.matrix || []).length) { box.innerHTML = '<div class="imp-mean">표시할 아쉬움 분포가 없습니다.</div>'; return; }
+    const xs = d.x_keys.map((x, i) => (d.x_labels && d.x_labels[i]) || _fbAxisVal(d.axis_x, x));
+    let h = '<div style="overflow-x:auto"><table class="fb-heat"><thead><tr><th></th>'
+      + xs.map(x => `<th>${escapeHtml(x)}</th>`).join('') + '<th>계</th></tr></thead><tbody>';
+    for (const row of d.matrix) {
+      h += `<tr><th>${escapeHtml(row.y_label || _fbAxisVal(d.axis_y, row.y))}</th>`;
+      for (const c of row.cells) {
+        const a = c.tot ? Math.min(0.85, 0.12 + c.rate / 100 * 0.8) : 0;   // 아쉬움율↑ = 빨강 진하게
+        const bg = c.neg ? `background:rgba(220,38,38,${a.toFixed(2)})` : '';
+        const txt = c.tot ? `${c.neg}/${c.tot}<div class="fb-rate">${c.rate}%</div>` : '·';
+        h += `<td style="${bg}" title="👎 ${c.neg} / 전체 ${c.tot} (${c.rate}%)">${txt}</td>`;
+      }
+      h += `<td class="fb-tot">👎${row.y_neg}<div class="fb-rate">/${row.y_tot}</div></td></tr>`;
+    }
+    h += '</tbody></table></div>';
+    box.innerHTML = h;
+  } catch (e) { box.innerHTML = `<div class="imp-mean">로드 실패: ${escapeHtml(e.message)}</div>`; }
 }
 // ✍ 답변 스타일 정책 — 불러오기/글자수/저장
 let _styleMax = 1000;

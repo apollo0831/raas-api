@@ -36,7 +36,8 @@ from raas_history_db import (init_db, save_query, get_history, get_popular,
                              add_data_request, add_improvement, set_improvement_verdict,
                              list_improvements, list_data_requests,
                              get_knowledge_items_by_ids, review_improvement, update_data_request,
-                             feedback_weakness, feedback_negative_open, knowledge_effect, loop_funnel,
+                             feedback_weakness, feedback_negative_open, feedback_distribution,
+                             knowledge_effect, loop_funnel,
                              list_approved_knowledge, retire_knowledge_item, reclassify_knowledge,
                              list_my_knowledge, retire_my_knowledge,
                              add_uploaded_data, list_my_uploads, retire_my_upload,
@@ -1694,6 +1695,31 @@ class RAASHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
 
+    def _post_feedback_dist(self, body):
+        # 아쉬움 분포 히트맵 — 축 토글(scope·intent·role·provider). 통계 열람 권한.
+        user = self._require_stats_viewer()
+        if not user:
+            return
+        try:
+            ax = body.get("x") or "intent"
+            ay = body.get("y") or "scope"
+            days = int(body.get("days") or 30)
+            d = feedback_distribution(ax, ay, days)
+
+            def lbl(axis, v):   # scope축은 코드→현행명(라이브 우선), 그 외는 원값
+                if axis == "scope":
+                    try:
+                        return GROUND._resolve_name(v) or v
+                    except Exception:
+                        return v
+                return v
+            d["x_labels"] = [lbl(ax, x) for x in d["x_keys"]]
+            for row in d["matrix"]:
+                row["y_label"] = lbl(ay, row["y"])
+            self.send_json({"ok": True, **d})
+        except Exception as e:
+            self.send_json({"ok": False, "error": str(e)}, 500)
+
     def _post_improve_review(self, body):
         # ⑥ 개선 시도 승인/반려 — 승인 시 기여 지식 항목을 approved(공유)로 승격
         user = self._require_stats_viewer()
@@ -2034,6 +2060,7 @@ class RAASHandler(BaseHTTPRequestHandler):
         "/api/upload/review": _post_upload_review,
         "/api/knowledge/mine/retire": _post_knowledge_mine_retire,
         "/api/improve/queue": _post_improve_queue,
+        "/api/feedback/dist": _post_feedback_dist,
         "/api/improve/review": _post_improve_review,
         "/api/data_request/process": _post_data_request_process,
         "/api/knowledge/retire": _post_knowledge_retire,
