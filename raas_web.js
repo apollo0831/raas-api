@@ -1831,6 +1831,14 @@ function _downloadExtract(id) {
   XLSX.writeFile(wb, fn);
 }
 
+// 최근 대화 턴(맥락 재작성용) — 후속 질문("이 중에…")을 서버가 독립 질문으로 재작성
+let _chatTurns = [];
+function _pushTurn(q, a) {
+  if (!q || !a) return;
+  _chatTurns.push({ q: q, a: String(a).slice(0, 800) });   // 답변은 앞 800자만(페이로드 절약)
+  if (_chatTurns.length > 6) _chatTurns.shift();
+}
+
 async function submitQuery(question, source, opts) {
   opts = opts || {};
   const _endpoint = opts.endpoint || '/api/query/stream';
@@ -1863,7 +1871,7 @@ async function submitQuery(question, source, opts) {
     const res = await _authedFetch(_endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, recent: _chatTurns.slice(-2) }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -1918,6 +1926,7 @@ async function submitQuery(question, source, opts) {
           if (ev.drill && ev.drill.length) msgBody.insertAdjacentHTML('beforeend', _buildDrillChips(ev.drill));
           // 원문 텍스트를 캐시(렌더된 HTML 아님) — 복원 시 재렌더로 차트를 다시 그림(canvas는 innerHTML에 안 담겨서).
           _saveCachedAnswer(question, rawText);
+          _pushTurn(question, rawText);   // 맥락 재작성용 최근 턴 누적
           if (qid) msgBody.insertAdjacentHTML('beforeend', _buildFeedbackBar(qid));
           refreshHistory();
           _scrollBottom();

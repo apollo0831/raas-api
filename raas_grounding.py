@@ -2955,6 +2955,54 @@ def _derive_intent(question: str, prov: dict) -> str:
     return "snapshot"              # 기본 — 현황/속성 조회
 
 
+# ─── 후속 질문 맥락 재작성 (게이트형) ───────────────────────────────────────
+# 지시어·생략이 있는 후속 질문("이 중에…", "그럼 러브FM은?")만 최근 대화로 '독립 질문'으로
+# 재작성한다. 게이트에 안 걸리는 독립 질문은 원문 그대로(LLM 미호출 → 비용 0).
+_FOLLOWUP_SIGNAL = ("이 중", "그 중", "그중", "이중", "거기", "그건", "그거", "그것",
+                    "그럼", "그러면", "위에서", "위 프로그램", "위 결과", "방금", "아까",
+                    "이건", "이것", "저것", "여기서", "해당", "그 프로그램", "그 채널",
+                    "앞서", "동일하게", "같은 걸로", "그대로", "각각")
+
+def _looks_followup(question: str) -> bool:
+    t = question or ""
+    return any(s in t for s in _FOLLOWUP_SIGNAL)
+
+_REWRITE_SYSTEM = (
+    "당신은 라디오 데이터 챗봇의 '후속 질문 재작성기'입니다. 이전 대화를 참고해, 지시어"
+    "(이 중에·그럼·거기서·해당 등)나 생략이 있는 후속 질문을 그 자체로 이해되는 '독립 질문' "
+    "한 줄로 다시 씁니다.\n"
+    "규칙:\n"
+    "- 이전 대화의 대상(프로그램·채널·기간 등)을 명시적으로 채워 넣는다.\n"
+    "- 사용자가 묻지 않은 조건·의도는 추가하지 않는다(과잉 재작성 금지).\n"
+    "- 이미 독립적이거나 이전 대화와 무관하면 원문을 그대로 출력한다.\n"
+    "- 설명 없이 재작성된 질문 한 줄만 출력한다."
+)
+
+def rewrite_followup(question: str, recent=None):
+    """후속 질문 → 독립 질문 재작성. 반환 (질문, 재작성여부).
+       게이트: 지시어 신호 없거나 최근 대화 없으면 원문 그대로(LLM 미호출)."""
+    q = (question or "").strip()
+    if not q or not _looks_followup(q) or not call_claude:
+        return question, False
+    turns = [t for t in (recent or []) if isinstance(t, dict)][-2:]   # 최근 2턴만
+    if not turns:
+        return question, False
+    convo = "\n".join(f"[이전질문] {(t.get('q') or '')[:200]}\n"
+                      f"[이전답변] {(t.get('a') or '')[:600]}" for t in turns)
+    if not convo.strip():
+        return question, False
+    try:
+        text, _ = call_claude(_REWRITE_SYSTEM,
+                              f"{convo}\n\n[후속질문] {q}\n\n독립 질문 한 줄:",
+                              max_tokens=200, model=HAIKU_MODEL)
+        rw = (text or "").strip().splitlines()[0].strip().strip('"').strip("'").strip()
+        if rw and 3 <= len(rw) <= 220 and rw != q:
+            return rw, True
+    except Exception as e:
+        print(f"[rewrite] {e}")
+    return question, False
+
+
 # ─── 메인 — 맥락 조립 ───────────────────────────────────────────────────────
 def assemble(question: str, overlay_ctx=None) -> dict:
     """질문 → 근거 context 조립(+ canonical intent 유도). 얇은 래퍼가 _assemble_core를

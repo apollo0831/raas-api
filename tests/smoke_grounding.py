@@ -82,6 +82,12 @@ check("intent trend by long_history",
 check("intent snapshot 기본(timeseries 번들은 trend 아님)",
       G._derive_intent("러브FM 어때", {"scope": "channel", "providers": ["metric_timeseries", "point_snapshot"]}), "snapshot")
 
+# 맥락 재작성 게이트 — 지시어 없는 독립 질문은 LLM 미호출·원문 그대로(비용 0)
+check_true("후속감지: '이 중에'", G._looks_followup("이 중에 특별게스트 누구야?"))
+check_true("독립질문은 후속 아님", not G._looks_followup("어제 컬투쇼 DAU 알려줘"))
+check("독립질문 재작성 안함(게이트)", G.rewrite_followup("어제 컬투쇼 DAU", [{"q":"a","a":"b"}]), ("어제 컬투쇼 DAU", False))
+check("recent 없으면 재작성 안함", G.rewrite_followup("이 중에 특별게스트?", []), ("이 중에 특별게스트?", False))
+
 print("── 2. 개념신호 가드(과잉 캡처 방지) ─────────────────")
 for q in ["신규사용자 유치 전략 알려줘", "DAU가 뭐야?", "신규 늘리려면 어떻게 해?", "MAU 높이는 방법", "안녕하세요"]:
     check(f"개념/비데이터 통과: {q}", G.resolve_entities(q).get("code"), None)

@@ -1323,6 +1323,17 @@ class RAASHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "질문이 없습니다"}, 400)
                 return
 
+            # 맥락 재작성 — 지시어/생략이 있는 후속 질문("이 중에…")만 최근 대화로 독립 질문화
+            #   (게이트 통과 시에만 Haiku 1콜, 독립 질문은 원문 그대로). 이후 모든 경로가 재작성문 사용.
+            _rw_note = ""
+            try:
+                _q2, _rw = GROUND.rewrite_followup(question, body.get("recent"))
+                if _rw:
+                    _rw_note = f"↳ 이렇게 해석했어요: **{_q2}**\n\n"
+                    question = _q2
+            except Exception as _e:
+                print(f"[rewrite] {_e}")
+
             # 데이터 추출 — '뽑아줘/엑셀/표로' 등. 결정적 표 생성(숫자는 코드, LLM 아님) +
             #   엑셀 다운로드(프론트 SheetJS). 광고·마케팅의 반복 데이터 추출 작업용.
             if GROUND.detect_extract(question):
@@ -1410,6 +1421,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                 def sse_g(d: dict):
                     self.wfile.write(("data: " + json.dumps(d, ensure_ascii=False) + "\n\n").encode("utf-8"))
                     self.wfile.flush()
+                if _rw_note:      # 맥락 재작성 시 해석 결과를 답변 맨 위에 투명하게 표기
+                    sse_g({"type": "token", "text": _rw_note})
                 _gu = f"근거 데이터:\n{_ground['context']}\n\n사용자 질문: {question}"
                 _gfull, _gusage = [], {}
                 for chunk in call_claude_stream(GROUND.system_with_style(GROUND.GROUNDING_SYSTEM), _gu, max_tokens=MAX_ANSWER_TOKENS):
