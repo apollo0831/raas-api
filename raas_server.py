@@ -1420,7 +1420,8 @@ class RAASHandler(BaseHTTPRequestHandler):
                         sse_g({"type": "token", "text": chunk})
                 _ganswer = "".join(_gfull)
                 _gqid = save_query(user_id, question, _ganswer, ip=ip, user_name=user_name,
-                                   user_role=user_role, intent="grounded",
+                                   user_role=user_role,
+                                   intent=(_ground.get("intent") or "snapshot"),   # 연산 유형(assemble 유도)
                                    scope=_ground["provenance"].get("program"), source="general",
                                    input_tokens=_gusage.get("input_tokens"),
                                    output_tokens=_gusage.get("output_tokens"),
@@ -1899,7 +1900,7 @@ class RAASHandler(BaseHTTPRequestHandler):
                     _full.append(chunk); sse_t({"type": "token", "text": chunk})
             _ans = "".join(_full)
             _qid = save_query(user_id, "어제 방송 특이사항", _ans, ip=ip, user_name=user_name,
-                              user_role=user_role, intent="today_digest", source="general",
+                              user_role=user_role, intent="digest", source="general",
                               input_tokens=_usage.get("input_tokens"),
                               output_tokens=_usage.get("output_tokens"))
             if user.get("is_admin"):

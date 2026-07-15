@@ -72,6 +72,16 @@ check("MAU 지표만 → 전사", e.get("code"), "T00")
 e = G.resolve_entities("고릴라 플랫폼 전체 최근 4주 DAU 추이 분석해줘", "F09")
 check("패널 T00 질의, 관심 무시", (e.get("code"), e.get("scope_kind")), ("T00", "channel"))
 
+# intent 유도(연산 분류) — provenance 신호 → canonical intent (순수함수, LLM 무관)
+check("intent realtime scope", G._derive_intent("지금 동시청취", {"scope": "realtime"}), "realtime")
+check("intent compare scope",  G._derive_intent("A vs B", {"scope": "compare"}), "compare")
+check("intent editorial provider",
+      G._derive_intent("편성 연혁", {"scope": "program", "providers": ["program_history"]}), "editorial")
+check("intent trend by long_history",
+      G._derive_intent("연도별 추이", {"scope": "program", "providers": ["long_history"]}), "trend")
+check("intent snapshot 기본(timeseries 번들은 trend 아님)",
+      G._derive_intent("러브FM 어때", {"scope": "channel", "providers": ["metric_timeseries", "point_snapshot"]}), "snapshot")
+
 print("── 2. 개념신호 가드(과잉 캡처 방지) ─────────────────")
 for q in ["신규사용자 유치 전략 알려줘", "DAU가 뭐야?", "신규 늘리려면 어떻게 해?", "MAU 높이는 방법", "안녕하세요"]:
     check(f"개념/비데이터 통과: {q}", G.resolve_entities(q).get("code"), None)

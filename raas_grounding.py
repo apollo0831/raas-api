@@ -2919,8 +2919,55 @@ def _assemble_meta(question, overlay_ctx=None) -> dict:
             "provenance": {"providers": ["metric_catalog"], "scope": "meta"}}
 
 
+# ─── intent 분류 (연산 기준 canonical taxonomy) ────────────────────────────
+# 질의를 '무슨 연산인가'로 분류 — 질의맵 통계·개선 신호용. LLM 재호출 없이 assemble의
+# 라우팅 결정(scope + 선택된 provider + wants_* 신호)에서 결정적으로 유도.
+# 확장: 새 값은 아래 튜플 + _derive_intent 매핑 규칙 한 줄로 추가(향후 온톨로지 이관 여지).
+_INTENTS = ("snapshot", "trend", "compare", "ranking", "correlate", "extract",
+            "editorial", "schedule", "realtime", "meta", "digest", "concept")
+
+def _derive_intent(question: str, prov: dict) -> str:
+    """assemble 결과(provenance)와 질문에서 canonical intent(연산 유형)를 결정적으로 유도.
+       scope 전용 의도(realtime/compare/ranking/meta/digest)는 scope로 확정, 나머지
+       (program/channel/general)는 사용된 provider·wants_* 신호로 판정."""
+    scope = (prov or {}).get("scope")
+    used = set((prov or {}).get("providers") or [])
+    # 1) scope 자체가 연산인 경우 — 그대로 확정
+    if scope in ("realtime", "compare", "ranking", "meta", "digest"):
+        return scope
+    if scope == "guest_search":
+        return "snapshot"          # 값→프로그램 역검색 = 현황 속성 조회
+    # 2) program/channel/general — 사용 provider + 질의 신호로 연산 판정(우선순위 순)
+    if used & {"channel_history", "program_history"} or _wants_editorial(question):
+        return "editorial"
+    if "schedule" in used:
+        return "schedule"
+    if "metric_correlate" in used or _wants_correlate(question):
+        return "correlate"
+    # trend는 질문 신호(추이·변화·최근N주)나 trend 전용 provider로만 — metric_timeseries는
+    #   program/channel 답변에 기본 번들돼 흔하므로 trend 트리거에서 제외(과분류 방지).
+    if used & {"long_history", "flow_decomp"} \
+            or _wants_history(question) or _is_trend_query(question) or _is_analytical(question):
+        return "trend"
+    if _is_concept(question):
+        return "concept"
+    return "snapshot"              # 기본 — 현황/속성 조회
+
+
 # ─── 메인 — 맥락 조립 ───────────────────────────────────────────────────────
 def assemble(question: str, overlay_ctx=None) -> dict:
+    """질문 → 근거 context 조립(+ canonical intent 유도). 얇은 래퍼가 _assemble_core를
+       호출하고 결과에 intent를 부착 — 서버가 query_history.intent로 저장(질의맵 분류)."""
+    res = _assemble_core(question, overlay_ctx)
+    if isinstance(res, dict) and res.get("ok"):
+        prov = res.setdefault("provenance", {})
+        if not prov.get("intent"):
+            prov["intent"] = _derive_intent(question, prov)
+        res["intent"] = prov["intent"]        # 서버 저장 편의(top-level 노출)
+    return res
+
+
+def _assemble_core(question: str, overlay_ctx=None) -> dict:
     """질문 → 근거 context 조립. overlay_ctx={user_id, mode:'normal'|'requery'}.
        반환: {ok, context, providers_used, entities_brief, provenance}"""
     question = _norm_fmam(question)    # '파워fm/러브Fm' 대소문자 정규화(엔티티 매칭 일관)
