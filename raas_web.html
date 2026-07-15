@@ -325,6 +325,15 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 }
 .hf-search:focus{border-color:rgba(79,142,247,.5)}
 .hist-modal-body{flex:1;overflow-y:auto;overflow-x:hidden}
+/* 모바일 — 모달(이력·내정보·승인관리·질의맵)을 전체 화면으로 (팝업 아님) */
+@media (max-width:640px){
+  .hist-modal{padding:0;align-items:stretch}
+  .hist-modal-inner{
+    width:100%;max-width:none;
+    height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;
+    border-radius:0;border:none;
+  }
+}
 /* 모바일 — 모달 표(승인관리·질의맵)는 자체 가로 스크롤, 본문은 팬 금지(좌우로 끌리는 현상 방지) */
 @media (max-width:720px){
   .hist-modal-body .adm-table,
