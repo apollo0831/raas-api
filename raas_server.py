@@ -1077,7 +1077,13 @@ class RAASHandler(BaseHTTPRequestHandler):
                                 "data": stats_by_user(days=days, limit=limit),
                                 "me": viewer.get("id")})
             elif sub == "topics":
-                self.send_json({"ok": True, "data": stats_topics(days=days, limit=limit)})
+                _t = stats_topics(days=days, limit=limit)
+                for it in _t.get("by_scope", []):   # scope 코드 → 현행명(라이브 우선)
+                    try:
+                        it["label"] = GROUND._resolve_name(it["scope"]) or it["scope"]
+                    except Exception:
+                        it["label"] = it["scope"]
+                self.send_json({"ok": True, "data": _t})
             elif sub == "heatmap":
                 dim = params.get("dimension", "metric")
                 self.send_json({"ok": True,

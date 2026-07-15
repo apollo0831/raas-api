@@ -562,21 +562,25 @@ function _renderStmByUser(rows) {
     </div>`;
 }
 
-// 인기 주제 탭
+// 인기 주제 탭 — 현행 축(대상 scope · 데이터소스 provider · 질문텍스트)
 function _renderStmTopics(d) {
-  const topics = (d && d.by_topic_key) || [];
-  const qs     = (d && d.by_question)  || [];
-  if (!topics.length && !qs.length) {
+  const scopes = (d && d.by_scope)    || [];
+  const provs  = (d && d.by_provider) || [];
+  const qs     = (d && d.by_question) || [];
+  if (!scopes.length && !provs.length && !qs.length) {
     return `<div class="stm-empty">기간 내 주제 통계가 없습니다.</div>`;
   }
-  const tBody = topics.map(t => `
+  const sBody = scopes.map(s => `
     <tr>
-      <td><span class="stm-tag">${escapeHtml(t.topic_key)}</span></td>
-      <td>${escapeHtml(t.intent||'—')}</td>
-      <td>${escapeHtml(t.scope||'—')}</td>
-      <td>${escapeHtml(t.metric||'—')}</td>
-      <td class="stm-num">${_fmtN(t.count)}</td>
-      <td style="font-size:var(--fs-xs);color:var(--dim)">${_fmtDate(t.last_asked)}</td>
+      <td><span class="stm-tag">${escapeHtml(s.label || s.scope)}</span> <span style="color:var(--dim);font-size:var(--fs-xs)">${escapeHtml(s.scope)}</span></td>
+      <td class="stm-num">${_fmtN(s.count)}</td>
+      <td style="font-size:var(--fs-xs);color:var(--dim)">${_fmtDate(s.last_asked)}</td>
+    </tr>`).join('');
+  const pBody = provs.map(p => `
+    <tr>
+      <td><span class="stm-tag">${escapeHtml(p.provider)}</span></td>
+      <td class="stm-num">${_fmtN(p.count)}</td>
+      <td style="font-size:var(--fs-xs);color:var(--dim)">${_fmtDate(p.last_asked)}</td>
     </tr>`).join('');
   const qBody = qs.map(q => `
     <tr>
@@ -586,11 +590,18 @@ function _renderStmTopics(d) {
     </tr>`).join('');
   return `
     <div class="stm-section">
-      <div class="stm-section-title">topic_key 빈도 <span class="stm-section-sub">intent:scope:metric 그룹핑</span></div>
-      ${topics.length ? `<table class="stm-table">
-        <thead><tr><th>topic_key</th><th>intent</th><th>scope</th><th>metric</th><th>건수</th><th>마지막</th></tr></thead>
-        <tbody>${tBody}</tbody>
+      <div class="stm-section-title">인기 대상 <span class="stm-section-sub">프로그램·채널별 질의 빈도</span></div>
+      ${scopes.length ? `<table class="stm-table">
+        <thead><tr><th>대상</th><th>건수</th><th>마지막</th></tr></thead>
+        <tbody>${sBody}</tbody>
       </table>` : '<div class="stm-empty">데이터 없음</div>'}
+    </div>
+    <div class="stm-section">
+      <div class="stm-section-title">데이터소스 빈도 <span class="stm-section-sub">답변이 실제 사용한 provider</span></div>
+      ${provs.length ? `<table class="stm-table">
+        <thead><tr><th>데이터소스</th><th>건수</th><th>마지막</th></tr></thead>
+        <tbody>${pBody}</tbody>
+      </table>` : '<div class="stm-empty">providers_used 누적 중 — 새 질의가 쌓이면 표시됩니다</div>'}
     </div>
     <div class="stm-section">
       <div class="stm-section-title">질문 텍스트 빈도</div>

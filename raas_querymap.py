@@ -216,19 +216,24 @@ def stats_by_user(days: int = 30, limit: int = 50) -> list:
 
 # ── 4) 인기 주제 ────────────────────────────────────────────
 def stats_topics(days: int = 30, limit: int = 20) -> dict:
-    """topic_key 빈도 TOP + question 텍스트 빈도 TOP."""
+    """현행 축 인기 주제 — 대상(scope)·데이터소스(provider)·질문텍스트 빈도 TOP.
+       (구 topic_key=intent:scope:metric은 은퇴 intent로 오염돼 폐기 — 현행 축으로 재구성)."""
     since = _since(days)
     df, params = _date_filter(since)
     with get_conn() as conn:
-        # by topic_key
-        topic_rows = conn.execute(
-            f"SELECT topic_key, COUNT(*) AS c, "
-            f"       MAX(intent) AS intent, MAX(scope) AS scope, MAX(metric) AS metric, "
-            f"       MAX(created_at) AS last_asked "
+        # 인기 대상 — 프로그램/채널(scope)별 질의 빈도
+        scope_rows = conn.execute(
+            f"SELECT scope, COUNT(*) AS c, MAX(created_at) AS last_asked "
             f"FROM query_history "
-            f"{df}{'AND' if df else 'WHERE'} topic_key IS NOT NULL "
-            f"GROUP BY topic_key ORDER BY c DESC LIMIT ?",
+            f"{df}{'AND' if df else 'WHERE'} scope IS NOT NULL AND scope != '' "
+            f"GROUP BY scope ORDER BY c DESC LIMIT ?",
             params + [limit]
+        ).fetchall()
+        # 데이터소스 — providers_used(JSON 리스트) 전개 집계
+        prov_raw = conn.execute(
+            f"SELECT providers_used, created_at FROM query_history "
+            f"{df}{'AND' if df else 'WHERE'} providers_used IS NOT NULL AND providers_used != ''",
+            params
         ).fetchall()
         # by question 텍스트
         q_rows = conn.execute(
@@ -238,13 +243,21 @@ def stats_topics(days: int = 30, limit: int = 20) -> dict:
             f"GROUP BY question ORDER BY c DESC LIMIT ?",
             params + [limit]
         ).fetchall()
+    pcount: dict = {}
+    plast: dict = {}
+    for r in prov_raw:
+        for p in _explode_providers(r["providers_used"]):
+            pcount[p] = pcount.get(p, 0) + 1
+            if (r["created_at"] or "") > plast.get(p, ""):
+                plast[p] = r["created_at"]
+    by_provider = [{"provider": p, "count": c, "last_asked": plast.get(p)}
+                   for p, c in sorted(pcount.items(), key=lambda kv: -kv[1])[:limit]]
     return {
-        "by_topic_key": [
-            {"topic_key": r["topic_key"], "count": r["c"],
-             "intent": r["intent"], "scope": r["scope"], "metric": r["metric"],
-             "last_asked": r["last_asked"]}
-            for r in topic_rows
+        "by_scope": [
+            {"scope": r["scope"], "count": r["c"], "last_asked": r["last_asked"]}
+            for r in scope_rows
         ],
+        "by_provider": by_provider,
         "by_question": [
             {"question": r["question"], "count": r["c"], "last_asked": r["last_asked"]}
             for r in q_rows
