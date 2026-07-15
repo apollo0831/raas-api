@@ -1,0 +1,76 @@
+# =============================================================================
+# RAAS Selection Ontology — 선곡(플레이리스트) 필드 정의
+#
+# 프로그램 × 일자 × 곡 (방송에 삽입된 곡 1건 = raas:SongSelection).
+# 원천: index=selection + BROADPLAN.csv 조인(VOD_ID→SEQ=PGM_CODE).
+# 지표(숫자)가 아니라 콘텐츠 속성 데이터 — csvField 어노테이션으로 필드 의미 정의
+# (게스트·편성 속성과 동일 패턴, get_metadata_field_info가 자동 인식).
+#
+# 2-tier 수집(raas_datasource): 최근 14일 일일 캐시(RA01·RA02) + 임의 과거일 온디맨드(1년).
+# =============================================================================
+
+@prefix raas: <http://raas.sbs.co.kr/onto#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+
+# ── 클래스 ────────────────────────────────────────────────────────────────
+raas:SongSelection a owl:Class ;
+    rdfs:label "선곡"@ko ;
+    rdfs:comment "방송에 삽입된 곡 1건(프로그램·일자·시각별). 곡 정보 + 방송 내 삽입 시각(START_TIME~END_TIME)을 가진다. 프로그램별 일자별 선곡표를 구성한다."@ko .
+
+
+# ── 필드 정의 (SongSelection 속성 · csvField = 원천 컬럼) ────────────────────
+raas:songTitle a owl:DatatypeProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range xsd:string ;
+    rdfs:label "곡명"@ko ; raas:csvField "SONG_TITLE" ;
+    rdfs:comment "방송에서 튼 곡의 제목."@ko .
+
+raas:artistName a owl:DatatypeProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range xsd:string ;
+    rdfs:label "아티스트"@ko ; raas:csvField "ARTIST_NAME" ;
+    rdfs:comment "곡의 아티스트(가수·연주자). 피처링·합동은 원문 그대로."@ko .
+
+raas:albumTitle a owl:DatatypeProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range xsd:string ;
+    rdfs:label "앨범"@ko ; raas:csvField "ALBUM_TITLE" ;
+    rdfs:comment "곡이 수록된 앨범명."@ko .
+
+raas:releaseYear a owl:DatatypeProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range xsd:string ;
+    rdfs:label "발매연도"@ko ; raas:csvField "RELEASE_YEAR" ;
+    rdfs:comment "곡(앨범)의 발매 연도."@ko .
+
+raas:genre a owl:DatatypeProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range xsd:string ;
+    rdfs:label "장르"@ko ; raas:csvField "GENRE_NM" ;
+    rdfs:comment "곡의 장르 분류명."@ko .
+
+raas:songStartTime a owl:DatatypeProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range xsd:string ;
+    rdfs:label "방송 내 시작시각"@ko ; raas:csvField "START_TIME" ;
+    rdfs:comment "곡이 방송에서 나오기 시작한 시각(YYYYMMDDHHMMSS). 자정을 넘겨도 원천 시각 그대로."@ko .
+
+raas:songEndTime a owl:DatatypeProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range xsd:string ;
+    rdfs:label "방송 내 종료시각"@ko ; raas:csvField "END_TIME" ;
+    rdfs:comment "곡이 방송에서 끝난 시각(YYYYMMDDHHMMSS)."@ko .
+
+raas:playTime a owl:DatatypeProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range xsd:integer ;
+    rdfs:label "재생시간(초)"@ko ; raas:csvField "PLAY_TIME" ;
+    rdfs:comment "방송에서 실제 재생된 시간(초). END_TIME−START_TIME과 대체로 일치."@ko .
+
+raas:onProgram a owl:ObjectProperty ;
+    rdfs:domain raas:SongSelection ; rdfs:range raas:Program ;
+    rdfs:label "방송 프로그램"@ko ; raas:csvField "PGM_CODE" ;
+    rdfs:comment "이 곡을 튼 프로그램(BROADPLAN SEQ = RAAS 프로그램 코드)."@ko .
+
+
+# ── 도메인 공리 ─────────────────────────────────────────────────────────────
+raas:SelectionDayBoundaryAxiom a raas:DomainAxiom ;
+    rdfs:label "선곡 방송일 경계 공리"@ko ;
+    raas:appliesTo raas:F01 ;
+    rdfs:comment "파워FM '딘딘의 뮤직하이'(F01)는 23:00~다음날 01:00 편성이라 자정을 넘긴다. 자정 이후(00:00~01:00) 곡도 '전날 방송분'으로 집계한다(수집 쿼리가 뮤직하이 외 프로그램의 수집창을 -1시간 보정해 방송일 경계를 맞춤). 따라서 '어제 뮤직하이 선곡'에는 어제 23시대와 오늘 0~1시대 곡이 함께 포함될 수 있다."@ko .

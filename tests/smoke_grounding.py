@@ -101,6 +101,11 @@ check_true("compare에 프로그램별 게스트 블록", _rc["context"].count("
 # 전 프로그램(오늘 모든 프로그램) 특별게스트 — 프로그램별 이번/같은요일 게스트 + 공리
 _gst = G._p_guest_special_today(G.resolve_entities("오늘 나오는 모든 프로그램 게스트 중 특별게스트 누구야?")) or {}
 check_true("guest_special_today: 프로그램별 게스트+공리", bool(_gst.get("프로그램별 게스트")) and bool(_gst.get("판정 공리")))
+# 선곡(플레이리스트) — 감지·추출·온톨로지(Splunk 무관: provider 데이터 경로는 라이브라 제외)
+check_true("선곡 감지: '선곡'", G._wants_selection("컬투쇼 선곡 알려줘"))
+check_true("독립 KPI질의는 선곡 아님", not G._wants_selection("컬투쇼 어제 DAU"))
+check_true("선곡 추출 감지", G.detect_extract("컬투쇼 선곡 뽑아줘") and not G.detect_extract("컬투쇼 선곡 알려줘"))
+check_true("온톨로지 선곡 필드정의(SONG_TITLE)", bool(get_adapter().get_metadata_field_info("SONG_TITLE")))
 
 print("── 2. 개념신호 가드(과잉 캡처 방지) ─────────────────")
 for q in ["신규사용자 유치 전략 알려줘", "DAU가 뭐야?", "신규 늘리려면 어떻게 해?", "MAU 높이는 방법", "안녕하세요"]:

@@ -584,6 +584,133 @@ def get_realtime_peak_trend(field: str = "T00", window=None) -> list:
     return feed.get() or []
 
 
+# ── 선곡(플레이리스트) — 프로그램×일자×곡 (index=selection + BROADPLAN 조인) ─────
+#   2-tier: 최근 창은 일일 캐시(일반 조회·추출용), 임의 과거일은 온디맨드(텍스트·대용량).
+#   콘텐츠 속성 소스(지표 아님). PGM_CODE=BROADPLAN SEQ(라이브 편성 코드).
+#   채널: RA01=러브FM, RA02=파워FM, RA03=고릴라M. 일일 캐시는 RA01·RA02만.
+#   원천 쿼리의 -1시간 보정: 파워FM 뮤직하이(F01)가 23:00~01:00라 자정 넘김분을 이전 방송일로.
+_SELECTION_COLS = ("DATE", "_time", "CHANNEL", "BROAD_NAME", "PGM_CODE", "SONG_TITLE",
+                   "ARTIST_NAME", "ALBUM_TITLE", "RELEASE_YEAR", "GENRE_NM",
+                   "START_TIME", "END_TIME", "PLAY_TIME")
+_SELECTION_DAILY_CH = '(CHANNEL="RA01" OR CHANNEL="RA02")'   # 일일 캐시 = 러브FM·파워FM
+_SELECTION_DAILY_WINDOW = "-14d@d"                            # 일일 캐시 창(권장 14일)
+
+def _selection_spl(earliest: str, latest: str, where: str = _SELECTION_DAILY_CH) -> str:
+    """선곡 SPL — earliest/latest 파라미터화(원천 쿼리 보존, -1h 보정 서브서치 유지).
+       where: 채널/프로그램 필터(예: (CHANNEL="RA01" OR CHANNEL="RA02") 또는 SEQ="F09")."""
+    return (
+        'search index=selection\n'
+        '[| makeresults\n'
+        f'    | eval earliest="{earliest}"\n'
+        f'    | eval latest="{latest}"\n'
+        '    | eval earliest=if(isnum(earliest),earliest,relative_time(now(),earliest))\n'
+        '    | eval latest=if(isnum(latest),latest,relative_time(now(),latest))\n'
+        '    | eval earliest=if(BROAD_NAME="딘딘의 Music High",earliest,earliest-3600)\n'
+        '    | eval latest=if(BROAD_NAME="딘딘의 Music High",latest,latest-3600)\n'
+        '    | return earliest, latest]\n'
+        '| eval DATE = strftime(_time, "%Y%m%d")\n'
+        '| join type=left VOD_ID\n'
+        '    [| inputlookup BROADPLAN.csv | search IS_END="N" | fields PGM_SCT, VOD_ID, SEQ]\n'
+        f'| search {where} AND SEQ=*\n'
+        '| rename SEQ as PGM_CODE\n'
+        '| table ' + ", ".join(_SELECTION_COLS))
+
+def _index_selection(rows: list) -> dict:
+    """[{DATE,PGM_CODE,SONG_TITLE,…}] → {PGM_CODE:{DATE:[곡행,…]}} (그 코드·날짜만 조회되게)."""
+    idx: dict = {}
+    for r in rows:
+        code = (r.get("PGM_CODE") or "").strip().upper()
+        date = (r.get("DATE") or "").strip()
+        if code and date:
+            idx.setdefault(code, {}).setdefault(date, []).append(r)
+    return idx
+
+def _load_selection_recent():
+    """최근 14일 선곡(RA01·RA02) 일일 로드 → {PGM_CODE:{DATE:[곡]}}. 저장소=Splunk."""
+    try:
+        rows = splunk_search(_selection_spl(_SELECTION_DAILY_WINDOW, "now"), timeout=180)
+    except Exception as e:
+        print(f"  [selection] 최근 선곡 조회 실패: {e}")
+        return {}, "error"
+    return _index_selection(rows), "splunk"
+
+_selection_feed = Feed("selection", _load_selection_recent, daily_at=KPI_REFRESH_AT)
+
+def get_selection_index() -> dict:
+    """최근 창 선곡 인덱스 {PGM_CODE:{DATE(YYYYMMDD):[곡행]}} (일일 캐시)."""
+    return _selection_feed.get() or {}
+
+def get_selection_source() -> str:
+    return _selection_feed.source()
+
+# 온디맨드(임의 과거일) — 보관 1년 내. 텍스트·대용량이라 캐시 안 하고 그때그때.
+_selection_hist_cache: dict = {}      # {(code_or_'*', 'YYYYMMDD'): rows}
+
+def _selection_date_bounds(date_str: str):
+    """'YYYY-MM-DD'|'YYYYMMDD' → (earliest, latest) Splunk 하루 경계(MM/DD/YYYY)."""
+    import datetime as _dt
+    s = (date_str or "").replace("/", "-")
+    fmt = "%Y-%m-%d" if "-" in s else "%Y%m%d"
+    d = _dt.datetime.strptime(s[:10] if "-" in s else s[:8], fmt).date()
+    nd = d + _dt.timedelta(days=1)
+    return d.strftime("%m/%d/%Y:00:00:00"), nd.strftime("%m/%d/%Y:00:00:00")
+
+def get_selection_history(date_str: str, code: str = None) -> list:
+    """특정 과거일 선곡 [{DATE,PGM_CODE,SONG_TITLE,…}] (온디맨드). code 주면 그 프로그램만(narrow).
+       보관 1년(get_selection_earliest) 내만 결과."""
+    key = ((code or "*").upper(), (date_str or "").replace("-", "").replace("/", "")[:8])
+    if not key[1]:
+        return []
+    if key in _selection_hist_cache:
+        return _selection_hist_cache[key]
+    try:
+        e, l = _selection_date_bounds(date_str)
+        where = f'SEQ="{code.upper()}"' if code else _SELECTION_DAILY_CH
+        rows = splunk_search(_selection_spl(e, l, where), timeout=150)
+    except Exception as ex:
+        print(f"  [selection_history {key}] 조회 실패: {ex}")
+        return []
+    _selection_hist_cache[key] = rows
+    return rows
+
+def _load_selection_earliest():
+    """선곡 보관 시작일 — 정책상 1년으로 캡(원천엔 더 과거도 있음)."""
+    import datetime as _dt
+    floor = (_dt.date.today() - _dt.timedelta(days=365)).strftime("%Y-%m-%d")
+    try:
+        r = splunk_search('| tstats min(_time) as e where index=selection', timeout=60)
+        t = float(r[0].get("e")) if (r and r[0].get("e")) else None
+        actual = _dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d") if t else None
+        # 실제 시작이 1년보다 최근이면 그걸, 아니면 1년 캡
+        return (max(actual, floor) if actual else floor), "splunk"
+    except Exception as ex:
+        print(f"  [selection_earliest] {ex}")
+        return floor, "policy"
+
+_selection_earliest_feed = Feed("selection_earliest", _load_selection_earliest, daily_at="00:15")
+
+def get_selection_earliest() -> str:
+    """선곡 조회 가능 시작일 'YYYY-MM-DD'(정책 1년 캡)."""
+    return _selection_earliest_feed.get()
+
+def get_selection_for(code: str, date_str: str = None) -> list:
+    """프로그램(code) 선곡 — date 지정 시 그 날(캐시 우선, 없으면 온디맨드), 미지정 시 캐시 최근 전체.
+       반환 [{DATE,SONG_TITLE,ARTIST_NAME,…}] (그 프로그램 곡 행만)."""
+    code = (code or "").upper()
+    idx = get_selection_index()
+    by_date = idx.get(code) or {}
+    if date_str:
+        dkey = (date_str or "").replace("-", "").replace("/", "")[:8]
+        if dkey in by_date:
+            return by_date[dkey]
+        return get_selection_history(date_str, code)     # 캐시 밖 과거일 → 온디맨드
+    # 날짜 미지정 → 캐시 최근 전체(날짜 오름차순 평탄화)
+    out = []
+    for d in sorted(by_date):
+        out.extend(by_date[d])
+    return out
+
+
 # ── 장기 아카이브 (real_dau.csv + summary_uuid_stats, 최대 10년) ─────
 # 상세 KPI(raas_kpi_latest, 2026-03~)와 별도의 장기 이력 — 4개 지표만: dau·dau_r7(롤링WAU)·
 #   dau_r30(롤링MAU)·dau_1min(1분이상 청취). 원천 real_dau.csv는 TYPE=DAY/WEEK/MONTH.

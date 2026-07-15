@@ -125,6 +125,17 @@ _EDITORIAL = [
         providers=["today_lineup"],
         note="게스트·view_radio — 상세 KPI 배치가 못 담은 '오늘' 공백 메움. 교차분석 대상 아님", shape="",
     ),
+    Source(
+        name="selection", label="선곡(플레이리스트)", grain="editorial",
+        axis="편성·서술형",
+        lookups=["index=selection", "BROADPLAN.csv(VOD_ID→PGM_CODE)"],
+        index_fn="get_selection_index",
+        available_periods=[],
+        onto_metrics=[],           # 지표 아님 — SongSelection 속성(곡·아티스트·장르·시각)
+        providers=["selection"],
+        note="프로그램×일자×곡. 2-tier: 최근14일 일일캐시(RA01·RA02) + 임의 과거일 온디맨드(1년). "
+             "곡별 청취반응 교차분석(START_TIME×동시자)은 2차", shape="",
+    ),
 ]
 
 SOURCES = _DAILY + _MINUTE + _EDITORIAL

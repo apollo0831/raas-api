@@ -70,6 +70,7 @@ ONTOLOGY_FILES = [
     "raas_ontology_episode.ttl",
     "raas_ontology_contributed.ttl",   # 승인 기여 지식(승격 배치 생성)
     "raas_ontology_relations.ttl",   # 지표 관계·해석(교차상관 팩터·구성비 공리) — Phase 3
+    "raas_ontology_selection.ttl",   # 선곡(플레이리스트) 필드 정의 + 방송일 경계 공리
 ]
 
 

@@ -520,12 +520,44 @@ def _build_extract_realtime(question: str) -> dict:
         "programs": [], "row_count": len(tb["rows"]), "col_count": len(tb["channels"]), "sheets": [sheet]}}
 
 
+def _build_extract_selection(question: str) -> dict:
+    """선곡 추출 — 프로그램 선곡표(행=곡). 특정일이면 그 날(온디맨드 1년 내), 미지정이면 최근 캐시."""
+    ent = resolve_entities(question)
+    code = ent.get("code")
+    if not code or ent.get("scope_kind") != "program":
+        return {"ok": False, "reason": "선곡 추출은 프로그램을 지정해 주세요(예: '컬투쇼 선곡 뽑아줘')"}
+    import raas_datasource as DSRC
+    as_of = ent.get("as_of_date")
+    rows = DSRC.get_selection_for(code, as_of)
+    if not rows:
+        return {"ok": False, "reason": "선곡 데이터 없음(보관 1년·최근 캐시 범위 확인)"}
+
+    def _hms(t):
+        t = str(t or "")
+        return f"{t[8:10]}:{t[10:12]}:{t[12:14]}" if len(t) >= 14 else t
+    header = ["날짜", "시작", "종료", "아티스트", "곡명", "앨범", "발매연도", "장르", "재생(초)"]
+    out_rows = [[r.get("DATE"), _hms(r.get("START_TIME")), _hms(r.get("END_TIME")),
+                 r.get("ARTIST_NAME"), r.get("SONG_TITLE"), r.get("ALBUM_TITLE"),
+                 r.get("RELEASE_YEAR"), r.get("GENRE_NM"), r.get("PLAY_TIME")] for r in rows]
+    dates = sorted({r.get("DATE") for r in rows if r.get("DATE")})
+    name = _resolve_name(code)
+    span = as_of or (f"{dates[0]}~{dates[-1]}" if dates else "최근")
+    sheet = {"field": "selection", "label": f"선곡 — {name}", "header": header, "rows": out_rows}
+    return {"ok": True, "payload": {
+        "title": f"{name}({code}) 선곡 · {span}",
+        "date_from": (dates[0] if dates else span), "date_to": (dates[-1] if dates else span),
+        "row_label": "곡", "programs": [],
+        "row_count": len(out_rows), "col_count": len(header) - 1, "sheets": [sheet]}}
+
+
 def build_extract(question: str, overlay_ctx=None) -> dict:
     """자연어 추출 요청 → {ok, payload}. payload에 지표별 시트(행=날짜, 열=프로그램).
-       실시간(동시사용자) 의도면 1분 간격 채널 표로 분기."""
+       실시간(동시사용자) 의도면 1분 간격 채널 표, 선곡 의도면 선곡표로 분기."""
     question = _norm_fmam(question)    # 채널명 대소문자 정규화
     if _detect_realtime(question):
         return _build_extract_realtime(question)
+    if _wants_selection(question):
+        return _build_extract_selection(question)
     spec = _extract_parse(question)
     try:
         rows = S._kpi_rows() or []
@@ -824,6 +856,45 @@ def _p_guest_special_today(ent):
     except Exception:
         pass
     return out
+
+
+# 선곡(플레이리스트) 감지
+_SELECTION_SIGNAL = ("선곡", "플레이리스트", "playlist", "선곡표", "튼 곡", "튼곡", "튼 노래",
+                     "무슨 곡", "무슨 노래", "어떤 곡", "어떤 노래", "곡 리스트", "노래 리스트",
+                     "선곡 리스트", "재생한 곡", "나온 곡", "나온 노래", "셋리스트", "set list")
+
+def _wants_selection(q: str) -> bool:
+    return any(s in (q or "") for s in _SELECTION_SIGNAL)
+
+def _p_selection(ent):
+    """[program] 프로그램 선곡표 — 곡·아티스트·앨범·장르·발매·방송 내 시각(START~END)·재생초.
+       특정일이면 그 날(캐시 밖 과거일은 온디맨드 1년 내), 미지정이면 캐시 최근 방송분.
+       provider는 데이터 슬라이스만 얇게(도메인 규칙은 온톨로지·LLM)."""
+    code = ent.get("code")
+    if not code or ent.get("scope_kind") != "program":
+        return None
+    import raas_datasource as DSRC
+    as_of = ent.get("as_of_date")            # 'YYYY-MM-DD' or None
+    if as_of:
+        rows = DSRC.get_selection_for(code, as_of)
+        label = f"{as_of} 선곡"
+    else:
+        by_date = DSRC.get_selection_index().get(code.upper()) or {}
+        if not by_date:
+            return None
+        latest = max(by_date)
+        rows = by_date[latest]
+        label = f"{latest} 선곡 (최근 방송분)"
+    if not rows:
+        return None
+    def _hm(t):
+        t = str(t or "")
+        return f"{t[8:10]}:{t[10:12]}" if len(t) >= 12 else t
+    songs = [{"시각": f"{_hm(r.get('START_TIME'))}~{_hm(r.get('END_TIME'))}",
+              "재생초": r.get("PLAY_TIME"), "아티스트": r.get("ARTIST_NAME"),
+              "곡": r.get("SONG_TITLE"), "앨범": r.get("ALBUM_TITLE"),
+              "발매": r.get("RELEASE_YEAR"), "장르": r.get("GENRE_NM")} for r in rows[:80]]
+    return {"범위": label, "곡수": len(rows), "선곡표": songs}
 
 
 # 채널 코드 → 소속 프로그램 코드 프리픽스 (X00 집계코드는 제외 처리)
@@ -1626,6 +1697,9 @@ PROVIDERS = [
     {"name": "guest_special_today", "needs": "channel",
      "desc": "모든 프로그램의 이번 방송 게스트 + 같은 요일 최근 게스트(반복 판정용) — '오늘 나오는 모든 프로그램 중 특별게스트' 등 전 프로그램 특별/고정 게스트 질의",
      "fetch": _p_guest_special_today},
+    {"name": "selection", "needs": "program",
+     "desc": "프로그램 선곡표(곡·아티스트·앨범·장르·발매·방송 내 시각·재생초). 특정일이면 그 날, 미지정이면 최근 방송분. '선곡·튼 곡·플레이리스트·무슨 노래 틀었어' 등",
+     "fetch": _p_selection},
     {"name": "program_demographics", "needs": "program",
      "desc": "프로그램별 일자별 청취자 성별·연령대·디바이스 분포(비율%, 룩업). PERIOD 청취시작/1분이상/10분이상. '컬투쇼 어제 연령대·성별·디바이스 분포·주 시청층' 등",
      "fetch": _p_program_demographics},
@@ -3203,6 +3277,8 @@ def _assemble_core(question: str, overlay_ctx=None) -> dict:
         names = ["guest_history"] + names     # '특별/고정 게스트' 질의는 게스트 이력+판정 공리 반드시 포함
     if _wants_guest_history(question) and ent.get("all_programs") and "guest_special_today" not in names:
         names = ["guest_special_today"] + names   # '모든 프로그램 특별게스트' — 전 프로그램 이번/같은요일 게스트
+    if _wants_selection(question) and ent.get("scope_kind") == "program" and "selection" not in names:
+        names = ["selection"] + names         # '선곡·튼 곡·플레이리스트' 질의는 선곡표 반드시 포함
     if _wants_program_demo(question) and ent.get("scope_kind") == "program" and "program_demographics" not in names:
         names = ["program_demographics"] + names   # 프로그램 성별·연령·디바이스 분포 질의
     if _wants_correlate(question) and ent.get("scope_kind") == "program" and "metric_correlate" not in names:
