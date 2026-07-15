@@ -667,6 +667,14 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   border-radius:8px;padding:14px;font-size:var(--fs-sm);
   max-height:480px;overflow-y:auto;
 }
+/* 모바일 — 그래프를 화면 폭 가득 + 크게(세로 스택), 노드 탭 쉽게 */
+@media (max-width:640px){
+  .stm-graph-wrap{flex-direction:column}
+  .stm-graph-canvas{width:100%;min-height:62vh}
+  .stm-graph-svg{height:62vh}
+  .stm-graph-side{flex:1 1 auto;width:100%;max-height:none}
+  .stm-graph-node-label{font-size:13px}
+}
 .stm-graph-side h4{margin:0 0 6px;font-size:var(--fs-md);color:var(--text)}
 .stm-graph-side .meta{color:var(--sub);font-size:var(--fs-xs);margin-bottom:10px}
 .stm-graph-side .row{display:flex;justify-content:space-between;padding:3px 0;color:var(--text2)}

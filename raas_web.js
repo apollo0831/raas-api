@@ -910,7 +910,16 @@ function _layoutAndRenderGraph(data) {
 
   // ── 인터랙션: 클릭 → 사이드 패널 상세, 드래그 → 위치 조정, 휠 → 줌 ──
   const _nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
-  let viewBox = [0, 0, W, H];
+  // viewBox를 콘텐츠(노드 bounding box)에 맞춰 화면을 꽉 채움 — 모바일에서 특히 크게 보임
+  const _mobile = (window.innerWidth || 800) < 640;
+  let viewBox = (() => {
+    let mnX = 1e9, mnY = 1e9, mxX = -1e9, mxY = -1e9;
+    for (const n of nodes) { mnX = Math.min(mnX, n.x); mnY = Math.min(mnY, n.y); mxX = Math.max(mxX, n.x); mxY = Math.max(mxY, n.y); }
+    if (!isFinite(mnX)) return [0, 0, W, H];
+    const pad = _mobile ? 22 : 34;
+    return [mnX - pad, mnY - pad, Math.max(60, mxX - mnX) + pad*2, Math.max(60, mxY - mnY) + pad*2];
+  })();
+  svg.setAttribute('viewBox', viewBox.join(' '));
   let dragging = null, panStart = null;
 
   function _svgPoint(ev) {
