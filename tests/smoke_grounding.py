@@ -204,6 +204,10 @@ check_true("실시간 감지: '지금 동시 청취자 몇 명'", G._detect_real
 check_true("실시간 감지: '실시간 현황'", G._detect_realtime("실시간 현황 보여줘"))
 check_true("오탐 방지: '지금 이상 있어?' 실시간 아님", not G._detect_realtime("지금 이상 있어?"))
 check_true("오탐 방지: '어제 DAU는?' 실시간 아님", not G._detect_realtime("어제 DAU는?"))
+# '분당' = 분단위 tempsummary(실시간) — 지금/실시간 없이 프로그램+과거일도 realtime scope로
+check_true("실시간 감지: '분당 청취자'", G._detect_realtime("7월 13일 컬투쇼 분당 청취자 수 알려줘"))
+_rt = G._rt_resolve_target("7월 13일 컬투쇼 분당 청취자 수")
+check("컬투쇼 분당 → 파워FM 편성창", (_rt.get("ch_field"), _rt.get("win")), ("F00", ("14:00", "16:00")))
 # 과거 특정일 분단위 — 연도 파싱 + history 경로. 보관 범위 밖이면 '언제부터' 안내
 check("절대일자 연도 파싱: '2025년 12월 31일'", G._parse_abs_date("2025년 12월 31일"), (2025, 12, 31))
 _rh = G._assemble_realtime("2025년 12월 31일 파워FM 분당 동시사용자 추이") or {}
