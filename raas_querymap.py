@@ -144,11 +144,17 @@ def stats_by_role(days: int = 30) -> list:
             for p in _explode_providers(r["providers_used"]):
                 prov_ctr[p] = prov_ctr.get(p, 0) + 1
         top_provider = max(prov_ctr, key=prov_ctr.get) if prov_ctr else None
+        # 주 intent — 현행 12종 중 최빈(은퇴 classify_intent 레거시 값 제외)
+        int_ctr: dict = {}
+        for r in grp:
+            if r["intent"] in CANONICAL_INTENTS:
+                int_ctr[r["intent"]] = int_ctr.get(r["intent"], 0) + 1
+        top_intent = max(int_ctr, key=int_ctr.get) if int_ctr else None
         out.append({
             "role":       role,
             "queries":    len(grp),
             "users":      len(users),
-            "top_intent": _mode(grp, "intent"),
+            "top_intent": top_intent,
             "top_metric": _mode(grp, "metric"),
             "top_scope":  _mode(grp, "scope"),
             "top_provider": top_provider,     # 현행: 주 데이터소스(providers_used 최빈)

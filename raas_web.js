@@ -382,6 +382,10 @@ async function _adminAction(uid, action) {
 
 // ── 질의맵 / 통계 ──────────────────────────────────────────
 let _STM = { tab: 'overview', days: 30, me: null };
+// intent(연산유형) 코드 → 한글 라벨 (현행 12종). 직무별·인기주제 탭 공용
+const _INTENT_KO = { snapshot:'현황조회', trend:'추이', compare:'비교', ranking:'순위',
+  correlate:'상관·원인', extract:'추출', editorial:'편성연혁', schedule:'편성표',
+  realtime:'실시간', meta:'카탈로그', digest:'특이사항', concept:'개념·정의' };
 
 function openStatsModal() {
   document.getElementById('statsModal').classList.add('open');
@@ -513,6 +517,7 @@ function _renderStmByRole(rows) {
       <td>${escapeHtml(r.role || '—')}</td>
       <td class="stm-num">${_fmtN(r.queries)}</td>
       <td class="stm-num">${_fmtN(r.users)}</td>
+      <td><span class="stm-tag">${r.top_intent ? escapeHtml(_INTENT_KO[r.top_intent]||r.top_intent) : '—'}</span></td>
       <td><span class="stm-tag">${escapeHtml(r.top_provider||'—')}</span></td>
       <td><span class="stm-tag">${escapeHtml(r.top_metric||'—')}</span></td>
       <td><span class="stm-tag">${escapeHtml(r.top_scope||'—')}</span></td>
@@ -526,7 +531,7 @@ function _renderStmByRole(rows) {
     <div class="stm-section">
       <div class="stm-section-title">직무별 상세</div>
       <table class="stm-table">
-        <thead><tr><th>직무</th><th>질문수</th><th>사용자</th><th>주 데이터소스</th><th>주 지표</th><th>주 scope</th><th>평균 토큰</th></tr></thead>
+        <thead><tr><th>직무</th><th>질문수</th><th>사용자</th><th>주 intent</th><th>주 데이터소스</th><th>주 지표</th><th>주 scope</th><th>평균 토큰</th></tr></thead>
         <tbody>${tbody}</tbody>
       </table>
     </div>`;
@@ -571,9 +576,6 @@ function _renderStmTopics(d) {
   if (!scopes.length && !intents.length && !provs.length && !qs.length) {
     return `<div class="stm-empty">기간 내 주제 통계가 없습니다.</div>`;
   }
-  const _INTENT_KO = { snapshot:'현황조회', trend:'추이', compare:'비교', ranking:'순위',
-    correlate:'상관·원인', extract:'추출', editorial:'편성연혁', schedule:'편성표',
-    realtime:'실시간', meta:'카탈로그', digest:'특이사항', concept:'개념·정의' };
   const iBody = intents.map(t => `
     <tr>
       <td><span class="stm-tag">${escapeHtml(_INTENT_KO[t.intent] || t.intent)}</span> <span style="color:var(--dim);font-size:var(--fs-xs)">${escapeHtml(t.intent)}</span></td>
