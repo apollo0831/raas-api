@@ -771,61 +771,6 @@ def _p_guest_history(ent):
     return out
 
 
-def _p_guest_special_today(ent):
-    """[all-programs] 최근 방송분 게스트가 있는 프로그램별로 '이번 게스트 + 같은 요일 최근 게스트들'을
-       제공 → LLM이 '이번 게스트가 그 요일 반복(고정)인지 벗어난 특별인지' 판정. 규칙은 공리, provider는
-       얇게(데이터 슬라이스만). '오늘 모든 프로그램 중 특별게스트' 질의용."""
-    if not ent.get("all_programs"):
-        return None
-    import datetime as _dt, re as _re
-    try:
-        rows = S._kpi_rows() or []
-    except Exception:
-        return None
-    prog_rx = _re.compile(r"^[FLMGP][0-9][0-9]$")
-    # 프로그램별 '최신 방송분(guestname 있는 최신 날짜)' 1건으로 축약
-    latest = {}
-    for r in rows:
-        code = (r.get("PGM_CODE") or "").strip()
-        g = (r.get("guestname") or "").strip()
-        d = (r.get("DATE") or "").strip()
-        if not (prog_rx.match(code) and g and d):
-            continue
-        if code not in latest or d > latest[code][0]:
-            latest[code] = (d, g)
-    progs = []
-    for code, (d, g) in latest.items():
-        try:
-            wd = _dt.datetime.strptime(d.replace("-", "/"), "%Y/%m/%d").weekday()
-        except Exception:
-            continue
-        same_wd = []                       # 같은 요일 최근 게스트(반복 판정 근거)
-        for h in (S._load_program_history(code, 56) or []):
-            hd = (h.get("DATE") or "").strip(); hg = (h.get("guestname") or "").strip()
-            if not (hd and hg):
-                continue
-            try:
-                if _dt.datetime.strptime(hd.replace("-", "/"), "%Y/%m/%d").weekday() == wd:
-                    same_wd.append(f"{hd}:{hg}")
-            except Exception:
-                pass
-        progs.append({"프로그램": f"{_resolve_name(code)}({code})", "요일": _WD_KO[wd],
-                      "이번 방송 게스트": g, "같은 요일 최근 게스트(반복 판정용)": same_wd[-6:]})
-    if not progs:
-        return None
-    out = {"_안내": "각 프로그램의 '이번 방송 게스트'가 '같은 요일 최근 게스트'에서 반복되면 고정, "
-                   "반복 없이 이번만 등장하면 특별게스트. (게스트 데이터는 최근 방송분 기준)",
-           "프로그램별 게스트": progs}
-    try:
-        from raas_onto import get_adapter
-        for ax in get_adapter().get_domain_axioms():
-            if "게스트" in (ax.get("label", "") + ax.get("text", "")):
-                out["판정 공리"] = ax["text"]; break
-    except Exception:
-        pass
-    return out
-
-
 # 채널 코드 → 소속 프로그램 코드 프리픽스 (X00 집계코드는 제외 처리)
 _CH_PREFIX = {"F00": ("F",), "L00": ("L", "M"), "G00": ("G",), "P00": ("P",),
               "T00": ("F", "L", "M", "G", "P")}
@@ -1623,9 +1568,6 @@ PROVIDERS = [
     {"name": "guest_history", "needs": "program",
      "desc": "게스트 이력(최근 6주 날짜·요일·게스트) + 고정/특별 판정 공리 + 등록 고정게스트. '특별 게스트·고정 게스트·일회성/특집 게스트·매주 나오는 게스트' 등 반복 패턴 질의",
      "fetch": _p_guest_history},
-    {"name": "guest_special_today", "needs": "channel",
-     "desc": "모든 프로그램의 이번 방송 게스트 + 같은 요일 최근 게스트(반복 판정용) — '오늘 나오는 모든 프로그램 중 특별게스트' 등 전 프로그램 특별/고정 게스트 질의",
-     "fetch": _p_guest_special_today},
     {"name": "program_demographics", "needs": "program",
      "desc": "프로그램별 일자별 청취자 성별·연령대·디바이스 분포(비율%, 룩업). PERIOD 청취시작/1분이상/10분이상. '컬투쇼 어제 연령대·성별·디바이스 분포·주 시청층' 등",
      "fetch": _p_program_demographics},
@@ -3201,8 +3143,6 @@ def _assemble_core(question: str, overlay_ctx=None) -> dict:
         names = ["engagement"] + names        # '문자·공감로그 참여' 질의는 참여 데이터 반드시 포함
     if _wants_guest_history(question) and ent.get("scope_kind") == "program" and "guest_history" not in names:
         names = ["guest_history"] + names     # '특별/고정 게스트' 질의는 게스트 이력+판정 공리 반드시 포함
-    if _wants_guest_history(question) and ent.get("all_programs") and "guest_special_today" not in names:
-        names = ["guest_special_today"] + names   # '모든 프로그램 특별게스트' — 전 프로그램 이번/같은요일 게스트
     if _wants_program_demo(question) and ent.get("scope_kind") == "program" and "program_demographics" not in names:
         names = ["program_demographics"] + names   # 프로그램 성별·연령·디바이스 분포 질의
     if _wants_correlate(question) and ent.get("scope_kind") == "program" and "metric_correlate" not in names:

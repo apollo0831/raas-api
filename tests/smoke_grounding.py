@@ -98,9 +98,6 @@ check_true("다중 게스트 → compare 2엔티티", bool(_cc) and len(_cc) == 
 _rc = G._assemble_compare("애프터 클럽, 김영철의 파워FM 특별게스트 비교", _cc)
 check_true("compare에 프로그램별 게스트 블록", _rc["context"].count("게스트 이력·고정/특별 판정") == 2
            and "guest_history" in _rc["provenance"]["providers"])
-# 전 프로그램(오늘 모든 프로그램) 특별게스트 — 프로그램별 이번/같은요일 게스트 + 공리
-_gst = G._p_guest_special_today(G.resolve_entities("오늘 나오는 모든 프로그램 게스트 중 특별게스트 누구야?")) or {}
-check_true("guest_special_today: 프로그램별 게스트+공리", bool(_gst.get("프로그램별 게스트")) and bool(_gst.get("판정 공리")))
 
 print("── 2. 개념신호 가드(과잉 캡처 방지) ─────────────────")
 for q in ["신규사용자 유치 전략 알려줘", "DAU가 뭐야?", "신규 늘리려면 어떻게 해?", "MAU 높이는 방법", "안녕하세요"]:
