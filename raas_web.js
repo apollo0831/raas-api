@@ -710,11 +710,28 @@ function _graphNodeLabel(n) {
   return raw.length > 14 ? raw.slice(0, 13) + '…' : raw;
 }
 
+// 그래프 facet 상태 — 숨긴 노드 타입 + 역할중심(사용자 접기) 모드. 기본: metric 숨김·역할중심.
+if (!_STM.graphHide) _STM.graphHide = new Set(['metric']);
+if (_STM.graphRoleMode === undefined) _STM.graphRoleMode = true;
+const _GRAPH_FACETS = [
+  { t:'role',    ko:'직무',      c:'#8b95a5' },
+  { t:'user',    ko:'사용자',    c:'#8b95a5' },
+  { t:'intent',  ko:'연산유형',  c:'#a855f7' },
+  { t:'provider',ko:'데이터소스',c:'#f59e0b' },
+  { t:'scope',   ko:'대상',      c:'#34c78a' },
+  { t:'metric',  ko:'지표(KPI)', c:'#4f8ef7' },
+];
+
 function _renderStmGraph(d) {
   if (!d || !d.nodes || d.nodes.length === 0) {
     return `<div class="stm-graph-empty">사용자 질의 데이터가 누적되면 관계 그래프가 표시됩니다.<br>현재 fact 보유 사용자가 없습니다.</div>`;
   }
-  const meta = d.meta || {};
+  _STM.graphRaw = d;
+  const facetBtns = _GRAPH_FACETS.map(f => {
+    const on = !_STM.graphHide.has(f.t);
+    return `<button class="stm-facet-btn${on?' on':''}" onclick="_graphToggleFacet('${f.t}')">
+      <span class="dot" style="background:${f.c};opacity:${on?1:0.3}"></span>${f.ko}</button>`;
+  }).join('');
   const html = `
     <div class="stm-graph-wrap">
       <div class="stm-graph-canvas" id="graphCanvas">
@@ -722,26 +739,57 @@ function _renderStmGraph(d) {
       </div>
       <div class="stm-graph-side" id="graphSide">
         <h4>관계 그래프</h4>
-        <div class="meta">최근 ${_STM.days || 0}일 · 노드 ${d.nodes.length} · 엣지 ${d.edges.length}</div>
-        <div class="row"><span class="k">사용자</span><span>${meta.n_users||0}</span></div>
-        <div class="row"><span class="k">직무</span><span>${meta.n_roles||0}</span></div>
-        <div class="row"><span class="k">연산유형</span><span>${meta.n_intents||0}</span></div>
-        <div class="row"><span class="k">데이터소스</span><span>${meta.n_providers||0}</span></div>
-        <div class="row"><span class="k">대상</span><span>${meta.n_scopes||0}</span></div>
-        <div class="row"><span class="k">지표(KPI)</span><span>${meta.n_metrics||0}</span></div>
-        <div class="stm-graph-legend">
-          <span class="lg"><span class="dot" style="background:#8b95a5"></span>사용자/직무</span>
-          <span class="lg"><span class="dot" style="background:#a855f7"></span>연산유형</span>
-          <span class="lg"><span class="dot" style="background:#f59e0b"></span>데이터소스</span>
-          <span class="lg"><span class="dot" style="background:#34c78a"></span>대상</span>
-          <span class="lg"><span class="dot" style="background:#4f8ef7"></span>지표</span>
-        </div>
-        <div style="margin-top:14px;font-size:var(--fs-xs);color:var(--dim)">노드 드래그 · 휠 줌</div>
+        <div class="meta" id="graphCount">최근 ${_STM.days || 0}일</div>
+        <div style="margin:8px 0"><button class="stm-facet-btn${_STM.graphRoleMode?' on':''}" onclick="_graphToggleRoleMode()">
+          ${_STM.graphRoleMode ? '👥 역할 중심' : '🙍 사용자별'}</button></div>
+        <div class="stm-graph-facets">${facetBtns}</div>
+        <div style="margin-top:10px;font-size:var(--fs-xs);color:var(--dim)">facet 버튼으로 표시 토글 · 노드 드래그 · 휠 줌<br>초록점선=대상↔연산 · 노랑점선=연산↔데이터</div>
       </div>
     </div>`;
-  // SVG 렌더는 다음 tick에 (DOM 삽입 후)
-  setTimeout(() => _layoutAndRenderGraph(d), 0);
+  setTimeout(() => _relayoutGraph(), 0);
   return html;
+}
+
+// facet 필터 + 역할중심 집계 적용 → 렌더용 데이터
+function _graphTransform(data) {
+  let nodes = data.nodes, edges = data.edges;
+  if (_STM.graphRoleMode) {
+    // 사용자 노드 제거 + user→X 엣지를 그 사용자의 직무 노드로 리라우팅·집계
+    const uidRole = {};
+    for (const n of nodes) if (n.type === 'user') uidRole[n.id] = 'r:' + n.role;
+    nodes = nodes.filter(n => n.type !== 'user');
+    const agg = {};
+    for (const e of edges) {
+      if (e.type === 'membership' || e.type === 'similar') continue;  // 사용자 전용 엣지 제외
+      let s = uidRole[e.source] || e.source, t = uidRole[e.target] || e.target;
+      if (s === t) continue;
+      const k = s + '|' + t + '|' + e.type;
+      if (!agg[k]) agg[k] = { source: s, target: t, type: e.type, weight: 0 };
+      agg[k].weight += (e.weight || 1);
+    }
+    edges = Object.values(agg);
+  }
+  const hide = _STM.graphHide;
+  nodes = nodes.filter(n => !hide.has(n.type));
+  const ids = new Set(nodes.map(n => n.id));
+  edges = edges.filter(e => ids.has(e.source) && ids.has(e.target));
+  return { nodes, edges, meta: data.meta };
+}
+
+function _relayoutGraph() {
+  if (!_STM.graphRaw) return;
+  const data = _graphTransform(_STM.graphRaw);
+  const cnt = document.getElementById('graphCount');
+  if (cnt) cnt.textContent = `최근 ${_STM.days || 0}일 · 노드 ${data.nodes.length} · 엣지 ${data.edges.length}`;
+  _layoutAndRenderGraph(data);
+}
+function _graphToggleFacet(t) {
+  if (_STM.graphHide.has(t)) _STM.graphHide.delete(t); else _STM.graphHide.add(t);
+  document.getElementById('stmBody').innerHTML = _renderStmGraph(_STM.graphRaw);
+}
+function _graphToggleRoleMode() {
+  _STM.graphRoleMode = !_STM.graphRoleMode;
+  document.getElementById('stmBody').innerHTML = _renderStmGraph(_STM.graphRaw);
 }
 
 function _layoutAndRenderGraph(data) {
@@ -824,10 +872,12 @@ function _layoutAndRenderGraph(data) {
     const stroke = e.type === 'similar' ? '#a78bfa'
                  : e.type === 'co_query' ? '#1ec9ff'
                  : e.type === 'membership' ? '#8b95a5'
-                 : e.type === 'operation' ? '#a855f7'
-                 : e.type === 'data' ? '#f59e0b'
+                 : e.type === 'operation' || e.type === 'role_operation' ? '#a855f7'
+                 : e.type === 'data' || e.type === 'role_data' ? '#f59e0b'
+                 : e.type === 'scope_intent' ? '#6ee7b7'
+                 : e.type === 'intent_provider' ? '#fbbf24'
                  : '#4f8ef7';
-    const dash = e.type === 'similar' ? ' stroke-dasharray="3 3"' : '';
+    const dash = (e.type === 'similar' || e.type === 'scope_intent' || e.type === 'intent_provider') ? ' stroke-dasharray="3 3"' : '';
     s += `<line x1="${e.s.x.toFixed(1)}" y1="${e.s.y.toFixed(1)}" x2="${e.t.x.toFixed(1)}" y2="${e.t.y.toFixed(1)}" stroke="${stroke}" stroke-width="${w}" stroke-opacity="${op}"${dash}/>`;
   }
   // nodes

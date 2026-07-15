@@ -668,6 +668,13 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 }
 .stm-graph-legend .lg{display:inline-flex;align-items:center;gap:5px}
 .stm-graph-legend .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+/* facet 토글 버튼 (Phase B) */
+.stm-graph-facets{display:flex;flex-wrap:wrap;gap:5px}
+.stm-facet-btn{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);
+  background:var(--bg2);border:1px solid var(--line2);border-radius:7px;padding:4px 9px;
+  color:var(--sub);cursor:pointer}
+.stm-facet-btn.on{background:var(--bg4);color:var(--text);border-color:var(--bg5)}
+.stm-facet-btn .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
 .stm-graph-node-label{
   font-size:11px;font-family:var(--sans);pointer-events:none;
   fill:var(--text);user-select:none;

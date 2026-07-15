@@ -631,6 +631,29 @@ def build_graph(days: int = 30, max_users: int = 30,
         edges.append({"source": f"u:{uid}", "target": f"p:{pv}",
                       "type": "data", "weight": w})
 
+    # 교차 엣지 [Phase B] — 같은 질의 내 공기(co-occurrence): 대상↔연산, 연산↔데이터소스.
+    #   "어떤 대상에 어떤 연산이 많나 / 어떤 연산이 어떤 데이터로 답해지나" — 창발적 관계층.
+    si_count: dict = {}   # (scope, intent)
+    ip_count: dict = {}   # (intent, provider)
+    for r in edge_rows:
+        iv = r["intent"] if r["intent"] in intent_set else None
+        sc = r["scope"] if r["scope"] in scope_set else None
+        if sc and iv:
+            si_count[(sc, iv)] = si_count.get((sc, iv), 0) + 1
+        if iv:
+            for p in _explode_providers(r["providers_used"]):
+                if p in provider_set:
+                    ip_count[(iv, p)] = ip_count.get((iv, p), 0) + 1
+    _XMIN = 2   # 노이즈 컷(2회 이상 공기)
+    for (sc, iv), w in si_count.items():
+        if w >= _XMIN:
+            edges.append({"source": f"s:{sc}", "target": f"i:{iv}",
+                          "type": "scope_intent", "weight": w})
+    for (iv, pv), w in ip_count.items():
+        if w >= _XMIN:
+            edges.append({"source": f"i:{iv}", "target": f"p:{pv}",
+                          "type": "intent_provider", "weight": w})
+
     # co_query: metric—metric, scope—scope (별도 분리)
     for p in co_query_pairs(days=days, dimension="metric", min_support=1, top_n=30):
         if p["a"] in metric_set and p["b"] in metric_set and p["weight"] >= 1:
