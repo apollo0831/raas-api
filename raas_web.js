@@ -2205,7 +2205,7 @@ function _thankReason(queryId, reason) {
 // HISTORY MODAL
 // ────────────────────────────────────────────────
 let _histDays = 0, _histOffset = 0, _histTotal = 0;
-let _histMode = 'all';   // 'all' | 'bad'(👎 아쉬움) | 'improve'(내 기여) | 'review'(검토 큐)
+let _histMode = 'all';   // 'all' | 'improve'(내 기여) | 'review'(검토 큐)  ※'아쉬움' 탭은 검토 큐와 중복이라 제거
 const HIST_PAGE_SIZE = 20;
 let _histAllItems = [];
 
@@ -2267,7 +2267,6 @@ async function loadHistAll() {
   if (_histMode === 'review')  { _loadReviewQueue(); return; }
   try {
     const params = new URLSearchParams({ limit: HIST_PAGE_SIZE, offset: _histOffset, days: _histDays });
-    if (_histMode === 'bad') params.set('feedback', '-1');   // 👎 아쉬움만
     const res = await fetch('/api/query/history/all?' + params);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
@@ -2908,9 +2907,17 @@ function _funnelDashboard(f) {
     ${stage('👎', '아쉬움', f.neg, '')}${arrow}${stage('✦', '개선착수', f.improvements, conv(f.neg, f.improvements))}${arrow}${stage('✓', '승인', f.approved, conv(f.improvements, f.approved))}${arrow}${stage('📦', '승격', f.promoted, conv(f.approved, f.promoted))}</div>`;
   const wk = f.neg_weekly || [];
   const maxRate = Math.max(...wk.map(w => w.rate), 1);
-  const bars = wk.map(w => `<div title="${w.week}: 👎${w.neg}/${w.tot} (${w.rate}%)" style="flex:1;min-width:10px;background:var(--accent);opacity:.7;border-radius:2px 2px 0 0;height:${Math.max(6, Math.round(w.rate / maxRate * 100))}%"></div>`).join('');
-  const trend = `<div style="margin-top:8px"><div style="font-size:12px;color:var(--dim);margin-bottom:4px">주간 👎율 추세 (6주)</div>
-    <div style="display:flex;align-items:flex-end;gap:3px;height:46px">${bars || '<span class="imp-mean">데이터 없음</span>'}</div></div>`;
+  // 각 주: 비율(%)은 막대 높이+상단 라벨, 절대수치(👎/전체)는 하단 라벨 — 비율과 절대수치 동시 표시
+  const cols = wk.map(w => `<div title="${w.week}: 👎 ${w.neg}건 / 전체 ${w.tot}건 (${w.rate}%)"
+      style="flex:1;min-width:34px;display:flex;flex-direction:column;align-items:center;gap:2px">
+      <div style="font-size:11px;font-weight:700;color:var(--text)">${w.rate}%</div>
+      <div style="width:100%;height:46px;display:flex;align-items:flex-end">
+        <div style="width:100%;background:var(--accent);opacity:.7;border-radius:2px 2px 0 0;height:${Math.max(6, Math.round(w.rate / maxRate * 100))}%"></div>
+      </div>
+      <div style="font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums">${w.neg}/${w.tot}</div>
+    </div>`).join('');
+  const trend = `<div style="margin-top:8px"><div style="font-size:12px;color:var(--dim);margin-bottom:4px">주간 👎율 추세 (6주) · 상단 비율 · 하단 👎/전체 건수</div>
+    <div style="display:flex;align-items:flex-end;gap:6px">${cols || '<span class="imp-mean">데이터 없음</span>'}</div></div>`;
   return `<div class="imp-sec-hd">📊 개선 루프 효과 · 최근 ${f.window_days}일 (누계 공유 ${f.total_approved} · 승격 ${f.total_promoted})</div>
     <div style="margin:0 14px 10px">${funnel}${trend}</div>`;
 }
