@@ -712,7 +712,6 @@ function _graphNodeLabel(n) {
 
 // 그래프 facet 상태 — 숨긴 노드 타입 + 역할중심(사용자 접기) 모드. 기본: metric 숨김·역할중심.
 if (!_STM.graphHide) _STM.graphHide = new Set(['metric']);
-if (_STM.graphRoleMode === undefined) _STM.graphRoleMode = true;
 if (_STM.graphGroupProviders === undefined) _STM.graphGroupProviders = false;
 const _GRAPH_FACETS = [
   { t:'role',    ko:'직무',      c:'#8b95a5' },
@@ -741,14 +740,13 @@ function _renderStmGraph(d) {
       <div class="stm-graph-side" id="graphSide">
         <h4>관계 그래프</h4>
         <div class="meta" id="graphCount">최근 ${_STM.days || 0}일</div>
-        <div style="margin:8px 0;display:flex;gap:5px;flex-wrap:wrap">
-          <button class="stm-facet-btn${_STM.graphRoleMode?' on':''}" onclick="_graphToggleRoleMode()">
-            ${_STM.graphRoleMode ? '👥 역할 중심' : '🙍 사용자별'}</button>
+        <div style="margin:8px 0">
           <button class="stm-facet-btn${_STM.graphGroupProviders?' on':''}" onclick="_graphToggleGroupProviders()">
             ${_STM.graphGroupProviders ? '📦 데이터 카테고리' : '🔹 데이터소스 개별'}</button>
         </div>
         <div class="stm-graph-facets">${facetBtns}</div>
-        <div style="margin-top:10px;font-size:var(--fs-xs);color:var(--dim)">facet 버튼으로 표시 토글 · 노드 드래그 · 휠 줌<br>초록점선=대상↔연산 · 노랑점선=연산↔데이터</div>
+        <div style="margin-top:10px;font-size:var(--fs-xs);color:var(--dim)">facet 버튼으로 유형 표시 토글 → 두 유형만 켜면 그 관계가 드러남 · 노드 드래그·휠 줌<br>회색선=유형 간 관계 · 하늘점선=동반조회</div>
+        <div id="graphDetail" class="stm-graph-detail"></div>
       </div>
     </div>`;
   setTimeout(() => _relayoutGraph(), 0);
@@ -780,22 +778,6 @@ function _graphTransform(data) {
     }
     edges = Object.values(agg);
   }
-  if (_STM.graphRoleMode) {
-    // 사용자 노드 제거 + user→X 엣지를 그 사용자의 직무 노드로 리라우팅·집계
-    const uidRole = {};
-    for (const n of nodes) if (n.type === 'user') uidRole[n.id] = 'r:' + n.role;
-    nodes = nodes.filter(n => n.type !== 'user');
-    const agg = {};
-    for (const e of edges) {
-      if (e.type === 'membership' || e.type === 'similar') continue;  // 사용자 전용 엣지 제외
-      let s = uidRole[e.source] || e.source, t = uidRole[e.target] || e.target;
-      if (s === t) continue;
-      const k = s + '|' + t + '|' + e.type;
-      if (!agg[k]) agg[k] = { source: s, target: t, type: e.type, weight: 0 };
-      agg[k].weight += (e.weight || 1);
-    }
-    edges = Object.values(agg);
-  }
   const hide = _STM.graphHide;
   nodes = nodes.filter(n => !hide.has(n.type));
   const ids = new Set(nodes.map(n => n.id));
@@ -812,10 +794,6 @@ function _relayoutGraph() {
 }
 function _graphToggleFacet(t) {
   if (_STM.graphHide.has(t)) _STM.graphHide.delete(t); else _STM.graphHide.add(t);
-  document.getElementById('stmBody').innerHTML = _renderStmGraph(_STM.graphRaw);
-}
-function _graphToggleRoleMode() {
-  _STM.graphRoleMode = !_STM.graphRoleMode;
   document.getElementById('stmBody').innerHTML = _renderStmGraph(_STM.graphRaw);
 }
 function _graphToggleGroupProviders() {
@@ -899,16 +877,11 @@ function _layoutAndRenderGraph(data) {
   // edges 먼저
   for (const e of edges) {
     const w = Math.min(4, 0.8 + Math.log(1 + (e.weight || 1)));
-    const op = e.type === 'similar' ? 0.35 : e.type === 'co_query' ? 0.55 : e.type === 'membership' ? 0.25 : 0.45;
-    const stroke = e.type === 'similar' ? '#a78bfa'
-                 : e.type === 'co_query' ? '#1ec9ff'
-                 : e.type === 'membership' ? '#8b95a5'
-                 : e.type === 'operation' || e.type === 'role_operation' ? '#a855f7'
-                 : e.type === 'data' || e.type === 'role_data' ? '#f59e0b'
-                 : e.type === 'scope_intent' ? '#6ee7b7'
-                 : e.type === 'intent_provider' ? '#fbbf24'
-                 : '#4f8ef7';
-    const dash = (e.type === 'similar' || e.type === 'scope_intent' || e.type === 'intent_provider') ? ' stroke-dasharray="3 3"' : '';
+    const op = e.type === 'similar' ? 0.3 : e.type === 'co_query' ? 0.5 : 0.4;
+    const stroke = e.type === 'similar' ? '#a78bfa'      // 사용자 유사도
+                 : e.type === 'co_query' ? '#1ec9ff'     // 동일유형 동반조회(대상·지표)
+                 : '#7f93b0';                            // rel — 유형 간 공기(중립)
+    const dash = (e.type === 'similar' || e.type === 'co_query') ? ' stroke-dasharray="3 3"' : '';
     s += `<line x1="${e.s.x.toFixed(1)}" y1="${e.s.y.toFixed(1)}" x2="${e.t.x.toFixed(1)}" y2="${e.t.y.toFixed(1)}" stroke="${stroke}" stroke-width="${w}" stroke-opacity="${op}"${dash}/>`;
   }
   // nodes
@@ -950,19 +923,21 @@ function _layoutAndRenderGraph(data) {
     return { x, y };
   }
 
-  svg.addEventListener('mousedown', ev => {
+  // Pointer 이벤트로 통일 — 마우스·터치·펜 공통(모바일 드래그 지원). SVG는 touch-action:none.
+  svg.addEventListener('pointerdown', ev => {
     const target = ev.target.closest('.gnode');
-    const p = _svgPoint(ev);
     if (target) {
+      ev.preventDefault();
       dragging = _nodeMap[target.dataset.id];
-      dragging.pinned = true;
-      _showNodeDetail(dragging, nodes, edges);
+      if (dragging) { dragging.pinned = true; _showNodeDetail(dragging, nodes, edges); }
+      try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
     } else {
       panStart = { x: ev.clientX, y: ev.clientY, vb: [...viewBox] };
     }
   });
-  window.addEventListener('mousemove', ev => {
+  svg.addEventListener('pointermove', ev => {
     if (dragging) {
+      ev.preventDefault();
       const p = _svgPoint(ev);
       dragging.x = p.x; dragging.y = p.y;
       _redrawGraphPositions(svg, nodes, edges);
@@ -974,10 +949,9 @@ function _layoutAndRenderGraph(data) {
       svg.setAttribute('viewBox', viewBox.join(' '));
     }
   });
-  window.addEventListener('mouseup', () => {
-    if (dragging) dragging.pinned = false;
-    dragging = null; panStart = null;
-  });
+  const _endPtr = () => { if (dragging) dragging.pinned = false; dragging = null; panStart = null; };
+  svg.addEventListener('pointerup', _endPtr);
+  svg.addEventListener('pointercancel', _endPtr);
   svg.addEventListener('wheel', ev => {
     ev.preventDefault();
     const factor = ev.deltaY > 0 ? 1.15 : 1 / 1.15;
@@ -1046,24 +1020,28 @@ function _redrawGraphPositions(svg, nodes, edges) {
 }
 
 function _showNodeDetail(node, nodes, edges) {
-  const side = document.getElementById('graphSide');
-  if (!side) return;
-  const incident = edges.filter(e => e.s.id === node.id || e.t.id === node.id);
-  const typeKr = {user:'사용자', role:'직무', metric:'지표', scope:'대상'}[node.type] || node.type;
+  // 노드 정보는 별도 박스(#graphDetail)에 — facet 토글 패널(#graphSide 상단)은 유지
+  const box = document.getElementById('graphDetail');
+  if (!box) return;
+  const incident = edges.filter(e => e.s.id === node.id || e.t.id === node.id)
+                        .sort((a, b) => (b.weight || 0) - (a.weight || 0));
+  const typeKr = {user:'사용자', role:'직무', metric:'지표(KPI)', scope:'대상',
+                  intent:'연산유형', provider:'데이터소스'}[node.type] || node.type;
+  const label = node.type === 'intent' ? (_INTENT_KO[node.label] || node.label) : node.label;
   let neighborHtml = '';
   if (incident.length) {
-    const list = incident.map(e => {
+    const list = incident.slice(0, 20).map(e => {
       const other = e.s.id === node.id ? e.t : e.s;
-      const w = e.weight || 1;
-      return `<div class="row"><span class="k">${escapeHtml(other.label)}</span><span>${w}</span></div>`;
+      const okr = other.type === 'intent' ? (_INTENT_KO[other.label] || other.label) : other.label;
+      return `<div class="row"><span class="k">${escapeHtml(okr)}</span><span>${e.weight || 1}</span></div>`;
     }).join('');
-    neighborHtml = `<h4 style="margin-top:14px">연결 (${incident.length})</h4>${list}`;
+    neighborHtml = `<div class="gd-hd">연결 (${incident.length})</div>${list}`;
   }
-  side.innerHTML = `
-    <h4>${escapeHtml(node.label)}</h4>
+  box.innerHTML = `
+    <div class="gd-close" onclick="document.getElementById('graphDetail').innerHTML=''">✕</div>
+    <h4>${escapeHtml(label)}</h4>
     <div class="meta">${typeKr}${node.role ? ' · ' + escapeHtml(node.role) : ''} · 가중치 ${node.weight||0}</div>
-    ${neighborHtml}
-    <div style="margin-top:14px;font-size:var(--fs-xs);color:var(--dim)">노드 드래그 · 휠 줌</div>`;
+    ${neighborHtml}`;
 }
 
 // ── 프로필 모달 ──

@@ -593,75 +593,44 @@ def build_graph(days: int = 30, max_users: int = 30,
         nodes.append({"id": f"p:{pv}", "type": "provider", "label": pv, "weight": c,
                       "category": _pcat.get(pv, "기타")})
 
-    # 엣지 빌드
+    # ── 엣지 빌드 [Phase D] — 모든 노드 유형 쌍의 통합 공기(co-occurrence) ──
+    # 각 질의는 facet 토큰 묶음(직무·사용자·대상·연산·데이터소스·지표)이다. 같은 질의에 함께
+    #   등장한 서로 다른 유형의 토큰 쌍을 모두 집계 → 어떤 두 유형이든 관계 엣지를 가진다.
+    #   (구 membership/interest/operation/data/scope_intent/intent_provider는 이 하나로 통합.
+    #    facet 토글로 두 유형만 켜면 그 쌍의 관계가 바로 드러남 — 역할중심/사용자별 모드 불필요.)
     edges: list = []
-    # membership: user → role
-    for u in users:
-        if u["role"] in role_used:
-            edges.append({"source": f"u:{u['user_id']}", "target": f"r:{u['role']}",
-                          "type": "membership", "weight": 1})
-
-    # interest: user → metric/scope (집계)
-    um_count: dict = {}
-    us_count: dict = {}
+    uid_role = {u["user_id"]: u["role"] for u in users}   # 노드와 동일 기준(현재 직무)
+    pair_ct: dict = {}      # (id_a, id_b) 정렬 → 공기 횟수 (교차유형만)
     for r in edge_rows:
+        toks = []           # 이 질의의 (type, node_id) 토큰들
         uid = str(r["user_id"])
-        if uid not in uid_set:
-            continue
-        if r["metric"] and r["metric"] in metric_set:
-            um_count[(uid, r["metric"])] = um_count.get((uid, r["metric"]), 0) + 1
-        if r["scope"] and r["scope"] in scope_set:
-            us_count[(uid, r["scope"])] = us_count.get((uid, r["scope"]), 0) + 1
-    for (uid, m), w in um_count.items():
-        edges.append({"source": f"u:{uid}", "target": f"m:{m}",
-                      "type": "interest", "weight": w})
-    for (uid, s), w in us_count.items():
-        edges.append({"source": f"u:{uid}", "target": f"s:{s}",
-                      "type": "interest", "weight": w})
-
-    # operation: user → intent, data: user → provider (집계) [Phase A]
-    ui_count: dict = {}
-    up_count: dict = {}
-    for r in edge_rows:
-        uid = str(r["user_id"])
-        if uid not in uid_set:
-            continue
+        if uid in uid_set:
+            toks.append(("user", f"u:{uid}"))
+        role = uid_role.get(uid)
+        if role in role_used:
+            toks.append(("role", f"r:{role}"))
+        if r["scope"] in scope_set:
+            toks.append(("scope", f"s:{r['scope']}"))
         if r["intent"] in intent_set:
-            ui_count[(uid, r["intent"])] = ui_count.get((uid, r["intent"]), 0) + 1
+            toks.append(("intent", f"i:{r['intent']}"))
+        if r["metric"] in metric_set:
+            toks.append(("metric", f"m:{r['metric']}"))
         for p in _explode_providers(r["providers_used"]):
             if p in provider_set:
-                up_count[(uid, p)] = up_count.get((uid, p), 0) + 1
-    for (uid, iv), w in ui_count.items():
-        edges.append({"source": f"u:{uid}", "target": f"i:{iv}",
-                      "type": "operation", "weight": w})
-    for (uid, pv), w in up_count.items():
-        edges.append({"source": f"u:{uid}", "target": f"p:{pv}",
-                      "type": "data", "weight": w})
+                toks.append(("provider", f"p:{p}"))
+        for a in range(len(toks)):
+            for b in range(a + 1, len(toks)):
+                if toks[a][0] == toks[b][0]:
+                    continue   # 같은 유형 쌍(예: provider끼리)은 제외 — 교차유형만
+                k = tuple(sorted((toks[a][1], toks[b][1])))
+                pair_ct[k] = pair_ct.get(k, 0) + 1
+    for (a, b), w in pair_ct.items():
+        # user 결합 쌍은 약해도 노출(1회), 그 외 유형쌍은 노이즈 컷(2회 이상)
+        _min = 1 if (a.startswith("u:") or b.startswith("u:")) else 2
+        if w >= _min:
+            edges.append({"source": a, "target": b, "type": "rel", "weight": w})
 
-    # 교차 엣지 [Phase B] — 같은 질의 내 공기(co-occurrence): 대상↔연산, 연산↔데이터소스.
-    #   "어떤 대상에 어떤 연산이 많나 / 어떤 연산이 어떤 데이터로 답해지나" — 창발적 관계층.
-    si_count: dict = {}   # (scope, intent)
-    ip_count: dict = {}   # (intent, provider)
-    for r in edge_rows:
-        iv = r["intent"] if r["intent"] in intent_set else None
-        sc = r["scope"] if r["scope"] in scope_set else None
-        if sc and iv:
-            si_count[(sc, iv)] = si_count.get((sc, iv), 0) + 1
-        if iv:
-            for p in _explode_providers(r["providers_used"]):
-                if p in provider_set:
-                    ip_count[(iv, p)] = ip_count.get((iv, p), 0) + 1
-    _XMIN = 2   # 노이즈 컷(2회 이상 공기)
-    for (sc, iv), w in si_count.items():
-        if w >= _XMIN:
-            edges.append({"source": f"s:{sc}", "target": f"i:{iv}",
-                          "type": "scope_intent", "weight": w})
-    for (iv, pv), w in ip_count.items():
-        if w >= _XMIN:
-            edges.append({"source": f"i:{iv}", "target": f"p:{pv}",
-                          "type": "intent_provider", "weight": w})
-
-    # co_query: metric—metric, scope—scope (별도 분리)
+    # co_query: 같은 사용자·같은 날 함께 조회된 동일유형 쌍(대상—대상, 지표—지표)
     for p in co_query_pairs(days=days, dimension="metric", min_support=1, top_n=30):
         if p["a"] in metric_set and p["b"] in metric_set and p["weight"] >= 1:
             edges.append({"source": f"m:{p['a']}", "target": f"m:{p['b']}",
