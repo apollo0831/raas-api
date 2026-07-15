@@ -629,39 +629,8 @@ def build_graph(days: int = 30, max_users: int = 30,
         _min = 1 if (a.startswith("u:") or b.startswith("u:")) else 2
         if w >= _min:
             edges.append({"source": a, "target": b, "type": "rel", "weight": w})
-
-    # co_query: 같은 사용자·같은 날 함께 조회된 동일유형 쌍(대상—대상, 지표—지표)
-    for p in co_query_pairs(days=days, dimension="metric", min_support=1, top_n=30):
-        if p["a"] in metric_set and p["b"] in metric_set and p["weight"] >= 1:
-            edges.append({"source": f"m:{p['a']}", "target": f"m:{p['b']}",
-                          "type": "co_query", "weight": p["weight"]})
-    for p in co_query_pairs(days=days, dimension="scope", min_support=1, top_n=30):
-        if p["a"] in scope_set and p["b"] in scope_set and p["weight"] >= 1:
-            edges.append({"source": f"s:{p['a']}", "target": f"s:{p['b']}",
-                          "type": "co_query", "weight": p["weight"]})
-
-    # similar: user—user (같은 role 사용자 ≥3명일 때만, cosine ≥ 0.2)
-    try:
-        from raas_recommend import _cosine, _user_vectors_by_role
-        # role별로 그룹화해서 그 안에서 페어 비교
-        role_users: dict = {}
-        for u in users:
-            role_users.setdefault(u["role"], []).append(u["user_id"])
-        for role, uids in role_users.items():
-            if not role or len(uids) < 3:
-                continue
-            vecs = _user_vectors_by_role(role)  # 같은 role 모든 user 벡터
-            for i in range(len(uids)):
-                for j in range(i + 1, len(uids)):
-                    a, b = uids[i], uids[j]
-                    if a not in vecs or b not in vecs:
-                        continue
-                    s = _cosine(vecs[a], vecs[b])
-                    if s >= 0.2:
-                        edges.append({"source": f"u:{a}", "target": f"u:{b}",
-                                      "type": "similar", "weight": round(s, 3)})
-    except Exception:
-        pass
+    # 동일 노드 유형 간 엣지(co_query 대상↔대상·지표↔지표, similar 사용자↔사용자)는 제외 —
+    #   교차 유형 관계(rel)만 표시한다.
 
     return {
         "nodes": nodes,

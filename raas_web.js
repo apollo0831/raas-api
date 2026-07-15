@@ -745,7 +745,7 @@ function _renderStmGraph(d) {
             ${_STM.graphGroupProviders ? '📦 데이터 카테고리' : '🔹 데이터소스 개별'}</button>
         </div>
         <div class="stm-graph-facets">${facetBtns}</div>
-        <div style="margin-top:10px;font-size:var(--fs-xs);color:var(--dim)">facet 버튼으로 유형 표시 토글 → 두 유형만 켜면 그 관계가 드러남 · 노드 드래그·휠 줌<br>회색선=유형 간 관계 · 하늘점선=동반조회</div>
+        <div style="margin-top:10px;font-size:var(--fs-xs);color:var(--dim)">facet 버튼으로 유형 표시 토글 → 두 유형만 켜면 그 관계가 드러남 · 노드 드래그·휠 줌<br>회색선=유형 간 관계(교차 유형만)</div>
         <div id="graphDetail" class="stm-graph-detail"></div>
       </div>
     </div>`;
@@ -850,8 +850,7 @@ function _layoutAndRenderGraph(data) {
       const a = e.s, b = e.t;
       const dx = b.x - a.x, dy = b.y - a.y;
       const d  = Math.sqrt(dx*dx + dy*dy) || 1;
-      const rest = REST + (e.type === 'similar' ? 40 : 0);
-      const f  = SPRING * (d - rest) * (1 + Math.log(1 + (e.weight || 1)) * 0.15);
+      const f  = SPRING * (d - REST) * (1 + Math.log(1 + (e.weight || 1)) * 0.15);
       const fx = (dx/d) * f, fy = (dy/d) * f;
       a.vx += fx; a.vy += fy;
       b.vx -= fx; b.vy -= fy;
@@ -877,11 +876,9 @@ function _layoutAndRenderGraph(data) {
   // edges 먼저
   for (const e of edges) {
     const w = Math.min(4, 0.8 + Math.log(1 + (e.weight || 1)));
-    const op = e.type === 'similar' ? 0.3 : e.type === 'co_query' ? 0.5 : 0.4;
-    const stroke = e.type === 'similar' ? '#a78bfa'      // 사용자 유사도
-                 : e.type === 'co_query' ? '#1ec9ff'     // 동일유형 동반조회(대상·지표)
-                 : '#7f93b0';                            // rel — 유형 간 공기(중립)
-    const dash = (e.type === 'similar' || e.type === 'co_query') ? ' stroke-dasharray="3 3"' : '';
+    const op = 0.4;
+    const stroke = '#7f93b0';   // rel — 유형 간 관계(교차 유형만)
+    const dash = '';
     s += `<line x1="${e.s.x.toFixed(1)}" y1="${e.s.y.toFixed(1)}" x2="${e.t.x.toFixed(1)}" y2="${e.t.y.toFixed(1)}" stroke="${stroke}" stroke-width="${w}" stroke-opacity="${op}"${dash}/>`;
   }
   // nodes
