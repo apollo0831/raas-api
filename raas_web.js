@@ -713,6 +713,7 @@ function _graphNodeLabel(n) {
 // 그래프 facet 상태 — 숨긴 노드 타입 + 역할중심(사용자 접기) 모드. 기본: metric 숨김·역할중심.
 if (!_STM.graphHide) _STM.graphHide = new Set(['metric']);
 if (_STM.graphRoleMode === undefined) _STM.graphRoleMode = true;
+if (_STM.graphGroupProviders === undefined) _STM.graphGroupProviders = false;
 const _GRAPH_FACETS = [
   { t:'role',    ko:'직무',      c:'#8b95a5' },
   { t:'user',    ko:'사용자',    c:'#8b95a5' },
@@ -740,8 +741,12 @@ function _renderStmGraph(d) {
       <div class="stm-graph-side" id="graphSide">
         <h4>관계 그래프</h4>
         <div class="meta" id="graphCount">최근 ${_STM.days || 0}일</div>
-        <div style="margin:8px 0"><button class="stm-facet-btn${_STM.graphRoleMode?' on':''}" onclick="_graphToggleRoleMode()">
-          ${_STM.graphRoleMode ? '👥 역할 중심' : '🙍 사용자별'}</button></div>
+        <div style="margin:8px 0;display:flex;gap:5px;flex-wrap:wrap">
+          <button class="stm-facet-btn${_STM.graphRoleMode?' on':''}" onclick="_graphToggleRoleMode()">
+            ${_STM.graphRoleMode ? '👥 역할 중심' : '🙍 사용자별'}</button>
+          <button class="stm-facet-btn${_STM.graphGroupProviders?' on':''}" onclick="_graphToggleGroupProviders()">
+            ${_STM.graphGroupProviders ? '📦 데이터 카테고리' : '🔹 데이터소스 개별'}</button>
+        </div>
         <div class="stm-graph-facets">${facetBtns}</div>
         <div style="margin-top:10px;font-size:var(--fs-xs);color:var(--dim)">facet 버튼으로 표시 토글 · 노드 드래그 · 휠 줌<br>초록점선=대상↔연산 · 노랑점선=연산↔데이터</div>
       </div>
@@ -753,6 +758,28 @@ function _renderStmGraph(d) {
 // facet 필터 + 역할중심 집계 적용 → 렌더용 데이터
 function _graphTransform(data) {
   let nodes = data.nodes, edges = data.edges;
+  if (_STM.graphGroupProviders) {
+    // [Phase C] 데이터소스 → 카테고리(KPI·참여·인구·아카이브·실시간·편성·특일)로 롤업
+    const pCat = {};
+    const catNodes = {};
+    for (const n of nodes) if (n.type === 'provider') {
+      const cat = n.category || '기타';
+      const id = 'p:@' + cat;
+      pCat[n.id] = id;
+      if (!catNodes[id]) catNodes[id] = { id, type: 'provider', label: cat, weight: 0, category: cat };
+      catNodes[id].weight += (n.weight || 1);
+    }
+    nodes = nodes.filter(n => n.type !== 'provider').concat(Object.values(catNodes));
+    const agg = {};
+    for (const e of edges) {
+      let s = pCat[e.source] || e.source, t = pCat[e.target] || e.target;
+      if (s === t) continue;
+      const k = s + '|' + t + '|' + e.type;
+      if (!agg[k]) agg[k] = { source: s, target: t, type: e.type, weight: 0 };
+      agg[k].weight += (e.weight || 1);
+    }
+    edges = Object.values(agg);
+  }
   if (_STM.graphRoleMode) {
     // 사용자 노드 제거 + user→X 엣지를 그 사용자의 직무 노드로 리라우팅·집계
     const uidRole = {};
@@ -789,6 +816,10 @@ function _graphToggleFacet(t) {
 }
 function _graphToggleRoleMode() {
   _STM.graphRoleMode = !_STM.graphRoleMode;
+  document.getElementById('stmBody').innerHTML = _renderStmGraph(_STM.graphRaw);
+}
+function _graphToggleGroupProviders() {
+  _STM.graphGroupProviders = !_STM.graphGroupProviders;
   document.getElementById('stmBody').innerHTML = _renderStmGraph(_STM.graphRaw);
 }
 

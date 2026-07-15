@@ -134,6 +134,37 @@ def get_source(name: str):
     return next((s for s in SOURCES if s.name == name), None)
 
 
+# ── provider → 데이터 카테고리 (질의맵 그래프 그룹핑용) ──────────────────────
+# 카테고리 매핑은 '소스 선언'의 홈인 레지스트리에만 둔다(querymap엔 규칙 없음).
+# 새 소스를 SOURCES에 선언하면 그 provider가 자동 분류되고, 보조 provider는 아래 보충.
+_SOURCE_CATEGORY = {
+    "kpi": "KPI", "engagement": "참여",
+    "pgm_gender": "인구", "pgm_age": "인구", "pgm_device": "인구",
+    "history_archive": "아카이브", "realtime": "실시간",
+    "airing_history": "편성", "today_lineup": "편성",
+}
+# SOURCES에 소스로 선언되지 않은 보조 provider(스냅샷·편성표·특일·순위 등)의 카테고리
+_AUX_PROVIDER_CATEGORY = {
+    "point_snapshot": "KPI", "channel_programs": "KPI", "program_ranking": "KPI",
+    "metric_correlate": "KPI", "weekday": "KPI", "data_coverage": "KPI",
+    "schedule": "편성", "programming": "편성", "guest_search": "편성",
+    "calendar": "특일", "period_events": "특일",
+    "realtime_now": "실시간", "realtime_history": "실시간",
+}
+
+def provider_categories() -> dict:
+    """provider 이름 → 데이터 카테고리(KPI·참여·인구·아카이브·실시간·편성·특일).
+       소스 선언(SOURCES.providers)에서 유도 + 보조 provider 보충. 미분류는 호출측에서 '기타'."""
+    out: dict = {}
+    for s in SOURCES:
+        cat = _SOURCE_CATEGORY.get(s.name)
+        if cat:
+            for p in s.providers:
+                out[p] = cat
+    out.update(_AUX_PROVIDER_CATEGORY)
+    return out
+
+
 def daily_sources():
     """교차지표 격자에 오르는 일간 소스(숫자 계열)."""
     return [s for s in _DAILY]

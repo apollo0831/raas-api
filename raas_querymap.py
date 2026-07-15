@@ -583,8 +583,15 @@ def build_graph(days: int = 30, max_users: int = 30,
         nodes.append({"id": f"s:{s}", "type": "scope", "label": s, "weight": c})
     for iv, c in intents:      # [Phase A] 연산유형 노드
         nodes.append({"id": f"i:{iv}", "type": "intent", "label": iv, "weight": c})
-    for pv, c in providers:    # [Phase A] 데이터소스 노드
-        nodes.append({"id": f"p:{pv}", "type": "provider", "label": pv, "weight": c})
+    # [Phase C] provider → 데이터 카테고리(레지스트리 유도) 부착 → 그래프에서 카테고리 그룹핑
+    try:
+        from raas_metrics_registry import provider_categories
+        _pcat = provider_categories()
+    except Exception:
+        _pcat = {}
+    for pv, c in providers:    # [Phase A] 데이터소스 노드 (+ [Phase C] category)
+        nodes.append({"id": f"p:{pv}", "type": "provider", "label": pv, "weight": c,
+                      "category": _pcat.get(pv, "기타")})
 
     # 엣지 빌드
     edges: list = []
