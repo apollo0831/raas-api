@@ -2055,7 +2055,6 @@ document.getElementById('btnNewChat').addEventListener('click', () => {
       <h1 class="welcome-logo">안녕하세요 👋</h1>
       <div class="welcome-sub">SBS 고릴라 라디오의 청취 데이터를 자연어로 질의하세요. 지표, 트렌드, 프로그램 분석을 AI가 답합니다.</div>
         <div class="welcome-cta"><button class="today-digest-btn" onclick="startTodayDigest()">🗓 어제 방송 특이사항 보기</button></div>
-      <div class="welcome-chips" id="suggestChips"></div>
     </div>`;
   _msgCount = 0;
   loadSuggestions();
@@ -2069,8 +2068,8 @@ function _initWelcomeChips() { /* 보팅 시점엔 RAAS_TOKEN 가능 — _bootAu
 // 웰컴 추천 칩 — 스토리라인은 '어제 방송 특이사항' 단일 경로(웰컴 CTA 상시 노출)로 전환.
 //   구 CP 다중슬롯 스토리라인은 제거됨. 웰컴은 직무 기반 추천칩만 렌더.
 async function loadSuggestions() {
-  _injectDataCheckChip();
-  await _loadLegacySuggestions();
+  _injectDataCheckChip();       // '데이터 확인하기' CTA(데이터 직무)만 유지
+  // 웰컴 추천칩(/api/suggestions)은 제거 — '어제 방송 특이사항 보기'·'데이터 확인하기' CTA만 노출
 }
 
 async function _loadLegacySuggestions() {
