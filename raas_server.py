@@ -690,6 +690,10 @@ class RAASHandler(BaseHTTPRequestHandler):
 
     def _get_query_history_all(self):
         try:
+            # 로그인 필수 — 전체 사용자 질의 이력은 로그인 사용자끼리만 열람
+            if not self._get_session_user():
+                self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+                return
             params = {}
             if "?" in self.path:
                 params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
@@ -698,7 +702,8 @@ class RAASHandler(BaseHTTPRequestHandler):
             days   = int(params.get("days", 0))
             _fb    = params.get("feedback")
             feedback = int(_fb) if _fb not in (None, "") else None
-            result = get_all_history(limit=limit, offset=offset, days=days, feedback=feedback)
+            q      = (params.get("q") or "").strip() or None
+            result = get_all_history(limit=limit, offset=offset, days=days, feedback=feedback, q=q)
             self.send_json({"ok": True, **result})
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)

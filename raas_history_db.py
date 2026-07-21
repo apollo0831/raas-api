@@ -1017,8 +1017,9 @@ def get_history(user_id: str, limit: int = 20, days: int = 7) -> list:
     ]
 
 
-def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=None) -> dict:
-    """전체 사용자 질의 이력. 최신순, 페이지네이션. feedback 지정 시 그 값만(-1=아쉬움)."""
+def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=None, q: str = None) -> dict:
+    """전체 사용자 질의 이력. 최신순, 페이지네이션. feedback 지정 시 그 값만(-1=아쉬움).
+    q 지정 시 질문 텍스트 부분일치 검색. IP는 응답에 노출하지 않음(프라이버시)."""
     conds: list = []
     base: list = []
     if days > 0:
@@ -1026,6 +1027,8 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=No
         conds.append("created_at >= ?"); base.append(since)
     if feedback is not None:
         conds.append("feedback = ?"); base.append(feedback)
+    if q:
+        conds.append("question LIKE ?"); base.append("%" + str(q).strip() + "%")
     where = ("WHERE " + " AND ".join(conds)) if conds else ""
     params_count = list(base)
     params_rows  = base + [limit, offset]
@@ -1033,7 +1036,7 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=No
     with get_conn() as conn:
         total = conn.execute(f"SELECT COUNT(*) FROM query_history {where}", params_count).fetchone()[0]
         rows  = conn.execute(
-            f"""SELECT id, user_id, user_name, ip, question, answer, chart_data,
+            f"""SELECT id, user_id, user_name, question, answer, chart_data,
                        feedback, feedback_reason, input_tokens, output_tokens, created_at, source
                 FROM query_history {where}
                 ORDER BY created_at DESC
@@ -1047,7 +1050,7 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=No
             {
                 "id":            r["id"],
                 "user_id":       r["user_id"],
-                "user_name":     r["user_name"] or r["ip"] or "unknown",
+                "user_name":     r["user_name"] or "unknown",
                 "question":      r["question"],
                 "answer":        r["answer"],
                 "chart_data":    json.loads(r["chart_data"]) if r["chart_data"] else None,

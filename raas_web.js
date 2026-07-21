@@ -221,8 +221,9 @@ function _renderSidebarUser() {
     || ['총괄관리','데이터'].includes(RAAS_USER.role);
   document.getElementById('suStatsBtn').style.display =
     statsAllowed ? 'inline-block' : 'none';
-  const revTab = document.getElementById('histTabReview');
-  if (revTab) revTab.style.display = statsAllowed ? 'inline-block' : 'none';
+  // 검토 큐 사이드바 버튼 — is_admin 전용
+  const revBtn = document.getElementById('btnReviewQueue');
+  if (revBtn) revBtn.style.display = RAAS_USER.is_admin ? '' : 'none';
   // 관리자 전용 '참고 정보(메타 푸터)' 토글
   document.getElementById('suMetaBtn').style.display =
     RAAS_USER.is_admin ? 'inline-block' : 'none';
@@ -1386,14 +1387,6 @@ function _saveCachedAnswer(question, answerHTML) {
   _saveQCache(arr);
 }
 
-// ────────────────────────────────────────────────
-// DATE
-// ────────────────────────────────────────────────
-(function(){
-  const d = new Date();
-  const s = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
-  document.getElementById('sidebarDate').textContent = s;
-})();
 
 // ────────────────────────────────────────────────
 // FORMATTERS
@@ -1974,33 +1967,35 @@ function isMobile() { return window.innerWidth <= 900; }
 
 function openSidebar() {
   const sb = document.getElementById('sidebar');
-  const bd = document.getElementById('sidebarBackdrop');
   if (isMobile()) {
-    sb.classList.add('mobile-open');
-    bd.classList.add('visible');
+    // 열기 전 포커스 해제 → 키보드 닫힘 (chat-main transform이 fixed 입력창 기준을 바꾸는 충돌 방지)
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    document.body.classList.add('sidebar-pushed');   // push+scale (딤 백드롭 없음)
   } else {
     sb.classList.remove('collapsed');
   }
 }
 function closeSidebar() {
   const sb = document.getElementById('sidebar');
-  const bd = document.getElementById('sidebarBackdrop');
   if (isMobile()) {
-    sb.classList.remove('mobile-open');
-    bd.classList.remove('visible');
+    document.body.classList.remove('sidebar-pushed');
   } else {
     sb.classList.add('collapsed');
   }
 }
 function toggleSidebar() {
   if (isMobile()) {
-    document.getElementById('sidebar').classList.contains('mobile-open') ? closeSidebar() : openSidebar();
+    document.body.classList.contains('sidebar-pushed') ? closeSidebar() : openSidebar();
   } else {
     document.getElementById('sidebar').classList.contains('collapsed') ? openSidebar() : closeSidebar();
   }
 }
 
 document.getElementById('btnToggleSidebar').addEventListener('click', toggleSidebar);
+// 밀린 본문 카드 어디를 눌러도 먼저 닫힘 (capture: 내부 버튼/링크보다 우선)
+document.querySelector('.chat-main').addEventListener('click', (e) => {
+  if (document.body.classList.contains('sidebar-pushed')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
+}, true);
 
 function openKpi() {
   const kp = document.getElementById('kpiPanel');
@@ -2046,6 +2041,7 @@ window.addEventListener('resize', () => {
     document.getElementById('sidebarBackdrop').classList.remove('visible');
     document.getElementById('sidebar').classList.remove('mobile-open');
     document.getElementById('kpiPanel').classList.remove('mobile-open');
+    document.body.classList.remove('sidebar-pushed');   // 데스크톱 전환 시 push 상태 해제
   }
 });
 document.getElementById('btnNewChat').addEventListener('click', () => {
@@ -2162,7 +2158,6 @@ function _initSidebarQueries() {
   if (!el) return;
   el.innerHTML = QUICK_QUERIES.map((q, i) =>
     `<button class="quick-query-btn" onclick="_onQuickQuery(${i})">
-      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span class="qq-text">${escapeHtml(q)}</span></button>`
   ).join('');
 }
@@ -2333,32 +2328,34 @@ function _thankReason(queryId, reason) {
 // HISTORY MODAL
 // ────────────────────────────────────────────────
 let _histDays = 0, _histOffset = 0, _histTotal = 0;
-let _histMode = 'all';   // 'all' | 'improve'(내 기여) | 'review'(검토 큐)  ※'아쉬움' 탭은 검토 큐와 중복이라 제거
+let _histMode = 'all';   // 'all'(질의 이력) | 'improve'(지식 기여) | 'review'(검토 큐)
+let _histQuery = '';
+let _histLoading = false;
+let _histObserver = null;
+let _histSearchTimer = null;
 const HIST_PAGE_SIZE = 20;
-let _histAllItems = [];
 
-function openHistModal() {
-  _histOffset = 0;
-  document.getElementById('histSearch').value = '';
+// 사이드바 진입점 3종 — 같은 모달 그릇 재사용, 모드/제목만 교체
+function openHistModal()   { _openHist('all', '질의 이력'); }
+function openContribModal(){ _openHist('improve', '지식 기여'); }
+function openReviewModal() { _openHist('review', '검토 큐'); }
+
+function _openHist(mode, title) {
+  _histMode = mode; _histOffset = 0; _histQuery = '';
+  if (_histObserver) { _histObserver.disconnect(); _histObserver = null; }
+  document.getElementById('histModalTitle').textContent = title;
+  const s = document.getElementById('histSearch'); if (s) s.value = '';
+  // 하단 검색바 + 새 질의 FAB는 질의 이력(all)에서만 표시
+  const onAll = (mode === 'all');
+  const bar = document.getElementById('histBottomBar'); if (bar) bar.style.display = onAll ? '' : 'none';
+  const fab = document.getElementById('histFab');       if (fab) fab.style.display = onAll ? '' : 'none';
   document.getElementById('histModal').classList.add('open');
   loadHistAll();
 }
 
 function closeHistModal() {
+  if (_histObserver) { _histObserver.disconnect(); _histObserver = null; }
   document.getElementById('histModal').classList.remove('open');
-}
-
-function setHistDays(days, btn) {
-  _histDays = days;
-  _histOffset = 0;
-  document.querySelectorAll('.hf-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  loadHistAll();
-}
-
-function histPage(dir) {
-  _histOffset = Math.max(0, _histOffset + dir * HIST_PAGE_SIZE);
-  loadHistAll();
 }
 
 function _histFmt(iso) {
@@ -2378,76 +2375,115 @@ function _fbIcon(fb) {
   return '<span class="hm-fb-icon" style="color:var(--dim)" title="미평가">—</span>';
 }
 
-function setHistMode(mode, btn) {
-  _histMode = mode;
-  _histOffset = 0;
-  if (btn) {
-    btn.parentElement.querySelectorAll('.hf-tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  }
-  loadHistAll();
-}
-
 async function loadHistAll() {
   const body = document.getElementById('histModalBody');
+  if (_histMode === 'improve') { body.innerHTML = '<div class="hist-empty-msg">로드 중...</div>'; _loadMyImprovements(); return; }
+  if (_histMode === 'review')  { body.innerHTML = '<div class="hist-empty-msg">로드 중...</div>'; _loadReviewQueue(); return; }
+  // 질의 이력(all) — 첫 페이지(리셋)
+  _histOffset = 0;
+  window._histIndex = {};
   body.innerHTML = '<div class="hist-empty-msg">로드 중...</div>';
-  if (_histMode === 'improve') { _loadMyImprovements(); return; }
-  if (_histMode === 'review')  { _loadReviewQueue(); return; }
+  const items = await _fetchHistPage();
+  if (items === null) return;   // 실패 메시지는 _fetchHistPage가 표시
+  if (!items.length) { body.innerHTML = `<div class="hist-empty-msg">${_histQuery ? '검색 결과가 없습니다.' : '내역이 없습니다.'}</div>`; return; }
+  body.innerHTML = items.map(_histQueryRow).join('') + '<div id="histSentinel" style="height:1px"></div>';
+  _histOffset = items.length;
+  _observeHistSentinel();
+}
+
+async function _fetchHistPage() {
   try {
     const params = new URLSearchParams({ limit: HIST_PAGE_SIZE, offset: _histOffset, days: _histDays });
-    const res = await fetch('/api/query/history/all?' + params);
+    if (_histQuery) params.set('q', _histQuery);
+    // 로그인 게이트 적용됨 → 토큰 헤더 필요. _authedFetch가 토큰·ngrok 헤더 부착 + 401 시 로그인 게이트
+    const res = await _authedFetch('/api/query/history/all?' + params);
+    if (res.status === 401) throw new Error('로그인이 필요합니다.');
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
-    _histTotal = data.total;
-    const queryItems = data.items || [];
-    _histAllItems = queryItems;       // 검색은 질의 텍스트 대상
-    _renderHistUnified(queryItems);
-    _updateHistFooter();
+    if (!data.ok) throw new Error(data.error || '로드 실패');
+    _histTotal = data.total || 0;
+    const items = data.items || [];
+    window._histIndex = window._histIndex || {};
+    items.forEach(it => { if (it.id != null) window._histIndex[it.id] = it; });
+    return items;
   } catch (e) {
-    body.innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`;
+    document.getElementById('histModalBody').innerHTML = `<div class="hist-empty-msg">로드 실패: ${escapeHtml(e.message)}</div>`;
+    return null;
   }
 }
 
-function _filterHistRows() {
-  const kw = document.getElementById('histSearch').value.trim().toLowerCase();
-  if (!kw) { loadHistAll(); return; }
-  _renderHistUnified(_histAllItems.filter(it => it.question.toLowerCase().includes(kw)));
+// 무한 스크롤 — 하단 근접 시 다음 묶음 append
+async function _histLoadMore() {
+  if (_histLoading || _histMode !== 'all') return;
+  if (_histOffset >= _histTotal) return;
+  _histLoading = true;
+  const items = await _fetchHistPage();
+  _histLoading = false;
+  if (!items || !items.length) return;
+  const sentinel = document.getElementById('histSentinel');
+  const html = items.map(_histQueryRow).join('');
+  if (sentinel) sentinel.insertAdjacentHTML('beforebegin', html);
+  else document.getElementById('histModalBody').insertAdjacentHTML('beforeend', html);
+  _histOffset += items.length;
+  if (_histOffset >= _histTotal && sentinel) { sentinel.remove(); if (_histObserver) _histObserver.disconnect(); }
 }
 
-// 분석 여정(세션) + 일반 질의를 시간순 통합 렌더
-function _renderHistUnified(queryItems) {
-  const body = document.getElementById('histModalBody');
-  window._histIndex = {};
-  (queryItems || []).forEach(it => { if (it.id != null) window._histIndex[it.id] = it; });
-  const rows = (queryItems || []).map(it => ({ t: it.created_at, html: _histQueryRow(it) }));
-  if (!rows.length) { body.innerHTML = '<div class="hist-empty-msg">내역이 없습니다.</div>'; return; }
-  rows.sort((a, b) => new Date(b.t) - new Date(a.t));
-  body.innerHTML = rows.map(r => r.html).join('');
+function _observeHistSentinel() {
+  if (_histObserver) _histObserver.disconnect();
+  const sentinel = document.getElementById('histSentinel');
+  if (!sentinel) return;
+  if (_histOffset >= _histTotal) { sentinel.remove(); return; }
+  const root = document.getElementById('histModalBody');
+  _histObserver = new IntersectionObserver(entries => {
+    if (entries.some(e => e.isIntersecting)) _histLoadMore();
+  }, { root, rootMargin: '240px' });
+  _histObserver.observe(sentinel);
 }
 
-// 분석 여정 = 세션 1행. 제목 = 첫 진입 칩 이름. 펼치면 이동 경로(+단계별 토큰).
+// 하단 검색(서버 q, 디바운스) — 입력 시 목록 리셋 후 재조회
+function _onHistSearchInput() {
+  clearTimeout(_histSearchTimer);
+  _histSearchTimer = setTimeout(() => {
+    _histQuery = (document.getElementById('histSearch').value || '').trim();
+    loadHistAll();
+  }, 300);
+}
+
+// 질의 이력 2줄 행: 1줄 질문 / 2줄 날짜·사용자·평가 + 우측 '>'
 function _histQueryRow(it) {
-  const time    = _histFmt(it.created_at);
-  const user    = (it.user_name || '').length > 18 ? (it.user_name || '').slice(0, 16) + '…' : (it.user_name || '—');
-  const qShort  = it.question.length > 60 ? it.question.slice(0, 58) + '…' : it.question;
-  const fbStatus = it.feedback === 1 ? '👍 도움됨' : it.feedback === -1 ? '👎 아쉬움' : '미평가';
-  return `<div class="hm-row" onclick="_toggleHmRow(this)">
-      <div class="hm-summary">
-        <span class="hm-time">${escapeHtml(time)}</span>
-        <span class="hm-user">${escapeHtml(user)}</span>
-        <span class="hm-q">${escapeHtml(qShort)}</span>
-        ${_fbIcon(it.feedback)}
+  const when   = formatRelTime(it.created_at);
+  const user   = (it.user_name || '').length > 16 ? (it.user_name || '').slice(0, 15) + '…' : (it.user_name || '—');
+  const rating = it.feedback === 1 ? '👍 도움됨' : it.feedback === -1 ? '👎 아쉬움' : '미평가';
+  return `<div class="hq-item" onclick="_openHistAnswer(${it.id})">
+      <div class="hq-main">
+        <div class="hq-q">${escapeHtml(it.question || '')}</div>
+        <div class="hq-meta">${escapeHtml(when)} · ${escapeHtml(user)} · ${rating}</div>
       </div>
-      <div class="hm-detail">
-        <div class="hm-detail-q">Q. ${escapeHtml(it.question)}</div>
-        <div class="hm-answer">${renderAiText(it.answer || '')}</div>
-        <div class="hm-actions">
-          <span class="hm-fb-status">${escapeHtml(fbStatus)}</span>
-          ${(it.input_tokens != null) ? `<span class="hm-fb-status" style="margin-left:8px">↑${it.input_tokens.toLocaleString()} ↓${(it.output_tokens||0).toLocaleString()} tok</span>` : ''}
-          ${it.feedback === -1 ? `<button class="imp-btn" onclick="event.stopPropagation();_openImprove(${it.id})">✦ 개선하기</button>` : ''}
-        </div>
-      </div>
+      <svg class="hq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
     </div>`;
+}
+
+// 행/'>' 탭 → 모달 닫고 메인 챗에 기록된 질문+저장답변 재현(읽기전용)
+function _openHistAnswer(id) {
+  const it = (window._histIndex || {})[id];
+  if (!it) return;
+  closeHistModal();
+  if (isMobile()) closeSidebar();
+  if (typeof _hideWelcome === 'function') _hideWelcome();
+  restoreFromCache(it.question, it.answer || '');
+}
+
+// 헤더 좌측 메뉴 아이콘 → 이력 닫고 왼쪽 사이드바 열기
+function _histOpenSidebar() {
+  closeHistModal();
+  openSidebar();
+}
+
+// 하단 '새 질의' FAB → 이력 닫고 새 질의 시작
+function _histNewQuery() {
+  closeHistModal();
+  if (isMobile()) closeSidebar();
+  const nb = document.getElementById('btnNewChat'); if (nb) nb.click();
+  const inp = document.getElementById('chatInput'); if (inp) setTimeout(() => inp.focus(), 60);
 }
 
 function _toggleHmRow(row) {
@@ -3182,9 +3218,9 @@ async function _processReq(id, status, btn) {
   } catch (e) { btn.disabled = false; alert('실패: ' + e.message); }
 }
 function _setHistFooter(label) {
-  document.getElementById('histModalCount').textContent = label;
-  document.getElementById('hmPgPrev').disabled = true;
-  document.getElementById('hmPgNext').disabled = true;
+  // 페이저 푸터는 제거됨(무한 스크롤 전환) — 하위 호환 no-op
+  const c = document.getElementById('histModalCount');
+  if (c) c.textContent = label;
 }
 
 // 세션 행 펼침 → 이동 경로 lazy 로드
@@ -3194,12 +3230,7 @@ function _reuseHistQuery(btn) {
 }
 
 function _updateHistFooter() {
-  const from = _histTotal ? _histOffset + 1 : 0;
-  const to   = Math.min(_histOffset + HIST_PAGE_SIZE, _histTotal);
-  document.getElementById('histModalCount').textContent =
-    _histTotal ? `${from}–${to} / 전체 ${_histTotal.toLocaleString()}건` : '0건';
-  document.getElementById('hmPgPrev').disabled = _histOffset === 0;
-  document.getElementById('hmPgNext').disabled = _histOffset + HIST_PAGE_SIZE >= _histTotal;
+  // 페이저 푸터 제거됨(무한 스크롤 전환) — 하위 호환 no-op
 }
 
 document.addEventListener('click', e => {
