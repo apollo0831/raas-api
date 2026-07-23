@@ -2084,6 +2084,10 @@ document.addEventListener('pointerdown', (e) => {
   _swipe = { card, x0: e.clientX, y0: e.clientY, id: e.pointerId,
              w: Math.round(window.innerWidth * 0.8), off: 0, active: false, moved: false };
   _swipe.off = _swipe.w;
+  // 포인터를 카드에 고정 — 모달은 자신이 스크롤 컨테이너(overflow-y:auto)라, 캡처가 없으면
+  // 드래그 도중 브라우저가 스크롤로 판단해 pointercancel을 던지고 그 자리에서 전환이 일어난다
+  // (본문 카드는 스크롤 컨테이너가 아니라 이 문제가 없었다 — 두 카드의 체감 차이가 여기서 났다).
+  try { card.setPointerCapture(e.pointerId); } catch (_) {}
 }, true);
 
 document.addEventListener('pointermove', (e) => {
@@ -2095,15 +2099,19 @@ document.addEventListener('pointermove', (e) => {
     if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
     _swipe.active = true;
     _swipe.card.style.transition = 'none';
+    _swipe.card.style.touchAction = 'none';   // 드래그 확정 후엔 브라우저 스크롤 개입 차단
   }
   e.preventDefault();
   _swipe.off = Math.max(0, Math.min(_swipe.w, _swipe.w + dx));   // 오른쪽으론 안 넘어감
   _swipe.card.style.transform = `translateX(${_swipe.off}px) translateY(${_pushDropPx()}px)`;
 }, true);
 
-function _swipeEnd() {
+// canceled=true(pointercancel)면 전환하지 않고 무조건 제자리로 — 사용자가 놓은 게 아니다
+function _swipeEnd(e, canceled) {
   const s = _swipe; _swipe = null;
   if (!s) return;
+  try { s.card.releasePointerCapture(s.id); } catch (_) {}
+  s.card.style.touchAction = '';
   if (!s.active) {
     // 드래그가 아니었던 경우 — 움직임 없이 뗐으면 '탭'으로 보고 바로 복귀.
     // (카드 안에서 세로로 스크롤한 뒤 뗀 것은 s.moved로 걸러진다)
@@ -2116,10 +2124,10 @@ function _swipeEnd() {
   void s.card.offsetWidth;
   s.card.style.transform = '';                       // 이후 위치는 CSS(클래스)가 결정
   _swallowClickUntil = Date.now() + 700;
-  if (s.off < s.w * 0.7) closeSidebar();             // 30% 이상 끌었으면 복귀
+  if (!canceled && s.off < s.w * 0.7) closeSidebar();   // 30% 이상 끌고 '놓았으면' 복귀
 }
-document.addEventListener('pointerup', _swipeEnd, true);
-document.addEventListener('pointercancel', _swipeEnd, true);
+document.addEventListener('pointerup', (e) => _swipeEnd(e, false), true);
+document.addEventListener('pointercancel', (e) => _swipeEnd(e, true), true);
 
 // 드래그 뒤 합성 click 1회 무효화
 document.addEventListener('click', (e) => {
