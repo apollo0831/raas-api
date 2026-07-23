@@ -46,6 +46,7 @@ def init_db():
             ("source",        "TEXT"),   # 'general'(일반 질의) | 'storyline'(스토리라인 칩)
             ("feedback_reason", "TEXT"), # 👎 아쉬움 사유(사용자 서술) — 약점 신호에 함께 노출
             ("providers_used", "TEXT"),  # 이 답변이 실제 쓴 provider 목록(JSON) — 개선화면 '직접 활용' 표기
+            ("extract_json",  "TEXT"),   # 추출표 payload(JSON) — 이력 재생 시 표·엑셀 그대로 복원
         ]:
             try:
                 conn.execute(f"ALTER TABLE query_history ADD COLUMN {col} {typedef}")
@@ -894,7 +895,8 @@ def save_query(user_id: str, question: str, answer: str,
                intent: str = None, scope: str = None, scope_keyword: str = None,
                metric: str = None, metrics: Optional[list] = None,
                topic_key: str = None, source: str = "general",
-               providers_used: Optional[list] = None) -> int:
+               providers_used: Optional[list] = None,
+               extract_payload: Optional[dict] = None) -> int:
     """질의 1건 DB 저장. JSONL 로그도 함께 기록.
     intent/scope/metric 등 fact 인자는 모두 optional — None이어도 정상 저장.
     source: 'general'(일반 질의) | 'storyline'(스토리라인 칩 질의).
@@ -902,16 +904,19 @@ def save_query(user_id: str, question: str, answer: str,
     chart_json   = json.dumps(chart_data, ensure_ascii=False) if chart_data is not None else None
     metrics_json = json.dumps(metrics,    ensure_ascii=False) if metrics    else None
     providers_json = json.dumps(providers_used, ensure_ascii=False) if providers_used else None
+    extract_json = json.dumps(extract_payload, ensure_ascii=False) if extract_payload else None
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO query_history "
             "(user_id, question, answer, chart_data, ip, user_name, user_role, "
             " input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, "
-            " intent, scope, scope_keyword, metric, metrics_json, topic_key, source, providers_used) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " intent, scope, scope_keyword, metric, metrics_json, topic_key, source, "
+            " providers_used, extract_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (user_id, question, answer, chart_json, ip, user_name, user_role,
              input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-             intent, scope, scope_keyword, metric, metrics_json, topic_key, source, providers_json)
+             intent, scope, scope_keyword, metric, metrics_json, topic_key, source,
+             providers_json, extract_json)
         )
         row_id = cur.lastrowid
 
@@ -989,7 +994,7 @@ def get_history(user_id: str, limit: int = 20, days: int = 7) -> list:
     스토리라인 분석 여정(칩·라우팅 질의)은 '최근 분석 여정'에서 별도 표시하므로 제외."""
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT id, question, answer, chart_data, feedback, feedback_reason,
+            """SELECT id, question, answer, chart_data, extract_json, feedback, feedback_reason,
                       input_tokens, output_tokens, created_at, source
                FROM query_history
                WHERE user_id = ?
@@ -1006,6 +1011,7 @@ def get_history(user_id: str, limit: int = 20, days: int = 7) -> list:
             "question":      r["question"],
             "answer":        r["answer"],
             "chart_data":    json.loads(r["chart_data"]) if r["chart_data"] else None,
+            "extract":       json.loads(r["extract_json"]) if r["extract_json"] else None,
             "feedback":      r["feedback"],
             "feedback_reason": r["feedback_reason"],
             "input_tokens":  r["input_tokens"],

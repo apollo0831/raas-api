@@ -1362,8 +1362,10 @@ class RAASHandler(BaseHTTPRequestHandler):
                            f" · 지표 {len(p['sheets'])}종을 추출했습니다. 아래 미리보기 확인 후 엑셀로 내려받으세요.")
                     sse_x({"type": "token", "text": _sm})
                     sse_x({"type": "extract", "payload": p})
+                    # 추출표 payload도 저장 — 이력 재생 시 표·엑셀을 그대로 복원(LLM 재호출 0)
                     _qid = save_query(user_id, question, _sm, ip=ip, user_name=user_name,
-                                      user_role=user_role, intent="extract", source="general")
+                                      user_role=user_role, intent="extract", source="general",
+                                      extract_payload=p)
                     sse_x({"type": "done", "query_id": _qid, "routing_badge": "📥 데이터 추출"})
                 else:
                     sse_x({"type": "token", "text": f"추출할 데이터를 구성하지 못했습니다"

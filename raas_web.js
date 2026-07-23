@@ -200,7 +200,6 @@ async function doLogout() {
   RAAS_TOKEN = '';
   RAAS_USER  = null;
   localStorage.removeItem('raas_token');
-  document.getElementById('sidebarUser').style.display = 'none';
   document.getElementById('historyList').innerHTML =
     '<div class="history-empty">아직 질의 내역이 없습니다.</div>';
   const sc = document.getElementById('suggestChips');
@@ -211,22 +210,16 @@ async function doLogout() {
 
 function _renderSidebarUser() {
   if (!RAAS_USER) return;
-  document.getElementById('suName').textContent = RAAS_USER.name;
-  document.getElementById('suMeta').textContent = RAAS_USER.role || '';
-  document.getElementById('sidebarUser').style.display = 'flex';
-  document.getElementById('suAdminBtn').style.display =
-    RAAS_USER.is_admin ? 'inline-block' : 'none';
-  // 질의맵: is_admin OR role in (총괄관리, 데이터)
-  const statsAllowed = RAAS_USER.is_admin
-    || ['총괄관리','데이터'].includes(RAAS_USER.role);
-  document.getElementById('suStatsBtn').style.display =
-    statsAllowed ? 'inline-block' : 'none';
-  // 검토 큐 사이드바 버튼 — is_admin 전용
-  const revBtn = document.getElementById('btnReviewQueue');
-  if (revBtn) revBtn.style.display = RAAS_USER.is_admin ? '' : 'none';
-  // 관리자 전용 '참고 정보(메타 푸터)' 토글
-  document.getElementById('suMetaBtn').style.display =
-    RAAS_USER.is_admin ? 'inline-block' : 'none';
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  // 승인 관리 — is_admin 전용
+  show('btnAdminManage', RAAS_USER.is_admin);
+  // 질의맵 — is_admin OR role in (총괄관리, 데이터)
+  const statsAllowed = RAAS_USER.is_admin || ['총괄관리','데이터'].includes(RAAS_USER.role);
+  show('btnStatsMap', statsAllowed);
+  // 검토 큐 — is_admin 전용
+  show('btnReviewQueue', RAAS_USER.is_admin);
+  // 참고 정보(메타 푸터) 토글 — 내 프로필 모달 내, is_admin 전용
+  show('pfMetaSection', RAAS_USER.is_admin);
   if (RAAS_USER.is_admin) _applyAdminMeta();
 }
 
@@ -234,7 +227,7 @@ function _renderSidebarUser() {
 function _applyAdminMeta() {
   const hidden = localStorage.getItem('raas_hide_meta') === '1';
   document.body.classList.toggle('hide-meta', hidden);
-  const btn = document.getElementById('suMetaBtn');
+  const btn = document.getElementById('pfMetaBtn');
   if (btn) btn.textContent = hidden ? '참고 정보: 꺼짐' : '참고 정보: 켜짐';
 }
 function toggleAdminMeta() {
@@ -2173,7 +2166,8 @@ function _onQuickQuery(i) {
 // ────────────────────────────────────────────────
 let _histItems = [];
 
-function restoreFromCache(question, answerHTML) {
+// 이력 재생 — 저장된 답변 텍스트 + 추출표(payload) + 차트를 그대로 복원(LLM 재호출 없음)
+function restoreFromCache(question, answerHTML, extractPayload) {
   const ti = document.getElementById('threadInner');
   ti.innerHTML = '';
   _msgCount = 0;
@@ -2192,20 +2186,23 @@ function restoreFromCache(question, answerHTML) {
       <div class="msg-avatar">R</div>
       <div class="msg-body">${bodyHTML}</div>
     </div>`);
-  if (!isLegacyHTML) {
-    const mb = ti.querySelector('.msg-ai:last-child .msg-body');
-    if (mb) _initLLMCharts(mb);   // ```chart → ECharts 재렌더(리로드에도 안전)
+  const mb = ti.querySelector('.msg-ai:last-child .msg-body');
+  if (mb && extractPayload) {                   // 추출표(엑셀 다운로드 포함) 복원
+    try { mb.insertAdjacentHTML('beforeend', _renderExtract(extractPayload)); } catch (_) {}
   }
+  if (mb) _initLLMCharts(mb);                   // ```chart → ECharts 재렌더(레거시 HTML도 시도)
   _scrollBottom();
 }
 
 function _onHistoryClick(i) {
-  const q = _histItems[i]?.question;
-  if (!q) return;
+  const it = _histItems[i];
+  if (!it || !it.question) return;
   if (isMobile()) closeSidebar();
-  const cached = _getCachedAnswer(q);
-  if (cached) restoreFromCache(q, cached);
-  else submitQuery(q, 'history_replay');
+  // 저장된 답변이 있으면 그대로 복원 — 재질의(LLM 재호출) 없음. 추출표·차트도 함께.
+  if (it.answer) { restoreFromCache(it.question, it.answer, it.extract); return; }
+  const cached = _getCachedAnswer(it.question);   // 구 이력(answer 없음) 폴백
+  if (cached) restoreFromCache(it.question, cached);
+  else submitQuery(it.question, 'history_replay');
 }
 
 async function refreshHistory() {
@@ -3700,8 +3697,8 @@ const SVG_MOON = `<svg width="15" height="15" fill="none" stroke="currentColor" 
 
 function _applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  const btn = document.getElementById('btnTheme');
-  if (btn) btn.innerHTML = theme === 'dark' ? SVG_SUN : SVG_MOON;
+  const btn = document.getElementById('pfThemeBtn');
+  if (btn) btn.textContent = theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환';
   // iOS Safari는 setAttribute로 즉시 반영 안 됨 — 제거 후 재삽입으로 강제 재읽기
   const color = theme === 'dark' ? '#0d1117' : '#fbfcfd';
   let meta = document.getElementById('metaThemeColor');
@@ -3718,12 +3715,13 @@ function _applyTheme(theme) {
   _applyTheme(saved);
 })();
 
-document.getElementById('btnTheme').addEventListener('click', function(){
+// 테마 전환 — 내 프로필 모달의 버튼(onclick)에서 호출
+function toggleTheme(){
   const cur = document.documentElement.getAttribute('data-theme') || 'dark';
   const next = cur === 'dark' ? 'light' : 'dark';
   localStorage.setItem('raas_theme', next);
   _applyTheme(next);
-});
+}
 
 // ────────────────────────────────────────────────
 // ── 사이드바 폭 드래그 리사이즈 (데스크톱 전용) ──────────────────────────
