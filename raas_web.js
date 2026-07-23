@@ -1834,7 +1834,6 @@ async function submitQuery(question, source, opts) {
   // Enter·전송버튼·칩 등 모든 진입 경로에 동일 적용.
   if (_raas_query_inflight) return;
   if (typeof _setHeaderBack === 'function') _setHeaderBack(false);   // 새 질의 → 뒤로가기 해제
-  if (typeof _closeOpenModals === 'function') _closeOpenModals();     // 열린 모달 정리
   _setQueryGenerating(true);
   const input = document.getElementById('chatInput');
   input.value = '';
@@ -2010,16 +2009,6 @@ document.getElementById('btnToggleSidebar').addEventListener('click', () => {
 document.querySelector('.chat-main').addEventListener('click', (e) => {
   if (document.body.classList.contains('sidebar-pushed')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
 }, true);
-// 모바일: 사이드바로 밀린 모달 카드(20vw) 탭 → 사이드바 닫고 원래 페이지(이력·프로필 등)로 복귀
-document.querySelectorAll('.hist-modal').forEach(m => {
-  m.addEventListener('click', (e) => {
-    if (document.body.classList.contains('sidebar-pushed')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
-  }, true);
-});
-// 사이드바에서 다른 곳으로 이동할 때는 열린 모달을 정리(안 그러면 결과를 덮음)
-function _closeOpenModals() {
-  document.querySelectorAll('.hist-modal.open').forEach(m => m.classList.remove('open'));
-}
 
 function openKpi() {
   const kp = document.getElementById('kpiPanel');
@@ -2232,7 +2221,6 @@ function _onHistoryClick(i) {
   if (!it || !it.question) return;
   if (isMobile()) closeSidebar();
   _setHeaderBack(false);   // 사이드바 이력에서 연 것은 돌아갈 페이지가 없음
-  _closeOpenModals();      // 열린 모달(밀린 상태 포함) 정리 후 메인챗에 복원
   // 저장된 답변이 있으면 그대로 복원 — 재질의(LLM 재호출) 없음. 추출표·차트도 함께.
   if (it.answer) { restoreFromCache(it.question, it.answer, it.extract); return; }
   const cached = _getCachedAnswer(it.question);   // 구 이력(answer 없음) 폴백
@@ -2511,13 +2499,14 @@ function _openHistAnswer(id) {
 }
 
 // 헤더 좌측 메뉴 아이콘 → 이력 닫고 왼쪽 사이드바 열기
-// 좌측상단 '메뉴' — 사이드바 펼침.
-//   모바일: 모달을 닫지 않고 그대로 오른쪽으로 밀어 20vw 카드로 남김(탭하면 원래 페이지 복귀).
-//   데스크톱: 현행대로 모달을 닫고 사이드바 펼침(레이아웃상 밀기가 없음).
-function _histOpenSidebar()    { if (!isMobile()) closeHistModal();    openSidebar(); }
-function _profileOpenSidebar() { if (!isMobile()) closeProfileModal(); openSidebar(); }
-function _adminOpenSidebar()   { if (!isMobile()) closeAdminModal();   openSidebar(); }
-function _statsOpenSidebar()   { if (!isMobile()) closeStatsModal();   openSidebar(); }
+function _histOpenSidebar() {
+  closeHistModal();
+  openSidebar();
+}
+// 좌측상단 '메뉴' — 모달 닫고 사이드바 펼침(질의 이력과 동일 동작). 우측 X는 제거됨.
+function _profileOpenSidebar() { closeProfileModal(); openSidebar(); }
+function _adminOpenSidebar()   { closeAdminModal();   openSidebar(); }
+function _statsOpenSidebar()   { closeStatsModal();   openSidebar(); }
 
 // 하단 '새 질의' FAB → 이력 닫고 새 질의 시작
 function _histNewQuery() {

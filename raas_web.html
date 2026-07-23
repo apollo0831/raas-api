@@ -1378,16 +1378,6 @@ table.story-table th{
     box-shadow:-6px 0 22px rgba(0,0,0,.20), 0 -6px 22px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.05);
     cursor:pointer;                                /* 카드 아무 곳이나 탭하면 닫힘 */
   }
-  /* 열린 모달(질의 이력·내 프로필·승인관리·질의맵·개선하기)도 본문 카드와 똑같이 밀림 —
-     좌측 80vw가 비워져 사이드바가 드러나고, 우측 20vw엔 원래 보던 화면이 카드로 남는다.
-     (모달 z500이 사이드바 z100보다 위지만 밀려나므로 겹치지 않음) */
-  body.sidebar-pushed .hist-modal.open{
-    transition:transform .28s cubic-bezier(.4,0,.2,1),border-radius .28s ease;
-    transform:translateX(80vw) translateY(var(--push-drop, 28px));
-    border-radius:28px;overflow:hidden;
-    box-shadow:-6px 0 22px rgba(0,0,0,.20), 0 -6px 22px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.05);
-    cursor:pointer;                                /* 남은 카드 탭 → 원래 페이지로 복귀 */
-  }
   .sidebar-backdrop{display:block;pointer-events:none}
   .kpi-panel{
     position:fixed;right:-100vw;top:0;
