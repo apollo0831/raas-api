@@ -633,16 +633,19 @@ function setStmHeatDim(dim) {
   _loadStmTab();
 }
 
+// 열 라벨 — 연산유형(intent)은 인기주제 탭과 같은 한글 라벨로 표시(원 코드는 title에 남김)
+function _stmColKo(dim, v) { return dim === 'intent' ? (_INTENT_KO[v] || v) : v; }
+
 function _renderStmHeatmap(d) {
   const dim = (d && d.dimension) || 'metric';
   const dimLabel = dim === 'metric' ? '지표' : dim === 'provider' ? '데이터소스'
-                 : dim === 'intent' ? '연산유형' : 'scope';
+                 : dim === 'intent' ? '연산유형' : '분석대상';
   const toolbar = `
     <div class="stm-heat-toolbar">
       <span class="label">차원:</span>
       <button class="${dim==='intent'?'active':''}" onclick="setStmHeatDim('intent')">연산유형</button>
       <button class="${dim==='metric'?'active':''}" onclick="setStmHeatDim('metric')">지표</button>
-      <button class="${dim==='scope' ?'active':''}" onclick="setStmHeatDim('scope')">scope</button>
+      <button class="${dim==='scope' ?'active':''}" onclick="setStmHeatDim('scope')">분석대상</button>
       <button class="${dim==='provider'?'active':''}" onclick="setStmHeatDim('provider')">데이터소스</button>
     </div>`;
   if (!d || !d.cols || d.cols.length === 0 || d.grand_total === 0) {
@@ -657,7 +660,7 @@ function _renderStmHeatmap(d) {
   // 헤더 행
   let html = `<div class="stm-heat" style="${gridStyle}">`;
   html += `<div class="stm-heat-cell head">직무 \\ ${dimLabel}</div>`;
-  for (const c of cols) html += `<div class="stm-heat-cell head" title="${escapeHtml(c)}">${escapeHtml(c)}</div>`;
+  for (const c of cols) html += `<div class="stm-heat-cell head" title="${escapeHtml(c)}">${escapeHtml(_stmColKo(dim, c))}</div>`;
   html += `<div class="stm-heat-cell head">합계</div>`;
   // 데이터 행
   for (let ri = 0; ri < roles.length; ri++) {
@@ -666,7 +669,7 @@ function _renderStmHeatmap(d) {
       const v = cells[ri][ci] || 0;
       const opacity = v === 0 ? 0 : Math.min(1, 0.12 + (v / max) * 0.78);
       const bg = `background:rgba(79,142,247,${opacity.toFixed(2)})`;
-      const tip = `${escapeHtml(roles[ri])} × ${escapeHtml(cols[ci])}: ${v}건`;
+      const tip = `${escapeHtml(roles[ri])} × ${escapeHtml(_stmColKo(dim, cols[ci]))}: ${v}건`;
       html += `<div class="stm-heat-cell data${v===0?' zero':''}" style="${bg}" title="${tip}">${v||'·'}</div>`;
     }
     html += `<div class="stm-heat-cell total">${d.row_totals[ri]||0}</div>`;
