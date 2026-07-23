@@ -2451,10 +2451,14 @@ function _histQueryRow(it) {
   const when   = formatRelTime(it.created_at);
   const user   = (it.user_name || '').length > 16 ? (it.user_name || '').slice(0, 15) + '…' : (it.user_name || '—');
   const rating = it.feedback === 1 ? '👍 도움됨' : it.feedback === -1 ? '👎 아쉬움' : '미평가';
+  // 사용 토큰(입력↑/출력↓) — 값이 있을 때만 메타 줄 끝에 표기
+  const tok = (it.input_tokens != null || it.output_tokens != null)
+    ? ` · <span class="hq-tok">↑${(it.input_tokens || 0).toLocaleString()} ↓${(it.output_tokens || 0).toLocaleString()} tok</span>`
+    : '';
   return `<div class="hq-item" onclick="_openHistAnswer(${it.id})">
       <div class="hq-main">
         <div class="hq-q">${escapeHtml(it.question || '')}</div>
-        <div class="hq-meta">${escapeHtml(when)} · ${escapeHtml(user)} · ${rating}</div>
+        <div class="hq-meta">${escapeHtml(when)} · ${escapeHtml(user)} · ${rating}${tok}</div>
       </div>
       <svg class="hq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
     </div>`;
