@@ -1378,6 +1378,15 @@ table.story-table th{
     box-shadow:-6px 0 22px rgba(0,0,0,.20), 0 -6px 22px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.05);
     cursor:pointer;                                /* 카드 아무 곳이나 탭하면 닫힘 */
   }
+  /* 모달을 보다가 ☰를 눌러 사이드바를 편 경우(=주차)에만 본문 카드와 똑같이 밀림.
+     사이드바에서 모달을 새로 여는 경우는 modal-parked가 없으므로 전면에 그대로 뜬다. */
+  body.modal-parked .hist-modal.open{
+    transition:transform .28s cubic-bezier(.4,0,.2,1),border-radius .28s ease;
+    transform:translateX(80vw) translateY(var(--push-drop, 28px));
+    border-radius:28px;overflow:hidden;
+    box-shadow:-6px 0 22px rgba(0,0,0,.20), 0 -6px 22px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.05);
+    cursor:pointer;                                /* 남은 카드 탭 → 원래 페이지로 복귀 */
+  }
   .sidebar-backdrop{display:block;pointer-events:none}
   .kpi-panel{
     position:fixed;right:-100vw;top:0;

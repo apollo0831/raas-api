@@ -257,6 +257,7 @@ async function _bootAuth() {
 
 // ── 관리자 모달 ──
 function openAdminModal() {
+  _unparkModal();
   document.getElementById('adminModal').classList.add('open');
   // 데이터 유지보수(재적재) 버튼 — 데이터 직무 AND 관리자만 노출
   document.getElementById('adminMaintenance').style.display =
@@ -382,6 +383,7 @@ const _INTENT_KO = { snapshot:'현황조회', trend:'추이', compare:'비교', 
   realtime:'실시간', meta:'카탈로그', digest:'특이사항', concept:'개념·정의' };
 
 function openStatsModal() {
+  _unparkModal();
   document.getElementById('statsModal').classList.add('open');
   _loadStmTab();
 }
@@ -1049,6 +1051,7 @@ let _PROGRAMS_CACHE = null;  // [{code,label,programs:[{code,label,time}]}]
 
 async function openProfileModal() {
   if (!RAAS_USER) return;
+  _unparkModal();
   document.getElementById('profileModal').classList.add('open');
   // 직무 드롭다운 동적 채우기 (현재 role 선택)
   await loadActiveRoles();
@@ -1834,6 +1837,7 @@ async function submitQuery(question, source, opts) {
   // Enter·전송버튼·칩 등 모든 진입 경로에 동일 적용.
   if (_raas_query_inflight) return;
   if (typeof _setHeaderBack === 'function') _setHeaderBack(false);   // 새 질의 → 뒤로가기 해제
+  if (typeof _closeParkedModals === 'function') _closeParkedModals();   // 주차 모달 정리
   _setQueryGenerating(true);
   const input = document.getElementById('chatInput');
   input.value = '';
@@ -1973,10 +1977,21 @@ function closeSidebar() {
   const sb = document.getElementById('sidebar');
   if (isMobile()) {
     document.body.classList.remove('sidebar-pushed');
+    _unparkModal();                                  // 밀어둔 모달도 제자리로
   } else {
     sb.classList.add('collapsed');
   }
 }
+
+// 모바일: 모달을 보다가 ☰로 사이드바를 펼친 상태 — 모달을 닫지 않고 우측 20vw 카드로 '주차'한다.
+// 상태(sidebar-pushed + .open)만으로는 '사이드바에서 모달을 새로 연 경우'와 구분되지 않으므로
+// 주차 의도를 별도 클래스로 표시한다(그 경우엔 모달이 전면에 떠야 함).
+function _parkModal() {
+  if (!isMobile()) return false;                     // 데스크톱은 밀기 개념 없음 → 기존대로 모달 닫기
+  document.body.classList.add('modal-parked');
+  return true;
+}
+function _unparkModal() { document.body.classList.remove('modal-parked'); }
 function toggleSidebar() {
   if (isMobile()) {
     document.body.classList.contains('sidebar-pushed') ? closeSidebar() : openSidebar();
@@ -2009,6 +2024,18 @@ document.getElementById('btnToggleSidebar').addEventListener('click', () => {
 document.querySelector('.chat-main').addEventListener('click', (e) => {
   if (document.body.classList.contains('sidebar-pushed')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
 }, true);
+// 주차된 모달 카드(20vw)도 동일 — 탭하면 사이드바 닫고 보던 페이지로 복귀
+document.querySelectorAll('.hist-modal').forEach(m => {
+  m.addEventListener('click', (e) => {
+    if (document.body.classList.contains('modal-parked')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
+  }, true);
+});
+// 사이드바에서 다른 곳(새 질의·최근 질의)으로 이동 → 주차 모달은 결과를 덮으므로 정리
+// (closeSidebar가 먼저 주차를 풀 수 있으므로 클래스로 가드하지 않고 무조건 정리)
+function _closeParkedModals() {
+  _unparkModal();
+  document.querySelectorAll('.hist-modal.open').forEach(m => m.classList.remove('open'));
+}
 
 function openKpi() {
   const kp = document.getElementById('kpiPanel');
@@ -2060,6 +2087,7 @@ window.addEventListener('resize', () => {
 document.getElementById('btnNewChat').addEventListener('click', () => {
   if (isMobile()) closeSidebar();
   _setHeaderBack(false);   // 새 채팅 → 뒤로가기 해제
+  _closeParkedModals();
   document.getElementById('threadInner').innerHTML = `
     <div class="welcome" id="welcomeScreen">
       <h1 class="welcome-logo">안녕하세요 👋</h1>
@@ -2221,6 +2249,7 @@ function _onHistoryClick(i) {
   if (!it || !it.question) return;
   if (isMobile()) closeSidebar();
   _setHeaderBack(false);   // 사이드바 이력에서 연 것은 돌아갈 페이지가 없음
+  _closeParkedModals();    // 주차 모달 정리 후 메인챗에 복원
   // 저장된 답변이 있으면 그대로 복원 — 재질의(LLM 재호출) 없음. 추출표·차트도 함께.
   if (it.answer) { restoreFromCache(it.question, it.answer, it.extract); return; }
   const cached = _getCachedAnswer(it.question);   // 구 이력(answer 없음) 폴백
@@ -2361,6 +2390,7 @@ function openContribModal(){ _openHist('improve', '지식 기여'); }
 function openReviewModal() { _openHist('review', '검토 큐'); }
 
 function _openHist(mode, title) {
+  _unparkModal();                       // 사이드바에서 새로 여는 경로 → 주차 아님(전면에 떠야 함)
   _histMode = mode; _histOffset = 0; _histQuery = '';
   if (_histObserver) { _histObserver.disconnect(); _histObserver = null; }
   document.getElementById('histModalTitle').textContent = title;
@@ -2498,15 +2528,16 @@ function _openHistAnswer(id) {
   _setHeaderBack(true);   // 좌측상단을 '<'(질의 이력으로)로 전환
 }
 
-// 헤더 좌측 메뉴 아이콘 → 이력 닫고 왼쪽 사이드바 열기
+// 헤더 좌측 메뉴 아이콘 → 사이드바 펼침
+//   모바일: 모달을 닫지 않고 우측 20vw 카드로 주차(탭하면 복귀) / 데스크톱: 기존대로 모달 닫기
 function _histOpenSidebar() {
-  closeHistModal();
-  openSidebar();
+  if (!isMobile()) closeHistModal();
+  openSidebar(); _parkModal();
 }
-// 좌측상단 '메뉴' — 모달 닫고 사이드바 펼침(질의 이력과 동일 동작). 우측 X는 제거됨.
-function _profileOpenSidebar() { closeProfileModal(); openSidebar(); }
-function _adminOpenSidebar()   { closeAdminModal();   openSidebar(); }
-function _statsOpenSidebar()   { closeStatsModal();   openSidebar(); }
+// 좌측상단 '메뉴' — 질의 이력과 동일 동작. 우측 X는 제거됨.
+function _profileOpenSidebar() { if (!isMobile()) closeProfileModal(); openSidebar(); _parkModal(); }
+function _adminOpenSidebar()   { if (!isMobile()) closeAdminModal();   openSidebar(); _parkModal(); }
+function _statsOpenSidebar()   { if (!isMobile()) closeStatsModal();   openSidebar(); _parkModal(); }
 
 // 하단 '새 질의' FAB → 이력 닫고 새 질의 시작
 function _histNewQuery() {
@@ -2537,6 +2568,7 @@ function _openImproveFromNeg(id) {
 // 직접 진입 — 질의·답변을 직접 받아 개선 모달 오픈
 function _openImproveWith(question, answer, qid, reason) {
   _improveState = { question: question, answer: answer || '', qid: qid, reason: reason || '' };
+  _unparkModal();
   document.getElementById('improveModal').classList.add('open');
   document.getElementById('improveQ').textContent = question;
   document.getElementById('improveOrig').innerHTML = renderAiText(answer || '');
