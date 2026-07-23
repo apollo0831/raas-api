@@ -369,11 +369,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 #adminModal .hist-modal-hd .btn-icon,  #adminModal .hist-modal-title,
 #statsModal .hist-modal-hd .btn-icon,  #statsModal .hist-modal-title,
 #improveModal .hist-modal-hd .btn-icon,#improveModal .hist-modal-title{pointer-events:auto}
-/* 개선하기 닫기(X) — KPI '핵심 지표' 패널 우상단 닫기(#btnCloseKpi)와 동일 규칙 */
-#improveModal .hist-modal-hd .btn-icon{color:var(--text);-webkit-tap-highlight-color:transparent}
-#improveModal .hist-modal-hd .btn-icon svg{width:19px;height:19px}
-#improveModal .hist-modal-hd .btn-icon:hover,
-#improveModal .hist-modal-hd .btn-icon:active{background:transparent}
+/* 개선하기 닫기(X)도 아래 .hist-modal-hd .btn-icon 공통 규칙(19px·--text·배경 없음)을 그대로 받는다 */
 .hist-hd-spacer{width:32px;flex-shrink:0}   /* 우측 X 제거 후 제목 중앙정렬 유지 */
 .hist-modal-title{font-size:var(--fs-lg);font-weight:600;flex:1;text-align:center;min-width:0}
 /* ── 질의 이력 2줄 행 — 행 구분선 없음(제목 아래 선만 유지) ── */
@@ -952,19 +948,20 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   transition:background .12s,color .12s;flex-shrink:0;
 }
 .btn-icon:hover{background:var(--bg3);color:var(--text)}
-/* 메인 헤더·질의 이력 헤더·KPI 헤더 아이콘 — 동일 크기(19px) + 색상 진하게(--text).
-   -webkit-tap-highlight-color:transparent — 탭 시 브라우저 기본 회색 하이라이트(깜빡임) 제거 */
+/* 메인 헤더·모달 헤더 5종·KPI 헤더 아이콘 — 동일 크기(19px) + 색상 진하게(--text).
+   -webkit-tap-highlight-color:transparent — 탭 시 브라우저 기본 회색 하이라이트(깜빡임) 제거.
+   (모달을 개별 id로 나열하면 새 모달이 늘 때마다 빠뜨린다 → .hist-modal-hd로 일괄 지정) */
 .chat-header .btn-icon,
-#histModal .hist-modal-hd .btn-icon,
+.hist-modal-hd .btn-icon,
 .kpi-panel-header .btn-icon{color:var(--text);-webkit-tap-highlight-color:transparent}
 .chat-header .btn-icon svg,
-#histModal .hist-modal-hd .btn-icon svg,
+.hist-modal-hd .btn-icon svg,
 .kpi-panel-header .btn-icon svg{width:19px;height:19px}
 /* 뒤로가기(<) 모드 — 이력에서 연 질의 보기 화면의 좌측상단 아이콘(얇은 글리프라 크게) */
 .chat-header .btn-icon.hdr-back svg{width:20px;height:20px}
-/* 선택/hover 시 회색 배경 제거 (메인·질의 이력·KPI 헤더 공통) */
+/* 선택/hover 시 회색 배경 제거 (메인·모달·KPI 헤더 공통) */
 .chat-header .btn-icon:hover,.chat-header .btn-icon:active,
-#histModal .hist-modal-hd .btn-icon:hover,#histModal .hist-modal-hd .btn-icon:active,
+.hist-modal-hd .btn-icon:hover,.hist-modal-hd .btn-icon:active,
 .kpi-panel-header .btn-icon:hover,.kpi-panel-header .btn-icon:active{background:transparent}
 .chat-header-title{
   font-size:var(--fs-lg);font-weight:600;color:var(--text);flex:1;
