@@ -2082,13 +2082,14 @@ document.addEventListener('pointerdown', (e) => {
   const card = _pushedCard();
   if (!card || !card.contains(e.target)) return;     // 사이드바 쪽 터치는 통과
   _swipe = { card, x0: e.clientX, y0: e.clientY, id: e.pointerId,
-             w: Math.round(window.innerWidth * 0.8), off: 0, active: false };
+             w: Math.round(window.innerWidth * 0.8), off: 0, active: false, moved: false };
   _swipe.off = _swipe.w;
 }, true);
 
 document.addEventListener('pointermove', (e) => {
   if (!_swipe || e.pointerId !== _swipe.id) return;
   const dx = e.clientX - _swipe.x0, dy = e.clientY - _swipe.y0;
+  if (Math.abs(dx) > 8 || Math.abs(dy) > 8) _swipe.moved = true;   // 움직였으면 탭이 아님
   if (!_swipe.active) {
     // 세로 스크롤 우선 — 가로 의도가 분명할 때만 드래그 시작
     if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
@@ -2102,7 +2103,13 @@ document.addEventListener('pointermove', (e) => {
 
 function _swipeEnd() {
   const s = _swipe; _swipe = null;
-  if (!s || !s.active) return;                       // 그냥 탭이면 아무 일도 없음
+  if (!s) return;
+  if (!s.active) {
+    // 드래그가 아니었던 경우 — 움직임 없이 뗐으면 '탭'으로 보고 바로 복귀.
+    // (카드 안에서 세로로 스크롤한 뒤 뗀 것은 s.moved로 걸러진다)
+    if (!s.moved) { _swallowClickUntil = Date.now() + 700; closeSidebar(); }
+    return;
+  }
   s.card.style.transition = '';
   s.card.style.transform = '';                       // 이후 위치는 CSS(클래스)가 결정
   _swallowClickUntil = Date.now() + 700;
