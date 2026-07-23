@@ -2545,18 +2545,32 @@ function _onHistSearchInput() {
 }
 
 // 질의 이력 2줄 행: 1줄 질문 / 2줄 날짜·사용자·평가 + 우측 '>'
+// 토큰 수 — 데스크톱은 정확값(18,432), 모바일은 축약(18.4k)을 보인다.
+// 두 표기를 함께 심고 CSS로 전환(렌더 시점의 화면폭에 묶이지 않아 회전·리사이즈에도 맞음).
+function _tokNum(n) {
+  const v = n || 0;
+  const abbr = v >= 10000 ? (v / 1000).toFixed(v >= 100000 ? 0 : 1) + 'k' : v.toLocaleString();
+  return `<span class="hq-n-full">${v.toLocaleString()}</span><span class="hq-n-abbr">${abbr}</span>`;
+}
+
 function _histQueryRow(it) {
   const when   = formatRelTime(it.created_at);
   const user   = (it.user_name || '').length > 16 ? (it.user_name || '').slice(0, 15) + '…' : (it.user_name || '—');
-  const rating = it.feedback === 1 ? '👍 도움됨' : it.feedback === -1 ? '👎 아쉬움' : '미평가';
+  // 평가 — 모바일에선 라벨 텍스트를 숨겨 토큰 사용량 자리를 확보(아이콘만으로 의미 전달).
+  // title은 남겨 데스크톱 툴팁·스크린리더에서 뜻이 유지된다.
+  const rating = it.feedback === 1
+    ? '<span title="도움됨">👍<span class="hq-fb-t"> 도움됨</span></span>'
+    : it.feedback === -1
+      ? '<span title="아쉬움">👎<span class="hq-fb-t"> 아쉬움</span></span>'
+      : '<span title="미평가" style="color:var(--dim)">—<span class="hq-fb-t"> 미평가</span></span>';
   // 사용 토큰(입력↑/출력↓) — 값이 있을 때만 메타 줄 끝에 표기
   const tok = (it.input_tokens != null || it.output_tokens != null)
-    ? ` · <span class="hq-tok">↑${(it.input_tokens || 0).toLocaleString()} ↓${(it.output_tokens || 0).toLocaleString()} tok</span>`
+    ? ` · <span class="hq-tok">↑${_tokNum(it.input_tokens)} ↓${_tokNum(it.output_tokens)}<span class="hq-fb-t"> tok</span></span>`
     : '';
   return `<div class="hq-item" onclick="_openHistAnswer(${it.id})">
       <div class="hq-main">
         <div class="hq-q">${escapeHtml(it.question || '')}</div>
-        <div class="hq-meta">${escapeHtml(when)} · ${escapeHtml(user)} · ${rating}${tok}</div>
+        <div class="hq-meta">${escapeHtml(when)} · <span class="hq-user">${escapeHtml(user)}</span> · ${rating}${tok}</div>
       </div>
       <svg class="hq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
     </div>`;
