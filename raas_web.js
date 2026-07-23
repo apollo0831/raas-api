@@ -639,13 +639,13 @@ function _stmColKo(dim, v) { return dim === 'intent' ? (_INTENT_KO[v] || v) : v;
 function _renderStmHeatmap(d) {
   const dim = (d && d.dimension) || 'metric';
   const dimLabel = dim === 'metric' ? '지표' : dim === 'provider' ? '데이터소스'
-                 : dim === 'intent' ? '연산유형' : '분석대상';
+                 : dim === 'intent' ? '연산유형' : '대상';
   const toolbar = `
     <div class="stm-heat-toolbar">
       <span class="label">차원:</span>
       <button class="${dim==='intent'?'active':''}" onclick="setStmHeatDim('intent')">연산유형</button>
       <button class="${dim==='metric'?'active':''}" onclick="setStmHeatDim('metric')">지표</button>
-      <button class="${dim==='scope' ?'active':''}" onclick="setStmHeatDim('scope')">분석대상</button>
+      <button class="${dim==='scope' ?'active':''}" onclick="setStmHeatDim('scope')">대상</button>
       <button class="${dim==='provider'?'active':''}" onclick="setStmHeatDim('provider')">데이터소스</button>
     </div>`;
   if (!d || !d.cols || d.cols.length === 0 || d.grand_total === 0) {
@@ -656,7 +656,9 @@ function _renderStmHeatmap(d) {
   const max = Math.max(...cells.flat(), 1);
   // grid-template-columns: 행 라벨 + cols + 행 합계
   const colCount = cols.length + 2;
-  const gridStyle = `grid-template-columns: minmax(120px, 1.2fr) repeat(${cols.length}, minmax(60px,1fr)) minmax(60px,0.7fr);`;
+  // 열 이름을 자르지 않으므로 최소폭 = max-content(글자 전체). 표가 화면보다 넓어지면
+  // .stm-heat-wrap이 좌우 스크롤한다. 60px 고정 최소폭이면 긴 이름이 셀 밖으로 새어나온다.
+  const gridStyle = `grid-template-columns: minmax(max-content, 1.2fr) repeat(${cols.length}, minmax(max-content,1fr)) minmax(60px,0.7fr);`;
   // 헤더 행
   let html = `<div class="stm-heat" style="${gridStyle}">`;
   html += `<div class="stm-heat-cell head">직무 \\ ${dimLabel}</div>`;
