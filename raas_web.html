@@ -1387,6 +1387,9 @@ table.story-table th{
     box-shadow:-6px 0 22px rgba(0,0,0,.20), 0 -6px 22px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.05);
     cursor:pointer;                                /* 남은 카드 탭 → 원래 페이지로 복귀 */
   }
+  /* 주차 중엔 모달 카드가 본문 카드를 정확히 덮는다 — 둘 다 그림자를 드리우면 경계 왼쪽이
+     두 겹으로 겹쳐 '새 질의'일 때보다 진해 보인다. 위 카드 것만 남긴다. */
+  body.modal-parked .chat-main{box-shadow:none}
   .sidebar-backdrop{display:block;pointer-events:none}
   .kpi-panel{
     position:fixed;right:-100vw;top:0;
