@@ -1418,6 +1418,16 @@ table.story-table th{
   /* 주차 중엔 모달 카드가 본문 카드를 정확히 덮는다 — 둘 다 그림자를 드리우면 경계 왼쪽이
      두 겹으로 겹쳐 '새 질의'일 때보다 진해 보인다. 위 카드 것만 남긴다. */
   body.modal-parked .chat-main{box-shadow:none}
+  /* 밀려 있는 동안 카드 '내부'의 상호작용을 끈다 — 질의 항목의 hover/active 회색 배경이
+     드래그 내내 갱신되며 제스처와 간섭한다(스크롤 컨테이너인 모달에서 특히 심함).
+     이벤트는 카드 자신이 받으므로 스와이프·탭 복귀는 그대로 동작한다. */
+  body.modal-parked .hist-modal.open *,
+  body.sidebar-pushed .chat-main *{pointer-events:none}
+  body.modal-parked .hist-modal.open,
+  body.sidebar-pushed .chat-main{
+    -webkit-tap-highlight-color:transparent;      /* 탭 순간의 기본 회색 플래시도 제거 */
+    user-select:none;-webkit-user-select:none;    /* 드래그가 텍스트 선택으로 새지 않도록 */
+  }
   .sidebar-backdrop{display:block;pointer-events:none}
   .kpi-panel{
     position:fixed;right:-100vw;top:0;
