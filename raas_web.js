@@ -2563,7 +2563,7 @@ function _histQueryRow(it) {
     ? ' · <span title="도움됨">👍<span class="hq-fb-t"> 도움됨</span></span>'
     : it.feedback === -1
       ? ' · <span title="아쉬움">👎<span class="hq-fb-t"> 아쉬움</span></span>'
-      : '<span class="hq-fb-none" title="미평가" style="color:var(--dim)"> · —<span class="hq-fb-t"> 미평가</span></span>';
+      : '<span class="hq-fb-none" title="미평가" style="color:var(--dim)"> · <span class="hq-fb-t">미평가</span></span>';
   // 사용 토큰(입력↑/출력↓) — 값이 있을 때만 메타 줄 끝에 표기
   const tok = (it.input_tokens != null || it.output_tokens != null)
     ? ` · <span class="hq-tok">↑${_tokNum(it.input_tokens)} ↓${_tokNum(it.output_tokens)}<span class="hq-fb-t"> tok</span></span>`
