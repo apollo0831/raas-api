@@ -1833,6 +1833,7 @@ async function submitQuery(question, source, opts) {
   // 직전 질의의 답변(스트리밍)이 완전히 끝나기 전에는 새 질의를 막는다.
   // Enter·전송버튼·칩 등 모든 진입 경로에 동일 적용.
   if (_raas_query_inflight) return;
+  if (typeof _setHeaderBack === 'function') _setHeaderBack(false);   // 새 질의 → 뒤로가기 해제
   _setQueryGenerating(true);
   const input = document.getElementById('chatInput');
   input.value = '';
@@ -1984,7 +1985,24 @@ function toggleSidebar() {
   }
 }
 
-document.getElementById('btnToggleSidebar').addEventListener('click', toggleSidebar);
+// 이력에서 연 '이전 질의 보기' 상태 — 좌측상단 아이콘을 뒤로(<)로 바꿔 질의 이력으로 복귀
+let _headerBackMode = false;
+const _HDR_MENU_SVG = '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>';
+const _HDR_BACK_SVG = '<polyline points="15 18 9 12 15 6"/>';
+function _setHeaderBack(on) {
+  _headerBackMode = !!on;
+  const b = document.getElementById('btnToggleSidebar');
+  if (!b) return;
+  const svg = b.querySelector('svg');
+  if (svg) svg.innerHTML = on ? _HDR_BACK_SVG : _HDR_MENU_SVG;
+  b.title = on ? '질의 이력으로' : '사이드바';
+  b.setAttribute('aria-label', on ? '질의 이력으로 돌아가기' : '사이드바 토글');
+}
+
+document.getElementById('btnToggleSidebar').addEventListener('click', () => {
+  if (_headerBackMode) { _setHeaderBack(false); openHistModal(); return; }   // 뒤로 → 질의 이력
+  toggleSidebar();
+});
 // 밀린 본문 카드 어디를 눌러도 먼저 닫힘 (capture: 내부 버튼/링크보다 우선)
 document.querySelector('.chat-main').addEventListener('click', (e) => {
   if (document.body.classList.contains('sidebar-pushed')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
@@ -2039,6 +2057,7 @@ window.addEventListener('resize', () => {
 });
 document.getElementById('btnNewChat').addEventListener('click', () => {
   if (isMobile()) closeSidebar();
+  _setHeaderBack(false);   // 새 채팅 → 뒤로가기 해제
   document.getElementById('threadInner').innerHTML = `
     <div class="welcome" id="welcomeScreen">
       <h1 class="welcome-logo">안녕하세요 👋</h1>
@@ -2199,6 +2218,7 @@ function _onHistoryClick(i) {
   const it = _histItems[i];
   if (!it || !it.question) return;
   if (isMobile()) closeSidebar();
+  _setHeaderBack(false);   // 사이드바 이력에서 연 것은 돌아갈 페이지가 없음
   // 저장된 답변이 있으면 그대로 복원 — 재질의(LLM 재호출) 없음. 추출표·차트도 함께.
   if (it.answer) { restoreFromCache(it.question, it.answer, it.extract); return; }
   const cached = _getCachedAnswer(it.question);   // 구 이력(answer 없음) 폴백
@@ -2473,6 +2493,7 @@ function _openHistAnswer(id) {
   if (isMobile()) closeSidebar();
   if (typeof _hideWelcome === 'function') _hideWelcome();
   restoreFromCache(it.question, it.answer || '', it.extract);
+  _setHeaderBack(true);   // 좌측상단을 '<'(질의 이력으로)로 전환
 }
 
 // 헤더 좌측 메뉴 아이콘 → 이력 닫고 왼쪽 사이드바 열기
