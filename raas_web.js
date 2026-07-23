@@ -1996,6 +1996,7 @@ function _setHeaderBack(on) {
   if (!b) return;
   const svg = b.querySelector('svg');
   if (svg) svg.innerHTML = on ? _HDR_BACK_SVG : _HDR_MENU_SVG;
+  b.classList.toggle('hdr-back', !!on);   // 뒤로 아이콘만 16px (헤더 기본 19px 오버라이드)
   b.title = on ? '질의 이력으로' : '사이드바';
   b.setAttribute('aria-label', on ? '질의 이력으로 돌아가기' : '사이드바 토글');
 }
