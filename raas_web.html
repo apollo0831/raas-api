@@ -1398,9 +1398,18 @@ table.story-table th{
   }
   /* 모달을 보다가 ☰를 눌러 사이드바를 편 경우(=주차)에만 본문 카드와 똑같이 밀림.
      사이드바에서 모달을 새로 여는 경우는 modal-parked가 없으므로 전면에 그대로 뜬다. */
-  body.modal-parked .hist-modal.open{
+  /* transition·will-change는 .chat-main처럼 '상태'가 아니라 '요소'에 둔다 —
+     주차 해제(modal-parked 제거) 순간 transition 선언까지 사라지면 복귀가 애니메이션 없이
+     툭 끊긴다. 본문 카드가 매끄러웠던 이유가 이것(.chat-main 기본 선언). */
+  .hist-modal{
     transition:transform .28s cubic-bezier(.4,0,.2,1),border-radius .28s ease;
+    will-change:transform;
+  }
+  body.modal-parked .hist-modal.open{
     transform:translateX(80vw) translateY(var(--push-drop, 28px));
+    /* 이동 중 배경 블러는 합성 비용이 커 드래그가 끊긴다(본문 카드엔 블러가 없음).
+       주차 상태에선 카드가 화면을 덮지도 않아 블러가 보일 일이 없다 */
+    backdrop-filter:none;-webkit-backdrop-filter:none;
     border-radius:28px;overflow:hidden;
     box-shadow:-6px 0 22px rgba(0,0,0,.20), 0 -6px 22px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.05);
     cursor:grab;                                   /* 남은 카드를 왼쪽으로 밀면 원래 페이지로 복귀 */

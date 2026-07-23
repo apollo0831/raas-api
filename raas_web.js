@@ -2110,7 +2110,10 @@ function _swipeEnd() {
     if (!s.moved) { _swallowClickUntil = Date.now() + 700; closeSidebar(); }
     return;
   }
+  // transition 복원과 위치 변경이 같은 프레임에 일어나면 전환이 트리거되지 않아 뚝 끊긴다.
+  // 복원 → 강제 리플로우 → 목표 위치 순서로 해야 스냅백·복귀가 부드럽게 이어진다.
   s.card.style.transition = '';
+  void s.card.offsetWidth;
   s.card.style.transform = '';                       // 이후 위치는 CSS(클래스)가 결정
   _swallowClickUntil = Date.now() + 700;
   if (s.off < s.w * 0.7) closeSidebar();             // 30% 이상 끌었으면 복귀
