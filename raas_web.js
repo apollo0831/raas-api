@@ -2188,7 +2188,8 @@ function restoreFromCache(question, answerHTML, extractPayload) {
     </div>`);
   const mb = ti.querySelector('.msg-ai:last-child .msg-body');
   if (mb && extractPayload) {                   // 추출표(엑셀 다운로드 포함) 복원
-    try { mb.insertAdjacentHTML('beforeend', _renderExtract(extractPayload)); } catch (_) {}
+    try { mb.insertAdjacentHTML('beforeend', _renderExtract(extractPayload)); }
+    catch (e) { console.warn('[replay] 추출표 복원 실패:', e); }
   }
   if (mb) _initLLMCharts(mb);                   // ```chart → ECharts 재렌더(레거시 HTML도 시도)
   _scrollBottom();
