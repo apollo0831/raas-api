@@ -2033,12 +2033,27 @@ document.getElementById('btnToggleSidebar').addEventListener('click', () => {
 document.querySelector('.chat-main').addEventListener('click', (e) => {
   if (document.body.classList.contains('sidebar-pushed')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
 }, true);
-// 주차된 모달 카드(20vw)도 동일 — 탭하면 사이드바 닫고 보던 페이지로 복귀
-document.querySelectorAll('.hist-modal').forEach(m => {
-  m.addEventListener('click', (e) => {
-    if (document.body.classList.contains('modal-parked')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
-  }, true);
-});
+// 주차된 모달 카드(20vw) 탭 → 사이드바 닫고 보던 페이지로 복귀 (모달 5종 공통).
+// click이 아니라 pointerdown(캡처)으로 받는다 — 모달 내부는 스크롤 컨테이너라
+// 터치에서 click이 합성되지 않는 경우가 있고, document 레벨이라 모달이 늦게 생겨도 동작한다.
+let _swallowClickAfterUnpark = false;
+document.addEventListener('pointerdown', (e) => {
+  if (!document.body.classList.contains('modal-parked')) return;
+  const t = e.target;
+  if (!t || !t.closest || !t.closest('.hist-modal.open')) return;
+  e.preventDefault(); e.stopPropagation();
+  _swallowClickAfterUnpark = true;      // 복귀 직후의 click이 모달 내부 버튼을 누르지 않도록
+  closeSidebar();                       // sidebar-pushed + modal-parked 해제 → 모달 전면 복귀
+}, true);
+// 복귀 탭에 뒤따르는 click 1회 무효화 + pointer 미지원 환경(구형)에서는 이 핸들러가 복귀를 담당
+document.addEventListener('click', (e) => {
+  if (_swallowClickAfterUnpark) { _swallowClickAfterUnpark = false; e.preventDefault(); e.stopPropagation(); return; }
+  if (!document.body.classList.contains('modal-parked')) return;
+  const t = e.target;
+  if (!t || !t.closest || !t.closest('.hist-modal.open')) return;
+  e.preventDefault(); e.stopPropagation();
+  closeSidebar();
+}, true);
 // 사이드바에서 다른 곳(새 질의·최근 질의)으로 이동 → 주차 모달은 결과를 덮으므로 정리
 // (closeSidebar가 먼저 주차를 풀 수 있으므로 클래스로 가드하지 않고 무조건 정리)
 function _closeParkedModals() {
