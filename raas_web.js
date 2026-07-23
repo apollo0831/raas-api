@@ -633,8 +633,12 @@ function setStmHeatDim(dim) {
   _loadStmTab();
 }
 
-// 열 라벨 — 연산유형(intent)은 인기주제 탭과 같은 한글 라벨로 표시(원 코드는 title에 남김)
-function _stmColKo(dim, v) { return dim === 'intent' ? (_INTENT_KO[v] || v) : v; }
+// 열 라벨 — 연산유형(intent)은 한글 라벨, 대상(scope)은 서버가 준 코드→이름 맵.
+// 둘 다 원 코드는 title 툴팁에 남긴다.
+function _stmColKo(dim, v, labels) {
+  if (dim === 'intent') return _INTENT_KO[v] || v;
+  return (labels && labels[v]) || v;
+}
 
 function _renderStmHeatmap(d) {
   const dim = (d && d.dimension) || 'metric';
@@ -662,7 +666,7 @@ function _renderStmHeatmap(d) {
   // 헤더 행
   let html = `<div class="stm-heat" style="${gridStyle}">`;
   html += `<div class="stm-heat-cell head">직무 \\ ${dimLabel}</div>`;
-  for (const c of cols) html += `<div class="stm-heat-cell head" title="${escapeHtml(c)}">${escapeHtml(_stmColKo(dim, c))}</div>`;
+  for (const c of cols) html += `<div class="stm-heat-cell head" title="${escapeHtml(c)}">${escapeHtml(_stmColKo(dim, c, d.col_labels))}</div>`;
   html += `<div class="stm-heat-cell head">합계</div>`;
   // 데이터 행
   for (let ri = 0; ri < roles.length; ri++) {
@@ -671,7 +675,7 @@ function _renderStmHeatmap(d) {
       const v = cells[ri][ci] || 0;
       const opacity = v === 0 ? 0 : Math.min(1, 0.12 + (v / max) * 0.78);
       const bg = `background:rgba(79,142,247,${opacity.toFixed(2)})`;
-      const tip = `${escapeHtml(roles[ri])} × ${escapeHtml(_stmColKo(dim, cols[ci]))}: ${v}건`;
+      const tip = `${escapeHtml(roles[ri])} × ${escapeHtml(_stmColKo(dim, cols[ci], d.col_labels))}: ${v}건`;
       html += `<div class="stm-heat-cell data${v===0?' zero':''}" style="${bg}" title="${tip}">${v||'·'}</div>`;
     }
     html += `<div class="stm-heat-cell total">${d.row_totals[ri]||0}</div>`;

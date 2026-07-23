@@ -290,6 +290,18 @@ def stats_topics(days: int = 30, limit: int = 20) -> dict:
 
 
 # ── 5) 직무 × 지표/scope 매트릭스 (히트맵 입력) ───────────
+def _scope_label(code: str) -> str:
+    """대상 코드(T00·F09…) → 현행 프로그램/채널명.
+    이름 해석은 grounding이 단일 소유(라이브 broadplan 우선 → 온톨로지 폴백)하므로
+    여기서 매핑을 복제하지 않고 지연 import로 재사용한다(서버가 이미 로드해 둔 모듈).
+    코드가 아닌 값('파워FM' 등 과거 저장분)은 해석 실패 시 원문 그대로."""
+    try:
+        import raas_grounding as G
+        return G._resolve_name(code) or code
+    except Exception:
+        return code
+
+
 def stats_role_metric_matrix(days: int = 30, dimension: str = "metric",
                              top_n: int = 10) -> dict:
     """직무(행) × 지표 또는 scope(열) 빈도 매트릭스.
@@ -382,6 +394,8 @@ def stats_role_metric_matrix(days: int = 30, dimension: str = "metric",
         "days":        days,
         "roles":       roles,
         "cols":        cols,
+        # 대상(scope)은 코드로 저장돼 있어 그대로는 못 읽는다 → 표시용 이름 동봉(코드는 cols에 보존)
+        "col_labels":  {c: _scope_label(c) for c in cols} if dimension == "scope" else {},
         "cells":       cells,
         "row_totals":  row_totals,
         "col_totals":  col_totals,
