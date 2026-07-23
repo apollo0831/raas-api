@@ -2476,6 +2476,10 @@ function _histOpenSidebar() {
   closeHistModal();
   openSidebar();
 }
+// 좌측상단 '메뉴' — 모달 닫고 사이드바 펼침(질의 이력과 동일 동작). 우측 X는 제거됨.
+function _profileOpenSidebar() { closeProfileModal(); openSidebar(); }
+function _adminOpenSidebar()   { closeAdminModal();   openSidebar(); }
+function _statsOpenSidebar()   { closeStatsModal();   openSidebar(); }
 
 // 하단 '새 질의' FAB → 이력 닫고 새 질의 시작
 function _histNewQuery() {

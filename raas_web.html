@@ -206,7 +206,17 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   opacity:0;pointer-events:none;transition:opacity .22s ease;
 }
 .sidebar-backdrop.visible{opacity:1;pointer-events:auto}
-.sidebar-top{height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px));padding:env(safe-area-inset-top, 0px) 16px 0;border-bottom:1px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;background:var(--bg0)}
+/* RAAS 헤더 = 오버레이 + 강한 방식(질의 이력·KPI와 동일: 블러 5px·88%·96px) — 메뉴·질의가 뒤로 스크롤되며 페이드 */
+.sidebar-top{position:absolute;top:0;left:0;right:0;z-index:50;height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px));padding:env(safe-area-inset-top, 0px) 16px 0;display:flex;align-items:center;justify-content:space-between;pointer-events:none}
+.sidebar-top .sidebar-logo{pointer-events:auto}
+.sidebar-top::before{
+  content:"";position:absolute;left:0;right:0;top:0;z-index:-1;pointer-events:none;
+  height:calc(96px + env(safe-area-inset-top, 0px));
+  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, var(--bg0) 88%, transparent) 45%, var(--bg0) 100%);
+  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 70%);
+  mask-image:linear-gradient(to top, transparent 0%, #000 70%);
+}
 .sidebar-top-info{display:flex;flex-direction:column}
 .btn-theme{
   width:28px;height:28px;display:flex;align-items:center;justify-content:center;
@@ -237,7 +247,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   font-size:var(--fs-xs);font-weight:500;color:var(--dim);
   flex-shrink:0;
 }
-.sidebar-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+.sidebar-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;padding-top:calc(64px + env(safe-area-inset-top, 0px))}
 .quick-queries{padding:2px 8px;display:flex;flex-direction:column;gap:1px}
 .quick-query-btn{
   display:flex;align-items:center;gap:9px;
@@ -329,11 +339,33 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   padding:14px 12px;border-bottom:1px solid var(--line);
   flex-shrink:0;
 }
-/* 질의 이력 헤더만 — 배경을 상단 status bar(--bg0)와 동일하게(메인·사이드바 통일), safe-area만큼 내림 */
-#histModal .hist-modal-hd{
-  padding:calc(14px + env(safe-area-inset-top, 0px)) 12px 14px;
-  background:var(--bg0);
+/* 질의 이력·내 프로필·승인 관리·질의맵 헤더 = 오버레이(강한 방식) — 선 제거, 내용이 뒤로 스크롤되며 상단에서 사라짐 */
+#histModal .hist-modal-hd,
+#profileModal .hist-modal-hd,
+#adminModal .hist-modal-hd,
+#statsModal .hist-modal-hd{
+  position:absolute;top:0;left:0;right:0;z-index:50;
+  height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  padding:env(safe-area-inset-top, 0px) 12px 0;
+  border-bottom:none;background:none;
+  pointer-events:none;   /* 아이콘·제목만 클릭, 나머지는 스크롤 통과 */
 }
+/* 강한 방식: 블러 5px + 88% 틴트 + 96px 페이드존 */
+#histModal .hist-modal-hd::before,
+#profileModal .hist-modal-hd::before,
+#adminModal .hist-modal-hd::before,
+#statsModal .hist-modal-hd::before{
+  content:"";position:absolute;left:0;right:0;top:0;z-index:-1;pointer-events:none;
+  height:calc(96px + env(safe-area-inset-top, 0px));
+  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, var(--bg0) 88%, transparent) 45%, var(--bg0) 100%);
+  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 70%);
+  mask-image:linear-gradient(to top, transparent 0%, #000 70%);
+}
+#histModal .hist-modal-hd .btn-icon,   #histModal .hist-modal-title,
+#profileModal .hist-modal-hd .btn-icon,#profileModal .hist-modal-title,
+#adminModal .hist-modal-hd .btn-icon,  #adminModal .hist-modal-title,
+#statsModal .hist-modal-hd .btn-icon,  #statsModal .hist-modal-title{pointer-events:auto}
 .hist-hd-spacer{width:32px;flex-shrink:0}   /* 우측 X 제거 후 제목 중앙정렬 유지 */
 .hist-modal-title{font-size:var(--fs-lg);font-weight:600;flex:1;text-align:center;min-width:0}
 /* ── 질의 이력 2줄 행 — 행 구분선 없음(제목 아래 선만 유지) ── */
@@ -344,7 +376,23 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 .hq-meta{font-size:calc(var(--fs-md) * 0.92);color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hq-chevron{width:18px;height:18px;color:var(--dim);flex-shrink:0}
 /* ── 하단 검색바(프로스티드 오버레이) + 새 질의 FAB ── */
-#histModal .hist-modal-body{padding-bottom:106px}   /* 페이드+검색바 아래로 마지막 항목이 가리지 않게 */
+/* 오버레이 헤더 아래에서 시작 + 상단 스크롤 마스크(메인 챗과 동일) — 항목이 헤더 영역을 지나 status bar 경계에서 사라짐 */
+/* [실험] 상단 opacity 마스크 제거 — 하단처럼 오버레이(::before)가 덮어서 흐리게. 상단 여백은 96px 페이드존만큼 */
+#histModal .hist-modal-body,
+#profileModal .hist-modal-body{
+  padding-top:calc(92px + env(safe-area-inset-top, 0px));   /* 오버레이 헤더 아래에서 시작 */
+}
+/* 승인 관리·질의맵: 중간 고정요소(툴바·섹션)+본문을 함께 스크롤 → 헤더 뒤로 스크롤·페이드 */
+#adminModal .hist-scroll,
+#statsModal .hist-scroll{
+  flex:1;min-height:0;overflow-y:auto;
+  padding-top:calc(92px + env(safe-area-inset-top, 0px));
+}
+#adminModal .hist-scroll .hist-modal-body,
+#statsModal .hist-scroll .hist-modal-body{flex:none;overflow:visible}
+#histModal .hist-modal-body{
+  padding-bottom:106px;   /* 질의 이력 하단 검색바 아래로 마지막 항목이 가리지 않게 */
+}
 .hist-bottom{
   position:absolute;left:0;right:0;bottom:0;z-index:4;pointer-events:none;  /* 위 투명부는 스크롤 통과 */
   padding:96px 14px calc(12px + env(safe-area-inset-bottom,0px));
@@ -869,15 +917,24 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   overflow:hidden;min-width:0;
   position:relative;   /* 입력창 오버레이(absolute) 기준 */
 }
+/* 헤더 = 오버레이 — 텍스트가 그 뒤로 스크롤되며 아이콘 영역을 지나 상단에서 사라짐(하단 입력창과 동일 방식) */
 .chat-header{
+  position:absolute;top:0;left:0;right:0;z-index:50;
   display:flex;align-items:center;gap:8px;
-  /* 공통 높이(--topbar-h) + safe-area(standalone status bar). 내용은 세로 중앙.
-     사이드바 상단(.sidebar-top)과 동일 계산 → 두 하단 라인이 픽셀 단위로 정렬됨 */
   height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
   padding:env(safe-area-inset-top, 0px) 16px 0;
-  border-bottom:1px solid var(--line);
-  background:var(--bg0);flex-shrink:0;
+  pointer-events:none;   /* 아이콘만 클릭(아래 .btn-icon), 나머지는 스크롤 통과 */
 }
+/* 강한 방식(질의 이력과 동일): 블러 5px + 88% 틴트 + 96px 페이드존 */
+.chat-header::before{
+  content:"";position:absolute;left:0;right:0;top:0;z-index:-1;pointer-events:none;
+  height:calc(96px + env(safe-area-inset-top, 0px));
+  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, var(--bg0) 88%, transparent) 45%, var(--bg0) 100%);
+  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 70%);
+  mask-image:linear-gradient(to top, transparent 0%, #000 70%);
+}
+.chat-header .btn-icon{pointer-events:auto}
 .btn-icon{
   width:32px;height:32px;display:flex;align-items:center;justify-content:center;
   border:none;background:transparent;color:var(--sub);
@@ -885,6 +942,18 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   transition:background .12s,color .12s;flex-shrink:0;
 }
 .btn-icon:hover{background:var(--bg3);color:var(--text)}
+/* 메인 헤더·질의 이력 헤더·KPI 헤더 아이콘 — 동일 크기(19px) + 색상 진하게(--text).
+   -webkit-tap-highlight-color:transparent — 탭 시 브라우저 기본 회색 하이라이트(깜빡임) 제거 */
+.chat-header .btn-icon,
+#histModal .hist-modal-hd .btn-icon,
+.kpi-panel-header .btn-icon{color:var(--text);-webkit-tap-highlight-color:transparent}
+.chat-header .btn-icon svg,
+#histModal .hist-modal-hd .btn-icon svg,
+.kpi-panel-header .btn-icon svg{width:19px;height:19px}
+/* 선택/hover 시 회색 배경 제거 (메인·질의 이력·KPI 헤더 공통) */
+.chat-header .btn-icon:hover,.chat-header .btn-icon:active,
+#histModal .hist-modal-hd .btn-icon:hover,#histModal .hist-modal-hd .btn-icon:active,
+.kpi-panel-header .btn-icon:hover,.kpi-panel-header .btn-icon:active{background:transparent}
 .chat-header-title{
   font-size:var(--fs-lg);font-weight:600;color:var(--text);flex:1;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -892,7 +961,11 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 
 /* ── THREAD ── */
 /* 하단 padding: 입력창(오버레이) 뒤로 스크롤되는 공간 — 마지막 답변이 가려지지 않게 */
-.chat-thread{flex:1;overflow-y:auto;padding:20px 0 150px}
+/* 헤더 오버레이 뒤로 스크롤 — 텍스트가 status bar 경계(safe-top)에서 완전 투명, 아이콘 영역을 지나
+   헤더 하단에서 완전 표시. 위로 스크롤 시 아이콘 영역을 다 쓰며 상단 경계 직전에 사라짐 */
+.chat-thread{flex:1;overflow-y:auto;
+  padding:calc(92px + env(safe-area-inset-top, 0px)) 0 150px;
+}
 .thread-inner{
   max-width:840px;margin:0 auto;padding:0 32px;
   display:flex;flex-direction:column;gap:0;
@@ -1036,13 +1109,14 @@ table.story-table th{
   position:absolute;left:0;right:0;bottom:0;z-index:50;
   /* 하단: safe-area(홈바)만으로 충분한 여유가 생기므로 기본 여백은 8px만 —
      아이폰에서 입력창이 과하게 올라와 보이던 것 완화. 상단 페이드 밴드도 26px로 축소. */
-  padding:26px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding:52px 16px calc(8px + env(safe-area-inset-bottom, 0px));   /* 페이드 밴드 확대(강한 방식) */
   pointer-events:none;   /* 페이드 밴드는 클릭 통과 — 입력창만 반응 */
 }
+/* 강한 방식(질의 이력과 동일): 블러 5px + 88% 그라데이션 틴트 */
 .input-wrap::before{
   content:"";position:absolute;inset:0;pointer-events:none;
-  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
-  background:color-mix(in srgb, var(--bg0) 50%, transparent);
+  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  background:linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--bg0) 88%, transparent) 100%);
   /* 마스크로 틴트+블러를 위쪽으로 페이드 — 경계선 없이 자연스럽게 */
   -webkit-mask-image:linear-gradient(to top,#000 62%,transparent);
   mask-image:linear-gradient(to top,#000 62%,transparent);
@@ -1063,8 +1137,13 @@ table.story-table th{
   font-size:var(--fs-base);color:var(--text);font-family:var(--sans);
   line-height:1.5;resize:none;min-height:66px;max-height:200px;
   outline:none;display:block;
+  /* Windows 클래식 스크롤바가 타원 안 오른쪽에 보이는 것 제거 — 스크롤 기능은 유지 */
+  scrollbar-width:none;-ms-overflow-style:none;
+  /* 타원 경계 바깥 소프트 블러 그림자 — 뒤 콘텐츠와 분리돼 입력 영역 가시성↑ (사이드바 카드와 동일 톤) */
+  box-shadow:0 2px 22px rgba(0,0,0,.28);
 }
 .input-box::placeholder{color:var(--color-text-placeholder);font-size:calc(var(--fs-base) * 0.94)}
+.input-box::-webkit-scrollbar{display:none}   /* Chrome·Edge·Safari 스크롤바 숨김(스크롤은 동작) */
 /* 포커스 시 파란 테두리 강조 제거 — 기본 테두리 유지 */
 .input-box:focus{border-color:var(--line2)}
 /* 전역 focus-visible(파란 아웃라인 + 작은 radius)에서 입력창 제외 → 입력 중에도 타원 유지·무테두리 */
@@ -1079,6 +1158,9 @@ table.story-table th{
 .btn-send:hover{background:#6fa3f9}
 .btn-send:active{transform:scale(.93)}
 .btn-send:disabled{background:var(--bg4);cursor:not-allowed}
+/* 모바일은 폰트 확대로 타원이 높아짐(72→79.5px) → 한 줄 상태에서 세로 중앙이 되도록 보정.
+   하단 기준은 유지되어 여러 줄로 길어져도 버튼은 아래줄에 남음 */
+@media (max-width:720px){ .btn-send{bottom:20px} }
 /* 답변 생성 중: 윗화살표 → 네모(정지), 빗금 커서 대신 일반 상태 유지 */
 .btn-send .ic-stop{display:none}
 .btn-send.is-generating .ic-arrow{display:none}
@@ -1097,7 +1179,7 @@ table.story-table th{
 .kpi-panel.collapsed{width:0;min-width:0}
 .kpi-close-mobile{
   display:none;
-  position:absolute;top:12px;right:12px;
+  position:absolute;top:12px;right:12px;z-index:51;   /* 오버레이 헤더(z50) 위 — 클릭 가능하게 */
   width:30px;height:30px;
   align-items:center;justify-content:center;
   border:none;background:var(--bg3);color:var(--sub);
@@ -1105,12 +1187,25 @@ table.story-table th{
   transition:background .12s,color .12s;
 }
 .kpi-close-mobile:hover{background:var(--bg4);color:var(--text)}
+/* KPI 헤더 = 오버레이 + 강한 방식(질의 이력과 동일: 블러 5px·88%·96px) — KPI 카드가 뒤로 스크롤되며 페이드 */
 .kpi-panel-header{
-  padding:10px 14px;border-bottom:1px solid var(--line);
-  display:flex;align-items:center;gap:8px;flex-shrink:0;
+  position:absolute;top:0;left:0;right:0;z-index:50;
+  height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  padding:env(safe-area-inset-top, 0px) 14px 0;
+  display:flex;align-items:center;gap:8px;
+  pointer-events:none;   /* 제목·버튼만 클릭 */
 }
+.kpi-panel-header::before{
+  content:"";position:absolute;left:0;right:0;top:0;z-index:-1;pointer-events:none;
+  height:calc(96px + env(safe-area-inset-top, 0px));
+  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, var(--bg0) 88%, transparent) 45%, var(--bg0) 100%);
+  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 70%);
+  mask-image:linear-gradient(to top, transparent 0%, #000 70%);
+}
+.kpi-panel-header .btn-icon,.kpi-panel-title{pointer-events:auto}
 .kpi-panel-title{font-size:var(--fs-md);font-weight:600;color:var(--sub);flex:1}
-.kpi-scroll{flex:1;overflow-y:auto;padding:14px}
+.kpi-scroll{flex:1;overflow-y:auto;padding:calc(92px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px))}
 /* KPI 패널 툴바 — 스코프 선택 + 기간 세그먼트 */
 .kpi-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .kpi-scope-select{
@@ -1280,7 +1375,7 @@ table.story-table th{
   }
   /* 열리면 화면 100% 덮음 (그림자는 전체 덮으므로 불필요) */
   .kpi-panel.mobile-open{right:0}
-  .kpi-close-mobile{display:flex}
+  /* 별도 모바일 X 미표시 — 헤더의 통일된 닫기(btnCloseKpi, 19px)를 모바일에서도 사용 */
 }
 @media(max-width:900px){
   .thread-inner{padding:0 16px;max-width:100%}
@@ -1379,8 +1474,8 @@ table.story-table th{
     <div class="sidebar-top-info">
       <div class="sidebar-logo">RAAS</div>
     </div>
-    <button class="btn-theme" id="btnTheme" title="테마 전환"></button>
   </div>
+  <div class="sidebar-scroll">
   <button class="btn-new-chat" id="btnNewChat">
     <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     새 질의
@@ -1401,7 +1496,14 @@ table.story-table th{
     <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 2h6a1 1 0 0 1 1 1v1h1a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/><path d="M9 13l2 2 4-4"/></svg>
     검토 큐
   </button>
-  <div class="sidebar-scroll">
+  <button class="btn-history" id="btnAdminManage" style="display:none" onclick="openAdminModal()">
+    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+    승인 관리
+  </button>
+  <button class="btn-history" id="btnStatsMap" style="display:none" onclick="openStatsModal()">
+    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    질의맵
+  </button>
     <div class="sidebar-section">빠른 질의</div>
     <div class="quick-queries" id="quickQueries"></div>
     <div class="sidebar-section">최근 질의</div>
@@ -1423,7 +1525,7 @@ table.story-table th{
     <span style="flex:1" aria-hidden="true"></span>
     <button class="btn-icon" id="btnToggleKpi" title="핵심 지표" aria-label="KPI 패널 토글">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        <line x1="19" y1="20" x2="19" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="5" y1="20" x2="5" y2="14"/>
       </svg>
     </button>
   </header>
@@ -1467,34 +1569,17 @@ table.story-table th{
     <span class="kpi-panel-title">핵심 지표</span>
     <button class="btn-icon" id="btnRefreshKpi" title="새로고침" aria-label="KPI 새로고침">
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
+        <path d="M20 12a8 8 0 1 1-2.34-5.66"/><polyline points="20 4 20 9.33 14.67 9.33"/>
       </svg>
     </button>
     <button class="btn-icon" id="btnCloseKpi" title="닫기" aria-label="KPI 패널 닫기">
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        <line x1="20" y1="4" x2="4" y2="20"/><line x1="4" y1="4" x2="20" y2="20"/>
       </svg>
     </button>
   </div>
   <div class="kpi-scroll" id="kpiScroll">
     <div class="kpi-loading" id="kpiLoading">KPI 데이터 로드 중…</div>
-  </div>
-  <!-- 사용자 정보 + 로그아웃 (로그인 시에만 표시) -->
-  <div class="sidebar-user" id="sidebarUser" style="display:none">
-    <div class="sidebar-user-info">
-      <div class="sidebar-user-name" id="suName">—</div>
-      <div class="sidebar-user-meta" id="suMeta">—</div>
-    </div>
-    <div class="sidebar-user-actions">
-      <button class="sidebar-user-btn admin" id="suAdminBtn"
-              style="display:none" onclick="openAdminModal()">승인 관리</button>
-      <button class="sidebar-user-btn admin" id="suStatsBtn"
-              style="display:none" onclick="openStatsModal()">질의맵</button>
-      <button class="sidebar-user-btn admin" id="suMetaBtn"
-              style="display:none" onclick="toggleAdminMeta()"
-              title="답변의 '분석 대상·실데이터·추가 적재 필요' 참고 푸터 표시/숨김 (관리자 전용)">참고 정보: 켜짐</button>
-      <button class="sidebar-user-btn" onclick="doLogout()">로그아웃</button>
-    </div>
   </div>
   <div class="panel-resize-handle" id="kpiResize" title="드래그로 폭 조절 · 더블클릭 기본폭"></div>
 </aside>
@@ -1506,12 +1591,13 @@ table.story-table th{
 <div class="hist-modal" id="profileModal">
   <div class="hist-modal-inner">
     <div class="hist-modal-hd">
-      <span class="hist-modal-title">내 프로필</span>
-      <button class="btn-icon" onclick="closeProfileModal()" title="닫기" style="margin-left:auto">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <button class="btn-icon" onclick="_profileOpenSidebar()" title="메뉴" aria-label="사이드바 열기">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
+      <span class="hist-modal-title">내 프로필</span>
+      <span class="hist-hd-spacer" aria-hidden="true"></span>
     </div>
     <div class="hist-modal-body">
       <form class="pf-body" id="profileForm" onsubmit="return saveProfile(event)">
@@ -1558,6 +1644,11 @@ table.story-table th{
       </form>
 
       <div class="pf-body" style="border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
+        <div class="pf-section-title">화면 테마</div>
+        <button type="button" class="pf-btn" id="pfThemeBtn" onclick="toggleTheme()">라이트 모드로 전환</button>
+      </div>
+
+      <div class="pf-body" style="border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
         <div class="pf-section-title">비밀번호 변경</div>
         <form id="pwForm" onsubmit="return changePw(event)">
           <div class="pf-grid">
@@ -1575,6 +1666,12 @@ table.story-table th{
             <button type="submit" class="pf-btn primary">비밀번호 변경</button>
           </div>
         </form>
+      </div>
+
+      <div class="pf-body" id="pfMetaSection" style="display:none;border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
+        <div class="pf-section-title">관리자 옵션</div>
+        <button type="button" class="pf-btn" id="pfMetaBtn" onclick="toggleAdminMeta()">참고 정보: 켜짐</button>
+        <div style="font-size:var(--fs-xs);color:var(--dim);margin-top:8px">답변의 '분석 대상·실데이터·추가 적재 필요' 참고 푸터 표시/숨김 (관리자 전용)</div>
       </div>
     </div>
   </div>
@@ -1618,13 +1715,15 @@ table.story-table th{
 <div class="hist-modal" id="adminModal">
   <div class="hist-modal-inner">
     <div class="hist-modal-hd">
-      <span class="hist-modal-title">사용자 승인 관리</span>
-      <button class="btn-icon" onclick="closeAdminModal()" title="닫기" style="margin-left:auto">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <button class="btn-icon" onclick="_adminOpenSidebar()" title="메뉴" aria-label="사이드바 열기">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
+      <span class="hist-modal-title">사용자 승인 관리</span>
+      <span class="hist-hd-spacer" aria-hidden="true"></span>
     </div>
+    <div class="hist-scroll">
     <!-- 데이터 유지보수 — 데이터 직무 관리자(apollo) 전용. 캐시 무효화+재적재+자동 재점검. -->
     <div id="adminMaintenance" style="display:none;padding:0 4px 14px;border-bottom:1px solid var(--line);margin-bottom:14px">
       <div class="adm-section-title">데이터 유지보수</div>
@@ -1645,6 +1744,7 @@ table.story-table th{
     <div class="hist-modal-body" id="adminModalBody">
       <div class="hist-empty-msg">로드 중...</div>
     </div>
+    </div>
   </div>
 </div>
 
@@ -1652,13 +1752,15 @@ table.story-table th{
 <div class="hist-modal" id="statsModal">
   <div class="hist-modal-inner">
     <div class="hist-modal-hd">
-      <span class="hist-modal-title">질의맵 · 통계</span>
-      <button class="btn-icon" onclick="closeStatsModal()" title="닫기" style="margin-left:auto">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <button class="btn-icon" onclick="_statsOpenSidebar()" title="메뉴" aria-label="사이드바 열기">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
+      <span class="hist-modal-title">질의맵 · 통계</span>
+      <span class="hist-hd-spacer" aria-hidden="true"></span>
     </div>
+    <div class="hist-scroll">
     <div class="stm-toolbar">
       <div class="stm-tabs">
         <button class="stm-tab active" data-tab="overview" onclick="setStmTab('overview')">전체</button>
@@ -1676,6 +1778,7 @@ table.story-table th{
     </div>
     <div class="hist-modal-body">
       <div class="stm-body" id="stmBody"><div class="stm-empty">로드 중…</div></div>
+    </div>
     </div>
   </div>
 </div>
