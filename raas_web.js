@@ -1963,6 +1963,19 @@ document.getElementById('btnSend').addEventListener('click', () => submitQuery(c
 // ────────────────────────────────────────────────
 function isMobile() { return window.innerWidth <= 900; }
 
+// ── 햅틱(진동) 피드백 ────────────────────────────────
+// Vibration API. 안드로이드 크롬 등에서 동작하고, iOS 사파리는 이 API 자체가 없어 조용히 무시된다
+// (아이폰에서 웹페이지가 진동을 주는 표준 수단은 현재 없음 — 기능 저하 없이 no-op).
+// 데스크톱·미지원 환경도 동일하게 no-op. OS '동작 줄이기' 설정을 켠 사용자는 생략.
+const _HAPTIC_MS = { tap: 12, back: 8 };      // 짧게 — 길면 알림처럼 느껴진다
+function _haptic(kind) {
+  try {
+    if (!navigator.vibrate) return false;
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    return navigator.vibrate(_HAPTIC_MS[kind] || _HAPTIC_MS.tap);
+  } catch (e) { return false; }
+}
+
 function openSidebar() {
   const sb = document.getElementById('sidebar');
   if (isMobile()) {
@@ -2026,9 +2039,14 @@ function _setHeaderBack(on) {
 }
 
 document.getElementById('btnToggleSidebar').addEventListener('click', () => {
-  if (_headerBackMode) { _setHeaderBack(false); openHistModal(); return; }   // 뒤로 → 질의 이력
+  if (_headerBackMode) { _haptic('back'); _setHeaderBack(false); openHistModal(); return; }   // 뒤로 → 질의 이력
   toggleSidebar();
 });
+// 사이드바 메뉴(새 질의·질의 이력·내 프로필·지식 기여·검토 큐·승인 관리·질의맵) 탭 시 짧은 진동.
+// pointerdown에 걸어 손가락이 닿는 순간 반응한다(click은 손을 뗀 뒤라 늦게 느껴짐).
+document.getElementById('sidebar').addEventListener('pointerdown', (e) => {
+  if (e.target && e.target.closest && e.target.closest('.btn-history, .btn-new-chat')) _haptic('tap');
+}, true);
 // 밀린 본문 카드 어디를 눌러도 먼저 닫힘 (capture: 내부 버튼/링크보다 우선)
 document.querySelector('.chat-main').addEventListener('click', (e) => {
   if (document.body.classList.contains('sidebar-pushed')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
@@ -2036,18 +2054,21 @@ document.querySelector('.chat-main').addEventListener('click', (e) => {
 // 주차된 모달 카드(20vw) 탭 → 사이드바 닫고 보던 페이지로 복귀 (모달 5종 공통).
 // click이 아니라 pointerdown(캡처)으로 받는다 — 모달 내부는 스크롤 컨테이너라
 // 터치에서 click이 합성되지 않는 경우가 있고, document 레벨이라 모달이 늦게 생겨도 동작한다.
-let _swallowClickAfterUnpark = false;
+// 복귀 탭 직후 합성되는 click 1회만 삼킨다. 무기한 플래그로 두면 소비되지 않은 채 남아
+// 한참 뒤의 무관한 클릭을 먹어버리므로 짧은 시간 창(700ms)으로 한정한다.
+let _swallowClickUntil = 0;
 document.addEventListener('pointerdown', (e) => {
   if (!document.body.classList.contains('modal-parked')) return;
   const t = e.target;
   if (!t || !t.closest || !t.closest('.hist-modal.open')) return;
   e.preventDefault(); e.stopPropagation();
-  _swallowClickAfterUnpark = true;      // 복귀 직후의 click이 모달 내부 버튼을 누르지 않도록
+  _swallowClickUntil = Date.now() + 700;   // 복귀 직후의 click이 모달 내부 버튼을 누르지 않도록
+  _haptic('back');
   closeSidebar();                       // sidebar-pushed + modal-parked 해제 → 모달 전면 복귀
 }, true);
 // 복귀 탭에 뒤따르는 click 1회 무효화 + pointer 미지원 환경(구형)에서는 이 핸들러가 복귀를 담당
 document.addEventListener('click', (e) => {
-  if (_swallowClickAfterUnpark) { _swallowClickAfterUnpark = false; e.preventDefault(); e.stopPropagation(); return; }
+  if (Date.now() < _swallowClickUntil) { _swallowClickUntil = 0; e.preventDefault(); e.stopPropagation(); return; }
   if (!document.body.classList.contains('modal-parked')) return;
   const t = e.target;
   if (!t || !t.closest || !t.closest('.hist-modal.open')) return;
