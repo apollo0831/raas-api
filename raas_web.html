@@ -1393,7 +1393,8 @@ table.story-table th{
     border-radius:28px;
     /* 내려간 상단 모서리 강조 — 왼쪽 + 위쪽 양방향 그라데이션 그림자 (연하게·좁게) */
     box-shadow:-6px 0 22px rgba(0,0,0,.20), 0 -6px 22px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.05);
-    cursor:pointer;                                /* 카드 아무 곳이나 탭하면 닫힘 */
+    cursor:grab;                                   /* 왼쪽으로 밀어서 복귀 */
+    touch-action:pan-y;                            /* 세로 스크롤은 그대로, 가로 제스처는 JS가 처리 */
   }
   /* 모달을 보다가 ☰를 눌러 사이드바를 편 경우(=주차)에만 본문 카드와 똑같이 밀림.
      사이드바에서 모달을 새로 여는 경우는 modal-parked가 없으므로 전면에 그대로 뜬다. */
@@ -1402,7 +1403,8 @@ table.story-table th{
     transform:translateX(80vw) translateY(var(--push-drop, 28px));
     border-radius:28px;overflow:hidden;
     box-shadow:-6px 0 22px rgba(0,0,0,.20), 0 -6px 22px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.05);
-    cursor:pointer;                                /* 남은 카드 탭 → 원래 페이지로 복귀 */
+    cursor:grab;                                   /* 남은 카드를 왼쪽으로 밀면 원래 페이지로 복귀 */
+    touch-action:pan-y;
   }
   /* 주차 중엔 모달 카드가 본문 카드를 정확히 덮는다 — 둘 다 그림자를 드리우면 경계 왼쪽이
      두 겹으로 겹쳐 '새 질의'일 때보다 진해 보인다. 위 카드 것만 남긴다. */

@@ -2058,32 +2058,62 @@ document.getElementById('btnToggleSidebar').addEventListener('click', () => {
 document.getElementById('sidebar').addEventListener('pointerdown', (e) => {
   if (e.target && e.target.closest && e.target.closest('.btn-history, .btn-new-chat')) _haptic('tap');
 }, true);
-// 밀린 본문 카드 어디를 눌러도 먼저 닫힘 (capture: 내부 버튼/링크보다 우선)
-document.querySelector('.chat-main').addEventListener('click', (e) => {
-  if (document.body.classList.contains('sidebar-pushed')) { e.preventDefault(); e.stopPropagation(); closeSidebar(); }
-}, true);
-// 주차된 모달 카드(20vw) 탭 → 사이드바 닫고 보던 페이지로 복귀 (모달 5종 공통).
-// click이 아니라 pointerdown(캡처)으로 받는다 — 모달 내부는 스크롤 컨테이너라
-// 터치에서 click이 합성되지 않는 경우가 있고, document 레벨이라 모달이 늦게 생겨도 동작한다.
-// 복귀 탭 직후 합성되는 click 1회만 삼킨다. 무기한 플래그로 두면 소비되지 않은 채 남아
-// 한참 뒤의 무관한 클릭을 먹어버리므로 짧은 시간 창(700ms)으로 한정한다.
+// ── 밀린 카드(우측 20vw) 스와이프로 복귀 ────────────────────────────────
+// 탭이 아니라 '왼쪽으로 밀어서' 원래 화면으로 돌아온다 — 손가락을 따라 카드가 움직이고,
+// 일정 거리(밀림폭의 30%) 이상 끌면 닫히고, 모자라면 제자리로 튕겨 돌아간다.
+// 대상은 본문 카드(.chat-main)와 주차된 모달 카드(.hist-modal.open) 공통.
+// 드래그 직후 합성되는 click 1회는 삼킨다(카드 안 버튼이 눌리는 것 방지) — 소비되지 않은 채
+// 남아 한참 뒤의 무관한 클릭을 먹지 않도록 짧은 시간 창(700ms)으로 한정.
 let _swallowClickUntil = 0;
+let _swipe = null;
+
+// 지금 밀려 있는 카드(주차 모달이 있으면 그쪽이 위)
+function _pushedCard() {
+  if (!document.body.classList.contains('sidebar-pushed')) return null;
+  if (document.body.classList.contains('modal-parked')) return document.querySelector('.hist-modal.open');
+  return document.querySelector('.chat-main');
+}
+function _pushDropPx() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--push-drop');
+  return parseFloat(v) || 28;
+}
+
 document.addEventListener('pointerdown', (e) => {
-  if (!document.body.classList.contains('modal-parked')) return;
-  const t = e.target;
-  if (!t || !t.closest || !t.closest('.hist-modal.open')) return;
-  e.preventDefault(); e.stopPropagation();
-  _swallowClickUntil = Date.now() + 700;   // 복귀 직후의 click이 모달 내부 버튼을 누르지 않도록
-  closeSidebar();                       // sidebar-pushed + modal-parked 해제 → 모달 전면 복귀
+  const card = _pushedCard();
+  if (!card || !card.contains(e.target)) return;     // 사이드바 쪽 터치는 통과
+  _swipe = { card, x0: e.clientX, y0: e.clientY, id: e.pointerId,
+             w: Math.round(window.innerWidth * 0.8), off: 0, active: false };
+  _swipe.off = _swipe.w;
 }, true);
-// 복귀 탭에 뒤따르는 click 1회 무효화 + pointer 미지원 환경(구형)에서는 이 핸들러가 복귀를 담당
+
+document.addEventListener('pointermove', (e) => {
+  if (!_swipe || e.pointerId !== _swipe.id) return;
+  const dx = e.clientX - _swipe.x0, dy = e.clientY - _swipe.y0;
+  if (!_swipe.active) {
+    // 세로 스크롤 우선 — 가로 의도가 분명할 때만 드래그 시작
+    if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+    _swipe.active = true;
+    _swipe.card.style.transition = 'none';
+  }
+  e.preventDefault();
+  _swipe.off = Math.max(0, Math.min(_swipe.w, _swipe.w + dx));   // 오른쪽으론 안 넘어감
+  _swipe.card.style.transform = `translateX(${_swipe.off}px) translateY(${_pushDropPx()}px)`;
+}, true);
+
+function _swipeEnd() {
+  const s = _swipe; _swipe = null;
+  if (!s || !s.active) return;                       // 그냥 탭이면 아무 일도 없음
+  s.card.style.transition = '';
+  s.card.style.transform = '';                       // 이후 위치는 CSS(클래스)가 결정
+  _swallowClickUntil = Date.now() + 700;
+  if (s.off < s.w * 0.7) closeSidebar();             // 30% 이상 끌었으면 복귀
+}
+document.addEventListener('pointerup', _swipeEnd, true);
+document.addEventListener('pointercancel', _swipeEnd, true);
+
+// 드래그 뒤 합성 click 1회 무효화
 document.addEventListener('click', (e) => {
-  if (Date.now() < _swallowClickUntil) { _swallowClickUntil = 0; e.preventDefault(); e.stopPropagation(); return; }
-  if (!document.body.classList.contains('modal-parked')) return;
-  const t = e.target;
-  if (!t || !t.closest || !t.closest('.hist-modal.open')) return;
-  e.preventDefault(); e.stopPropagation();
-  closeSidebar();
+  if (Date.now() < _swallowClickUntil) { _swallowClickUntil = 0; e.preventDefault(); e.stopPropagation(); }
 }, true);
 // 사이드바에서 다른 곳(새 질의·최근 질의)으로 이동 → 주차 모달은 결과를 덮으므로 정리
 // (closeSidebar가 먼저 주차를 풀 수 있으므로 클래스로 가드하지 않고 무조건 정리)
