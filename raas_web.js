@@ -1999,7 +1999,9 @@ function closeSidebar() {
 // 모바일: 모달을 보다가 ☰로 사이드바를 펼친 상태 — 모달을 닫지 않고 우측 20vw 카드로 '주차'한다.
 // 상태(sidebar-pushed + .open)만으로는 '사이드바에서 모달을 새로 연 경우'와 구분되지 않으므로
 // 주차 의도를 별도 클래스로 표시한다(그 경우엔 모달이 전면에 떠야 함).
+// (☰로 사이드바 펼침 상태로 돌아오는 지점 — 진동 포인트 ②. 이 함수는 모달 헤더 ☰ 4종만 호출한다)
 function _parkModal() {
+  _haptic('back');
   if (!isMobile()) return false;                     // 데스크톱은 밀기 개념 없음 → 기존대로 모달 닫기
   document.body.classList.add('modal-parked');
   return true;
@@ -2039,7 +2041,7 @@ function _setHeaderBack(on) {
 }
 
 document.getElementById('btnToggleSidebar').addEventListener('click', () => {
-  if (_headerBackMode) { _haptic('back'); _setHeaderBack(false); openHistModal(); return; }   // 뒤로 → 질의 이력
+  if (_headerBackMode) { _setHeaderBack(false); openHistModal(); return; }   // 뒤로 → 질의 이력
   toggleSidebar();
 });
 // 사이드바 메뉴(새 질의·질의 이력·내 프로필·지식 기여·검토 큐·승인 관리·질의맵) 탭 시 짧은 진동.
@@ -2063,7 +2065,6 @@ document.addEventListener('pointerdown', (e) => {
   if (!t || !t.closest || !t.closest('.hist-modal.open')) return;
   e.preventDefault(); e.stopPropagation();
   _swallowClickUntil = Date.now() + 700;   // 복귀 직후의 click이 모달 내부 버튼을 누르지 않도록
-  _haptic('back');
   closeSidebar();                       // sidebar-pushed + modal-parked 해제 → 모달 전면 복귀
 }, true);
 // 복귀 탭에 뒤따르는 click 1회 무효화 + pointer 미지원 환경(구형)에서는 이 핸들러가 복귀를 담당
