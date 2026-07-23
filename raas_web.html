@@ -369,15 +369,11 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 #adminModal .hist-modal-hd .btn-icon,  #adminModal .hist-modal-title,
 #statsModal .hist-modal-hd .btn-icon,  #statsModal .hist-modal-title,
 #improveModal .hist-modal-hd .btn-icon,#improveModal .hist-modal-title{pointer-events:auto}
-/* 개선하기 닫기(X) — KPI 패널 닫기와 동일 색상, 아이콘 16×16 */
-#improveModal .hist-modal-hd .btn-icon{
-  width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
-  border:none;border-radius:6px;background:var(--bg3);color:var(--sub);
-  transition:background .12s,color .12s;
-}
+/* 개선하기 닫기(X) — KPI '핵심 지표' 패널 우상단 닫기(#btnCloseKpi)와 동일 규칙 */
+#improveModal .hist-modal-hd .btn-icon{color:var(--text);-webkit-tap-highlight-color:transparent}
+#improveModal .hist-modal-hd .btn-icon svg{width:19px;height:19px}
 #improveModal .hist-modal-hd .btn-icon:hover,
-#improveModal .hist-modal-hd .btn-icon:active{background:var(--bg4);color:var(--text)}
-#improveModal .hist-modal-hd .btn-icon svg{width:16px;height:16px}
+#improveModal .hist-modal-hd .btn-icon:active{background:transparent}
 .hist-hd-spacer{width:32px;flex-shrink:0}   /* 우측 X 제거 후 제목 중앙정렬 유지 */
 .hist-modal-title{font-size:var(--fs-lg);font-weight:600;flex:1;text-align:center;min-width:0}
 /* ── 질의 이력 2줄 행 — 행 구분선 없음(제목 아래 선만 유지) ── */
@@ -1697,8 +1693,9 @@ table.story-table th{
       <span class="hist-hd-spacer" aria-hidden="true"></span>
       <span class="hist-modal-title">✦ 답변 개선하기</span>
       <button class="btn-icon" onclick="_closeImprove()" title="닫기" aria-label="닫기">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="20" y1="4" x2="4" y2="20"/><line x1="4" y1="4" x2="20" y2="20"/>
+        </svg>
       </button>
     </div>
     <div class="hist-modal-body">
