@@ -1988,8 +1988,8 @@ function toggleSidebar() {
 // 이력에서 연 '이전 질의 보기' 상태 — 좌측상단 아이콘을 뒤로(<)로 바꿔 질의 이력으로 복귀
 let _headerBackMode = false;
 const _HDR_MENU_SVG = '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>';
-// 뒤로(<) — 다른 헤더 아이콘(햄버거 18×12 · KPI 14×16)과 시각 크기를 맞춘 8×14 글리프
-const _HDR_BACK_SVG = '<polyline points="15 19 8 12 15 5"/>';
+// 뒤로(<) — 얇은 글리프라 viewBox를 넓게 씀(8×16). 렌더 크기는 CSS .hdr-back(20px)
+const _HDR_BACK_SVG = '<polyline points="15 20 7 12 15 4"/>';
 function _setHeaderBack(on) {
   _headerBackMode = !!on;
   const b = document.getElementById('btnToggleSidebar');
