@@ -1042,7 +1042,7 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=No
     with get_conn() as conn:
         total = conn.execute(f"SELECT COUNT(*) FROM query_history {where}", params_count).fetchone()[0]
         rows  = conn.execute(
-            f"""SELECT id, user_id, user_name, question, answer, chart_data,
+            f"""SELECT id, user_id, user_name, question, answer, chart_data, extract_json,
                        feedback, feedback_reason, input_tokens, output_tokens, created_at, source
                 FROM query_history {where}
                 ORDER BY created_at DESC
@@ -1060,6 +1060,7 @@ def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=No
                 "question":      r["question"],
                 "answer":        r["answer"],
                 "chart_data":    json.loads(r["chart_data"]) if r["chart_data"] else None,
+                "extract":       json.loads(r["extract_json"]) if r["extract_json"] else None,
                 "feedback":      r["feedback"],
                 "feedback_reason": r["feedback_reason"],
                 "input_tokens":  r["input_tokens"],

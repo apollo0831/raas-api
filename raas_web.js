@@ -2461,13 +2461,14 @@ function _histQueryRow(it) {
 }
 
 // 행/'>' 탭 → 모달 닫고 메인 챗에 기록된 질문+저장답변 재현(읽기전용)
+//   추출표(엑셀)·차트도 함께 복원 — extract는 서버가 저장한 payload(get_all_history)
 function _openHistAnswer(id) {
   const it = (window._histIndex || {})[id];
   if (!it) return;
   closeHistModal();
   if (isMobile()) closeSidebar();
   if (typeof _hideWelcome === 'function') _hideWelcome();
-  restoreFromCache(it.question, it.answer || '');
+  restoreFromCache(it.question, it.answer || '', it.extract);
 }
 
 // 헤더 좌측 메뉴 아이콘 → 이력 닫고 왼쪽 사이드바 열기
