@@ -3440,7 +3440,9 @@ function _kpiSetScope(s) {
   _KPI.scope = s; localStorage.setItem('raas_kpi_scope', s); loadKpiPanel();
 }
 function _kpiAiBrief() {
-  const phrase = { day: '어제', week: '이번 주', mon: '이번 달' }[_KPI.period];
+  // 완결된 직전 기간을 브리핑한다 — 일간이 오늘이 아닌 '어제'인 것과 같은 이유로
+  // 주간은 '지난주', 월간은 '지난달'(진행 중인 기간은 집계가 미완이라 비교가 왜곡됨)
+  const phrase = { day: '어제', week: '지난주', mon: '지난달' }[_KPI.period];
   if (isMobile()) closeKpi();
   submitQuery(`${_kpiScopeName()}${phrase} 핵심 지표 브리핑해줘`, 'kpi_panel');
 }
@@ -3600,7 +3602,7 @@ async function loadKpiPanel() {
       html += '</div></div>';
     }
 
-    html += `<button class="kpi-ai-btn" onclick="_kpiAiBrief()">✨ AI 요약</button>`;
+    html += `<button class="kpi-ai-btn" onclick="_kpiAiBrief()">✨ AI ${_KPI_PERIOD_KO[_KPI.period]} 브리핑</button>`;
     scroll.innerHTML = html;
     _loadRtCard();                      // 실시간 카드 비동기 채움 + 60초 자동 갱신
     if (_RT_TIMER) clearInterval(_RT_TIMER);
