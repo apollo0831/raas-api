@@ -339,11 +339,12 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   padding:14px 12px;border-bottom:1px solid var(--line);
   flex-shrink:0;
 }
-/* 질의 이력·내 프로필·승인 관리·질의맵 헤더 = 오버레이(강한 방식) — 선 제거, 내용이 뒤로 스크롤되며 상단에서 사라짐 */
+/* 질의 이력·내 프로필·승인 관리·질의맵·개선하기 헤더 = 오버레이(강한 방식) — 선 제거, 내용이 뒤로 스크롤되며 상단에서 사라짐 */
 #histModal .hist-modal-hd,
 #profileModal .hist-modal-hd,
 #adminModal .hist-modal-hd,
-#statsModal .hist-modal-hd{
+#statsModal .hist-modal-hd,
+#improveModal .hist-modal-hd{
   position:absolute;top:0;left:0;right:0;z-index:50;
   height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
   padding:env(safe-area-inset-top, 0px) 12px 0;
@@ -354,7 +355,8 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 #histModal .hist-modal-hd::before,
 #profileModal .hist-modal-hd::before,
 #adminModal .hist-modal-hd::before,
-#statsModal .hist-modal-hd::before{
+#statsModal .hist-modal-hd::before,
+#improveModal .hist-modal-hd::before{
   content:"";position:absolute;left:0;right:0;top:0;z-index:-1;pointer-events:none;
   height:calc(96px + env(safe-area-inset-top, 0px));
   background:linear-gradient(to top, transparent 0%, color-mix(in srgb, var(--bg0) 88%, transparent) 45%, var(--bg0) 100%);
@@ -365,7 +367,17 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 #histModal .hist-modal-hd .btn-icon,   #histModal .hist-modal-title,
 #profileModal .hist-modal-hd .btn-icon,#profileModal .hist-modal-title,
 #adminModal .hist-modal-hd .btn-icon,  #adminModal .hist-modal-title,
-#statsModal .hist-modal-hd .btn-icon,  #statsModal .hist-modal-title{pointer-events:auto}
+#statsModal .hist-modal-hd .btn-icon,  #statsModal .hist-modal-title,
+#improveModal .hist-modal-hd .btn-icon,#improveModal .hist-modal-title{pointer-events:auto}
+/* 개선하기 닫기(X) — KPI 패널 닫기와 동일 색상, 아이콘 16×16 */
+#improveModal .hist-modal-hd .btn-icon{
+  width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+  border:none;border-radius:6px;background:var(--bg3);color:var(--sub);
+  transition:background .12s,color .12s;
+}
+#improveModal .hist-modal-hd .btn-icon:hover,
+#improveModal .hist-modal-hd .btn-icon:active{background:var(--bg4);color:var(--text)}
+#improveModal .hist-modal-hd .btn-icon svg{width:16px;height:16px}
 .hist-hd-spacer{width:32px;flex-shrink:0}   /* 우측 X 제거 후 제목 중앙정렬 유지 */
 .hist-modal-title{font-size:var(--fs-lg);font-weight:600;flex:1;text-align:center;min-width:0}
 /* ── 질의 이력 2줄 행 — 행 구분선 없음(제목 아래 선만 유지) ── */
@@ -379,7 +391,8 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 /* 오버레이 헤더 아래에서 시작 + 상단 스크롤 마스크(메인 챗과 동일) — 항목이 헤더 영역을 지나 status bar 경계에서 사라짐 */
 /* [실험] 상단 opacity 마스크 제거 — 하단처럼 오버레이(::before)가 덮어서 흐리게. 상단 여백은 96px 페이드존만큼 */
 #histModal .hist-modal-body,
-#profileModal .hist-modal-body{
+#profileModal .hist-modal-body,
+#improveModal .hist-modal-body{
   padding-top:calc(92px + env(safe-area-inset-top, 0px));   /* 오버레이 헤더 아래에서 시작 */
 }
 /* 승인 관리·질의맵: 중간 고정요소(툴바·섹션)+본문을 함께 스크롤 → 헤더 뒤로 스크롤·페이드 */
@@ -1681,9 +1694,10 @@ table.story-table th{
 <div class="hist-modal" id="improveModal">
   <div class="hist-modal-inner">
     <div class="hist-modal-hd">
+      <span class="hist-hd-spacer" aria-hidden="true"></span>
       <span class="hist-modal-title">✦ 답변 개선하기</span>
-      <button class="btn-icon" onclick="_closeImprove()" title="닫기" style="margin-left:auto">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <button class="btn-icon" onclick="_closeImprove()" title="닫기" aria-label="닫기">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
