@@ -156,7 +156,7 @@ KPI 패널         | 우측 토글 패널(loadKpiPanel) — 핵심 지표 스냅
   답변은 SSE 토큰 스트리밍 → `renderAiText`(굵게·표·`[small]`푸터 지원).
 - 추천칩(`/api/suggestions`): ① 어제 이상신호(직무 필터) → ② 개인화 → ③ 직무 템플릿 순 6개.
 - 모달 5종: `profileModal`(내 정보) · `histModal`(이력 보기) · `improveModal`(개선하기) ·
-  `adminModal`(관리자) · `statsModal`(질의맵). 이력 보기 탭: 전체/일반질의/개선이력/**검토 큐**(직무권한).
+  `adminModal`(관리자) · `statsModal`(질의 통계). 이력 보기 탭: 전체/일반질의/개선이력/**검토 큐**(직무권한).
 - 관리자 메타 토글: `body.hide-meta`로 답변 `[small]` 참고 푸터 표시/숨김.
 
 ## Splunk Lookups

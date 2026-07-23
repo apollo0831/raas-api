@@ -213,7 +213,7 @@ function _renderSidebarUser() {
   const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
   // 승인 관리 — is_admin 전용
   show('btnAdminManage', RAAS_USER.is_admin);
-  // 질의맵 — is_admin OR role in (총괄관리, 데이터)
+  // 질의 통계 — is_admin OR role in (총괄관리, 데이터)
   const statsAllowed = RAAS_USER.is_admin || ['총괄관리','데이터'].includes(RAAS_USER.role);
   show('btnStatsMap', statsAllowed);
   // 검토 큐 — is_admin 전용
@@ -375,7 +375,7 @@ async function _adminAction(uid, action) {
   }
 }
 
-// ── 질의맵 / 통계 ──────────────────────────────────────────
+// ── 질의 통계 ──────────────────────────────────────────────
 let _STM = { tab: 'overview', days: 30, me: null };
 // intent(연산유형) 코드 → 한글 라벨 (현행 12종). 직무별·인기주제 탭 공용
 const _INTENT_KO = { snapshot:'현황조회', trend:'추이', compare:'비교', ranking:'순위',
@@ -2053,7 +2053,7 @@ document.getElementById('btnToggleSidebar').addEventListener('click', () => {
   if (_headerBackMode) { _setHeaderBack(false); openHistModal(); return; }   // 뒤로 → 질의 이력
   toggleSidebar();
 });
-// 사이드바 메뉴(새 질의·질의 이력·내 프로필·지식 기여·검토 큐·승인 관리·질의맵) 탭 시 짧은 진동.
+// 사이드바 메뉴(새 질의·질의 이력·내 프로필·지식 기여·검토 큐·승인 관리·질의 통계) 탭 시 짧은 진동.
 // pointerdown에 걸어 손가락이 닿는 순간 반응한다(click은 손을 뗀 뒤라 늦게 느껴짐).
 document.getElementById('sidebar').addEventListener('pointerdown', (e) => {
   if (e.target && e.target.closest && e.target.closest('.btn-history, .btn-new-chat')) _haptic('tap');

@@ -339,7 +339,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   padding:14px 12px;border-bottom:1px solid var(--line);
   flex-shrink:0;
 }
-/* 질의 이력·내 프로필·승인 관리·질의맵·개선하기 헤더 = 오버레이(강한 방식) — 선 제거, 내용이 뒤로 스크롤되며 상단에서 사라짐 */
+/* 질의 이력·내 프로필·승인 관리·질의 통계·개선하기 헤더 = 오버레이(강한 방식) — 선 제거, 내용이 뒤로 스크롤되며 상단에서 사라짐 */
 #histModal .hist-modal-hd,
 #profileModal .hist-modal-hd,
 #adminModal .hist-modal-hd,
@@ -401,7 +401,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 #improveModal .hist-modal-body{
   padding-top:calc(92px + env(safe-area-inset-top, 0px));   /* 오버레이 헤더 아래에서 시작 */
 }
-/* 승인 관리·질의맵: 중간 고정요소(툴바·섹션)+본문을 함께 스크롤 → 헤더 뒤로 스크롤·페이드 */
+/* 승인 관리·질의 통계: 중간 고정요소(툴바·섹션)+본문을 함께 스크롤 → 헤더 뒤로 스크롤·페이드 */
 #adminModal .hist-scroll,
 #statsModal .hist-scroll{
   flex:1;min-height:0;overflow-y:auto;
@@ -459,7 +459,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 }
 .hf-search:focus{border-color:rgba(79,142,247,.5)}
 .hist-modal-body{flex:1;overflow-y:auto;overflow-x:hidden}
-/* 모바일 — 모달(이력·내정보·승인관리·질의맵)을 전체 화면으로 (팝업 아님) */
+/* 모바일 — 모달(이력·내정보·승인관리·질의 통계)을 전체 화면으로 (팝업 아님) */
 @media (max-width:640px){
   .hist-modal{padding:0;align-items:stretch}
   .hist-modal-inner{
@@ -468,7 +468,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
     border-radius:0;border:none;
   }
 }
-/* 모바일 — 모달 표(승인관리·질의맵)는 자체 가로 스크롤, 본문은 팬 금지(좌우로 끌리는 현상 방지) */
+/* 모바일 — 모달 표(승인관리·질의 통계)는 자체 가로 스크롤, 본문은 팬 금지(좌우로 끌리는 현상 방지) */
 @media (max-width:720px){
   .hist-modal-body .adm-table,
   .hist-modal-body .stm-table{
@@ -658,7 +658,7 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
   background:var(--bg2);border-bottom:1px solid var(--line);
 }
 
-/* ── STATS MODAL (질의맵) ── */
+/* ── STATS MODAL (질의 통계) ── */
 .stm-toolbar{
   padding:11px 18px;background:var(--bg2);border-bottom:1px solid var(--line);
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;
@@ -1564,7 +1564,7 @@ table.story-table th{
   </button>
   <button class="btn-history" id="btnStatsMap" style="display:none" onclick="openStatsModal()">
     <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-    질의맵
+    질의 통계
   </button>
     <div class="sidebar-section">빠른 질의</div>
     <div class="quick-queries" id="quickQueries"></div>
@@ -1812,7 +1812,7 @@ table.story-table th{
   </div>
 </div>
 
-<!-- ── STATS MODAL (질의맵) ── -->
+<!-- ── STATS MODAL (질의 통계) ── -->
 <div class="hist-modal" id="statsModal">
   <div class="hist-modal-inner">
     <div class="hist-modal-hd">
@@ -1821,7 +1821,7 @@ table.story-table th{
           <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
-      <span class="hist-modal-title">질의맵</span>
+      <span class="hist-modal-title">질의 통계</span>
       <span class="hist-hd-spacer" aria-hidden="true"></span>
     </div>
     <div class="hist-scroll">
