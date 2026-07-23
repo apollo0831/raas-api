@@ -257,7 +257,7 @@ async function _bootAuth() {
 
 // ── 관리자 모달 ──
 function openAdminModal() {
-  _unparkModal();
+  _enterModal('adminModal');
   document.getElementById('adminModal').classList.add('open');
   // 데이터 유지보수(재적재) 버튼 — 데이터 직무 AND 관리자만 노출
   document.getElementById('adminMaintenance').style.display =
@@ -383,7 +383,7 @@ const _INTENT_KO = { snapshot:'현황조회', trend:'추이', compare:'비교', 
   realtime:'실시간', meta:'카탈로그', digest:'특이사항', concept:'개념·정의' };
 
 function openStatsModal() {
-  _unparkModal();
+  _enterModal('statsModal');
   document.getElementById('statsModal').classList.add('open');
   _loadStmTab();
 }
@@ -1051,7 +1051,7 @@ let _PROGRAMS_CACHE = null;  // [{code,label,programs:[{code,label,time}]}]
 
 async function openProfileModal() {
   if (!RAAS_USER) return;
-  _unparkModal();
+  _enterModal('profileModal');
   document.getElementById('profileModal').classList.add('open');
   // 직무 드롭다운 동적 채우기 (현재 role 선택)
   await loadActiveRoles();
@@ -1992,6 +1992,15 @@ function _parkModal() {
   return true;
 }
 function _unparkModal() { document.body.classList.remove('modal-parked'); }
+
+// 모달 진입 공통 — 주차 해제 + 이미 열려 있던 다른 모달 정리.
+// 주차 도입 전에는 ☰가 모달을 닫아 남는 게 없었지만, 이제는 .open으로 남는다.
+// 모달 5종이 모두 z-index:500이라 정리하지 않으면 DOM 뒤쪽(histModal)이 새 모달을 덮는다
+// ('내 프로필'을 눌렀는데 '질의 이력'이 보이던 원인).
+function _enterModal(id) {
+  _unparkModal();
+  document.querySelectorAll('.hist-modal.open').forEach(m => { if (m.id !== id) m.classList.remove('open'); });
+}
 function toggleSidebar() {
   if (isMobile()) {
     document.body.classList.contains('sidebar-pushed') ? closeSidebar() : openSidebar();
@@ -2390,7 +2399,7 @@ function openContribModal(){ _openHist('improve', '지식 기여'); }
 function openReviewModal() { _openHist('review', '검토 큐'); }
 
 function _openHist(mode, title) {
-  _unparkModal();                       // 사이드바에서 새로 여는 경로 → 주차 아님(전면에 떠야 함)
+  _enterModal('histModal');             // 주차 해제 + 다른 모달 정리(전면에 떠야 함)
   _histMode = mode; _histOffset = 0; _histQuery = '';
   if (_histObserver) { _histObserver.disconnect(); _histObserver = null; }
   document.getElementById('histModalTitle').textContent = title;
