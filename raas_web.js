@@ -102,6 +102,7 @@ const _LOGIN_ID_KEY = 'raas_login_id';
 const _REMEMBER_PREF_KEY = 'raas_remember_pref';   // 체크박스의 마지막 선택
 function _showAuthGate() {
   document.getElementById('authGate').classList.add('open');
+  if (typeof _setStatusBar === 'function') _setStatusBar(_statusBarColorForNow());   // 상태바=게이트 상단색
   // 기억해 둔 아이디를 채우고 비밀번호로 바로 커서 — 비밀번호는 브라우저 관리자가 채운다.
   // (앱이 비밀번호를 저장하지 않는 이유: localStorage 평문 보관은 XSS 한 번에 그대로 새어나간다)
   try {
@@ -123,7 +124,10 @@ function _showAuthGate() {
     }
   } catch (_) {}
 }
-function _hideAuthGate()  { document.getElementById('authGate').classList.remove('open'); }
+function _hideAuthGate()  {
+  document.getElementById('authGate').classList.remove('open');
+  if (typeof _setStatusBar === 'function') _setStatusBar(_statusBarColorForNow());   // 앱 기본 배경색으로 복귀
+}
 
 function setAuthTab(tab) {
   document.getElementById('authTabLogin').classList.toggle('active', tab === 'login');
@@ -4110,12 +4114,10 @@ document.getElementById('btnRefreshKpi').addEventListener('click', loadKpiPanel)
 const SVG_SUN  = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 const SVG_MOON = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 
-function _applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  const btn = document.getElementById('pfThemeBtn');
-  if (btn) btn.textContent = theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환';
-  // iOS Safari는 setAttribute로 즉시 반영 안 됨 — 제거 후 재삽입으로 강제 재읽기
-  const color = theme === 'dark' ? '#0d1117' : '#fbfcfd';
+// iOS 홈화면 앱의 상단 상태바(약 62px)는 theme-color 단색으로 칠해진다. 화면 배경과 다르면
+// 그 자리에 경계선이 생긴다 → 화면별로 '상단에 실제로 깔린 색'과 맞춘다.
+//   iOS Safari는 setAttribute로 즉시 반영 안 됨 — 메타를 제거 후 재삽입해 강제 재읽기.
+function _setStatusBar(color) {
   let meta = document.getElementById('metaThemeColor');
   if (meta) meta.remove();
   meta = document.createElement('meta');
@@ -4123,6 +4125,22 @@ function _applyTheme(theme) {
   meta.name = 'theme-color';
   meta.content = color;
   document.head.appendChild(meta);
+}
+// 로그인 게이트가 떠 있으면 그라디언트 최상단 색, 아니면 앱 기본 배경색.
+function _statusBarColorForNow() {
+  const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+  const gateOpen = document.getElementById('authGate')?.classList.contains('open');
+  // 로그인 게이트: 그라디언트 최상단이 시스템 상태바(라이트=흰색·다크=검정)와 같은 색으로
+  // 시작하므로 그 색을 그대로 준다 → 상태바와 화면이 이어지고 아래로 하늘색이 번진다.
+  if (gateOpen) return theme === 'dark' ? '#000000' : '#ffffff';
+  return theme === 'dark' ? '#0d1117' : '#fbfcfd';                 // 앱 기본(--bg0)
+}
+
+function _applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('pfThemeBtn');
+  if (btn) btn.textContent = theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환';
+  _setStatusBar(_statusBarColorForNow());
 }
 
 (function(){
