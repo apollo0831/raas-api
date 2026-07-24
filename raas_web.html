@@ -1079,7 +1079,11 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 .pf2-glabel .r{color:var(--dim);font-weight:400}
 .pf2-card{background:var(--bg2);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 /* 행 */
-.pf2-row{display:flex;align-items:center;gap:12px;padding:14px 16px;min-height:52px}
+.pf2-row{display:flex;align-items:center;gap:12px;padding:14px 16px;min-height:52px;position:relative}
+/* 관심 프로그램 — 닫힘 값(라벨)엔 이름만, 드롭다운 목록엔 시간까지. 투명 select를 행 위에 겹쳐
+   클릭·네이티브 목록은 유지하고 표시 텍스트만 라벨(#pfMyProgramLabel)이 담당한다. */
+.pf2-sel-ovl{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;
+  border:none;background:transparent;font-family:var(--sans)}
 .pf2-row + .pf2-row,.pf2-expand + .pf2-row{border-top:1px solid var(--line)}
 .pf2-row .k{color:var(--text);font-size:var(--fs-base);white-space:nowrap;flex-shrink:0}
 .pf2-row .v{margin-left:auto;color:var(--sub);font-size:calc(var(--fs-md) + 1px);text-align:right;
@@ -1112,8 +1116,8 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 .pf2-expand{display:none;padding:2px 16px 16px}
 .pf2-expand.open{display:block}
 /* 관심 주제 값 행 (읽기 전용) */
-.pf2-stat{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;min-height:48px}
-.pf2-stat + .pf2-stat{border-top:1px solid var(--line)}
+.pf2-stat{display:flex;align-items:center;gap:12px;padding:13px 16px;min-height:52px}
+.pf2-stat + .pf2-stat,.pf2-stat + .pf2-row{border-top:1px solid var(--line)}
 .pf2-stat .k{color:var(--text);font-size:var(--fs-base);flex-shrink:0;min-width:72px}
 .pf2-stat .v{margin-left:auto;color:var(--sub);font-size:calc(var(--fs-md) + 1px);text-align:right;line-height:1.5;
   word-break:keep-all}
@@ -1902,11 +1906,11 @@ table.story-table th{
         <div class="pf2-id">
           <div class="pf2-pill">
             <span class="ic"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-            <span id="pf2LoginId" style="font-weight:700">—</span><span class="cap">아이디</span>
+            <span id="pf2LoginId" style="font-weight:700">—</span>
           </div>
           <div class="pf2-pill">
             <span class="ic"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/><circle cx="12" cy="8" r="4.5"/></svg></span>
-            <span id="pf2Name">—</span><span class="cap">이름</span>
+            <span id="pf2Name">—</span>
           </div>
         </div>
 
@@ -1925,8 +1929,9 @@ table.story-table th{
               </select>
             </div>
             <div class="pf2-row" id="pfProgramRow">
-              <span class="pf2-ic"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 3 14.6 8.6 20.5 9.3 16 13.3 17.3 19.1 12 16 6.7 19.1 8 13.3 3.5 9.3 9.4 8.6"/></svg></span><span class="k">내 관심 프로그램</span>
-              <select class="pf2-sel" id="pfMyProgram" onchange="_pfInlineSave()"><option value="">로드 중…</option></select>
+              <span class="pf2-ic"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 3 14.6 8.6 20.5 9.3 16 13.3 17.3 19.1 12 16 6.7 19.1 8 13.3 3.5 9.3 9.4 8.6"/></svg></span><span class="k">관심 프로그램</span>
+              <span class="v" id="pfMyProgramLabel">—</span>
+              <select class="pf2-sel-ovl" id="pfMyProgram" onchange="_pfInlineSave();_pfSyncProgLabel()"><option value="">로드 중…</option></select>
             </div>
             <div class="pf2-row tap" id="pfPwRow" onclick="_pfTogglePw()">
               <span class="pf2-ic"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="k">비밀번호 변경</span>
@@ -1954,7 +1959,7 @@ table.story-table th{
           <div class="pf2-glabel">옵션 설정</div>
           <div class="pf2-card">
             <div class="pf2-row" id="pfMetaRow" style="display:none">
-              <span class="pf2-ic"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.7" fill="currentColor" stroke="none"/></svg></span><span class="k">참고 정보 보기</span>
+              <span class="pf2-ic"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.7" fill="currentColor" stroke="none"/></svg></span><span class="k">답변 부가정보 보기</span>
               <label class="pf2-switch"><input type="checkbox" id="pfMetaSwitch" onchange="_pfMetaToggle()"><span class="track"></span><span class="thumb"></span></label>
             </div>
             <div class="pf2-row">

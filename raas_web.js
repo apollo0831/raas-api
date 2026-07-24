@@ -1375,7 +1375,7 @@ function _renderInterestMap(d) {
       <td class="n">${i.count}회</td></tr>`).join('')}</tbody></table>`;
   };
   // 질의 수(펼침 없음) + 3개 펼침 행
-  let rows = `<div class="pf2-stat">${IC_Q}<span class="k">질의 수</span><span class="v"><span class="big">${total}</span></span></div>`;
+  let rows = `<div class="pf2-stat">${IC_Q}<span class="k">질의 횟수</span><span class="v"><span class="big">${total}</span></span></div>`;
   for (const key of ['intent', 'scope', 'metric']) {
     const a = axes[key];
     rows += `
@@ -1432,21 +1432,30 @@ async function _loadProgramsForProfile() {
     }
     const myList = RAAS_USER.my_programs || [];
     const current = myList.length ? myList[0] : '';
+    // option 텍스트엔 시간까지(드롭다운 목록용), data-name엔 이름만(닫힘 라벨용)
     const groups = _PROGRAMS_CACHE.map(ch => {
       const opts = ch.programs.map(p => {
         const time = p.time ? ` · ${p.time}` : '';
-        return `<option value="${escapeHtml(p.code)}"${p.code === current ? ' selected' : ''}>${escapeHtml(p.label)}${escapeHtml(time)}</option>`;
+        return `<option value="${escapeHtml(p.code)}" data-name="${escapeHtml(p.label)}"${p.code === current ? ' selected' : ''}>${escapeHtml(p.label)}${escapeHtml(time)}</option>`;
       }).join('');
       return `<optgroup label="${escapeHtml(ch.label)}">${opts}</optgroup>`;
     }).join('');
     const _chOpts = [['F00', '파워FM 채널'], ['L00', '러브FM 채널']].map(([c, l]) =>
-      `<option value="${c}"${c === current ? ' selected' : ''}>${l}</option>`).join('');
-    // 기존 select(#pfMyProgram)를 그대로 채운다(교체 아님) — onchange 핸들러 유지
+      `<option value="${c}" data-name="${l}"${c === current ? ' selected' : ''}>${l}</option>`).join('');
     sel.innerHTML = `<option value=""${current ? '' : ' selected'}>선택 없음</option>`
       + `<optgroup label="채널">${_chOpts}</optgroup>` + groups;
+    _pfSyncProgLabel();
   } catch (e) {
     sel.innerHTML = `<option value="">네트워크 오류</option>`;
   }
+}
+
+// 닫힘 상태 라벨 — 선택된 option의 data-name(이름만, 시간 제외)을 표시
+function _pfSyncProgLabel() {
+  const sel = document.getElementById('pfMyProgram'), lab = document.getElementById('pfMyProgramLabel');
+  if (!sel || !lab) return;
+  const opt = sel.options[sel.selectedIndex];
+  lab.textContent = (opt && (opt.dataset.name || opt.textContent)) || '선택 없음';
 }
 
 function _collectSelectedPrograms() {
