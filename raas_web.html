@@ -610,6 +610,13 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 .auth-form{display:flex;flex-direction:column;gap:12px}
 .auth-form.hidden{display:none}
 .auth-field{display:flex;flex-direction:column;gap:5px}
+/* 아이디 기억하기 — 비밀번호는 앱이 저장하지 않는다(평문 보관 금지). 브라우저 비밀번호
+   관리자가 채우도록 autocomplete만 정확히 두고, 여기서는 아이디만 기억한다 */
+.auth-remember{
+  display:flex;align-items:center;gap:7px;cursor:pointer;
+  font-size:var(--fs-sm);color:var(--sub);user-select:none;margin:-2px 0 2px;
+}
+.auth-remember input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;margin:0}
 .auth-label{font-size:var(--fs-xs);color:var(--sub);font-weight:500}
 .auth-input,.auth-select{
   padding:9px 12px;border-radius:8px;
@@ -1532,8 +1539,12 @@ table.story-table th{
       </div>
       <div class="auth-field">
         <label class="auth-label">비밀번호</label>
-        <input class="auth-input" name="password" type="password" autocomplete="current-password" required>
+        <input class="auth-input" id="authPw" name="password" type="password" autocomplete="current-password" required>
       </div>
+      <label class="auth-remember">
+        <input type="checkbox" id="authRemember" checked>
+        <span>아이디 기억하기</span>
+      </label>
       <div class="auth-msg hidden" id="authLoginMsg" role="status" aria-live="polite"></div>
       <button class="auth-submit" type="submit">로그인</button>
     </form>

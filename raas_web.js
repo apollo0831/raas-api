@@ -98,7 +98,31 @@ function _afterAuthed(fresh) {
   loadSuggestions();   // 직무 기반 추천 칩
 }
 
-function _showAuthGate()  { document.getElementById('authGate').classList.add('open'); }
+const _LOGIN_ID_KEY = 'raas_login_id';
+const _REMEMBER_PREF_KEY = 'raas_remember_pref';   // 체크박스의 마지막 선택
+function _showAuthGate() {
+  document.getElementById('authGate').classList.add('open');
+  // 기억해 둔 아이디를 채우고 비밀번호로 바로 커서 — 비밀번호는 브라우저 관리자가 채운다.
+  // (앱이 비밀번호를 저장하지 않는 이유: localStorage 평문 보관은 XSS 한 번에 그대로 새어나간다)
+  try {
+    const saved = localStorage.getItem(_LOGIN_ID_KEY);
+    const f = document.getElementById('authLoginForm');
+    const rem = document.getElementById('authRemember');
+    const pw = document.getElementById('authPw');
+    if (pw) pw.value = '';        // 로그아웃 후 입력값이 화면에 남지 않게(공용 PC 대비)
+    const msg = document.getElementById('authLoginMsg');
+    if (msg) { msg.textContent = ''; msg.className = 'auth-msg hidden'; }
+    // 체크 상태는 마지막 선택을 따른다(처음 쓰는 사람은 기본 켜짐).
+    // '기억 안 함'을 고른 사용자에게 다음 진입에서 다시 켜져 있으면 의도가 무시된 것처럼 보인다.
+    if (rem) rem.checked = localStorage.getItem(_REMEMBER_PREF_KEY) !== '0';
+    if (saved && f) {
+      f.login_id.value = saved;
+      if (pw) setTimeout(() => pw.focus(), 120);   // 아이디는 채워졌으니 비밀번호부터
+    } else if (f) {
+      f.login_id.value = '';   // 기억 안 함 → 직전 입력이 남지 않게 비운다
+    }
+  } catch (_) {}
+}
 function _hideAuthGate()  { document.getElementById('authGate').classList.remove('open'); }
 
 function setAuthTab(tab) {
@@ -141,6 +165,14 @@ async function doLogin(ev) {
     RAAS_TOKEN = data.token;
     RAAS_USER  = data.user;
     localStorage.setItem('raas_token', RAAS_TOKEN);
+    // 아이디 기억하기 — 체크 해제 시 저장값도 지운다(공용 PC 대비)
+    try {
+      const rem = document.getElementById('authRemember');
+      const on = !!(rem && rem.checked);
+      localStorage.setItem(_REMEMBER_PREF_KEY, on ? '1' : '0');
+      if (on) localStorage.setItem(_LOGIN_ID_KEY, body.login_id);
+      else localStorage.removeItem(_LOGIN_ID_KEY);
+    } catch (_) {}
     _hideAuthGate();
     _renderSidebarUser();
     _afterAuthed(true);   // 로그인 직후 — KPI 패널 접힌 상태로 시작
