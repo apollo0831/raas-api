@@ -616,6 +616,17 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
   background:linear-gradient(180deg, #fbfcfd 0%, #eef5fc 22%, #d8e8f8 56%, #bfd9f3 84%, #b0d0f0 100%);
 }
 .auth-gate.open{display:flex}
+/* 상단 고정 페이드 — 키보드/암호채우기로 화면이 위로 밀릴 때, 스크롤돼 올라온 그라디언트
+   파란 부분이 상태바와 경계를 만든다. 뷰포트에 고정된 스트립(상태바 색 → 투명)으로 항상
+   최상단을 덮어 경계를 가린다. pointer-events:none이라 입력엔 영향 없음. */
+.auth-gate::before{
+  content:"";position:fixed;top:0;left:0;right:0;
+  height:calc(76px + env(safe-area-inset-top, 0px));z-index:3;pointer-events:none;
+  background:linear-gradient(180deg, #0d1117 0%, #0d1117 42%, rgba(13,17,23,0) 100%);
+}
+[data-theme="light"] .auth-gate::before{
+  background:linear-gradient(180deg, #fbfcfd 0%, #fbfcfd 42%, rgba(251,252,253,0) 100%);
+}
 .auth-card{
   width:100%;max-width:400px;
   background:rgba(26,33,48,.55);
