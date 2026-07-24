@@ -1124,6 +1124,14 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 .pf2-blind{padding:12px 16px;border-top:1px solid var(--line)}
 .pf2-blind-hd{font-size:var(--fs-xs);color:var(--sub);font-weight:600;margin-bottom:7px}
 .pf2-blind-item{display:flex;gap:8px;font-size:var(--fs-sm);color:var(--text2);padding:3px 0;line-height:1.5}
+/* 사용 통계 상세표 (펼침) */
+.pf2-tbl{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.pf2-tbl td{padding:6px 2px;border-top:1px solid var(--line);color:var(--text2)}
+.pf2-tbl tr:first-child td{border-top:none}
+.pf2-tbl td.n{text-align:right;color:var(--sub);font-family:var(--mono);width:52px;white-space:nowrap}
+.pf2-tbl td.bar{width:38%}
+.pf2-tbl .barwrap{height:8px;background:var(--bg1);border-radius:3px;overflow:hidden}
+.pf2-tbl .barfill{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:3px}
 
 /* ── MAIN CHAT ── */
 .chat-main{
@@ -1960,7 +1968,7 @@ table.story-table th{
 
         <!-- 내 관심 주제 -->
         <div class="pf2-group">
-          <div class="pf2-glabel">내 관심 주제 <span class="r">최근 30일</span></div>
+          <div class="pf2-glabel">사용 통계 <span class="r">최근 30일</span></div>
           <div class="pf2-card" id="pfInterest"><div class="pf2-empty">로드 중…</div></div>
         </div>
 

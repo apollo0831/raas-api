@@ -1345,27 +1345,41 @@ async function loadInterestMap() {
   }
 }
 
-// 내 관심 주제 — 6개: 질의수·연산유형·대상·지표 + 사각지대·동료 평균.
-//   연산유형은 _INTENT_KO 한글, 대상은 scope_labels(프로그램명). 상위 3개까지 요약 표기.
+// 사용 통계 — 질의수 + (주 연산유형·관심 대상·관심 지표) 펼침표 + 사각지대·동료 평균.
+//   서버가 count 내림차순으로 내려주므로 그대로 상위→하위. 상세표는 항목·횟수·막대.
 function _renderInterestMap(d) {
   if (!d) return '<div class="pf2-empty">데이터 없음</div>';
   const total = d.total_queries || 0;
-  const topN = (arr, keyFn, n) => (arr || []).slice(0, n).map(keyFn).filter(Boolean);
-  const joinMore = (arr, all) => {
-    if (!arr.length) return '—';
-    const rest = (all ? all.length : arr.length) - arr.length;
-    return escapeHtml(arr.join('·')) + (rest > 0 ? ` <span style="color:var(--dim)">외 ${rest}</span>` : '');
+  const labels = d.scope_labels || {};
+  // 각 통계축을 [{name, count}]로 정규화(이미 count desc 정렬)
+  const norm = (arr, nameFn) => (arr || []).map(x => ({ name: nameFn(x), count: x.count || 0 })).filter(x => x.name);
+  const axes = {
+    intent: { title: '주 연산유형', items: norm(d.by_intent, i => _INTENT_KO[i.intent] || i.intent) },
+    scope:  { title: '관심 대상',  items: norm(d.by_scope,  s => labels[s.scope] || s.scope) },
+    metric: { title: '관심 지표',  items: norm(d.by_metric, m => _METRIC_KO[m.metric] || m.metric) },
   };
-  const intents = topN(d.by_intent, i => _INTENT_KO[i.intent] || i.intent, 3);
-  const labels  = d.scope_labels || {};
-  const scopes  = topN(d.by_scope,  s => labels[s.scope] || s.scope, 3);
-  const metrics = topN(d.by_metric, m => (_METRIC_KO[m.metric] || m.metric), 3);
-
-  const rows = `
-    <div class="pf2-stat"><span class="k">질의 수</span><span class="v"><span class="big">${total}</span></span></div>
-    <div class="pf2-stat"><span class="k">연산유형</span><span class="v">${joinMore(intents, d.by_intent)}</span></div>
-    <div class="pf2-stat"><span class="k">대상</span><span class="v">${joinMore(scopes, d.by_scope)}</span></div>
-    <div class="pf2-stat"><span class="k">지표</span><span class="v">${joinMore(metrics, d.by_metric)}</span></div>`;
+  const summary = items => items.length ? escapeHtml(items.slice(0, 3).map(i => i.name).join('·')) : '—';
+  const chev = '<svg class="pf2-chev" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>';
+  // 펼침 상세표 — 항목·막대·횟수 (count desc)
+  const table = items => {
+    if (!items.length) return '<div class="pf2-empty">기간 내 데이터 없음</div>';
+    const max = Math.max(...items.map(i => i.count), 1);
+    return `<table class="pf2-tbl"><tbody>${items.map(i => `
+      <tr><td>${escapeHtml(i.name)}</td>
+      <td class="bar"><div class="barwrap"><div class="barfill" style="width:${(i.count / max * 100).toFixed(1)}%"></div></div></td>
+      <td class="n">${i.count}회</td></tr>`).join('')}</tbody></table>`;
+  };
+  // 질의 수(펼침 없음) + 3개 펼침 행
+  let rows = `<div class="pf2-stat"><span class="k">질의 수</span><span class="v"><span class="big">${total}</span></span></div>`;
+  for (const key of ['intent', 'scope', 'metric']) {
+    const a = axes[key];
+    rows += `
+      <div class="pf2-row tap" id="pfStatRow-${key}" onclick="_pfStatToggle('${key}')">
+        <span class="k">${a.title}</span>
+        <span class="v" style="margin-right:8px">${summary(a.items)}</span>${chev}
+      </div>
+      <div class="pf2-expand" id="pfStat-${key}">${table(a.items)}</div>`;
+  }
 
   // 사각지대
   let blind = '';
@@ -1387,6 +1401,14 @@ function _renderInterestMap(d) {
   }
   if (total === 0) return rows + '<div class="pf2-empty">아직 질의 이력이 없습니다.</div>' + blind + peer;
   return rows + blind + peer;
+}
+
+// 사용 통계 축(연산유형·대상·지표) 펼침 토글
+function _pfStatToggle(key) {
+  const ex = document.getElementById('pfStat-' + key), row = document.getElementById('pfStatRow-' + key);
+  if (!ex) return;
+  const open = ex.classList.toggle('open');
+  if (row) row.classList.toggle('open', open);
 }
 
 function closeProfileModal() {
