@@ -82,6 +82,17 @@ async function _authedFetch(url, options) {
 }
 
 // ── 인증 게이트 UI 제어 ──
+// 인증 성공 후 공통 초기 로드 — 부팅 복원·로그인·가입(자동승인) 세 경로가 모두 여기를 거친다.
+// (이전에는 경로마다 호출 목록이 달라, 로그아웃 후 재로그인하면 KPI 패널만 '로드 중…'에
+//  멈춰 있었다. 새로고침해야 부팅 경로를 타면서 채워졌던 것 — 진입점을 하나로 모아 재발 방지)
+function _afterAuthed() {
+  _phIdentify(RAAS_USER);
+  _checkDataVersion();
+  loadKpiPanel();
+  refreshHistory();
+  loadSuggestions();   // 직무 기반 추천 칩
+}
+
 function _showAuthGate()  { document.getElementById('authGate').classList.add('open'); }
 function _hideAuthGate()  { document.getElementById('authGate').classList.remove('open'); }
 
@@ -127,9 +138,7 @@ async function doLogin(ev) {
     localStorage.setItem('raas_token', RAAS_TOKEN);
     _hideAuthGate();
     _renderSidebarUser();
-    _phIdentify(RAAS_USER);
-    refreshHistory();
-    loadSuggestions();
+    _afterAuthed();
   } catch (e) {
     _showAuthMsg('authLoginMsg', '네트워크 오류: ' + e.message, '');
   } finally {
@@ -173,9 +182,7 @@ async function doRegister(ev) {
         RAAS_USER = me.user;
         _hideAuthGate();
         _renderSidebarUser();
-        _phIdentify(RAAS_USER);
-        refreshHistory();
-        loadSuggestions();
+        _afterAuthed();
       }
     } else {
       _showAuthMsg('authRegMsg',
@@ -4154,12 +4161,5 @@ _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
 
 // 인증 게이트 — 토큰 복원 후 성공 시만 KPI/이력/추천 칩 로드
 (async () => {
-  const authed = await _bootAuth();
-  if (authed) {
-    _checkDataVersion();
-    loadKpiPanel();
-    refreshHistory();
-    loadSuggestions();   // 직무 기반 추천 칩
-    _phIdentify(RAAS_USER);  // 세션 복원 사용자 식별
-  }
+  if (await _bootAuth()) _afterAuthed();
 })();
