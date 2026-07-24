@@ -926,6 +926,9 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 .pf-btn:hover{background:var(--bg3)}
 .pf-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .pf-btn.primary:hover{opacity:.9}
+/* 로그아웃 — 되돌리기 쉬운 동작이라 경고색까진 아니고, 저장/변경 버튼과 구분되게 톤만 다르게 */
+.pf-btn.danger{color:#ef4444;border-color:rgba(239,68,68,.4)}
+.pf-btn.danger:hover{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.6)}
 .pf-msg{
   margin-top:10px;padding:9px 12px;border-radius:7px;
   font-size:var(--fs-sm);
@@ -1731,9 +1734,15 @@ table.story-table th{
       </div>
 
       <div class="pf-body" id="pfMetaSection" style="display:none;border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
-        <div class="pf-section-title">관리자 옵션</div>
+        <div class="pf-section-title">옵션 설정</div>
         <button type="button" class="pf-btn" id="pfMetaBtn" onclick="toggleAdminMeta()">참고 정보: 켜짐</button>
-        <div style="font-size:var(--fs-xs);color:var(--dim);margin-top:8px">답변의 '분석 대상·실데이터·추가 적재 필요' 참고 푸터 표시/숨김 (관리자 전용)</div>
+        <div style="font-size:var(--fs-xs);color:var(--dim);margin-top:8px">답변의 '분석 대상·실데이터·추가 적재 필요' 참고 푸터 표시/숨김 — 이 기기에만 적용되는 개인 설정</div>
+      </div>
+
+      <div class="pf-body" style="border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
+        <div class="pf-section-title">로그아웃</div>
+        <button type="button" class="pf-btn danger" onclick="_pfLogout()">로그아웃</button>
+        <div style="font-size:var(--fs-xs);color:var(--dim);margin-top:8px">로그인 화면으로 돌아갑니다. 다른 계정으로 로그인하거나 회원가입할 수 있습니다.</div>
       </div>
     </div>
   </div>

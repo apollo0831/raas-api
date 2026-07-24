@@ -208,6 +208,14 @@ async function doLogout() {
   setAuthTab('login');
 }
 
+// 내 프로필 → 로그아웃. 열린 모달·사이드바를 먼저 정리해야 로그인 게이트가 그 위에 안 가린다.
+function _pfLogout() {
+  closeProfileModal();
+  if (typeof _closeParkedModals === 'function') _closeParkedModals();
+  closeSidebar();
+  doLogout();
+}
+
 function _renderSidebarUser() {
   if (!RAAS_USER) return;
   const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
