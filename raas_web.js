@@ -85,7 +85,11 @@ async function _authedFetch(url, options) {
 // 인증 성공 후 공통 초기 로드 — 부팅 복원·로그인·가입(자동승인) 세 경로가 모두 여기를 거친다.
 // (이전에는 경로마다 호출 목록이 달라, 로그아웃 후 재로그인하면 KPI 패널만 '로드 중…'에
 //  멈춰 있었다. 새로고침해야 부팅 경로를 타면서 채워졌던 것 — 진입점을 하나로 모아 재발 방지)
-function _afterAuthed() {
+// fresh=true — 방금 로그인/가입한 경우. 우측 KPI 패널을 접힌 상태로 시작한다
+// (질의부터 하도록 본문을 넓게. 데이터는 뒤에서 미리 채워 두므로 펼치면 바로 보인다).
+// 세션 복원(새로고침)은 보던 상태를 유지 — 작업 중 새로고침에서 패널이 접히면 성가시다.
+function _afterAuthed(fresh) {
+  if (fresh) closeKpi();
   _phIdentify(RAAS_USER);
   _checkDataVersion();
   loadKpiPanel();
@@ -138,7 +142,7 @@ async function doLogin(ev) {
     localStorage.setItem('raas_token', RAAS_TOKEN);
     _hideAuthGate();
     _renderSidebarUser();
-    _afterAuthed();
+    _afterAuthed(true);   // 로그인 직후 — KPI 패널 접힌 상태로 시작
   } catch (e) {
     _showAuthMsg('authLoginMsg', '네트워크 오류: ' + e.message, '');
   } finally {
@@ -182,7 +186,7 @@ async function doRegister(ev) {
         RAAS_USER = me.user;
         _hideAuthGate();
         _renderSidebarUser();
-        _afterAuthed();
+        _afterAuthed(true);   // 가입(자동승인) 직후
       }
     } else {
       _showAuthMsg('authRegMsg',
