@@ -653,6 +653,18 @@ body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 .adm-action-btn.approve:hover{background:rgba(52,199,138,.1)}
 .adm-action-btn.reject{color:var(--red);border-color:rgba(242,107,107,.4)}
 .adm-action-btn.reject:hover{background:rgba(242,107,107,.1)}
+/* 임시 비밀번호 배너 — 발급 직후 1회만 보이는 값이라 눈에 띄게, 값은 고정폭+선택 가능 */
+.adm-temp-pw{
+  margin:14px 18px;padding:14px 16px;border-radius:10px;
+  background:var(--accent-soft);border:1px solid rgba(79,142,247,.45);
+}
+.adm-temp-hd{font-size:var(--fs-sm);font-weight:600;color:var(--text);margin-bottom:8px}
+.adm-temp-val{
+  font-family:var(--mono);font-size:var(--fs-lg);font-weight:700;color:var(--accent);
+  letter-spacing:.06em;user-select:all;-webkit-user-select:all;
+  padding:8px 12px;border-radius:6px;background:var(--bg1);display:inline-block;
+}
+.adm-temp-sub{font-size:var(--fs-xs);color:var(--sub);margin-top:8px;line-height:1.5}
 .adm-section-title{
   padding:11px 18px;font-size:var(--fs-md);font-weight:600;color:var(--text);
   background:var(--bg2);border-bottom:1px solid var(--line);
@@ -1527,6 +1539,33 @@ table.story-table th{
       <div class="auth-msg hidden" id="authRegMsg" role="status" aria-live="polite"></div>
       <button class="auth-submit" type="submit">가입 요청</button>
     </form>
+  </div>
+</div>
+
+<!-- ── 비밀번호 변경 강제 게이트 (관리자 초기화 후 첫 로그인) ── -->
+<!-- 로그인은 됐지만 임시 비밀번호 상태 — 새 비밀번호를 정하기 전엔 앱을 가린다.
+     '취소' 없음: 빠져나갈 길을 주면 임시 비밀번호가 그대로 남는다(원한다면 로그아웃). -->
+<div class="auth-gate" id="pwForceGate">
+  <div class="auth-card">
+    <div class="auth-brand">비밀번호 변경</div>
+    <div class="auth-sub">관리자가 발급한 임시 비밀번호로 로그인했습니다.<br>계속하려면 새 비밀번호를 정해 주세요.</div>
+    <form class="auth-form" id="pwForceForm" onsubmit="return submitForcedPw(event)">
+      <div class="auth-field">
+        <label class="auth-label">새 비밀번호 (4자 이상)</label>
+        <input class="auth-input" id="pwForceNew" name="new_password" type="password"
+               autocomplete="new-password" required minlength="4">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">새 비밀번호 확인</label>
+        <input class="auth-input" name="new_password2" type="password"
+               autocomplete="new-password" required minlength="4">
+      </div>
+      <div class="auth-msg hidden" id="pwForceMsg" role="status" aria-live="polite"></div>
+      <button class="auth-submit" type="submit">변경하고 시작하기</button>
+    </form>
+    <div style="text-align:center;margin-top:14px">
+      <button type="button" class="auth-tab" onclick="doLogout()">다른 계정으로 로그인</button>
+    </div>
   </div>
 </div>
 

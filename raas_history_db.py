@@ -115,6 +115,12 @@ def init_db():
             conn.execute("ALTER TABLE users ADD COLUMN channel TEXT")
         except Exception:
             pass
+        # 비밀번호 분실 복구(A안) — 관리자가 임시 비밀번호를 발급하면 1, 본인이 바꾸면 0.
+        # 1인 동안에는 로그인은 되지만 비밀번호 변경 외 다른 화면을 쓸 수 없다.
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN must_change_pw INTEGER DEFAULT 0")
+        except Exception:
+            pass
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_user_created "

@@ -59,6 +59,8 @@ def _user_dict(row) -> dict:
         'is_admin':     bool(row['is_admin']) if 'is_admin' in keys else False,
         'my_programs':  _parse_my_programs(row['my_programs']) if 'my_programs' in keys else [],
         'channel':      (row['channel'] if 'channel' in keys else None),
+        # 관리자가 임시 비밀번호를 발급한 상태 — 프론트가 비밀번호 변경을 강제한다
+        'must_change_pw': bool(row['must_change_pw']) if 'must_change_pw' in keys else False,
     }
 
 
@@ -116,7 +118,8 @@ def authenticate(login_id: str, pw: str) -> Optional[dict]:
     """ID/PW 검증. status='approved'만 통과. 통과 시 user dict 반환."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id, login_id, pw_hash, pw_salt, name, role, status, my_programs, is_admin, channel "
+            "SELECT id, login_id, pw_hash, pw_salt, name, role, status, my_programs, is_admin, channel, "
+            "       must_change_pw "
             "FROM users WHERE login_id = ?",
             (login_id,)
         ).fetchone()
@@ -147,7 +150,8 @@ def resolve_session(token: str) -> Optional[dict]:
         return None
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT u.id, u.login_id, u.name, u.role, u.status, u.my_programs, u.is_admin, u.channel, s.expires_at "
+            "SELECT u.id, u.login_id, u.name, u.role, u.status, u.my_programs, u.is_admin, u.channel, "
+            "       u.must_change_pw, s.expires_at "
             "FROM sessions s JOIN users u ON s.user_id = u.id "
             "WHERE s.token = ?",
             (token,)
@@ -243,8 +247,64 @@ def change_password(user_id: int, old_pw: str, new_pw: str) -> dict:
         new_salt = secrets.token_hex(16)
         new_hash = _hash_pw(new_pw, new_salt)
         conn.execute(
-            "UPDATE users SET pw_hash = ?, pw_salt = ? WHERE id = ?",
+            "UPDATE users SET pw_hash = ?, pw_salt = ?, must_change_pw = 0 WHERE id = ?",
             (new_hash, new_salt, user_id)
+        )
+    return {'ok': True}
+
+
+# ── 비밀번호 분실 복구 (A안: 관리자 재설정) ───────────────────
+# 해시는 단방향이라 원문 복구가 불가능하다 → 관리자가 임시 비밀번호를 발급하고
+# 본인이 첫 로그인에서 바꾸게 한다. 임시값은 응답으로 1회만 나가고 DB엔 해시만 남는다.
+# 임시 비밀번호에는 사람이 옮겨 적을 때 헷갈리는 글자(0/O, 1/l/I)를 넣지 않는다.
+_TEMP_PW_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
+
+
+def generate_temp_password(length: int = 10) -> str:
+    return ''.join(secrets.choice(_TEMP_PW_ALPHABET) for _ in range(length))
+
+
+def admin_reset_password(uid: int) -> dict:
+    """관리자용 비밀번호 초기화. 임시 비밀번호를 새로 발급하고
+    must_change_pw=1 + 해당 사용자의 모든 세션 무효화(로그인된 기기 강제 로그아웃).
+    리턴: {ok, temp_password, login_id, name} — temp_password는 이때만 평문으로 존재."""
+    temp = generate_temp_password()
+    salt = secrets.token_hex(16)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT login_id, name, status FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+        if not row:
+            return {'ok': False, 'error': '사용자 없음'}
+        if row['status'] != 'approved':
+            return {'ok': False, 'error': '승인된 사용자만 초기화할 수 있습니다.'}
+        conn.execute(
+            "UPDATE users SET pw_hash = ?, pw_salt = ?, must_change_pw = 1 WHERE id = ?",
+            (_hash_pw(temp, salt), salt, uid)
+        )
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (uid,))
+    return {'ok': True, 'temp_password': temp,
+            'login_id': row['login_id'], 'name': row['name']}
+
+
+def set_password_forced(user_id: int, new_pw: str) -> dict:
+    """임시 비밀번호로 로그인한 사용자가 현재 비밀번호 입력 없이 새로 설정.
+    must_change_pw=1인 동안에만 허용 — 아니면 일반 change_password를 써야 한다
+    (세션 탈취자가 비밀번호를 갈아끼우는 경로가 되지 않도록 서버가 상태를 확인)."""
+    if not new_pw or len(new_pw) < 4:
+        return {'ok': False, 'error': '새 비밀번호는 4자 이상'}
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT must_change_pw FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not row:
+            return {'ok': False, 'error': '사용자 없음'}
+        if not row['must_change_pw']:
+            return {'ok': False, 'error': '초기화 상태가 아닙니다. 현재 비밀번호로 변경하세요.'}
+        salt = secrets.token_hex(16)
+        conn.execute(
+            "UPDATE users SET pw_hash = ?, pw_salt = ?, must_change_pw = 0 WHERE id = ?",
+            (_hash_pw(new_pw, salt), salt, user_id)
         )
     return {'ok': True}
 
@@ -264,7 +324,7 @@ def list_users() -> list:
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, login_id, name, role, title, status, "
-            "       created_at, approved_at, approved_by "
+            "       created_at, approved_at, approved_by, must_change_pw "
             "FROM users ORDER BY created_at DESC"
         ).fetchall()
     return [dict(r) for r in rows]

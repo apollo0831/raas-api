@@ -216,8 +216,53 @@ function _pfLogout() {
   doLogout();
 }
 
+// 임시 비밀번호로 들어온 상태 — 새 비밀번호를 정하기 전에는 앱을 쓸 수 없다.
+// 로그인·가입·부팅복원 세 경로가 모두 _renderSidebarUser를 거치므로 여기서 한 번만 건다.
+function _maybeForcePwChange() {
+  const need = !!(RAAS_USER && RAAS_USER.must_change_pw);
+  const gate = document.getElementById('pwForceGate');
+  if (gate) gate.classList.toggle('open', need);
+  if (need) {
+    const inp = document.getElementById('pwForceNew');
+    if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 100); }
+    const msg = document.getElementById('pwForceMsg');
+    if (msg) { msg.className = 'auth-msg hidden'; msg.textContent = ''; }
+  }
+  return need;
+}
+
+async function submitForcedPw(e) {
+  e.preventDefault();
+  const f = e.target;
+  const pw1 = f.new_password.value, pw2 = f.new_password2.value;
+  const msg = document.getElementById('pwForceMsg');
+  const say = (t, cls) => { msg.textContent = t; msg.className = 'auth-msg ' + (cls || ''); };
+  if (pw1.length < 4) { say('새 비밀번호는 4자 이상이어야 합니다.', ''); return false; }
+  if (pw1 !== pw2)    { say('두 비밀번호가 일치하지 않습니다.', ''); return false; }
+  const btn = f.querySelector('button[type=submit]');
+  btn.disabled = true;
+  try {
+    const res = await _authedFetch('/api/me/password/forced', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_password: pw1 }),
+    });
+    const data = await res.json();
+    if (!data.ok) { say(data.error || '변경 실패', ''); return false; }
+    RAAS_USER.must_change_pw = false;
+    document.getElementById('pwForceGate').classList.remove('open');
+    say('', '');
+  } catch (err) {
+    say('네트워크 오류: ' + err.message, '');
+  } finally {
+    btn.disabled = false;
+  }
+  return false;
+}
+
 function _renderSidebarUser() {
   if (!RAAS_USER) return;
+  _maybeForcePwChange();
   const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
   // 승인 관리 — is_admin 전용
   show('btnAdminManage', RAAS_USER.is_admin);
@@ -339,12 +384,15 @@ function _renderAdminUsers(pending, all) {
       <td>${escapeHtml(u.login_id)}</td>
       <td>${escapeHtml(u.name)}</td>
       <td>${escapeHtml(u.role)}</td>
-      <td><span class="adm-badge ${u.status||'pending'}">${u.status||'pending'}</span></td>
+      <td><span class="adm-badge ${u.status||'pending'}">${u.status||'pending'}</span>${
+        u.must_change_pw ? ' <span class="adm-badge pending" title="임시 비밀번호 상태 — 본인이 변경하면 해제">초기화됨</span>' : ''}</td>
       <td style="font-size:var(--fs-xs);color:var(--dim)">${escapeHtml(u.created_at||'')}</td>
       <td>${showActions ? `
         <button class="adm-action-btn approve" onclick="approveUser(${u.id})">승인</button>
         <button class="adm-action-btn reject"  onclick="rejectUser(${u.id})">거절</button>
-      ` : ''}</td>
+      ` : (u.status === 'approved' ? `
+        <button class="adm-action-btn" onclick="resetUserPw(${u.id}, '${escapeHtml(u.login_id)}')">비밀번호 초기화</button>
+      ` : '')}</td>
     </tr>`;
   const pendingHtml = pending.length ? `
     <div class="adm-section-title">승인 대기 (${pending.length})</div>
@@ -368,6 +416,51 @@ async function rejectUser(uid) {
   if (!confirm('이 사용자를 거절하시겠습니까? 활성 세션도 무효화됩니다.')) return;
   await _adminAction(uid, 'reject');
 }
+// 비밀번호 분실 복구(A안) — 임시 비밀번호 발급. 평문은 이 응답에만 있고 다시 볼 수 없으므로
+// 화면에 남겨 두고(자동 닫힘 없음) 관리자가 본인에게 전달하도록 한다.
+async function resetUserPw(uid, loginId) {
+  if (!confirm(`'${loginId}' 계정의 비밀번호를 초기화합니다.\n\n· 임시 비밀번호가 발급되며 기존 비밀번호는 사용할 수 없습니다.\n· 해당 사용자의 로그인 세션이 모두 해제됩니다.\n· 본인은 다음 로그인 시 새 비밀번호를 정해야 합니다.\n\n진행할까요?`)) return;
+  try {
+    const res = await _authedFetch('/api/admin/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: uid }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error || '실패'); return; }
+    _showTempPw(data);
+    _loadAdminUsers();
+  } catch (e) {
+    alert('네트워크 오류: ' + e.message);
+  }
+}
+
+// 발급된 임시 비밀번호 표시 — 모달 상단에 고정 배너(1회성, 새로고침하면 사라짐)
+function _showTempPw(d) {
+  const body = document.getElementById('adminModalBody');
+  if (!body) return;
+  const box = document.createElement('div');
+  box.className = 'adm-temp-pw';
+  box.innerHTML = `
+    <div class="adm-temp-hd">🔑 임시 비밀번호 발급 — ${escapeHtml(d.name || '')} (${escapeHtml(d.login_id || '')})</div>
+    <div class="adm-temp-val" id="admTempVal">${escapeHtml(d.temp_password)}</div>
+    <div class="adm-temp-sub">이 값은 지금만 볼 수 있습니다. 본인에게 직접 전달하세요.
+      본인이 다음 로그인에서 새 비밀번호를 정하면 이 임시값은 무효가 됩니다.</div>
+    <div style="margin-top:8px;display:flex;gap:6px">
+      <button class="adm-action-btn approve" onclick="_copyTempPw()">복사</button>
+      <button class="adm-action-btn" onclick="this.closest('.adm-temp-pw').remove()">닫기</button>
+    </div>`;
+  body.prepend(box);
+  box.scrollIntoView({ block: 'nearest' });
+}
+function _copyTempPw() {
+  const el = document.getElementById('admTempVal');
+  if (!el) return;
+  const t = el.textContent;
+  if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => alert('복사했습니다.'), () => alert('복사 실패 — 직접 선택해 복사하세요.'));
+  else alert('복사를 지원하지 않는 브라우저입니다. 직접 선택해 복사하세요.');
+}
+
 async function _adminAction(uid, action) {
   try {
     const res = await _authedFetch('/api/admin/approve', {

@@ -46,7 +46,8 @@ from raas_auth import (register_user, authenticate, create_session,
                        resolve_session, destroy_session,
                        get_pending_users, list_users, approve_user, reject_user,
                        bootstrap_admins, ALLOWED_ROLES,
-                       update_profile, change_password)
+                       update_profile, change_password,
+                       admin_reset_password, set_password_forced)
 from raas_onboarding import list_active_profiles, build_suggestions
 import raas_metrics_engine as METRICS
 import raas_storyline_router as ROUTER
@@ -1257,6 +1258,39 @@ class RAASHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(e)}, 500)
         return
 
+    def _post_me_password_forced(self, body):
+        """임시 비밀번호 상태(must_change_pw=1)에서 현재 비밀번호 없이 새로 설정.
+        상태 확인은 auth 레이어가 한다 — 아니면 400."""
+        user = self._get_session_user()
+        if not user:
+            self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
+            return
+        try:
+            result = set_password_forced(user['id'], body.get('new_password', ''))
+            self.send_json(result, 200 if result.get('ok') else 400)
+        except Exception as e:
+            self.send_json({"ok": False, "error": str(e)}, 500)
+        return
+
+    def _post_admin_reset_password(self, body):
+        """비밀번호 분실 복구(A안) — 관리자가 임시 비밀번호 발급.
+        평문은 이 응답에만 실려 나가고 저장하지 않는다(DB엔 해시만)."""
+        admin = self._require_admin()
+        if not admin:
+            return
+        try:
+            uid = int(body.get("user_id", 0))
+            if not uid:
+                self.send_json({"ok": False, "error": "user_id 필수"}, 400)
+                return
+            result = admin_reset_password(uid)
+            if result.get('ok'):
+                print(f"[pw-reset] admin={admin['login_id']} → user_id={uid} ({result.get('login_id')})")
+            self.send_json(result, 200 if result.get('ok') else 400)
+        except Exception as e:
+            self.send_json({"ok": False, "error": str(e)}, 500)
+        return
+
     def _post_admin_approve(self, body):
         admin = self._require_admin()
         if not admin:
@@ -2077,6 +2111,8 @@ class RAASHandler(BaseHTTPRequestHandler):
         "/api/logout": _post_logout,
         "/api/me/update": _post_me_update,
         "/api/me/password": _post_me_password,
+        "/api/me/password/forced": _post_me_password_forced,
+        "/api/admin/reset-password": _post_admin_reset_password,
         "/api/admin/approve": _post_admin_approve,
         "/api/ip-users": _post_ip_users,
         "/api/query/feedback": _post_query_feedback,
