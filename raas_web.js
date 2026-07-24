@@ -2379,9 +2379,26 @@ function _initWelcomeChips() { /* 보팅 시점엔 RAAS_TOKEN 가능 — _bootAu
 
 // 웰컴 추천 칩 — 스토리라인은 '어제 방송 특이사항' 단일 경로(웰컴 CTA 상시 노출)로 전환.
 //   구 CP 다중슬롯 스토리라인은 제거됨. 웰컴은 직무 기반 추천칩만 렌더.
+// 웰컴 CTA는 '하루 한 번'만 — 그날 처음 웰컴 화면을 볼 때만 노출하고, 이후에는
+// (눌렀든 안 눌렀든) '새 질의'·새로고침에서 숨긴다. 다음 날 다시 노출.
+// '어제 방송 특이사항'은 매일 내용이 바뀌므로 하루 1회는 남기되, 반복 노출 피로를 없앤다.
+const _CTA_DATE_KEY = 'raas_cta_date';
+function _todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+                         + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 async function loadSuggestions() {
-  _injectDataCheckChip();       // '데이터 확인하기' CTA(데이터 직무)만 유지
-  // 웰컴 추천칩(/api/suggestions)은 제거 — '어제 방송 특이사항 보기'·'데이터 확인하기' CTA만 노출
+  const cta = document.querySelector('#welcomeScreen .welcome-cta');
+  if (!cta) return;
+  // 이미 이번 화면에서 노출 중이면 유지 — 직무 변경 등으로 재호출될 때 보고 있던 CTA가
+  // '오늘 이미 봤음'으로 판정돼 눈앞에서 사라지지 않도록.
+  if (cta.dataset.shown === '1') { _injectDataCheckChip(); return; }
+  if (localStorage.getItem(_CTA_DATE_KEY) === _todayStr()) { cta.remove(); return; }
+  localStorage.setItem(_CTA_DATE_KEY, _todayStr());   // 오늘 몫 소진 — 표시 시점에 기록
+  cta.dataset.shown = '1';
+  _injectDataCheckChip();       // '데이터 확인하기' CTA(데이터 직무)만 추가
 }
 
 async function _loadLegacySuggestions() {
