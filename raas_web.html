@@ -1413,7 +1413,10 @@ table.story-table th{
   font-size:var(--fs-xs);font-weight:600;color:var(--dim);
   text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;
 }
-.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+/* 패널 폭(드래그로 가변)에 따라 카드 열 수가 자동 조정 — 좁으면 1열, 넓히면 2·3열…
+   최소 카드폭 130px(기본폭 308px에선 2열, 좁히면 1열, 넓히면 3열 이상). 미니차트는
+   grid-column:1/-1로 항상 전체 폭. */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));gap:8px}
 .kpi-card{
   background:var(--bg2);border-radius:10px;padding:10px 12px;
   border:1px solid var(--line);
