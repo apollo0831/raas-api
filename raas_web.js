@@ -1353,10 +1353,15 @@ function _renderInterestMap(d) {
   const labels = d.scope_labels || {};
   // 각 통계축을 [{name, count}]로 정규화(이미 count desc 정렬)
   const norm = (arr, nameFn) => (arr || []).map(x => ({ name: nameFn(x), count: x.count || 0 })).filter(x => x.name);
+  const _ic = paths => `<span class="pf2-ic"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">${paths}</svg></span>`;
+  const IC_Q      = _ic('<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 1 1 21 11.5z"/>');       // 질의 수
+  const IC_INTENT = _ic('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>');                                                                    // 주 연산유형
+  const IC_SCOPE  = _ic('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>'); // 관심 대상
+  const IC_METRIC = _ic('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>');       // 관심 지표
   const axes = {
-    intent: { title: '주 연산유형', items: norm(d.by_intent, i => _INTENT_KO[i.intent] || i.intent) },
-    scope:  { title: '관심 대상',  items: norm(d.by_scope,  s => labels[s.scope] || s.scope) },
-    metric: { title: '관심 지표',  items: norm(d.by_metric, m => _METRIC_KO[m.metric] || m.metric) },
+    intent: { title: '주 연산유형', ic: IC_INTENT, items: norm(d.by_intent, i => _INTENT_KO[i.intent] || i.intent) },
+    scope:  { title: '관심 대상',  ic: IC_SCOPE,  items: norm(d.by_scope,  s => labels[s.scope] || s.scope) },
+    metric: { title: '관심 지표',  ic: IC_METRIC, items: norm(d.by_metric, m => _METRIC_KO[m.metric] || m.metric) },
   };
   const summary = items => items.length ? escapeHtml(items.slice(0, 3).map(i => i.name).join('·')) : '—';
   const chev = '<svg class="pf2-chev" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>';
@@ -1370,12 +1375,12 @@ function _renderInterestMap(d) {
       <td class="n">${i.count}회</td></tr>`).join('')}</tbody></table>`;
   };
   // 질의 수(펼침 없음) + 3개 펼침 행
-  let rows = `<div class="pf2-stat"><span class="k">질의 수</span><span class="v"><span class="big">${total}</span></span></div>`;
+  let rows = `<div class="pf2-stat">${IC_Q}<span class="k">질의 수</span><span class="v"><span class="big">${total}</span></span></div>`;
   for (const key of ['intent', 'scope', 'metric']) {
     const a = axes[key];
     rows += `
       <div class="pf2-row tap" id="pfStatRow-${key}" onclick="_pfStatToggle('${key}')">
-        <span class="k">${a.title}</span>
+        ${a.ic}<span class="k">${a.title}</span>
         <span class="v" style="margin-right:8px">${summary(a.items)}</span>${chev}
       </div>
       <div class="pf2-expand" id="pfStat-${key}">${table(a.items)}</div>`;
