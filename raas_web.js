@@ -3789,6 +3789,13 @@ async function loadKpiPanel() {
 
     // 툴바 — 스코프 선택 + 기간 세그먼트 (선택은 localStorage 기억, 기본 전체·일간)
     const myCode = (typeof RAAS_USER !== 'undefined' && RAAS_USER && (RAAS_USER.my_programs || [])[0]) || '';
+    // 저장된 스코프가 채널도 아니고 현재 관심 프로그램도 아니면 = 다른 기기에서 관심 프로그램을
+    // 바꾼 뒤 남은 옛 코드. 그대로 두면 드롭다운엔 옵션이 없어 '전체'로 보이는데 데이터는
+    // 옛 프로그램 것이 나온다 → 새 관심(없으면 전체)으로 맞춘다.
+    if (!_KPI_SCOPES.some(([c]) => c === _KPI.scope) && _KPI.scope !== myCode) {
+      _KPI.scope = myCode || 'T00';
+      localStorage.setItem('raas_kpi_scope', _KPI.scope);
+    }
     const scopeOpts = _KPI_SCOPES.map(([c, l]) =>
       `<option value="${c}"${c === _KPI.scope ? ' selected' : ''}>${l}</option>`).join('')
       + (myCode && !_KPI_SCOPES.some(([c]) => c === myCode)

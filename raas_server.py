@@ -413,6 +413,12 @@ class RAASHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
+        # 캐시 금지 — API 응답에 Cache-Control이 없으면 브라우저·ngrok이 휴리스틱 캐싱을 해
+        # 다른 기기에서 바꾼 프로필(/api/me의 my_programs 등)이 새로고침해도 옛 값으로 남는다.
+        # 응답 내용이 토큰마다 다르므로 Vary도 함께(공유 캐시가 남의 응답을 주지 않도록).
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Vary", "Authorization")
         self.send_header("Content-Length", len(body))
         self.end_headers()
         self.wfile.write(body)
