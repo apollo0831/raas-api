@@ -12,6 +12,22 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="RAAS">
 <script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.documentElement.setAttribute('data-theme',t);var m=document.getElementById('metaThemeColor');if(m)m.setAttribute('content',t==='dark'?'#0d1117':'#fbfcfd');}());</script>
+<!-- 패널 폭·접힘 상태를 첫 페인트 전에 반영. raas_web.js는 외부 파일이라 받아오는 동안
+     브라우저가 기본 레이아웃(256/308px·펼침)을 먼저 그려서, 뒤늦게 복원되면 폭이 튀고
+     닫아둔 패널이 나타났다 사라지는 깜빡임이 보였다. 테마와 같은 방식으로 head에서 처리.
+     preload 클래스는 이 구간의 transition을 막고, 메인 JS가 초기화를 끝내면 제거한다. -->
+<script>(function(){try{
+  var d=document.documentElement, mob=window.innerWidth<=900;
+  d.classList.add('preload');
+  var sw=parseInt(localStorage.getItem('raas_sidebar_w'),10);
+  var kw=parseInt(localStorage.getItem('raas_kpi_w'),10);
+  if(sw)d.style.setProperty('--sidebar-w',sw+'px');
+  if(kw)d.style.setProperty('--kpi-w',kw+'px');
+  if(!mob){   /* 모바일 패널은 오버레이 — 접힘 개념 없음 */
+    if(localStorage.getItem('raas_sidebar_collapsed')==='1')d.classList.add('pre-sb-collapsed');
+    if(localStorage.getItem('raas_kpi_collapsed')==='1')d.classList.add('pre-kpi-collapsed');
+  }
+}catch(e){}}());</script>
 <!-- PostHog stub loader (init은 부팅 시 /api/posthog-config 받은 뒤 호출) -->
 <script>
 !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
@@ -199,6 +215,11 @@ body.panel-resizing{cursor:col-resize;user-select:none}
 body.panel-resizing .sidebar,body.panel-resizing .kpi-panel{transition:none}
 @media(max-width:900px){.panel-resize-handle{display:none}}
 .sidebar.collapsed{width:0;min-width:0}
+/* 첫 페인트용 선반영(head 인라인 스크립트) — 메인 JS가 실제 .collapsed를 붙이면 제거된다.
+   preload 구간엔 transition을 꺼서 복원된 폭/접힘이 애니메이션 없이 처음부터 그려진다. */
+html.pre-sb-collapsed .sidebar{width:0;min-width:0}
+html.pre-kpi-collapsed .kpi-panel{width:0;min-width:0}
+html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 .sidebar-backdrop{
   display:none;position:fixed;inset:0;
   background:rgba(0,0,0,.55);z-index:299;

@@ -2098,6 +2098,22 @@ function _haptic(kind) {
   } catch (e) { return false; }
 }
 
+// head 인라인 스크립트가 걸어 둔 선반영 가드를 해제한다. 이 시점엔 실제 .collapsed 클래스와
+// 복원된 폭이 모두 적용된 뒤라 값이 바뀌지 않으므로 애니메이션이 돌지 않는다.
+// (_initPanelResize의 apply()가 2프레임 뒤 transition을 되살리므로 그 뒤에 푼다)
+// 백그라운드 탭(비표시 상태로 복원된 탭 등)에서는 rAF가 아예 돌지 않는다 → 타이머로도 반드시 해제.
+// 안 풀리면 transition이 영구히 꺼지고 pre-kpi-collapsed가 남아 패널을 열어도 폭 0으로 눌린다.
+function _endPreload() {
+  let done = false;
+  const clear = () => {
+    if (done) return;
+    done = true;
+    document.documentElement.classList.remove('preload', 'pre-sb-collapsed', 'pre-kpi-collapsed');
+  };
+  requestAnimationFrame(() => requestAnimationFrame(clear));
+  setTimeout(clear, 300);
+}
+
 // 사이드바 접힘 상태도 KPI 패널과 동일하게 데스크톱에서만 기억한다(새로고침해도 그대로).
 // 모바일은 본문을 밀어내는 오버레이라 저장하지 않는다 — '열림'을 저장하면 다음 진입에서
 // 챗이 20vw 카드로 밀린 채 시작한다.
@@ -4091,7 +4107,13 @@ function _initPanelResize() {
     const el = document.querySelector(PANEL[k]);
     if (el) el.style.transition = 'none';
     document.documentElement.style.setProperty(CSSVAR[k], w + 'px');
-    if (el) requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transition = ''; }));
+    // 복원은 rAF 2프레임 뒤. 단 백그라운드 탭에선 rAF가 돌지 않아 'none'이 영구히 남으므로
+    // 타이머로도 반드시 되살린다(안 그러면 이후 여닫기 애니메이션이 죽는다).
+    if (el) {
+      const restore = () => { el.style.transition = ''; };
+      requestAnimationFrame(() => requestAnimationFrame(restore));
+      setTimeout(restore, 300);
+    }
   };
   const clamp = (k, w) => {
     const [lo, hi] = bounds[k]();
@@ -4199,12 +4221,15 @@ function _initKeyboardDock() {
 // INIT
 // ────────────────────────────────────────────────
 _cleanQCache();
-_restoreKpiCollapsed(true);   // 저장된 접힘 상태를 첫 페인트 전에 반영(깜빡임 방지)
+// 폭·접힘은 이미 head 인라인 스크립트가 첫 페인트 전에 반영해 뒀다(깜빡임 방지).
+// 여기서는 실제 .collapsed 클래스로 옮겨 붙이고, 폭 복원까지 끝나면 preload 가드를 푼다.
+_restoreKpiCollapsed(true);
 _restoreSidebarCollapsed(true);
 _initKeyboardDock();
 _initWelcomeChips();
 _initSidebarQueries();
 _initPanelResize();
+_endPreload();
 _populateRoleDropdowns();   // 가입 폼 드롭다운 즉시 채움 (인증 불필요)
 _bootPostHog();             // PostHog init (graceful — 키 없으면 no-op)
 
