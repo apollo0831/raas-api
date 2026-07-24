@@ -698,13 +698,9 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 [data-theme="light"] .auth-input,[data-theme="light"] .auth-select{
   background:#fff;border-color:rgba(21,54,99,.15);
 }
-/* 포커스 - 테두리만 바꾸면 약해서 옅은 링을 함께 준다 */
-.auth-input:focus,.auth-select:focus{
-  border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,142,247,.20);
-}
-[data-theme="light"] .auth-input:focus,[data-theme="light"] .auth-select:focus{
-  box-shadow:0 0 0 3px rgba(37,99,235,.14);
-}
+/* 포커스 시 파란 테두리·링을 표시하지 않는다(요청) — 기본 테두리 유지, 강조 없음 */
+.auth-input:focus,.auth-select:focus{border-color:var(--line2);box-shadow:none}
+[data-theme="light"] .auth-input:focus,[data-theme="light"] .auth-select:focus{border-color:rgba(21,54,99,.15)}
 /* 주 액션 - 알약형 풀폭. 단색보다 세로 그라디언트가 눌린 느낌 없이 또렷하다 */
 .auth-submit{
   margin-top:8px;padding:13px 16px;border-radius:999px;border:none;
