@@ -628,8 +628,11 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
    position:absolute라 .auth-gate(고정)에 붙어 스크롤과 무관하게 최상단을 지킨다.
    mask로 블러도 색과 같은 지점에서 사라져 아래 카드는 흐려지지 않는다. */
 .auth-gate::before{
-  content:"";position:absolute;left:0;right:0;top:0;z-index:2;pointer-events:none;
+  content:"";position:fixed;left:0;right:0;top:0;z-index:2;pointer-events:none;
   height:calc(120px + env(safe-area-inset-top, 0px));
+  /* 시스템 박스가 화면을 밀어 올리면 fixed도 같이 밀린다 → JS가 visualViewport.offsetTop을
+     --auth-fade-shift로 넣어, 밀린 만큼 도로 내려 항상 '보이는 최상단'에 다시 붙는다. */
+  transform:translateY(var(--auth-fade-shift, 0px));will-change:transform;
   background:linear-gradient(to top, transparent 0%, color-mix(in srgb, #0d1117 90%, transparent) 42%, #0d1117 100%);
   backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
   -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 62%);

@@ -125,6 +125,21 @@ function _showAuthGate() {
 }
 function _hideAuthGate()  { document.getElementById('authGate').classList.remove('open'); }
 
+// 시스템 박스(암호채우기·키보드)가 화면을 위로 밀면 position:fixed 요소까지 함께 밀린다.
+// visualViewport.offsetTop = 레이아웃 뷰포트 대비 '보이는 영역'이 얼마나 내려갔는지.
+// 그만큼 상단 페이드 오버레이를 도로 내려(translateY), 밀림과 무관하게 항상 보이는
+// 최상단(죽은 62px 영역 바로 아래)에 붙어 딤·블러 효과를 낸다.
+function _pinAuthFade() {
+  const vv = window.visualViewport;
+  const shift = vv ? Math.max(0, vv.offsetTop) : 0;
+  document.documentElement.style.setProperty('--auth-fade-shift', shift + 'px');
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', _pinAuthFade);
+  window.visualViewport.addEventListener('scroll', _pinAuthFade);
+}
+window.addEventListener('scroll', _pinAuthFade, true);   // 폴백(구형)
+
 function setAuthTab(tab) {
   document.getElementById('authTabLogin').classList.toggle('active', tab === 'login');
   document.getElementById('authTabReg').classList.toggle('active',   tab === 'register');
