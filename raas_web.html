@@ -605,17 +605,39 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 /* ── 로그인 화면 ──────────────────────────────────────────────
    차분한 블루 그라디언트 배경 + 테두리 없는 유리질 카드. 테마 연동(라이트=밝은 블루,
    다크=딥 네이비). 기본 규칙이 다크, [data-theme="light"]가 오버라이드하는 파일 관례를 따름. */
+/* 사이드바와 같은 구조 — 고정 컨테이너(스크롤 X) + 내부 스크롤 래퍼(.auth-scroll) +
+   상단 absolute 페이드 오버레이. 암호채우기/키보드로 내부가 스크롤돼 올라와도 오버레이는
+   컨테이너에 붙어 제자리를 지키며, 콘텐츠가 죽은 62px 영역 도달 전에 페이드아웃된다. */
 .auth-gate{
-  position:fixed;inset:0;z-index:900;
+  position:fixed;inset:0;z-index:900;overflow:hidden;
   /* 위쪽에서 은은하게 번지는 광원 — 단색 배경보다 화면이 눌리지 않고 부드럽다 */
   background:linear-gradient(180deg, #0d1117 0%, #0f1a30 42%, #182a49 74%, #23385e 100%);
-  display:none;align-items:center;justify-content:center;
-  padding:24px;overflow-y:auto;
+  display:none;
 }
 [data-theme="light"] .auth-gate{
   background:linear-gradient(180deg, #fbfcfd 0%, #eef5fc 22%, #d8e8f8 56%, #bfd9f3 84%, #b0d0f0 100%);
 }
-.auth-gate.open{display:flex}
+.auth-gate.open{display:block}
+/* 실제 스크롤은 여기서 — 콘텐츠를 세로 중앙 정렬, 상단은 오버레이 높이만큼 여백 확보 */
+.auth-scroll{
+  position:absolute;inset:0;overflow-y:auto;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:calc(72px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+/* 상단 페이드 오버레이 — 그라디언트 최상단색(=상태바색)에서 시작해 아래로 투명+블러 약화.
+   position:absolute라 .auth-gate(고정)에 붙어 스크롤과 무관하게 최상단을 지킨다.
+   mask로 블러도 색과 같은 지점에서 사라져 아래 카드는 흐려지지 않는다. */
+.auth-gate::before{
+  content:"";position:absolute;left:0;right:0;top:0;z-index:2;pointer-events:none;
+  height:calc(120px + env(safe-area-inset-top, 0px));
+  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, #0d1117 90%, transparent) 42%, #0d1117 100%);
+  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+  -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 62%);
+  mask-image:linear-gradient(to top, transparent 0%, #000 62%);
+}
+[data-theme="light"] .auth-gate::before{
+  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, #fbfcfd 90%, transparent) 42%, #fbfcfd 100%);
+}
 .auth-card{
   width:100%;max-width:400px;
   background:rgba(26,33,48,.55);
@@ -1589,6 +1611,7 @@ table.story-table th{
 
 <!-- ── AUTH GATE (로그인/가입) ── -->
 <div class="auth-gate" id="authGate">
+  <div class="auth-scroll">
   <div class="auth-card">
     <div class="auth-brand">RAAS</div>
     <div class="auth-sub">Radio Analytics</div>
@@ -1637,12 +1660,14 @@ table.story-table th{
       <button class="auth-submit" type="submit">가입 요청</button>
     </form>
   </div>
+  </div>
 </div>
 
 <!-- ── 비밀번호 변경 강제 게이트 (관리자 초기화 후 첫 로그인) ── -->
 <!-- 로그인은 됐지만 임시 비밀번호 상태 — 새 비밀번호를 정하기 전엔 앱을 가린다.
      '취소' 없음: 빠져나갈 길을 주면 임시 비밀번호가 그대로 남는다(원한다면 로그아웃). -->
 <div class="auth-gate" id="pwForceGate">
+  <div class="auth-scroll">
   <div class="auth-card">
     <div class="auth-brand">비밀번호 변경</div>
     <div class="auth-sub">관리자가 발급한 임시 비밀번호로 로그인했습니다.<br>계속하려면 새 비밀번호를 정해 주세요.</div>
@@ -1663,6 +1688,7 @@ table.story-table th{
     <div style="text-align:center;margin-top:14px">
       <button type="button" class="auth-tab" onclick="doLogout()">다른 계정으로 로그인</button>
     </div>
+  </div>
   </div>
 </div>
 
