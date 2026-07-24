@@ -90,7 +90,7 @@ async function _authedFetch(url, options) {
 // 세션 복원(새로고침)은 보던 상태를 유지 — 작업 중 새로고침에서 패널이 접히면 성가시다.
 function _afterAuthed(fresh) {
   if (fresh) closeKpi();          // 새 로그인은 항상 접힘에서 시작(그 값이 저장됨)
-  else _restoreKpiCollapsed();    // 새로고침은 접어둔/펼쳐둔 상태 그대로 복원
+  else { _restoreKpiCollapsed(); _restoreSidebarCollapsed(); }   // 새로고침은 접어둔/펼쳐둔 상태 그대로
   _phIdentify(RAAS_USER);
   _checkDataVersion();
   loadKpiPanel();
@@ -2098,6 +2098,25 @@ function _haptic(kind) {
   } catch (e) { return false; }
 }
 
+// 사이드바 접힘 상태도 KPI 패널과 동일하게 데스크톱에서만 기억한다(새로고침해도 그대로).
+// 모바일은 본문을 밀어내는 오버레이라 저장하지 않는다 — '열림'을 저장하면 다음 진입에서
+// 챗이 20vw 카드로 밀린 채 시작한다.
+const _SB_COLLAPSED_KEY = 'raas_sidebar_collapsed';
+function _saveSidebarCollapsed(on) {
+  if (!isMobile()) localStorage.setItem(_SB_COLLAPSED_KEY, on ? '1' : '0');
+}
+// instant=true — 최초 로드용. 마크업이 펼친 상태라 그냥 클래스를 붙이면 폭 transition이 돌아
+// '펼쳐졌다 접히는' 깜빡임이 보인다. 한 프레임 transition을 꺼서 처음부터 접힌 채 그린다.
+function _restoreSidebarCollapsed(instant) {
+  if (isMobile()) return;
+  const sb = document.getElementById('sidebar');
+  const want = localStorage.getItem(_SB_COLLAPSED_KEY) === '1';
+  if (sb.classList.contains('collapsed') === want) return;
+  if (instant) sb.style.transition = 'none';
+  sb.classList.toggle('collapsed', want);
+  if (instant) requestAnimationFrame(() => { sb.style.transition = ''; });
+}
+
 function openSidebar() {
   const sb = document.getElementById('sidebar');
   if (isMobile()) {
@@ -2106,6 +2125,7 @@ function openSidebar() {
     document.body.classList.add('sidebar-pushed');   // push+scale (딤 백드롭 없음)
   } else {
     sb.classList.remove('collapsed');
+    _saveSidebarCollapsed(false);
   }
 }
 function closeSidebar() {
@@ -2115,6 +2135,7 @@ function closeSidebar() {
     _unparkModal();                                  // 밀어둔 모달도 제자리로
   } else {
     sb.classList.add('collapsed');
+    _saveSidebarCollapsed(true);
   }
 }
 
@@ -4179,6 +4200,7 @@ function _initKeyboardDock() {
 // ────────────────────────────────────────────────
 _cleanQCache();
 _restoreKpiCollapsed(true);   // 저장된 접힘 상태를 첫 페인트 전에 반영(깜빡임 방지)
+_restoreSidebarCollapsed(true);
 _initKeyboardDock();
 _initWelcomeChips();
 _initSidebarQueries();
