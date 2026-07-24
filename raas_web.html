@@ -11,7 +11,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="RAAS">
-<script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.documentElement.setAttribute('data-theme',t);var m=document.getElementById('metaThemeColor');if(m)m.setAttribute('content',t==='dark'?'#0d1117':'#fbfcfd');}());</script>
+<script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.documentElement.setAttribute('data-theme',t);
+/* iOS 홈화면 앱은 첫 페인트의 theme-color를 상태바에 고정한다(이후 JS로 바꿔도 상태바는 안 바뀜).
+   로그아웃 상태면 처음부터 로그인 게이트 그라디언트 상단색(흰/검)을, 아니면 앱 기본색을 준다.
+   → 상태바와 화면 최상단이 처음부터 같은 색이라 62px 경계가 생기지 않는다. */
+var out=!localStorage.getItem('raas_token');var color=out?(t==='dark'?'#000000':'#ffffff'):(t==='dark'?'#0d1117':'#fbfcfd');
+var m=document.getElementById('metaThemeColor');if(m)m.setAttribute('content',color);}());</script>
 <!-- 패널 폭·접힘 상태를 첫 페인트 전에 반영. raas_web.js는 외부 파일이라 받아오는 동안
      브라우저가 기본 레이아웃(256/308px·펼침)을 먼저 그려서, 뒤늦게 복원되면 폭이 튀고
      닫아둔 패널이 나타났다 사라지는 깜빡임이 보였다. 테마와 같은 방식으로 head에서 처리.
