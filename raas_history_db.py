@@ -1023,11 +1023,15 @@ def get_history(user_id: str, limit: int = 20, days: int = 7) -> list:
     ]
 
 
-def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=None, q: str = None) -> dict:
-    """전체 사용자 질의 이력. 최신순, 페이지네이션. feedback 지정 시 그 값만(-1=아쉬움).
-    q 지정 시 질문 텍스트 부분일치 검색. IP는 응답에 노출하지 않음(프라이버시)."""
+def get_all_history(limit: int = 50, offset: int = 0, days: int = 0, feedback=None, q: str = None,
+                    user_id: str = None) -> dict:
+    """질의 이력. 최신순, 페이지네이션. feedback 지정 시 그 값만(-1=아쉬움).
+    q 지정 시 질문 텍스트 부분일치 검색. IP는 응답에 노출하지 않음(프라이버시).
+    user_id 지정 시 그 사용자 것만 — 호출자(서버)가 비관리자에게 강제한다."""
     conds: list = []
     base: list = []
+    if user_id is not None:
+        conds.append("user_id = ?"); base.append(str(user_id))
     if days > 0:
         since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
         conds.append("created_at >= ?"); base.append(since)

@@ -690,10 +690,13 @@ class RAASHandler(BaseHTTPRequestHandler):
 
     def _get_query_history_all(self):
         try:
-            # 로그인 필수 — 전체 사용자 질의 이력은 로그인 사용자끼리만 열람
-            if not self._get_session_user():
+            # 로그인 필수. 전체 사용자 이력은 관리자(is_admin)만, 일반 사용자는 자기 것만.
+            user = self._get_session_user()
+            if not user:
                 self.send_json({"ok": False, "error": "로그인이 필요합니다."}, 401)
                 return
+            # 비관리자는 서버가 user_id를 강제한다 — 쿼리스트링으로 남의 이력을 요청해도 무시됨
+            scope_uid = None if user.get("is_admin") else str(user.get("id"))
             params = {}
             if "?" in self.path:
                 params = dict(urllib.parse.parse_qsl(self.path.split("?", 1)[1]))
@@ -703,8 +706,9 @@ class RAASHandler(BaseHTTPRequestHandler):
             _fb    = params.get("feedback")
             feedback = int(_fb) if _fb not in (None, "") else None
             q      = (params.get("q") or "").strip() or None
-            result = get_all_history(limit=limit, offset=offset, days=days, feedback=feedback, q=q)
-            self.send_json({"ok": True, **result})
+            result = get_all_history(limit=limit, offset=offset, days=days, feedback=feedback, q=q,
+                                     user_id=scope_uid)
+            self.send_json({"ok": True, "scope": "all" if scope_uid is None else "mine", **result})
         except Exception as e:
             self.send_json({"ok": False, "error": str(e)}, 500)
 

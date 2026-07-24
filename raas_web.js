@@ -2613,6 +2613,9 @@ function _tokNum(n) {
 function _histQueryRow(it) {
   const when   = formatRelTime(it.created_at);
   const user   = (it.user_name || '').length > 16 ? (it.user_name || '').slice(0, 15) + '…' : (it.user_name || '—');
+  // 일반 사용자는 자기 질의만 보므로 작성자명이 매 줄 반복돼 의미가 없다 → 관리자에게만 표시
+  const who    = (RAAS_USER && RAAS_USER.is_admin)
+    ? ` · <span class="hq-user">${escapeHtml(user)}</span>` : '';
   // 평가 — 모바일에선 라벨 텍스트를 숨겨 토큰 사용량 자리를 확보(아이콘만으로 의미 전달).
   // 미평가('—')는 모바일에서 통째로 생략 — 구분점(·)까지 span 안에 넣어야 '· ·'가 남지 않는다.
   // title은 남겨 데스크톱 툴팁·스크린리더에서 뜻이 유지된다.
@@ -2628,7 +2631,7 @@ function _histQueryRow(it) {
   return `<div class="hq-item" onclick="_openHistAnswer(${it.id})">
       <div class="hq-main">
         <div class="hq-q">${escapeHtml(it.question || '')}</div>
-        <div class="hq-meta">${escapeHtml(when)} · <span class="hq-user">${escapeHtml(user)}</span>${rating}${tok}</div>
+        <div class="hq-meta">${escapeHtml(when)}${who}${rating}${tok}</div>
       </div>
       <svg class="hq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
     </div>`;
