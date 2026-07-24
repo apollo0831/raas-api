@@ -102,7 +102,6 @@ const _LOGIN_ID_KEY = 'raas_login_id';
 const _REMEMBER_PREF_KEY = 'raas_remember_pref';   // 체크박스의 마지막 선택
 function _showAuthGate() {
   document.getElementById('authGate').classList.add('open');
-  if (typeof _setStatusBar === 'function') _setStatusBar(_statusBarColorForNow());   // 상태바=게이트 상단색
   // 기억해 둔 아이디를 채우고 비밀번호로 바로 커서 — 비밀번호는 브라우저 관리자가 채운다.
   // (앱이 비밀번호를 저장하지 않는 이유: localStorage 평문 보관은 XSS 한 번에 그대로 새어나간다)
   try {
@@ -124,10 +123,7 @@ function _showAuthGate() {
     }
   } catch (_) {}
 }
-function _hideAuthGate()  {
-  document.getElementById('authGate').classList.remove('open');
-  if (typeof _setStatusBar === 'function') _setStatusBar(_statusBarColorForNow());   // 앱 기본 배경색으로 복귀
-}
+function _hideAuthGate()  { document.getElementById('authGate').classList.remove('open'); }
 
 function setAuthTab(tab) {
   document.getElementById('authTabLogin').classList.toggle('active', tab === 'login');
@@ -4127,14 +4123,12 @@ function _setStatusBar(color) {
   meta.content = color;
   document.head.appendChild(meta);
 }
-// 로그인 게이트가 떠 있으면 그라디언트 최상단 색, 아니면 앱 기본 배경색.
+// 상태바 색 = 앱 기본(--bg0). 로그인 게이트의 그라디언트 최상단도 이 색과 똑같이 시작하므로
+// 게이트/앱을 오갈 때 theme-color를 바꿀 필요가 없다(iOS 홈화면 앱은 첫 페인트 값에 고정되는
+// 경향이 있어, 바꾸려 하면 오히려 상태바 #fbfcfd vs 화면 #ffffff처럼 미세한 경계가 남는다).
 function _statusBarColorForNow() {
   const theme = document.documentElement.getAttribute('data-theme') || 'dark';
-  const gateOpen = document.getElementById('authGate')?.classList.contains('open');
-  // 로그인 게이트: 그라디언트 최상단이 시스템 상태바(라이트=흰색·다크=검정)와 같은 색으로
-  // 시작하므로 그 색을 그대로 준다 → 상태바와 화면이 이어지고 아래로 하늘색이 번진다.
-  if (gateOpen) return theme === 'dark' ? '#000000' : '#ffffff';
-  return theme === 'dark' ? '#0d1117' : '#fbfcfd';                 // 앱 기본(--bg0)
+  return theme === 'dark' ? '#0d1117' : '#fbfcfd';
 }
 
 // 버튼은 '전환할 대상'을 안내한다 — 다크면 '라이트로', 라이트면 '다크로'.
