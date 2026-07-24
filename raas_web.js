@@ -1211,6 +1211,7 @@ async function openProfileModal() {
   if (!RAAS_USER) return;
   _enterModal('profileModal');
   document.getElementById('profileModal').classList.add('open');
+  _syncThemeBtn();   // 현재 테마에 맞는 라벨로 (부팅 때 버튼이 아직 없어 못 맞춘 경우 보정)
   // 직무 드롭다운 동적 채우기 (현재 role 선택)
   await loadActiveRoles();
   _renderRoleOptions(document.getElementById('pfRole'), false, RAAS_USER.role);
@@ -4136,10 +4137,17 @@ function _statusBarColorForNow() {
   return theme === 'dark' ? '#0d1117' : '#fbfcfd';                 // 앱 기본(--bg0)
 }
 
+// 버튼은 '전환할 대상'을 안내한다 — 다크면 '라이트로', 라이트면 '다크로'.
+function _syncThemeBtn() {
+  const btn = document.getElementById('pfThemeBtn');
+  if (!btn) return;
+  const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+  btn.textContent = theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환';
+}
+
 function _applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  const btn = document.getElementById('pfThemeBtn');
-  if (btn) btn.textContent = theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환';
+  _syncThemeBtn();   // 부팅 시엔 버튼이 아직 DOM에 없어 no-op — 모달 열 때 다시 맞춘다
   _setStatusBar(_statusBarColorForNow());
 }
 
