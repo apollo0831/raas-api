@@ -729,6 +729,14 @@ def interest_map(user_id, days: int = 30) -> dict:
             f"GROUP BY topic_key ORDER BY c DESC LIMIT 5",
             [uid] + date_params
         ).fetchall()
+        # 연산유형(intent) — 현행 12종만(레거시 제외). 프론트가 _INTENT_KO로 한글화.
+        _iph = ",".join("?" * len(CANONICAL_INTENTS))
+        intent_rows = conn.execute(
+            f"SELECT intent, COUNT(*) AS c FROM query_history "
+            f"WHERE user_id = ? AND intent IN ({_iph}) {df_clause} "
+            f"GROUP BY intent ORDER BY c DESC",
+            [uid] + list(CANONICAL_INTENTS) + date_params
+        ).fetchall()
 
     by_metric = [{"metric": r["metric"], "count": r["c"],
                   "pct": round(r["c"] / total * 100, 1) if total else 0}
@@ -736,7 +744,12 @@ def interest_map(user_id, days: int = 30) -> dict:
     by_scope  = [{"scope": r["scope"], "count": r["c"],
                   "pct": round(r["c"] / total * 100, 1) if total else 0}
                  for r in scope_rows]
+    by_intent = [{"intent": r["intent"], "count": r["c"],
+                  "pct": round(r["c"] / total * 100, 1) if total else 0}
+                 for r in intent_rows]
     top_topics = [{"topic_key": r["topic_key"], "count": r["c"]} for r in topic_rows]
+    # 대상(scope) 코드 → 현행 프로그램/채널명. 프론트가 코드 대신 이름을 보여주게(질의 통계와 동일).
+    scope_labels = {s["scope"]: _scope_label(s["scope"]) for s in by_scope}
 
     # 사각지대 — recommend_for_user 재사용 (gap-template + gap-metric)
     blind_spots: list = []
@@ -787,6 +800,8 @@ def interest_map(user_id, days: int = 30) -> dict:
         "total_queries": total,
         "by_metric":    by_metric,
         "by_scope":     by_scope,
+        "scope_labels": scope_labels,   # {코드: 프로그램명} — 대상을 이름으로 표시
+        "by_intent":    by_intent,      # 연산유형(현행 12종) — 프론트 _INTENT_KO로 한글화
         "top_topics":   top_topics,
         "blind_spots":  blind_spots,
         "peer_compare": peer_compare,

@@ -1070,6 +1070,61 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 /* 관심 프로그램 — 단일 선택 드롭다운 */
 .pf-empty-progs{padding:20px;text-align:center;color:var(--dim);font-size:var(--fs-sm)}
 
+/* ── 내 프로필: 설정 리스트(iOS 설정 형태) ── */
+.pf2-scroll{padding:14px 16px calc(24px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:22px}
+/* 상단 아이디/이름 pill */
+.pf2-id{display:flex;flex-direction:column;gap:8px}
+.pf2-pill{display:flex;align-items:center;gap:11px;background:var(--bg2);border:1px solid var(--line);
+  border-radius:999px;padding:13px 20px;font-size:var(--fs-base);color:var(--text)}
+.pf2-pill .ic{color:var(--sub);flex-shrink:0;display:flex}
+.pf2-pill .cap{margin-left:auto;color:var(--dim);font-size:var(--fs-xs)}
+/* 그룹 */
+.pf2-glabel{font-size:var(--fs-sm);color:var(--sub);font-weight:600;margin:0 4px 8px;display:flex;justify-content:space-between}
+.pf2-glabel .r{color:var(--dim);font-weight:400}
+.pf2-card{background:var(--bg2);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+/* 행 */
+.pf2-row{display:flex;align-items:center;gap:12px;padding:14px 16px;min-height:52px}
+.pf2-row + .pf2-row,.pf2-expand + .pf2-row{border-top:1px solid var(--line)}
+.pf2-row .k{color:var(--text);font-size:var(--fs-md);white-space:nowrap;flex-shrink:0}
+.pf2-row .v{margin-left:auto;color:var(--sub);font-size:var(--fs-md);text-align:right;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf2-row.tap{cursor:pointer}
+.pf2-row.tap:hover{background:var(--bg3)}
+.pf2-chev{margin-left:auto;color:var(--dim);flex-shrink:0;transition:transform .18s}
+.pf2-row.open .pf2-chev{transform:rotate(90deg)}
+/* 인라인 select (직무·채널·프로그램) — 값이 오른쪽에 붙는 형태 */
+.pf2-sel{margin-left:auto;max-width:62%;background:transparent;border:none;color:var(--sub);
+  font-size:var(--fs-md);font-family:var(--sans);text-align:right;text-align-last:right;
+  cursor:pointer;padding:0 2px}
+.pf2-sel:focus{outline:none;color:var(--accent)}
+/* 스위치 */
+.pf2-switch{margin-left:auto;position:relative;width:44px;height:26px;flex-shrink:0}
+.pf2-switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.pf2-switch .track{position:absolute;inset:0;border-radius:999px;background:var(--bg4);transition:background .18s}
+.pf2-switch .thumb{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+  background:#fff;transition:transform .18s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.pf2-switch input:checked ~ .track{background:var(--accent)}
+.pf2-switch input:checked ~ .thumb{transform:translateX(18px)}
+/* 세그먼트(화면 모드) */
+.pf2-seg{margin-left:auto;display:flex;gap:2px;background:var(--bg1);border-radius:9px;padding:3px}
+.pf2-seg button{border:none;background:transparent;color:var(--sub);font-size:var(--fs-sm);
+  font-family:var(--sans);padding:5px 13px;border-radius:7px;cursor:pointer;transition:background .12s,color .12s}
+.pf2-seg button.active{background:var(--bg4);color:var(--text)}
+/* 아코디언(비밀번호) — 행 아래로 펼쳐짐 */
+.pf2-expand{display:none;padding:2px 16px 16px}
+.pf2-expand.open{display:block}
+/* 관심 주제 값 행 (읽기 전용) */
+.pf2-stat{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;min-height:48px}
+.pf2-stat + .pf2-stat{border-top:1px solid var(--line)}
+.pf2-stat .k{color:var(--sub);font-size:var(--fs-md);flex-shrink:0;min-width:72px}
+.pf2-stat .v{margin-left:auto;color:var(--text);font-size:var(--fs-md);text-align:right;line-height:1.5;
+  word-break:keep-all}
+.pf2-stat .v .big{font-weight:700;font-family:var(--mono);font-size:var(--fs-lg)}
+.pf2-empty{padding:18px;text-align:center;color:var(--dim);font-size:var(--fs-sm)}
+.pf2-blind{padding:12px 16px;border-top:1px solid var(--line)}
+.pf2-blind-hd{font-size:var(--fs-xs);color:var(--sub);font-weight:600;margin-bottom:7px}
+.pf2-blind-item{display:flex;gap:8px;font-size:var(--fs-sm);color:var(--text2);padding:3px 0;line-height:1.5}
+
 /* ── MAIN CHAT ── */
 .chat-main{
   flex:1;height:100%;display:flex;flex-direction:column;
@@ -1833,84 +1888,92 @@ table.story-table th{
       <span class="hist-hd-spacer" aria-hidden="true"></span>
     </div>
     <div class="hist-modal-body">
-      <form class="pf-body" id="profileForm" onsubmit="return saveProfile(event)">
-        <div class="pf-section">
-          <div class="pf-section-title">기본 정보</div>
-          <div class="pf-grid">
-            <div class="pf-field">
-              <label class="pf-label">아이디</label>
-              <input class="pf-input" id="pfLoginId" readonly>
+      <div class="pf2-scroll" id="pfScroll">
+        <!-- 아이디 / 이름 (표시 전용) -->
+        <div class="pf2-id">
+          <div class="pf2-pill">
+            <span class="ic"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <span id="pf2LoginId">—</span><span class="cap">아이디</span>
+          </div>
+          <div class="pf2-pill">
+            <span class="ic"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/><circle cx="12" cy="8" r="4.5"/></svg></span>
+            <span id="pf2Name">—</span><span class="cap">이름</span>
+          </div>
+        </div>
+
+        <!-- 계정 -->
+        <div class="pf2-group">
+          <div class="pf2-glabel">계정</div>
+          <div class="pf2-card">
+            <div class="pf2-row">
+              <span class="k">직무</span>
+              <select class="pf2-sel" id="pfRole" onchange="_pfRoleChanged()"><option value="">로드 중…</option></select>
             </div>
-            <div class="pf-field">
-              <label class="pf-label">이름</label>
-              <input class="pf-input" id="pfName" required>
-            </div>
-            <div class="pf-field">
-              <label class="pf-label">직무</label>
-              <select class="pf-select" id="pfRole" required onchange="_pfOnRoleChange()">
-                <option value="">로드 중…</option>
+            <div class="pf2-row" id="pfChannelRow" style="display:none">
+              <span class="k">담당 채널</span>
+              <select class="pf2-sel" id="pfChannel" onchange="_pfInlineSave()">
+                <option value="">선택</option><option value="파워FM">파워FM</option><option value="러브FM">러브FM</option>
               </select>
             </div>
-            <div class="pf-field" id="pfChannelField" style="display:none">
-              <label class="pf-label">담당 채널 <span style="color:var(--dim);font-weight:400;font-size:var(--fs-xs)">— CP 전용</span></label>
-              <select class="pf-select" id="pfChannel">
-                <option value="">선택해 주세요</option>
-                <option value="파워FM">파워FM</option>
-                <option value="러브FM">러브FM</option>
-              </select>
+            <div class="pf2-row" id="pfProgramRow">
+              <span class="k">내 관심 프로그램</span>
+              <select class="pf2-sel" id="pfMyProgram" onchange="_pfInlineSave()"><option value="">로드 중…</option></select>
+            </div>
+            <div class="pf2-row tap" id="pfPwRow" onclick="_pfTogglePw()">
+              <span class="k">비밀번호 변경</span>
+              <svg class="pf2-chev" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <div class="pf2-expand" id="pfPwExpand">
+              <form id="pwForm" onsubmit="return changePw(event)">
+                <div class="pf-field" style="margin-bottom:10px">
+                  <label class="pf-label">현재 비밀번호</label>
+                  <input class="pf-input" type="password" name="old_password" autocomplete="current-password">
+                </div>
+                <div class="pf-field">
+                  <label class="pf-label">새 비밀번호 (4자 이상)</label>
+                  <input class="pf-input" type="password" name="new_password" minlength="4" autocomplete="new-password">
+                </div>
+                <div class="pf-msg hidden" id="pwMsg"></div>
+                <div class="pf-actions"><button type="submit" class="pf-btn primary">변경</button></div>
+              </form>
             </div>
           </div>
         </div>
-        <div class="pf-section">
-          <div class="pf-section-title">내(관심) 프로그램 <span style="color:var(--dim);font-weight:400">— 클릭해서 선택/해제</span></div>
-          <div id="pfPrograms"><div class="pf-empty-progs">프로그램 목록 로드 중…</div></div>
+
+        <!-- 옵션 설정 -->
+        <div class="pf2-group">
+          <div class="pf2-glabel">옵션 설정</div>
+          <div class="pf2-card">
+            <div class="pf2-row" id="pfMetaRow" style="display:none">
+              <span class="k">참고 정보 보기</span>
+              <label class="pf2-switch"><input type="checkbox" id="pfMetaSwitch" onchange="_pfMetaToggle()"><span class="track"></span><span class="thumb"></span></label>
+            </div>
+            <div class="pf2-row">
+              <span class="k">화면 모드</span>
+              <div class="pf2-seg" id="pfThemeSeg">
+                <button type="button" data-th="light" onclick="_pfSetTheme('light')">라이트</button>
+                <button type="button" data-th="dark" onclick="_pfSetTheme('dark')">다크</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="pf-section">
-          <div class="pf-section-title">내 관심 맵 <span style="color:var(--dim);font-weight:400">— 최근 30일 질의 기반</span></div>
-          <div id="pfInterestMap"><div class="im-empty">로드 중…</div></div>
+
+        <!-- 내 관심 주제 -->
+        <div class="pf2-group">
+          <div class="pf2-glabel">내 관심 주제 <span class="r">최근 30일</span></div>
+          <div class="pf2-card" id="pfInterest"><div class="pf2-empty">로드 중…</div></div>
         </div>
+
+        <!-- 로그아웃 -->
+        <div class="pf2-group">
+          <div class="pf2-card">
+            <div class="pf2-row tap" onclick="_pfLogout()"><span class="k">로그아웃</span>
+              <svg class="pf2-chev" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </div>
+        </div>
+
         <div class="pf-msg hidden" id="pfMsg"></div>
-        <div class="pf-actions">
-          <button type="button" class="pf-btn" onclick="closeProfileModal()">취소</button>
-          <button type="submit" class="pf-btn primary">저장</button>
-        </div>
-      </form>
-
-      <div class="pf-body" style="border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
-        <div class="pf-section-title">화면 테마</div>
-        <button type="button" class="pf-btn" id="pfThemeBtn" onclick="toggleTheme()">라이트 모드로 전환</button>
-      </div>
-
-      <div class="pf-body" style="border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
-        <div class="pf-section-title">비밀번호 변경</div>
-        <form id="pwForm" onsubmit="return changePw(event)">
-          <div class="pf-grid">
-            <div class="pf-field">
-              <label class="pf-label">현재 비밀번호</label>
-              <input class="pf-input" type="password" name="old_password" autocomplete="current-password">
-            </div>
-            <div class="pf-field">
-              <label class="pf-label">새 비밀번호 (4자 이상)</label>
-              <input class="pf-input" type="password" name="new_password" minlength="4" autocomplete="new-password">
-            </div>
-          </div>
-          <div class="pf-msg hidden" id="pwMsg"></div>
-          <div class="pf-actions">
-            <button type="submit" class="pf-btn primary">비밀번호 변경</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="pf-body" id="pfMetaSection" style="display:none;border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
-        <div class="pf-section-title">옵션 설정</div>
-        <button type="button" class="pf-btn" id="pfMetaBtn" onclick="toggleAdminMeta()">참고 정보: 켜짐</button>
-        <div style="font-size:var(--fs-xs);color:var(--dim);margin-top:8px">답변의 '분석 대상·실데이터·추가 적재 필요' 참고 푸터 표시/숨김 — 이 기기에만 적용되는 개인 설정</div>
-      </div>
-
-      <div class="pf-body" style="border-top:1px solid var(--line);padding-top:20px;margin-top:6px">
-        <div class="pf-section-title">로그아웃</div>
-        <button type="button" class="pf-btn danger" onclick="_pfLogout()">로그아웃</button>
-        <div style="font-size:var(--fs-xs);color:var(--dim);margin-top:8px">로그인 화면으로 돌아갑니다. 다른 계정으로 로그인하거나 회원가입할 수 있습니다.</div>
       </div>
     </div>
   </div>

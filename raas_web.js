@@ -330,8 +330,7 @@ function _renderSidebarUser() {
   show('btnStatsMap', statsAllowed);
   // 검토 큐 — is_admin 전용
   show('btnReviewQueue', RAAS_USER.is_admin);
-  // 참고 정보(메타 푸터) 토글 — 내 프로필 모달 내, is_admin 전용
-  show('pfMetaSection', RAAS_USER.is_admin);
+  // 참고 정보(메타 푸터) — 내 프로필 옵션 설정에서 토글(관리자만). 여기선 저장값을 body에 반영.
   if (RAAS_USER.is_admin) _applyAdminMeta();
 }
 
@@ -339,8 +338,8 @@ function _renderSidebarUser() {
 function _applyAdminMeta() {
   const hidden = localStorage.getItem('raas_hide_meta') === '1';
   document.body.classList.toggle('hide-meta', hidden);
-  const btn = document.getElementById('pfMetaBtn');
-  if (btn) btn.textContent = hidden ? '참고 정보: 꺼짐' : '참고 정보: 켜짐';
+  const sw = document.getElementById('pfMetaSwitch');
+  if (sw) sw.checked = !hidden;   // 스위치 켜짐 = 참고 정보 표시
 }
 function toggleAdminMeta() {
   const hidden = localStorage.getItem('raas_hide_meta') === '1';
@@ -541,6 +540,11 @@ let _STM = { tab: 'overview', days: 30, me: null };
 const _INTENT_KO = { snapshot:'현황조회', trend:'추이', compare:'비교', ranking:'순위',
   correlate:'상관·원인', extract:'추출', editorial:'편성연혁', schedule:'편성표',
   realtime:'실시간', meta:'카탈로그', digest:'특이사항', concept:'개념·정의' };
+
+// 지표 코드 → 한글 (관심 주제 표시용). 매핑 없으면 원문 유지.
+const _METRIC_KO = { all:'종합', dau:'DAU', wau:'WAU', mau:'MAU', deep:'깊은청취',
+  new:'신규유입', new_week:'주간 신규', new_d1:'D1 유지', churn:'이탈',
+  react_rate:'재방문율', dau_r30:'DAU(30일평균)', habit:'습관형성' };
 
 function openStatsModal() {
   _enterModal('statsModal');
@@ -1222,140 +1226,167 @@ async function openProfileModal() {
   if (!RAAS_USER) return;
   _enterModal('profileModal');
   document.getElementById('profileModal').classList.add('open');
-  _syncThemeBtn();   // 현재 테마에 맞는 라벨로 (부팅 때 버튼이 아직 없어 못 맞춘 경우 보정)
-  // 직무 드롭다운 동적 채우기 (현재 role 선택)
+  // 아이디·이름 (표시 전용)
+  document.getElementById('pf2LoginId').textContent = RAAS_USER.login_id || '—';
+  document.getElementById('pf2Name').textContent    = RAAS_USER.name || '—';
+  // 직무 드롭다운
   await loadActiveRoles();
   _renderRoleOptions(document.getElementById('pfRole'), false, RAAS_USER.role);
-  // 폼에 현재 값 채우기
-  document.getElementById('pfLoginId').value = RAAS_USER.login_id || '';
-  document.getElementById('pfName').value    = RAAS_USER.name || '';
-  // CP 채널 초기값 + 가시성 (D-015 옵션 A)
+  // CP 채널 초기값 + 가시성
   const chSel = document.getElementById('pfChannel');
   if (chSel) chSel.value = RAAS_USER.channel || '';
   _pfOnRoleChange();
+  // 옵션: 참고 정보(관리자만) 스위치, 화면 모드 세그먼트
+  _pfSyncMetaRow();
+  _pfSyncThemeSeg();
+  // 비밀번호 아코디언 초기화(접힘)
+  _pfClosePw();
   document.getElementById('pfMsg').className = 'pf-msg hidden';
-  document.getElementById('pwMsg').className = 'pf-msg hidden';
-  document.getElementById('pwForm').reset();
+  // 관심 프로그램 select + 관심 주제
   await _loadProgramsForProfile();
-  loadInterestMap();   // 내 관심 맵 비동기 로드 (실패해도 다른 섹션 영향 X)
+  loadInterestMap();
 }
 
-// 직무 변경 시 CP 전용 채널 select 가시성 토글 (D-015 옵션 A)
+// 직무 변경 시 CP 전용 채널 행 가시성 토글
 function _pfOnRoleChange() {
   const role = document.getElementById('pfRole')?.value || '';
-  const field = document.getElementById('pfChannelField');
-  if (!field) return;
-  field.style.display = (role === 'CP') ? 'flex' : 'none';
-  // CP가 아니면 값도 비움
-  if (role !== 'CP') {
-    const ch = document.getElementById('pfChannel');
-    if (ch) ch.value = '';
+  const row = document.getElementById('pfChannelRow');
+  if (row) row.style.display = (role === 'CP') ? 'flex' : 'none';
+  if (role !== 'CP') { const ch = document.getElementById('pfChannel'); if (ch) ch.value = ''; }
+}
+
+// 직무 변경 → 채널 행 갱신 후 인라인 저장
+function _pfRoleChanged() { _pfOnRoleChange(); _pfInlineSave(); }
+
+// 계정 항목(직무·채널·관심프로그램) 즉시 저장 — 별도 저장 버튼 없이 변경 시 반영
+let _pfSaving = false;
+async function _pfInlineSave() {
+  if (_pfSaving) return;
+  const role = document.getElementById('pfRole').value;
+  const channel = document.getElementById('pfChannel')?.value || '';
+  const msg = document.getElementById('pfMsg');
+  if (role === 'CP' && !channel) {   // CP는 채널 필수 — 저장 보류
+    msg.textContent = '담당 채널(파워FM/러브FM)을 선택해 주세요.'; msg.className = 'pf-msg';
+    return;
   }
+  _pfSaving = true;
+  try {
+    const res = await _authedFetch('/api/me/update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: RAAS_USER.name, role, channel, my_programs: _collectSelectedPrograms() }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) { msg.textContent = data.error || '저장 실패'; msg.className = 'pf-msg'; return; }
+    const prevRole = RAAS_USER.role, prevChannel = RAAS_USER.channel;
+    RAAS_USER = data.user;
+    _renderSidebarUser();
+    msg.textContent = '저장되었습니다.'; msg.className = 'pf-msg success';
+    setTimeout(() => { if (msg.textContent === '저장되었습니다.') msg.className = 'pf-msg hidden'; }, 1800);
+    if (data.user.role !== prevRole || data.user.channel !== prevChannel) { try { loadSuggestions(); } catch (_) {} }
+  } catch (e) {
+    msg.textContent = '네트워크 오류: ' + e.message; msg.className = 'pf-msg';
+  } finally { _pfSaving = false; }
+}
+
+// 비밀번호 아코디언
+function _pfTogglePw() {
+  const ex = document.getElementById('pfPwExpand');
+  ex.classList.contains('open') ? _pfClosePw() : _pfOpenPw();
+}
+function _pfOpenPw() {
+  document.getElementById('pfPwExpand').classList.add('open');
+  document.getElementById('pfPwRow').classList.add('open');
+}
+function _pfClosePw() {
+  const ex = document.getElementById('pfPwExpand'); if (!ex) return;
+  ex.classList.remove('open');
+  document.getElementById('pfPwRow').classList.remove('open');
+  const f = document.getElementById('pwForm'); if (f) f.reset();
+  const m = document.getElementById('pwMsg'); if (m) m.className = 'pf-msg hidden';
+}
+
+// 참고 정보 행 — 관리자만 노출, 스위치는 현재 상태 반영
+function _pfSyncMetaRow() {
+  const row = document.getElementById('pfMetaRow'), sw = document.getElementById('pfMetaSwitch');
+  if (!row || !sw) return;
+  const isAdmin = !!(RAAS_USER && RAAS_USER.is_admin);
+  row.style.display = isAdmin ? 'flex' : 'none';
+  if (isAdmin) sw.checked = localStorage.getItem('raas_hide_meta') !== '1';   // 켜짐=표시
+}
+function _pfMetaToggle() {
+  const sw = document.getElementById('pfMetaSwitch');
+  localStorage.setItem('raas_hide_meta', sw.checked ? '0' : '1');
+  _applyAdminMeta();
+}
+
+// 화면 모드 세그먼트 — 현재 테마 강조
+function _pfSyncThemeSeg() {
+  const seg = document.getElementById('pfThemeSeg'); if (!seg) return;
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.th === cur));
+}
+function _pfSetTheme(theme) {
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  if (theme !== cur) { localStorage.setItem('raas_theme', theme); _applyTheme(theme); }
+  _pfSyncThemeSeg();
 }
 
 async function loadInterestMap() {
-  const host = document.getElementById('pfInterestMap');
+  const host = document.getElementById('pfInterest');
   if (!host) return;
-  host.innerHTML = '<div class="im-empty">로드 중…</div>';
+  host.innerHTML = '<div class="pf2-empty">로드 중…</div>';
   try {
     const res = await _authedFetch('/api/my/interest-map?days=30');
-    if (!res.ok) {
-      host.innerHTML = '<div class="im-empty">정보를 불러올 수 없습니다.</div>';
-      return;
-    }
-    const json = await res.json();
-    if (!json.ok) {
-      host.innerHTML = '<div class="im-empty">정보를 불러올 수 없습니다.</div>';
-      return;
-    }
+    const json = res.ok ? await res.json() : null;
+    if (!json || !json.ok) { host.innerHTML = '<div class="pf2-empty">정보를 불러올 수 없습니다.</div>'; return; }
     host.innerHTML = _renderInterestMap(json.data);
   } catch (e) {
-    host.innerHTML = '<div class="im-empty">네트워크 오류</div>';
+    host.innerHTML = '<div class="pf2-empty">네트워크 오류</div>';
   }
 }
 
+// 내 관심 주제 — 6개: 질의수·연산유형·대상·지표 + 사각지대·동료 평균.
+//   연산유형은 _INTENT_KO 한글, 대상은 scope_labels(프로그램명). 상위 3개까지 요약 표기.
 function _renderInterestMap(d) {
-  if (!d) return '<div class="im-empty">데이터 없음</div>';
+  if (!d) return '<div class="pf2-empty">데이터 없음</div>';
   const total = d.total_queries || 0;
-
-  // 분포 막대 헬퍼
-  const _bars = (items, key) => {
-    if (!items.length) return '<div class="im-empty">기간 내 데이터 없음</div>';
-    const max = Math.max(...items.map(i => i.count || 0), 1);
-    return items.slice(0, 6).map(i => `
-      <div class="im-bar-row">
-        <div class="im-bar-label" title="${escapeHtml(i[key])}">${escapeHtml(i[key])}</div>
-        <div class="im-bar-track"><div class="im-bar-fill" style="width:${(i.count/max*100).toFixed(1)}%"></div></div>
-        <div class="im-bar-count">${i.count}</div>
-      </div>`).join('');
+  const topN = (arr, keyFn, n) => (arr || []).slice(0, n).map(keyFn).filter(Boolean);
+  const joinMore = (arr, all) => {
+    if (!arr.length) return '—';
+    const rest = (all ? all.length : arr.length) - arr.length;
+    return escapeHtml(arr.join('·')) + (rest > 0 ? ` <span style="color:var(--dim)">외 ${rest}</span>` : '');
   };
+  const intents = topN(d.by_intent, i => _INTENT_KO[i.intent] || i.intent, 3);
+  const labels  = d.scope_labels || {};
+  const scopes  = topN(d.by_scope,  s => labels[s.scope] || s.scope, 3);
+  const metrics = topN(d.by_metric, m => (_METRIC_KO[m.metric] || m.metric), 3);
+
+  const rows = `
+    <div class="pf2-stat"><span class="k">질의 수</span><span class="v"><span class="big">${total}</span></span></div>
+    <div class="pf2-stat"><span class="k">연산유형</span><span class="v">${joinMore(intents, d.by_intent)}</span></div>
+    <div class="pf2-stat"><span class="k">대상</span><span class="v">${joinMore(scopes, d.by_scope)}</span></div>
+    <div class="pf2-stat"><span class="k">지표</span><span class="v">${joinMore(metrics, d.by_metric)}</span></div>`;
 
   // 사각지대
-  let blindHtml = '';
+  let blind = '';
   if (d.blind_spots && d.blind_spots.length) {
-    blindHtml = `
-      <div class="im-block" style="grid-column:1 / -1">
-        <div class="im-block-title">사각지대 — ${d.role || '직무'} 직무에서 아직 안 보신 영역</div>
-        <div class="im-blind-list">
-          ${d.blind_spots.map(b => `
-            <div class="im-blind-item" title="${escapeHtml(b.reason||'')}">
-              <span class="im-blind-icon">💡</span>
-              <div class="im-blind-text">${escapeHtml(b.question)}
-                ${b.reason ? `<div class="im-blind-reason">${escapeHtml(b.reason)}</div>` : ''}
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>`;
+    blind = `<div class="pf2-blind">
+      <div class="pf2-blind-hd">사각지대 — ${escapeHtml(d.role || '직무')} 직무에서 아직 안 보신 영역</div>
+      ${d.blind_spots.slice(0, 3).map(b => `<div class="pf2-blind-item"><span>💡</span><span>${escapeHtml(b.question)}</span></div>`).join('')}
+    </div>`;
   }
-
   // 동료 평균 대비
-  let peerHtml = '';
+  let peer = '';
   if (d.peer_compare) {
     const p = d.peer_compare;
-    peerHtml = `
-      <div class="im-peer">
-        <div style="font-weight:600;margin-bottom:6px">동료 평균 대비 — ${d.role} 직무</div>
-        <div class="im-peer-row"><span class="k">같은 직무 동료</span><span>${p.same_role_users}명</span></div>
-        <div class="im-peer-row"><span class="k">내 질문수 / 동료 평균</span>
-          <span>${p.my_queries} / ${p.peer_avg_queries}</span></div>
-        ${p.peer_top_metrics && p.peer_top_metrics.length ? `
-          <div class="im-peer-row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px">
-            <span class="k">동료들이 자주 보는 지표</span>
-            <span>${p.peer_top_metrics.map(m => escapeHtml(m.metric)).join(', ')}</span>
-          </div>` : ''}
-      </div>`;
+    peer = `<div class="pf2-blind">
+      <div class="pf2-blind-hd">동료 평균 대비 — ${escapeHtml(d.role || '직무')} (${p.same_role_users}명)</div>
+      <div class="pf2-blind-item"><span>👤</span><span>내 질의 ${p.my_queries} · 동료 평균 ${p.peer_avg_queries}</span></div>
+      ${(p.peer_top_metrics && p.peer_top_metrics.length) ? `<div class="pf2-blind-item"><span>📊</span><span>동료 다빈도 지표: ${p.peer_top_metrics.map(m => escapeHtml(_METRIC_KO[m.metric] || m.metric)).join('·')}</span></div>` : ''}
+    </div>`;
   }
-
-  // 빈 상태 (질의 0건)
-  if (total === 0) {
-    return `
-      <div class="im-summary">
-        <div class="kpi"><div class="label">최근 30일 질의</div><div class="val">0</div></div>
-        <div class="kpi"><div class="label">직무</div><div class="val" style="font-size:var(--fs-md);font-family:var(--sans)">${escapeHtml(d.role||'—')}</div></div>
-      </div>
-      <div class="im-empty">아직 질의 이력이 없습니다. 칩 추천을 클릭하거나 질문을 던지면 분포가 누적됩니다.</div>
-      ${blindHtml}
-      ${peerHtml}`;
-  }
-
-  return `
-    <div class="im-summary">
-      <div class="kpi"><div class="label">최근 30일 질의</div><div class="val">${total}</div></div>
-      <div class="kpi"><div class="label">직무</div><div class="val" style="font-size:var(--fs-md);font-family:var(--sans)">${escapeHtml(d.role||'—')}</div></div>
-      <div class="kpi"><div class="label">주요 주제</div><div class="val" style="font-size:var(--fs-sm);font-family:var(--mono)">${(d.top_topics&&d.top_topics[0]&&d.top_topics[0].topic_key)?escapeHtml(d.top_topics[0].topic_key):'—'}</div></div>
-    </div>
-    <div class="im-grid">
-      <div class="im-block">
-        <div class="im-block-title">주로 보는 지표</div>
-        ${_bars(d.by_metric||[], 'metric')}
-      </div>
-      <div class="im-block">
-        <div class="im-block-title">주로 보는 대상</div>
-        ${_bars(d.by_scope||[], 'scope')}
-      </div>
-      ${blindHtml}
-    </div>
-    ${peerHtml}`;
+  if (total === 0) return rows + '<div class="pf2-empty">아직 질의 이력이 없습니다.</div>' + blind + peer;
+  return rows + blind + peer;
 }
 
 function closeProfileModal() {
@@ -1363,40 +1394,31 @@ function closeProfileModal() {
 }
 
 async function _loadProgramsForProfile() {
-  const host = document.getElementById('pfPrograms');
+  const sel = document.getElementById('pfMyProgram');
+  if (!sel) return;
   try {
     if (!_PROGRAMS_CACHE) {
       const res = await _authedFetch('/api/programs');
       const data = await res.json();
-      if (!data.ok) {
-        host.innerHTML = `<div class="pf-empty-progs" style="color:var(--red)">${escapeHtml(data.error||'프로그램 로드 실패')}</div>`;
-        return;
-      }
+      if (!data.ok) { sel.innerHTML = `<option value="">${escapeHtml(data.error||'로드 실패')}</option>`; return; }
       _PROGRAMS_CACHE = data.channels;
     }
-    // 단일 선택 — RAAS_USER.my_programs 가 배열이지만 첫 번째 값만 사용
     const myList = RAAS_USER.my_programs || [];
     const current = myList.length ? myList[0] : '';
     const groups = _PROGRAMS_CACHE.map(ch => {
       const opts = ch.programs.map(p => {
-        const sel = (p.code === current) ? ' selected' : '';
         const time = p.time ? ` · ${p.time}` : '';
-        return `<option value="${escapeHtml(p.code)}"${sel}>${escapeHtml(p.label)}${escapeHtml(time)}</option>`;
+        return `<option value="${escapeHtml(p.code)}"${p.code === current ? ' selected' : ''}>${escapeHtml(p.label)}${escapeHtml(time)}</option>`;
       }).join('');
       return `<optgroup label="${escapeHtml(ch.label)}">${opts}</optgroup>`;
     }).join('');
-    // 채널 단위 관심 — 리스트 상단에 추가(선택 시 해당 채널 전체가 기본 대상이 됨)
     const _chOpts = [['F00', '파워FM 채널'], ['L00', '러브FM 채널']].map(([c, l]) =>
       `<option value="${c}"${c === current ? ' selected' : ''}>${l}</option>`).join('');
-    const channelGroup = `<optgroup label="채널">${_chOpts}</optgroup>`;
-    host.innerHTML = `
-      <select class="pf-select" id="pfMyProgram">
-        <option value=""${current ? '' : ' selected'}>선택 없음</option>
-        ${channelGroup}
-        ${groups}
-      </select>`;
+    // 기존 select(#pfMyProgram)를 그대로 채운다(교체 아님) — onchange 핸들러 유지
+    sel.innerHTML = `<option value=""${current ? '' : ' selected'}>선택 없음</option>`
+      + `<optgroup label="채널">${_chOpts}</optgroup>` + groups;
   } catch (e) {
-    host.innerHTML = `<div class="pf-empty-progs" style="color:var(--red)">네트워크 오류: ${escapeHtml(e.message)}</div>`;
+    sel.innerHTML = `<option value="">네트워크 오류</option>`;
   }
 }
 
@@ -1405,55 +1427,6 @@ function _collectSelectedPrograms() {
   const sel = document.getElementById('pfMyProgram');
   const v = sel ? sel.value : '';
   return v ? [v] : [];
-}
-
-async function saveProfile(ev) {
-  ev.preventDefault();
-  const msg = document.getElementById('pfMsg');
-  const roleVal = document.getElementById('pfRole').value;
-  const channelVal = document.getElementById('pfChannel')?.value || '';
-  // CP 선택 시 채널 필수
-  if (roleVal === 'CP' && !channelVal) {
-    msg.textContent = '담당 채널(파워FM 또는 러브FM)을 선택해 주세요.';
-    msg.className = 'pf-msg';
-    return false;
-  }
-  const payload = {
-    name:        document.getElementById('pfName').value.trim(),
-    role:        roleVal,
-    my_programs: _collectSelectedPrograms(),
-    channel:     channelVal,
-  };
-  try {
-    const res = await _authedFetch('/api/me/update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      msg.textContent = data.error || '저장 실패';
-      msg.className = 'pf-msg';
-      return false;
-    }
-    const prevRole = RAAS_USER && RAAS_USER.role;
-    const prevChannel = RAAS_USER && RAAS_USER.channel;
-    RAAS_USER = data.user;
-    _renderSidebarUser();
-    msg.textContent = '저장되었습니다.';
-    msg.className = 'pf-msg success';
-
-    // 직무 또는 채널이 바뀌면 웰컴 추천칩을 갱신(웰컴 화면일 때만 반영, 아니면 no-op)
-    const newRole = data.user && data.user.role;
-    const newChannel = data.user && data.user.channel;
-    if (newRole !== prevRole || newChannel !== prevChannel) {
-      try { loadSuggestions(); } catch (_) {}
-    }
-  } catch (e) {
-    msg.textContent = '네트워크 오류: ' + e.message;
-    msg.className = 'pf-msg';
-  }
-  return false;
 }
 
 async function changePw(ev) {
@@ -1476,9 +1449,12 @@ async function changePw(ev) {
       msg.className = 'pf-msg';
       return false;
     }
-    msg.textContent = '비밀번호가 변경되었습니다.';
-    msg.className = 'pf-msg success';
     form.reset();
+    // 성공 → 아코디언 닫고 상단 메시지로 안내(패널 내부 메시지는 접히므로)
+    _pfClosePw();
+    const top = document.getElementById('pfMsg');
+    if (top) { top.textContent = '비밀번호가 변경되었습니다.'; top.className = 'pf-msg success';
+      setTimeout(() => { if (top.textContent === '비밀번호가 변경되었습니다.') top.className = 'pf-msg hidden'; }, 2200); }
   } catch (e) {
     msg.textContent = '네트워크 오류: ' + e.message;
     msg.className = 'pf-msg';
@@ -4156,7 +4132,7 @@ function _syncThemeBtn() {
 
 function _applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  _syncThemeBtn();   // 부팅 시엔 버튼이 아직 DOM에 없어 no-op — 모달 열 때 다시 맞춘다
+  if (typeof _pfSyncThemeSeg === 'function') _pfSyncThemeSeg();   // 프로필 화면 모드 세그먼트 동기화
   _setStatusBar(_statusBarColorForNow());
 }
 
