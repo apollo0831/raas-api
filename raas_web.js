@@ -4152,10 +4152,10 @@ function _setStatusBar(color) {
 }
 // 상태바 색 = 앱 기본(--bg0). 로그인 게이트의 그라디언트 최상단도 이 색과 똑같이 시작하므로
 // 게이트/앱을 오갈 때 theme-color를 바꿀 필요가 없다(iOS 홈화면 앱은 첫 페인트 값에 고정되는
-// 경향이 있어, 바꾸려 하면 상태바와 화면 최상단이 미세하게 어긋난다).
+// 경향이 있어, 바꾸려 하면 오히려 상태바 #fbfcfd vs 화면 #ffffff처럼 미세한 경계가 남는다).
 function _statusBarColorForNow() {
   const theme = document.documentElement.getAttribute('data-theme') || 'dark';
-  return theme === 'dark' ? '#20201f' : '#f9f9f7';
+  return theme === 'dark' ? '#0d1117' : '#fbfcfd';
 }
 
 // 버튼은 '전환할 대상'을 안내한다 — 다크면 '라이트로', 라이트면 '다크로'.
