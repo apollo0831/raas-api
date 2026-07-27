@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" id="metaThemeColor" content="#0d1117">
+<meta name="theme-color" id="metaThemeColor" content="#20201f">
 <meta name="color-scheme" content="dark light">
 <!-- 홈 화면에 추가 시 전체화면(standalone). status bar는 default(밝은 바·어두운 글자) — 라이트 테마와
      자연스럽게 어우러지고, black-translucent의 하단 62px 갭 버그를 피함(웹 화면이 정상 높이로 채워짐) -->
@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="RAAS">
-<script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.documentElement.setAttribute('data-theme',t);var m=document.getElementById('metaThemeColor');if(m)m.setAttribute('content',t==='dark'?'#0d1117':'#fbfcfd');}());</script>
+<script>(function(){var t=localStorage.getItem('raas_theme')||'dark';document.documentElement.setAttribute('data-theme',t);var m=document.getElementById('metaThemeColor');if(m)m.setAttribute('content',t==='dark'?'#20201f':'#f9f9f7');}());</script>
 <!-- 패널 폭·접힘 상태를 첫 페인트 전에 반영. raas_web.js는 외부 파일이라 받아오는 동안
      브라우저가 기본 레이아웃(256/308px·펼침)을 먼저 그려서, 뒤늦게 복원되면 폭이 튀고
      닫아둔 패널이 나타났다 사라지는 깜빡임이 보였다. 테마와 같은 방식으로 head에서 처리.
@@ -37,12 +37,12 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
 :root {
-  --bg0: #0d1117;
-  --bg1: #13181f;
-  --bg2: #1a2130;
-  --bg3: #1f2937;
-  --bg4: #2d3748;
-  --bg5: #374151;
+  --bg0: #20201f;
+  --bg1: #2b2b29;
+  --bg2: #33332f;
+  --bg3: #3c3b36;
+  --bg4: #47463f;
+  --bg5: #54524a;
   --line:  rgba(255,255,255,.07);
   --line2: rgba(255,255,255,.12);
   /* 텍스트 색 — Claude 앱 다크 토큰에 맞춤(warm). bg는 RAAS 유지(cool) */
@@ -142,12 +142,12 @@
 }
 
 [data-theme="light"] {
-  --bg0: #fbfcfd;
+  --bg0: #f9f9f7;
   --bg1: #ffffff;
-  --bg2: #f7f8fa;
-  --bg3: #edf0f4;
-  --bg4: #dde2ea;
-  --bg5: #c8d0db;
+  --bg2: #f3f3f0;
+  --bg3: #eceae4;
+  --bg4: #e2e0d8;
+  --bg5: #d5d2c8;
   --line:  rgba(0,0,0,.08);
   --line2: rgba(0,0,0,.13);
   /* 텍스트 색 — Claude 앱 라이트 토큰에 맞춤(warm). bg는 RAAS 유지(cool) */
@@ -613,11 +613,11 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
 .auth-gate{
   position:fixed;inset:0;z-index:900;overflow:hidden;
   /* 위쪽에서 은은하게 번지는 광원 — 단색 배경보다 화면이 눌리지 않고 부드럽다 */
-  background:linear-gradient(180deg, #0d1117 0%, #0f1a30 42%, #182a49 74%, #23385e 100%);
+  background:linear-gradient(180deg, #20201f 0%, #0f1a30 42%, #182a49 74%, #23385e 100%);
   display:none;
 }
 [data-theme="light"] .auth-gate{
-  background:linear-gradient(180deg, #fbfcfd 0%, #eef5fc 22%, #d8e8f8 56%, #bfd9f3 84%, #b0d0f0 100%);
+  background:linear-gradient(180deg, #f9f9f7 0%, #eef5fc 22%, #d8e8f8 56%, #bfd9f3 84%, #b0d0f0 100%);
 }
 .auth-gate.open{display:block}
 /* 실제 스크롤은 여기서 — 콘텐츠를 세로 중앙 정렬, 상단은 오버레이 높이만큼 여백 확보 */
@@ -635,13 +635,13 @@ html.preload .sidebar,html.preload .kpi-panel{transition:none !important}
   /* 시스템 박스가 화면을 밀어 올리면 fixed도 같이 밀린다 → JS가 visualViewport.offsetTop을
      --auth-fade-shift로 넣어, 밀린 만큼 도로 내려 항상 '보이는 최상단'에 다시 붙는다. */
   transform:translateY(var(--auth-fade-shift, 0px));will-change:transform;
-  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, #0d1117 90%, transparent) 42%, #0d1117 100%);
+  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, #20201f 90%, transparent) 42%, #20201f 100%);
   backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
   -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 62%);
   mask-image:linear-gradient(to top, transparent 0%, #000 62%);
 }
 [data-theme="light"] .auth-gate::before{
-  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, #fbfcfd 90%, transparent) 42%, #fbfcfd 100%);
+  background:linear-gradient(to top, transparent 0%, color-mix(in srgb, #f9f9f7 90%, transparent) 42%, #f9f9f7 100%);
 }
 .auth-card{
   width:100%;max-width:400px;
